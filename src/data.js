@@ -353,6 +353,10 @@ function updateTask(user, taskId, input = {}) {
 }
 
 /** 작업 삭제. 이미 청구된 작업은 거부. */
+function deleteProject(projectId) {
+  db().prepare("DELETE FROM projects WHERE id = ?").run(Number(projectId));
+}
+
 function deleteTask(user, taskId) {
   const task = getTaskForUser(user, taskId);
   if (!task) return null;
@@ -848,6 +852,7 @@ module.exports = {
   computeRatePrice,
   listProjects,
   getProjectForUser,
+  deleteProject,
   listTracksForProject,
   getTrackForUser,
   getTaskForUser,

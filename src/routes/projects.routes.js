@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireAuth, requireEditor, requireInvoice, canEdit, canInvoice } = require("../auth");
+const { requireAuth, requireEditor, requireChief, requireInvoice, canEdit, canInvoice } = require("../auth");
 const {
   TASK_TYPES,
   TASK_TYPE_LABELS,
@@ -19,6 +19,7 @@ const { config } = require("../config");
 const {
   listProjects,
   getProjectForUser,
+  deleteProject,
   clientOptions,
   listProjectManagers,
   listRateItems,
@@ -175,6 +176,14 @@ router.get("/:id", requireAuth, (req, res) => {
   renderProjectDetail(req, res, p);
 });
 
+// ── 프로젝트 삭제 (치프 전용) ──
+router.post("/:id/delete", requireChief, (req, res) => {
+  const p = getProjectForUser(req.user, Number(req.params.id));
+  if (!p) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  deleteProject(p.id);
+  res.redirect("/projects?flash=deleted");
+});
+
 function renderProjectDetail(req, res, p, formState = null, err = "") {
   const editable = canEdit(req.user); // 치프/스태프는 편집, 대표는 열람 전용
   const showInvoice = canInvoice(req.user); // 청구 섹션은 치프/대표만
@@ -259,6 +268,11 @@ function projectMetaCard(p, err = "") {
       </summary>
       <div class="mt-3 border-t border-border pt-3">
         ${projectEditForm(p, err)}
+        <div class="mt-4 border-t border-border pt-4">
+          <form method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?">
+            <button class="btn-ghost px-3 py-1.5 text-xs text-danger" type="submit">프로젝트 삭제</button>
+          </form>
+        </div>
       </div>
     </details>`;
 }
