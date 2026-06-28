@@ -151,10 +151,24 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
   const list = rows.length
     ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, tracks })).join("")
     : `<p class="py-4 text-center text-sm text-muted">등록된 세션이 없습니다.</p>`;
+  const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
+  const isMixing = project && project.project_type === "mixing";
+  if (isMixing) {
+    return `
+    <details class="card mt-3">
+      <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+        <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
+      </summary>
+      <div class="mt-3 space-y-3 border-t border-border pt-3">
+        ${isAdmin ? sessionCreateForm(project, managers, rateItems) : ""}
+        <div class="space-y-2">${list}</div>
+      </div>
+    </details>`;
+  }
   return `
     <section class="card mt-3 space-y-3">
       <div class="flex items-center justify-between gap-3">
-        <h2 class="font-display text-base font-semibold">세션 일정 ${rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : ""}</h2>
+        <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
       </div>
       ${isAdmin ? sessionCreateForm(project, managers, rateItems) : ""}
       <div class="space-y-2">${list}</div>
