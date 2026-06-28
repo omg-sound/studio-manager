@@ -13,10 +13,21 @@ const {
   deleteSession,
   createTaskFromSession,
 } = require("../data");
-const { layout, pageHeader, esc, flashBanner } = require("../views");
+const { layout, pageHeader, esc, flashBanner, errorPage } = require("../views");
 const { sessionRow } = require("../views.sessions");
 
 const router = express.Router();
+
+/** 세션 시간 겹침 안내 페이지(409). */
+function sessionConflictMessage(c) {
+  const when = [c.session_date, [c.start_time, c.end_time].filter(Boolean).join("–")].filter(Boolean).join(" ");
+  return errorPage({
+    code: 409,
+    title: "세션 시간이 겹칩니다",
+    message: `이미 같은 시간대에 ${c.session_type} 세션이 있습니다 — ${c.project_title} (${when}). 다른 시간으로 예약하세요.`,
+    user: null,
+  });
+}
 
 // ── 전역 일정(다가오는 세션 + 지난 세션) ──
 router.get("/sessions", requireAuth, (req, res) => {
@@ -56,6 +67,7 @@ router.post("/sessions", requireEditor, (req, res) => {
     res.redirect(`/projects/${s.project_id}?flash=added`);
   } catch (e) {
     if (e.message === "SESSION_DATE_REQUIRED") return res.status(400).send("세션 날짜를 입력하세요.");
+    if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
     throw e;
   }
 });
@@ -68,6 +80,7 @@ router.post("/sessions/:id", requireEditor, (req, res) => {
     res.redirect(`/projects/${s.project_id}?flash=saved`);
   } catch (e) {
     if (e.message === "SESSION_DATE_REQUIRED") return res.status(400).send("세션 날짜를 입력하세요.");
+    if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
     throw e;
   }
 });

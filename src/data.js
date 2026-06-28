@@ -682,10 +682,56 @@ function sessionRateAmount(session) {
   return { item, minutes, amount: computeRatePrice(item, minutes) };
 }
 
+/** 'HH:MM' → 자정 기준 분(유효하지 않으면 null). */
+function timeToMin(hhmm) {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+/**
+ * 같은 날 시간대가 겹치는 다른 녹음/믹싱 세션(스튜디오 전체, 취소 제외)을 찾는다.
+ * 시간(시작·종료)이 둘 다 있어야 검사한다(미정이면 null). 반열린구간[start,end) 겹침 + 야간(자정 넘김) 처리.
+ */
+function findSessionConflict({ date, start, end, excludeId = null }) {
+  const s = timeToMin(start);
+  let e = timeToMin(end);
+  if (!isValidYmd(date) || s == null || e == null) return null;
+  if (e <= s) e += 1440; // end<=start면 야간(자정 넘김)
+  const rows = db()
+    .prepare(
+      `SELECT s.*, p.title AS project_title FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+       WHERE s.session_date = ? AND s.status <> '취소'
+         AND s.session_type IN ('녹음','믹싱')
+         AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+         AND s.id <> ?
+       ORDER BY s.start_time`
+    )
+    .all(date, excludeId == null ? -1 : excludeId);
+  for (const r of rows) {
+    const bs = timeToMin(r.start_time);
+    let be = timeToMin(r.end_time);
+    if (bs == null || be == null) continue;
+    if (be <= bs) be += 1440;
+    if (s < be && bs < e) return r; // 겹침
+  }
+  return null;
+}
+
+function assertNoSessionConflict(f, excludeId) {
+  const conflict = findSessionConflict({ date: f.session_date, start: f.start_time, end: f.end_time, excludeId });
+  if (conflict) {
+    const err = new Error("SESSION_TIME_CONFLICT");
+    err.conflict = conflict;
+    throw err;
+  }
+}
+
 function createSession(user, projectId, input = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
   const f = sessionFields(input);
+  assertNoSessionConflict(f, null);
   const info = db()
     .prepare(
       `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, memo)
@@ -699,6 +745,7 @@ function updateSession(user, sessionId, input = {}) {
   const s = getSessionForUser(user, sessionId);
   if (!s) return null;
   const f = sessionFields(input);
+  assertNoSessionConflict(f, s.id);
   db()
     .prepare(
       `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,

@@ -58,6 +58,28 @@ function timeLabel(s) {
   return "시간 미정";
 }
 
+/** 세션 시간 슬롯 — 스튜디오 운영시간(낮 12:00부터 30분 단위, 23:30까지). */
+const SESSION_TIME_SLOTS = (() => {
+  const out = [];
+  for (let m = 12 * 60; m <= 23 * 60 + 30; m += 30) {
+    out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  }
+  return out;
+})();
+
+/** 시작/종료 시간 select 옵션. 목록 밖 기존값(레거시·야간)은 보존용으로 추가. */
+function timeOptions(current) {
+  const cur = current || "";
+  const out = [`<option value="">선택</option>`];
+  if (cur && !SESSION_TIME_SLOTS.includes(cur)) {
+    out.push(`<option value="${esc(cur)}" selected>${esc(cur)}</option>`);
+  }
+  for (const t of SESSION_TIME_SLOTS) {
+    out.push(`<option value="${t}" ${t === cur ? "selected" : ""}>${t}</option>`);
+  }
+  return out.join("");
+}
+
 /**
  * 세션 폼 필드(생성/편집 공유). 순서 = 예약 시 정하는 값 먼저, 실제 진행 시간(시작·종료)은 뒤.
  * 날짜·상태 → 예약 담당자·담당 엔지니어 → 녹음 종류·단가 → 시작·종료 → 메모.
@@ -98,11 +120,11 @@ function sessionFields(s, managers, rateItems = []) {
       </div>
       <div>
         <label class="label mb-0.5 text-xs">시작</label>
-        <input class="input py-1.5 text-sm" type="time" name="start_time" value="${esc(s.start_time || "")}" />
+        <select class="input py-1.5 text-sm" name="start_time">${timeOptions(s.start_time)}</select>
       </div>
       <div>
         <label class="label mb-0.5 text-xs">종료</label>
-        <input class="input py-1.5 text-sm" type="time" name="end_time" value="${esc(s.end_time || "")}" />
+        <select class="input py-1.5 text-sm" name="end_time">${timeOptions(s.end_time)}</select>
       </div>
     </div>
     <input class="input mt-2 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;
