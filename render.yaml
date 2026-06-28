@@ -1,0 +1,65 @@
+# Render Blueprint — web(SQLite on Disk) + 일일 백업/연체 스캔 cron.
+# 플레이북1 §1: Render Starter + Disk, RENDER_EXTERNAL_URL → BASE_URL 자동 도출.
+#
+# 배포 절차·시크릿 입력값은 DEPLOY.md 참조. 핵심 제약(Render 공식 문서 확인):
+#  · Disk는 단일 서비스에만 attach → cron은 SQLite에 직접 접근 불가.
+#    cron은 web 서비스를 HTTP로 트리거하고, 디스크를 가진 web 프로세스가 백업을 수행한다.
+#  · cron schedule은 5-필드 표준 cron, UTC 기준.
+#  · BACKUP_TOKEN은 web·cron이 같은 값을 공유해야 한다(둘 다 sync:false → 대시보드에서 동일 값 입력).
+
+services:
+  # ── 웹 서비스(영속 디스크에 SQLite + 업로드 + 백업) ──
+  - type: web
+    name: omg-studios-manager
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: npm ci && npm run build:css
+    startCommand: node src/server.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /var/data # DB(/var/data/app.db) · 업로드(/var/data/uploads) · 백업(/var/data/backups)
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/app.db
+      - key: ADMIN_EMAIL
+        sync: false # 최초 치프(chief) Google 이메일 — 대시보드에서 입력
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: TOKEN_ENC_KEY
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MAX_UPLOAD_MB
+        value: "200"
+      - key: BACKUP_TOKEN
+        sync: false # cron 트리거 인증용 — cron 서비스와 동일한 값 입력(openssl rand -hex 32)
+      # BASE_URL은 비워두면 RENDER_EXTERNAL_URL을 자동 사용
+      # DEV_LOGIN은 프로덕션에서 절대 설정하지 말 것
+
+  # ── 일일 백업·연체 스캔 cron(web을 HTTP로 트리거) ──
+  - type: cron
+    name: omg-studios-cron
+    runtime: node
+    plan: starter
+    region: singapore
+    # 매일 03:00 KST = 18:00 UTC. web이 깨어 있는 시간대(영업시간 외)에 백업.
+    schedule: "0 18 * * *"
+    # 트리거 스크립트는 Node 내장 fetch만 사용 → native 빌드(better-sqlite3) 불필요.
+    buildCommand: npm install --omit=dev --omit=optional
+    startCommand: node src/jobs/cron-trigger.js
+    envVars:
+      - key: WEB_HOSTPORT
+        fromService:
+          name: omg-studios-manager
+          type: web
+          property: hostport # 같은 private network의 web 내부 host:port
+      - key: BACKUP_TOKEN
+        sync: false # web의 BACKUP_TOKEN과 반드시 동일한 값

@@ -1,0 +1,35 @@
+{
+  "name": "omg-studios-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "녹음/믹싱 스튜디오 프로젝트·자료 전달·청구 관리 (1인 운영 + 클라이언트 열람)",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:css": "tailwindcss -i ./public/css/src.css -o ./public/css/app.css --minify",
+    "watch:css": "tailwindcss -i ./public/css/src.css -o ./public/css/app.css --watch",
+    "prestart": "npm run build:css",
+    "start": "node src/server.js",
+    "dev": "npm run build:css && node src/server.js",
+    "seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "googleapis": "^173.0.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.2.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

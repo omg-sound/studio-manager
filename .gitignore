@@ -1,0 +1,32 @@
+# 의존성
+node_modules/
+
+# 환경변수·비밀
+.env
+.env.local
+*.local
+
+# SQLite 데이터 파일(WAL/SHM 포함)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# 백업(cron VACUUM INTO)·업로드 — 영속 디스크 데이터, 저장소에 넣지 않음
+data/backups/
+data/uploads/
+
+# Tailwind 빌드 산출물
+public/css/app.css
+
+# 업로드/임시·캐시
+tmp/
+.cache/
+
+# OS
+.DS_Store
+
+# OMC 상태
+.omc/state/
+
+# Claude Code 로컬 설정(개발자별 권한 오버라이드 — 공유하지 않음)
+.claude/settings.local.json

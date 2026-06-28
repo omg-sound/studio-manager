@@ -1,0 +1,105 @@
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+const { db } = require("../db");
+const { config } = require("../config");
+const { todayYmd } = require("./date");
+const { listInvoices, balanceOf } = require("../data");
+
+// 백업 디렉터리: DB와 같은 (영속) 디스크. 프로덕션 /var/data/backups, 로컬 ./data/backups.
+function backupDir() {
+  return path.join(path.dirname(config.dbPath), "backups");
+}
+
+const KEEP_BACKUPS = 14; // 최근 14일분 유지(일일 cron 기준 2주)
+
+/**
+ * 연체 인보이스 요약(발행 + 마감 경과 + 잔금 존재). 단일 진실원천인 data.isOverdue 필터 재사용.
+ * 알림 채널(메일/웹훅)은 후속 TODO이며 현재는 집계·로그·JSON 응답으로 노출한다.
+ */
+function overdueSummary() {
+  const rows = listInvoices(null, { overdue: true });
+  const items = rows.map((i) => ({
+    id: i.id,
+    title: i.title,
+    invoice_number: i.invoice_number || null,
+    client_name: i.client_name || null,
+    project_title: i.project_title || null,
+    due_date: i.due_date,
+    balance: balanceOf(i),
+  }));
+  const totalDue = items.reduce((sum, i) => sum + i.balance, 0);
+  return { count: items.length, totalDue, items };
+}
+
+/**
+ * SQLite 온라인 백업. VACUUM INTO는 잠금/WAL과 무관하게 일관된 스냅샷 단일 파일을 만든다.
+ * 같은 날 재실행 시 대상 파일을 먼저 지워(VACUUM INTO는 기존 파일이면 실패) 최신본으로 갱신한다.
+ */
+function backupDatabase({ keep = KEEP_BACKUPS } = {}) {
+  const dir = backupDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = todayYmd(); // 'YYYY-MM-DD' (KST)
+  const file = path.join(dir, `app-${stamp}.db`);
+  fs.rmSync(file, { force: true });
+  // 경로는 서버가 생성한 값(사용자 입력 아님). 방어적으로 작은따옴표만 이스케이프.
+  const safe = file.replace(/'/g, "''");
+  db().exec(`VACUUM INTO '${safe}'`);
+  const sizeBytes = fs.statSync(file).size;
+  const pruned = pruneOldBackups(dir, keep);
+  return { file, sizeBytes, pruned };
+}
+
+/** app-YYYY-MM-DD.db 파일명을 사전식(=시간순) 정렬해 최근 keep개만 남기고 오래된 것 제거. */
+function pruneOldBackups(dir, keep) {
+  let names;
+  try {
+    names = fs.readdirSync(dir);
+  } catch (_e) {
+    return [];
+  }
+  const all = names.filter((f) => /^app-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort();
+  const remove = all.slice(0, Math.max(0, all.length - keep));
+  for (const f of remove) {
+    try {
+      fs.rmSync(path.join(dir, f), { force: true });
+    } catch (_e) {
+      /* 정리 실패는 치명적이지 않음 */
+    }
+  }
+  return remove;
+}
+
+/**
+ * 일일 유지보수: DB 백업 + 연체 스캔. cron이 HTTP로 트리거(maintenance.routes).
+ * 백업(내구성 핵심)을 먼저, 그리고 두 작업을 각자 try/catch로 격리한다 → 한쪽 실패가 다른 쪽을
+ * 막지 않는다(연체 읽기 오류로 백업이 건너뛰는 우선순위 역전 방지). ok는 백업 성공 기준.
+ */
+function runDailyMaintenance(opts = {}) {
+  const ranAt = new Date().toISOString();
+  let backup = null;
+  let backupError = null;
+  try {
+    backup = backupDatabase(opts);
+  } catch (e) {
+    backupError = e && e.message ? e.message : String(e);
+  }
+  let overdue = null;
+  let overdueError = null;
+  try {
+    overdue = overdueSummary();
+  } catch (e) {
+    overdueError = e && e.message ? e.message : String(e);
+  }
+  return { ok: !backupError, ranAt, backup, backupError, overdue, overdueError };
+}
+
+module.exports = {
+  runDailyMaintenance,
+  overdueSummary,
+  backupDatabase,
+  pruneOldBackups,
+  backupDir,
+  KEEP_BACKUPS,
+};

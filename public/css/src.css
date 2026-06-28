@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Claude 스타일 색상 토큰(따뜻한 크림 + 클레이 액센트, R G B 채널) ── */
+:root {
+  color-scheme: light;
+  --color-bg: 250 249 245; /* #FAF9F5 warm ivory */
+  --color-surface: 255 255 255; /* white cards */
+  --color-elevated: 240 238 230; /* #F0EEE6 사이드바/패널 */
+  --color-border: 229 226 215; /* #E5E2D7 warm */
+  --color-muted: 124 119 108; /* #7C776C warm gray */
+  --color-fg: 38 36 33; /* #262421 warm near-black */
+  --color-primary: 200 121 91; /* #C8795B 클레이(테라코타) */
+  --color-primary-fg: 255 255 255;
+  --color-success: 92 122 92; /* muted sage */
+  --color-warning: 181 121 60; /* warm amber */
+  --color-danger: 188 75 60; /* #BC4B3C warm red */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-bg: 30 29 27; /* #1E1D1B warm charcoal */
+    --color-surface: 38 37 34; /* #262522 */
+    --color-elevated: 45 43 39; /* #2D2B27 */
+    --color-border: 61 58 52; /* warm */
+    --color-muted: 156 150 139;
+    --color-fg: 237 235 228; /* warm off-white */
+    --color-primary: 214 138 105; /* #D68A69 lighter clay */
+    --color-primary-fg: 28 26 24;
+    --color-success: 132 170 132;
+    --color-warning: 209 158 96;
+    --color-danger: 224 122 104;
+  }
+}
+
+/* iOS 입력 자동확대 방지: 모바일에서 폼 컨트롤 16px(플레이북2 §5-1). */
+@media (max-width: 639.98px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@layer base {
+  body {
+    font-family: theme("fontFamily.sans");
+    touch-action: manipulation; /* 더블탭 확대 차단 */
+    -webkit-font-smoothing: antialiased;
+  }
+  /* 제목은 세리프(Anthropic 에디토리얼 톤) */
+  .font-display {
+    font-family: theme("fontFamily.serif");
+    letter-spacing: 0;
+  }
+}
+
+/* 재사용 컴포넌트 클래스 */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-primary-fg hover:bg-primary/90;
+  }
+  .btn-ghost {
+    @apply btn border border-border bg-surface text-fg hover:bg-elevated;
+  }
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-fg placeholder:text-muted/70 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-fg/90;
+  }
+  .card {
+    @apply rounded-xl border border-border bg-surface p-5;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+  .badge {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
+  }
+}

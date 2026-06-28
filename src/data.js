@@ -1,0 +1,886 @@
+"use strict";
+
+/**
+ * 데이터 접근 헬퍼. 내부 도구이므로 로그인한 직원(staff/admin)은 모든 프로젝트를 열람한다.
+ * 쓰기 권한은 라우트 미들웨어(requireEditor/requireChief/requireInvoice)가 분리해 강제한다.
+ * 통계·표시 분기는 권한 술어(canInvoice/isChief, auth.js)로 판단한다(거래처 외부 열람은 폐기됨).
+ */
+
+const { db } = require("./db");
+const { todayYmd, isValidYmd, formatYmdShort, minutesBetween } = require("./lib/date");
+const { canInvoice, isChief, canEdit } = require("./auth");
+const {
+  TASK_TYPE_LABELS,
+  normalizeTrackContentType,
+  normalizeTaskType,
+  normalizeBillingType,
+  normalizeTaskStatus,
+  normalizeSessionType,
+  normalizeSessionStatus,
+} = require("./config");
+
+/** 'HH:MM' 검증(아니면 null). */
+function cleanTime(v) {
+  const s = String(v || "").trim();
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : null;
+}
+
+// ── 인보이스 금액/상태 파생(플레이북2 §4 payStatus/balanceOf) ──
+
+/** 잔금(미수금) = 총액 - 입금액(음수 없음). */
+function balanceOf(inv) {
+  return Math.max((inv.amount || 0) - (inv.paid_amount || 0), 0);
+}
+
+/** 납입 상태: 미납 | 부분납 | 완납. */
+function payStatusOf(inv) {
+  const paid = inv.paid_amount || 0;
+  if (paid <= 0) return "미납";
+  if (paid >= (inv.amount || 0)) return "완납";
+  return "부분납";
+}
+
+/** 연체: 발행 상태 + 마감 경과 + 잔금 존재. */
+function isOverdue(inv) {
+  return inv.status === "발행" && !!inv.due_date && todayYmd() > inv.due_date && balanceOf(inv) > 0;
+}
+
+function parseQuantity(value) {
+  const n = Number(String(value == null ? "" : value).replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function parseWon(value) {
+  const n = parseInt(String(value == null ? "" : value).replace(/[^\d-]/g, ""), 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function taskTotal(quantity, unitPrice) {
+  return Math.round(parseQuantity(quantity) * parseWon(unitPrice));
+}
+
+// ── 거래처(실결제자) ──
+function listClients({ kind } = {}) {
+  if (kind) {
+    return db().prepare("SELECT * FROM clients WHERE kind = ? ORDER BY name COLLATE NOCASE").all(kind);
+  }
+  return db().prepare("SELECT * FROM clients ORDER BY name COLLATE NOCASE").all();
+}
+
+/** 분류별 거래처 수(탭 배지용). */
+function clientKindCounts() {
+  const rows = db().prepare("SELECT kind, COUNT(*) AS n FROM clients GROUP BY kind").all();
+  const map = {};
+  for (const r of rows) map[r.kind] = r.n;
+  return map;
+}
+function getClient(id) {
+  return db().prepare("SELECT * FROM clients WHERE id = ?").get(id);
+}
+function clientOptions() {
+  return db().prepare("SELECT id, name FROM clients ORDER BY name COLLATE NOCASE").all();
+}
+
+function listProjectManagers({ includeInactive = false } = {}) {
+  return db()
+    .prepare(
+      `SELECT * FROM project_managers
+       ${includeInactive ? "" : "WHERE active = 1"}
+       ORDER BY active DESC, name COLLATE NOCASE`
+    )
+    .all();
+}
+
+function listProjectServiceItems({ includeInactive = false } = {}) {
+  return db()
+    .prepare(
+      `SELECT * FROM project_service_items
+       ${includeInactive ? "" : "WHERE active = 1"}
+       ORDER BY active DESC, label COLLATE NOCASE`
+    )
+    .all();
+}
+
+// ── 단가표(과금 항목) ──
+
+/** 시간(소수, "3.5") → 분. 빈 값/0 이하면 0. */
+function parseHoursToMinutes(v) {
+  const n = Number(String(v == null ? "" : v).replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 60) : 0;
+}
+
+function rateFields(input) {
+  return {
+    name: String(input.name || "").trim(),
+    base_minutes: parseHoursToMinutes(input.base_hours),
+    base_price: parseWon(input.base_price),
+    extra_minutes: parseHoursToMinutes(input.extra_hours) || 60,
+    extra_price: parseWon(input.extra_price),
+  };
+}
+
+function listRateItems({ includeInactive = false } = {}) {
+  return db()
+    .prepare(
+      `SELECT * FROM rate_items
+       ${includeInactive ? "" : "WHERE active = 1"}
+       ORDER BY active DESC, name COLLATE NOCASE`
+    )
+    .all();
+}
+
+function createRateItem(input = {}) {
+  const f = rateFields(input);
+  if (!f.name) throw new Error("RATE_NAME_REQUIRED");
+  const info = db()
+    .prepare(
+      `INSERT INTO rate_items (name, base_minutes, base_price, extra_minutes, extra_price, active)
+       VALUES (@name,@base_minutes,@base_price,@extra_minutes,@extra_price,1)`
+    )
+    .run(f);
+  return db().prepare("SELECT * FROM rate_items WHERE id = ?").get(info.lastInsertRowid);
+}
+
+function updateRateItem(id, input = {}) {
+  const f = rateFields(input);
+  if (!f.name) throw new Error("RATE_NAME_REQUIRED");
+  db()
+    .prepare(
+      `UPDATE rate_items SET name=@name, base_minutes=@base_minutes, base_price=@base_price,
+       extra_minutes=@extra_minutes, extra_price=@extra_price WHERE id=@id`
+    )
+    .run({ id, ...f });
+  return db().prepare("SELECT * FROM rate_items WHERE id = ?").get(id);
+}
+
+function setRateItemActive(id, active) {
+  db().prepare("UPDATE rate_items SET active=? WHERE id=?").run(active ? 1 : 0, id);
+}
+
+function deleteRateItem(id) {
+  db().prepare("DELETE FROM rate_items WHERE id = ?").run(id);
+}
+
+/**
+ * 진행 분(minutes)에 대한 자동 산정 금액(3단계에서 사용).
+ * - 기준 시간 이내 → 기준가. 초과분은 초과 단위(분)로 올림하여 단위당 과금.
+ * - base_minutes=0이면 시간 무관 정액(base_price).
+ */
+function computeRatePrice(item, minutes) {
+  if (!item) return 0;
+  const m = Math.max(0, Number(minutes) || 0);
+  if (item.base_minutes <= 0 || m <= item.base_minutes) return item.base_price;
+  const unit = item.extra_minutes > 0 ? item.extra_minutes : 60;
+  const units = Math.ceil((m - item.base_minutes) / unit);
+  return item.base_price + units * item.extra_price;
+}
+
+// ── 프로젝트(클라이언트 범위 강제) ──
+
+/**
+ * 프로젝트 목록(로그인 직원 전체 열람). 필터(service/clientId/q)는 옵션.
+ * @returns {Array}
+ */
+function listProjects(_user, { service, clientId, q } = {}) {
+  const where = [];
+  const params = {};
+
+  if (clientId) {
+    where.push("p.client_id = @clientId");
+    params.clientId = Number(clientId);
+  }
+  if (service) {
+    where.push("p.services LIKE @service");
+    params.service = `%"${service}"%`;
+  }
+  if (q) {
+    where.push("(p.title LIKE @q OR p.artist LIKE @q)");
+    params.q = `%${q}%`;
+  }
+
+  const sql = `
+    SELECT p.*, c.name AS client_name, m.name AS manager_name,
+      (SELECT GROUP_CONCAT(tr.title, '||') FROM project_tracks tr WHERE tr.project_id = p.id) AS track_titles,
+      (SELECT COALESCE(SUM(t.total_price), 0)
+       FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       WHERE tr.project_id = p.id) AS task_total
+    FROM projects p
+    LEFT JOIN clients c ON c.id = p.client_id
+    LEFT JOIN project_managers m ON m.id = p.manager_id
+    ${where.length ? "WHERE " + where.join(" AND ") : ""}
+    ORDER BY
+      CASE WHEN p.due_date IS NULL OR p.due_date = '' THEN 1 ELSE 0 END,
+      p.due_date ASC,
+      p.created_at DESC`;
+  return db().prepare(sql).all(params);
+}
+
+/** 단건 조회 + 권한 검사. 권한 없으면 null(클라이언트가 타 프로젝트 접근 시도 시 404 처리용). */
+function getProjectForUser(user, id) {
+  const row = db()
+    .prepare(
+      `SELECT p.*, c.name AS client_name, m.name AS manager_name, tr_sum.track_titles, task_sum.task_total FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       LEFT JOIN project_managers m ON m.id = p.manager_id
+       LEFT JOIN (
+         SELECT project_id, GROUP_CONCAT(title, '||') AS track_titles
+         FROM project_tracks
+         GROUP BY project_id
+       ) tr_sum ON tr_sum.project_id = p.id
+       LEFT JOIN (
+         SELECT tr.project_id, COALESCE(SUM(t.total_price), 0) AS task_total
+         FROM project_tracks tr
+         LEFT JOIN track_tasks t ON t.track_id = tr.id
+         GROUP BY tr.project_id
+       ) task_sum ON task_sum.project_id = p.id
+       WHERE p.id = ?`
+    )
+    .get(id);
+  return row || null;
+}
+
+// ── 트랙/콘텐츠 + 모듈형 작업(Task) ──
+
+function listTracksForProject(user, projectId) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null;
+  const tracks = db()
+    .prepare("SELECT * FROM project_tracks WHERE project_id = ? ORDER BY created_at ASC, id ASC")
+    .all(project.id);
+  const tasks = db()
+    .prepare(
+      `SELECT t.*, tr.project_id, tr.title AS track_title, tr.content_type
+       FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       WHERE tr.project_id = ?
+       ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
+    )
+    .all(project.id);
+  const byTrack = new Map();
+  for (const task of tasks) {
+    if (!byTrack.has(task.track_id)) byTrack.set(task.track_id, []);
+    byTrack.get(task.track_id).push(task);
+  }
+  return { project, tracks: tracks.map((track) => ({ ...track, tasks: byTrack.get(track.id) || [] })) };
+}
+
+function getTrackForUser(user, trackId) {
+  const track = db()
+    .prepare(
+      `SELECT tr.*, p.client_id, p.title AS project_title
+       FROM project_tracks tr
+       JOIN projects p ON p.id = tr.project_id
+       WHERE tr.id = ?`
+    )
+    .get(trackId);
+  return track || null;
+}
+
+function createTrack(user, projectId, input = {}) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null;
+  const title = String(input.title || "").trim();
+  if (!title) throw new Error("TRACK_TITLE_REQUIRED");
+  const info = db()
+    .prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, ?, ?)")
+    .run(project.id, title, normalizeTrackContentType(input.content_type));
+  return db().prepare("SELECT * FROM project_tracks WHERE id = ?").get(info.lastInsertRowid);
+}
+
+function updateTrack(user, trackId, input = {}) {
+  const track = getTrackForUser(user, trackId);
+  if (!track) return null;
+  const title = String(input.title || "").trim();
+  if (!title) throw new Error("TRACK_TITLE_REQUIRED");
+  db()
+    .prepare("UPDATE project_tracks SET title = ?, content_type = ? WHERE id = ?")
+    .run(title, normalizeTrackContentType(input.content_type), track.id);
+  return db().prepare("SELECT * FROM project_tracks WHERE id = ?").get(track.id);
+}
+
+/** 트랙 삭제. 청구된 작업이 하나라도 있으면 거부(인보이스 스냅샷 정합성). */
+function deleteTrack(user, trackId) {
+  const track = getTrackForUser(user, trackId);
+  if (!track) return null;
+  const invoiced = db()
+    .prepare("SELECT COUNT(*) AS n FROM track_tasks WHERE track_id = ? AND is_invoiced = 1")
+    .get(track.id).n;
+  if (invoiced > 0) throw new Error("TRACK_HAS_INVOICED");
+  db().prepare("DELETE FROM project_tracks WHERE id = ?").run(track.id); // track_tasks는 CASCADE
+  return { project_id: track.project_id };
+}
+
+function getTaskForUser(user, taskId) {
+  const task = db()
+    .prepare(
+      `SELECT t.*, tr.project_id, tr.title AS track_title, tr.content_type, p.client_id
+       FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       JOIN projects p ON p.id = tr.project_id
+       WHERE t.id = ?`
+    )
+    .get(taskId);
+  return task || null;
+}
+
+/** 작업 수정. 이미 청구된 작업은 거부(라인아이템 스냅샷이 잠금). total_price는 재계산. */
+function updateTask(user, taskId, input = {}) {
+  const task = getTaskForUser(user, taskId);
+  if (!task) return null;
+  if (task.is_invoiced) throw new Error("TASK_LOCKED");
+  const quantity = parseQuantity(input.quantity);
+  const unitPrice = parseWon(input.unit_price);
+  db()
+    .prepare(
+      `UPDATE track_tasks SET
+         task_type = @task_type, billing_type = @billing_type, quantity = @quantity,
+         unit_price = @unit_price, total_price = @total_price, engineer_name = @engineer_name,
+         status = @status
+       WHERE id = @id`
+    )
+    .run({
+      id: task.id,
+      task_type: normalizeTaskType(input.task_type),
+      billing_type: normalizeBillingType(input.billing_type),
+      quantity,
+      unit_price: unitPrice,
+      total_price: taskTotal(quantity, unitPrice),
+      engineer_name: String(input.engineer_name || "").trim() || null,
+      status: normalizeTaskStatus(input.status),
+    });
+  return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
+}
+
+/** 작업 삭제. 이미 청구된 작업은 거부. */
+function deleteTask(user, taskId) {
+  const task = getTaskForUser(user, taskId);
+  if (!task) return null;
+  if (task.is_invoiced) throw new Error("TASK_LOCKED");
+  db().prepare("DELETE FROM track_tasks WHERE id = ?").run(task.id);
+  return { project_id: task.project_id };
+}
+
+function createTask(user, trackId, input = {}) {
+  const track = getTrackForUser(user, trackId);
+  if (!track) return null;
+  const quantity = parseQuantity(input.quantity);
+  const unitPrice = parseWon(input.unit_price);
+  const taskType = normalizeTaskType(input.task_type);
+  const info = db()
+    .prepare(
+      `INSERT INTO track_tasks
+       (track_id, task_type, billing_type, quantity, unit_price, total_price, engineer_name, status, is_invoiced)
+       VALUES (@track_id, @task_type, @billing_type, @quantity, @unit_price, @total_price, @engineer_name, @status, 0)`
+    )
+    .run({
+      track_id: track.id,
+      task_type: taskType,
+      billing_type: normalizeBillingType(input.billing_type),
+      quantity,
+      unit_price: unitPrice,
+      total_price: taskTotal(quantity, unitPrice),
+      engineer_name: String(input.engineer_name || "").trim() || null,
+      status: normalizeTaskStatus(input.status),
+    });
+  return db().prepare("SELECT * FROM track_tasks WHERE id = ?").get(info.lastInsertRowid);
+}
+
+function listUnbilledTasksForProject(user, projectId) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null;
+  const rows = db()
+    .prepare(
+      `SELECT t.*, tr.title AS track_title, tr.content_type, tr.project_id
+       FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       WHERE tr.project_id = ?
+         AND t.status = 'Completed'
+         AND t.is_invoiced = 0
+       ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
+    )
+    .all(project.id);
+  return { project, rows };
+}
+
+function listInvoiceItemsForInvoice(user, invoiceId) {
+  const inv = getInvoiceForUser(user, invoiceId);
+  if (!inv) return null;
+  const rows = db()
+    .prepare("SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY id ASC")
+    .all(inv.id);
+  return { invoice: inv, rows };
+}
+
+function nextInvoiceNumber(issueDate) {
+  const ym = String(issueDate || todayYmd()).slice(0, 7).replace("-", "");
+  const prefix = `INV-${ym}-`;
+  const row = db()
+    .prepare("SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY invoice_number DESC LIMIT 1")
+    .get(prefix + "%");
+  const last = row && row.invoice_number ? parseInt(row.invoice_number.slice(prefix.length), 10) : 0;
+  return prefix + String((Number.isFinite(last) ? last : 0) + 1).padStart(3, "0");
+}
+
+function createInvoiceFromTasks(user, { projectId, taskIds, issueDate, dueDate, title } = {}) {
+  const project = getProjectForUser(user, projectId);
+  if (!project || !canInvoice(user)) return null;
+  const selected = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
+  if (!selected.length) throw new Error("TASK_IDS_REQUIRED");
+
+  const placeholders = selected.map(() => "?").join(",");
+  const params = [project.id, ...selected];
+  const tasks = db()
+    .prepare(
+      `SELECT t.*, tr.title AS track_title, tr.content_type, tr.project_id
+       FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       WHERE tr.project_id = ?
+         AND t.status = 'Completed'
+         AND t.is_invoiced = 0
+         AND t.id IN (${placeholders})
+       ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
+    )
+    .all(...params);
+  if (tasks.length !== selected.length) throw new Error("TASK_NOT_BILLABLE");
+
+  const d = db();
+  const subtotal = tasks.reduce((sum, task) => sum + (task.total_price || 0), 0);
+  const tax = Math.round(subtotal * 0.1);
+  const total = subtotal + tax;
+  const issued = issueDate || todayYmd();
+  const invoiceTitle = String(title || "").trim() || `${project.title} 작업 청구`;
+  const invoiceNumber = nextInvoiceNumber(issued);
+
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    const info = d
+      .prepare(
+        `INSERT INTO invoices
+         (project_id, client_id, title, invoice_number, amount, tax_amount, paid_amount, status, issued_date, due_date, memo)
+         VALUES (@project_id, @client_id, @title, @invoice_number, @amount, @tax_amount, 0, '발행', @issued_date, @due_date, @memo)`
+      )
+      .run({
+        project_id: project.id,
+        client_id: project.client_id || null,
+        title: invoiceTitle,
+        invoice_number: invoiceNumber,
+        amount: total,
+        tax_amount: tax,
+        issued_date: issued,
+        due_date: dueDate || null,
+        memo: "완료된 미청구 작업에서 자동 생성",
+      });
+    const invoiceId = info.lastInsertRowid;
+    const insertItem = d.prepare(
+      `INSERT INTO invoice_items
+       (invoice_id, task_id, track_title, task_type, description, quantity, unit_price, amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ? WHERE id = ?");
+    for (const task of tasks) {
+      const taskLabel = TASK_TYPE_LABELS[task.task_type] || task.task_type;
+      const description = `${task.track_title} - ${taskLabel}`;
+      insertItem.run(
+        invoiceId,
+        task.id,
+        task.track_title,
+        task.task_type,
+        description,
+        task.quantity,
+        task.unit_price,
+        task.total_price
+      );
+      markTask.run(invoiceId, task.id);
+    }
+    d.exec("COMMIT;");
+    return getInvoiceForUser(user, invoiceId);
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
+}
+
+/**
+ * 청구 삭제. 연결된 작업의 잠금(is_invoiced)을 먼저 해제한 뒤 삭제해야 좀비 작업이 안 생긴다.
+ * (FK는 invoice_id만 SET NULL로 지울 뿐 is_invoiced=1은 남으므로 명시적 UPDATE 필요.)
+ */
+function deleteInvoice(user, id) {
+  if (!canInvoice(user)) return null;
+  const inv = db().prepare("SELECT id FROM invoices WHERE id = ?").get(id);
+  if (!inv) return null;
+  const d = db();
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    d.prepare("UPDATE track_tasks SET is_invoiced = 0, invoice_id = NULL WHERE invoice_id = ?").run(id);
+    d.prepare("DELETE FROM invoices WHERE id = ?").run(id); // invoice_items는 FK CASCADE
+    d.exec("COMMIT;");
+    return { id };
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
+}
+
+// ── 대시보드 통계 ──
+// 전 직원이 프로젝트/마감을 본다. 청구(미수금·연체)는 청구권자(치프/대표), 클라이언트 수는 치프에게 노출.
+function dashboardStats(user) {
+  const d = db();
+  const total = d.prepare("SELECT COUNT(*) AS n FROM projects").get().n;
+  const today = todayYmd();
+  // '다가오는 마감'은 오늘 이후만. 지난 마감은 별도 '지연' 목록으로 분리(임박 항목이 밀리지 않게).
+  const upcoming = d
+    .prepare(
+      `SELECT p.*, c.name AS client_name FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       WHERE p.due_date IS NOT NULL AND p.due_date <> '' AND p.due_date >= @today
+       ORDER BY p.due_date ASC LIMIT 5`
+    )
+    .all({ today });
+  const overdue = d
+    .prepare(
+      `SELECT p.*, c.name AS client_name FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       WHERE p.due_date IS NOT NULL AND p.due_date <> '' AND p.due_date < @today
+       ORDER BY p.due_date DESC LIMIT 5`
+    )
+    .all({ today });
+  const showInvoices = canInvoice(user);
+  const showClients = isChief(user);
+  return {
+    canInvoice: showInvoices,
+    isChief: showClients,
+    total,
+    clients: showClients ? d.prepare("SELECT COUNT(*) AS n FROM clients").get().n : null,
+    upcoming,
+    overdue,
+    invoices: showInvoices ? invoiceStats(user) : null,
+  };
+}
+
+// ── 청구(invoices) — 클라이언트 범위 강제 ──
+
+/** 인보이스 목록(치프 전용 라우트에서 사용). 필터(status/overdue/clientId)는 옵션. */
+function listInvoices(_user, { status, overdue, clientId } = {}) {
+  const where = [];
+  const params = {};
+  if (status) {
+    where.push("i.status = @status");
+    params.status = status;
+  }
+  if (clientId) {
+    where.push("i.client_id = @clientId");
+    params.clientId = Number(clientId);
+  }
+  const sql = `
+    SELECT i.*, p.title AS project_title, c.name AS client_name
+    FROM invoices i
+    LEFT JOIN projects p ON p.id = i.project_id
+    LEFT JOIN clients c ON c.id = i.client_id
+    ${where.length ? "WHERE " + where.join(" AND ") : ""}
+    ORDER BY
+      CASE WHEN i.due_date IS NULL OR i.due_date = '' THEN 1 ELSE 0 END,
+      i.due_date ASC, i.created_at DESC`;
+  let rows = db().prepare(sql).all(params);
+  if (overdue) rows = rows.filter(isOverdue); // 연체는 파생값이라 코드에서 필터
+  return rows;
+}
+
+/** 단건 인보이스(치프 전용 라우트에서 사용). */
+function getInvoiceForUser(_user, id) {
+  const row = db()
+    .prepare(
+      `SELECT i.*, p.title AS project_title, c.name AS client_name
+       FROM invoices i
+       LEFT JOIN projects p ON p.id = i.project_id
+       LEFT JOIN clients c ON c.id = i.client_id WHERE i.id = ?`
+    )
+    .get(id);
+  return row || null;
+}
+
+/** 인보이스 요약 통계(미수금·이번 달 발행·연체). */
+function invoiceStats(user) {
+  const rows = listInvoices(user, {});
+  const receivable = rows
+    .filter((i) => i.status === "발행")
+    .reduce((s, i) => s + balanceOf(i), 0);
+  const month = todayYmd().slice(0, 7); // 'YYYY-MM'
+  const thisMonthIssued = rows
+    .filter((i) => i.status !== "미발행" && (i.issued_date || "").slice(0, 7) === month)
+    .reduce((s, i) => s + (i.amount || 0), 0);
+  const overdue = rows.filter(isOverdue);
+  const overdueAmount = overdue.reduce((s, i) => s + balanceOf(i), 0);
+  return { receivable, thisMonthIssued, overdueCount: overdue.length, overdueAmount, total: rows.length };
+}
+
+/** 프로젝트의 인보이스 목록(권한 검사). 권한 없으면 null. */
+function listInvoicesForProject(user, projectId) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null;
+  const rows = db()
+    .prepare(
+      `SELECT i.*, c.name AS client_name FROM invoices i
+       LEFT JOIN clients c ON c.id = i.client_id
+       WHERE i.project_id = ? ORDER BY i.created_at DESC, i.id DESC`
+    )
+    .all(projectId);
+  return { project, rows };
+}
+
+// ── 세션(스튜디오 일정) ──
+
+/** 프로젝트의 세션 목록(날짜순). 권한 없으면 null. */
+function listSessionsForProject(user, projectId) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null;
+  const rows = db()
+    .prepare("SELECT * FROM sessions WHERE project_id = ? ORDER BY session_date ASC, start_time ASC, id ASC")
+    .all(projectId);
+  return {
+    project,
+    rows: rows.map((row) => ({
+      ...row,
+      billing: sessionRateAmount(row),
+      billed_task_id: db().prepare("SELECT id FROM track_tasks WHERE session_id = ?").get(row.id)?.id || null,
+    })),
+  };
+}
+
+/** 단건 세션(로그인 직원 전체 열람). */
+function getSessionForUser(_user, sessionId) {
+  return db().prepare("SELECT * FROM sessions WHERE id = ?").get(sessionId) || null;
+}
+
+function sessionFields(input) {
+  const date = String(input.session_date || "").trim();
+  if (!isValidYmd(date)) throw new Error("SESSION_DATE_REQUIRED");
+  return {
+    session_type: normalizeSessionType(input.session_type),
+    session_date: date,
+    start_time: cleanTime(input.start_time),
+    end_time: cleanTime(input.end_time),
+    engineer_name: String(input.engineer_name || "").trim() || null,
+    status: normalizeSessionStatus(input.status),
+    rate_item_id: Number(input.rate_item_id) || null,
+    memo: String(input.memo || "").trim() || null,
+  };
+}
+
+/** 녹음 세션의 진행시간 → 단가표 자동 산정. 시간제 대상(녹음+단가+시간)이 아니면 null. */
+function sessionRateAmount(session) {
+  if (!session || session.session_type !== "녹음" || !session.rate_item_id) return null;
+  const minutes = minutesBetween(session.start_time, session.end_time);
+  if (minutes <= 0) return null;
+  const item = db().prepare("SELECT * FROM rate_items WHERE id = ?").get(session.rate_item_id);
+  if (!item) return null;
+  return { item, minutes, amount: computeRatePrice(item, minutes) };
+}
+
+function createSession(user, projectId, input = {}) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null;
+  const f = sessionFields(input);
+  const info = db()
+    .prepare(
+      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, engineer_name, status, rate_item_id, memo)
+       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @engineer_name, @status, @rate_item_id, @memo)`
+    )
+    .run({ project_id: project.id, ...f });
+  return db().prepare("SELECT * FROM sessions WHERE id = ?").get(info.lastInsertRowid);
+}
+
+function updateSession(user, sessionId, input = {}) {
+  const s = getSessionForUser(user, sessionId);
+  if (!s) return null;
+  const f = sessionFields(input);
+  db()
+    .prepare(
+      `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
+       end_time=@end_time, engineer_name=@engineer_name, status=@status, rate_item_id=@rate_item_id, memo=@memo WHERE id=@id`
+    )
+    .run({ id: s.id, ...f });
+  return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
+}
+
+function setSessionStatus(user, sessionId, status) {
+  const s = getSessionForUser(user, sessionId);
+  if (!s) return null;
+  db().prepare("UPDATE sessions SET status=? WHERE id=?").run(normalizeSessionStatus(status), s.id);
+  return { project_id: s.project_id };
+}
+
+function deleteSession(user, sessionId) {
+  const s = getSessionForUser(user, sessionId);
+  if (!s) return null;
+  db().prepare("DELETE FROM sessions WHERE id = ?").run(s.id);
+  return { project_id: s.project_id };
+}
+
+/** 다가오는 세션(오늘 이후, 취소 제외) — 전역 일정/대시보드. */
+function upcomingSessions(_user, { limit = 50 } = {}) {
+  return db()
+    .prepare(
+      `SELECT s.*, p.title AS project_title FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+       WHERE s.session_date >= ? AND s.status <> '취소'
+       ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC LIMIT ?`
+    )
+    .all(todayYmd(), limit)
+    .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
+}
+
+/** 지난 세션(오늘 이전) — 전역 일정. */
+function pastSessions(_user, { limit = 30 } = {}) {
+  return db()
+    .prepare(
+      `SELECT s.*, p.title AS project_title FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+       WHERE s.session_date < ?
+       ORDER BY s.session_date DESC, s.start_time DESC, s.id DESC LIMIT ?`
+    )
+    .all(todayYmd(), limit)
+    .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
+}
+
+/** 녹음 세션 → 시간제 작업 생성. 진행시간을 단가표로 산정해 track_task(Time_Charge, Completed)로. */
+function createTaskFromSession(user, sessionId, { trackId, newTrackTitle, taskType } = {}) {
+  const s = getSessionForUser(user, sessionId);
+  if (!s) return null;
+  const project = getProjectForUser(user, s.project_id);
+  if (!project || !canEdit(user)) return null;
+  if (s.status !== "완료") throw new Error("SESSION_NOT_COMPLETED");
+  const calc = sessionRateAmount(s);
+  if (!calc) throw new Error("SESSION_NOT_BILLABLE");
+  const existing = db().prepare("SELECT id FROM track_tasks WHERE session_id = ?").get(s.id);
+  if (existing) throw new Error("SESSION_ALREADY_BILLED");
+
+  // 기존 곡·콘텐츠 선택 여부 판별: 값이 있으면 정수 검증(IDOR·오타 방어), 비었으면 새 트랙 생성.
+  const hasTrackSel = trackId != null && String(trackId).trim() !== "";
+  if (hasTrackSel) {
+    const tid = Number(trackId);
+    if (!Number.isInteger(tid) || tid <= 0) throw new Error("TRACK_NOT_FOUND");
+  }
+  const amount = calc.amount;
+
+  const d = db();
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    let track;
+    if (hasTrackSel) {
+      track = d.prepare("SELECT * FROM project_tracks WHERE id = ? AND project_id = ?").get(Number(trackId), project.id);
+      if (!track) throw new Error("TRACK_NOT_FOUND");
+    } else {
+      const title = String(newTrackTitle || "").trim() || `${s.session_type} ${formatYmdShort(s.session_date)}`;
+      const tinfo = d
+        .prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, ?, 'Music')")
+        .run(project.id, title);
+      track = d.prepare("SELECT * FROM project_tracks WHERE id = ?").get(tinfo.lastInsertRowid);
+    }
+    // 작업 종류: 폼에서 선택한 값(악기/ADR 녹음 등) 우선, 없으면 보컬 녹음 기본.
+    const resolvedTaskType = normalizeTaskType(taskType || "Vocal_Recording");
+    const info = d
+      .prepare(
+        `INSERT INTO track_tasks
+         (track_id, task_type, billing_type, quantity, unit_price, total_price, engineer_name, status, is_invoiced, session_id)
+         VALUES (?, ?, 'Time_Charge', 1, ?, ?, ?, 'Completed', 0, ?)`
+      )
+      .run(track.id, resolvedTaskType, amount, amount, s.engineer_name || null, s.id);
+    d.exec("COMMIT;");
+    return { project_id: project.id, task_id: info.lastInsertRowid };
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
+}
+
+// ── 자료 전달(deliverables) — 프로젝트 범위 강제 ──
+
+/** 프로젝트의 자료 목록(권한 검사: 클라이언트는 자기 프로젝트만). 권한 없으면 null. */
+function listDeliverablesForProject(user, projectId) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null; // 404 처리용
+  const rows = db()
+    .prepare("SELECT * FROM deliverables WHERE project_id = ? ORDER BY created_at DESC, id DESC")
+    .all(projectId);
+  return { project, rows };
+}
+
+/** 단건 자료(로그인 직원 전체 열람). 소속 프로젝트가 있으면 존재만 확인. */
+function getDeliverableForUser(user, id) {
+  const row = db().prepare("SELECT * FROM deliverables WHERE id = ?").get(id);
+  if (!row) return null;
+  if (row.project_id != null && !getProjectForUser(user, row.project_id)) return null;
+  return row;
+}
+
+/** 공개 토큰으로 단건 조회(로그인 불필요). 철회/만료 검사는 호출부에서. */
+function getDeliverableByToken(token) {
+  if (!token) return null;
+  return db().prepare("SELECT * FROM deliverables WHERE access_token = ?").get(token);
+}
+
+/** 최근 자료 타임라인(로그인 직원 전체 열람). */
+function recentDeliverables(_user, limit = 50) {
+  return db()
+    .prepare(
+      `SELECT dv.*, p.title AS project_title, c.name AS client_name
+       FROM deliverables dv
+       LEFT JOIN projects p ON p.id = dv.project_id
+       LEFT JOIN clients c ON c.id = p.client_id
+       ORDER BY dv.created_at DESC, dv.id DESC LIMIT ?`
+    )
+    .all(limit);
+}
+
+module.exports = {
+  listClients,
+  clientKindCounts,
+  getClient,
+  clientOptions,
+  listProjectManagers,
+  listProjectServiceItems,
+  listRateItems,
+  createRateItem,
+  updateRateItem,
+  setRateItemActive,
+  deleteRateItem,
+  computeRatePrice,
+  listProjects,
+  getProjectForUser,
+  listTracksForProject,
+  getTrackForUser,
+  getTaskForUser,
+  createTrack,
+  updateTrack,
+  deleteTrack,
+  createTask,
+  updateTask,
+  deleteTask,
+  listUnbilledTasksForProject,
+  listInvoiceItemsForInvoice,
+  createInvoiceFromTasks,
+  deleteInvoice,
+  dashboardStats,
+  listDeliverablesForProject,
+  getDeliverableForUser,
+  getDeliverableByToken,
+  recentDeliverables,
+  balanceOf,
+  payStatusOf,
+  isOverdue,
+  listInvoices,
+  getInvoiceForUser,
+  invoiceStats,
+  listInvoicesForProject,
+  listSessionsForProject,
+  getSessionForUser,
+  createSession,
+  updateSession,
+  setSessionStatus,
+  deleteSession,
+  upcomingSessions,
+  pastSessions,
+  sessionRateAmount,
+  createTaskFromSession,
+};
