@@ -6,16 +6,18 @@
 
 ---
 
-## ▶ 진행 상태 (2026-06-28 기준 · VSCode 이어가기용)
+## ▶ 진행 상태 (2026-06-28 기준)
 
 | 단계 | 상태 |
 |---|---|
 | 1. Git 저장소 + 푸시 | ✅ 완료 — `github.com/omg-sound/studio-manager` (main) |
-| 2. Render Blueprint 연결 | ✅ 진행 — 두 서비스 인식됨 |
-| 3. 시크릿 입력 | ⏳ **진행 중** — `ADMIN_EMAIL`✅ · `GOOGLE_CLIENT_ID`✅ · **`GOOGLE_CLIENT_SECRET` ❌(다음 작업)** · **`BACKUP_TOKEN`(web+cron 동일값) ❌** |
-| 4. Apply → 빌드·배포 | ⬜ 대기 |
-| 5. OAuth redirect URI(배포 도메인) | ⬜ 대기 |
-| 6. 첫 로그인·검증·cron 트리거 | ⬜ 대기 |
+| 2. Render Blueprint 연결 | ✅ 완료 — web + cron 두 서비스 배포 중 |
+| 3. 시크릿 입력 | ✅ 완료 — 전체 env 입력 완료 |
+| 4. Apply → 빌드·배포 | ✅ 완료 — `https://omg-studios-manager.onrender.com` live |
+| 5. OAuth redirect URI(배포 도메인) | ✅ 완료 — GCP 콘솔에 callback URI 등록 |
+| 6. 첫 로그인·검증·cron 트리거 | ✅ 완료 — Google 로그인·`/healthz`·백업 cron 전부 통과 |
+
+**배포 완전 완료 (2026-06-28 18:31 KST)**. 다음 선택 작업은 §7 운영 메모 참조.
 
 **바로 다음 할 일**: GCP에서 `GOOGLE_CLIENT_SECRET`(=Client ID와 같은 OAuth 웹 클라이언트의 "클라이언트
 보안 비밀", `GOCSPX-…`)을 복사해 Render web 서비스에 입력 → `BACKUP_TOKEN`을 web·cron 두 곳에 **동일한

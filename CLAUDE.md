@@ -138,8 +138,10 @@
   `DEPLOY.md` 배포 런북(git init·시크릿·OAuth·검증) 신설. 로컬 E2E(토큰 401/200/404·백업 무결성+데이터
   보존·prune 14·트리거 종료코드·프로덕션 fail-fast) 통과. **실제 배포(GitHub 푸시·Render 계정·시크릿·GCP)는
   사용자 단계** — `DEPLOY.md` 참조.
-- 다음 단계: **Render 실배포 진행 중**(GitHub 푸시 완료, Blueprint 시크릿 입력 단계 — `DEPLOY.md` ▶진행 상태) →
-  실제 Drive 연동(GCP) → 청구서 PDF(선택) → 연체 메일/웹훅 알림(선택).
+- **Render 실배포 완료(2026-06-28)**: `https://omg-studios-manager.onrender.com` live. Google OAuth 로그인·
+  `/healthz`·일일 백업 cron 수동 트리거(172KB DB 생성·연체 스캔) 전부 통과. 빌드 함정: `tailwindcss`가
+  `devDependencies`라 `NODE_ENV=production`에서 `npm ci`가 건너뜀(exit 127) → `npm install --include=dev`로
+  변경해 해결. 세부 체크포인트 = `DEPLOY.md`(전 단계 ✅).
 
 ## 스택
 
@@ -283,19 +285,16 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 - [x] **권한 3단계 검증(2026-06-28)**: owner/chief/staff dev-login, GET 매트릭스(대표 새프로젝트/클라이언트/
       설정 403·청구 200, 스태프 청구/클라이언트/설정 403), POST 쓰기(대표 편집 403·치프/스태프 302), 청구
       생성(스태프 403·치프/대표 권한통과), 대표 청구 상태변경 302, 역할별 대시보드 카드, admin→chief 마이그레이션
-- [ ] Google OAuth 실연동(사용자 GCP 설정 후): 동의화면·redirect URI·refresh token→Drive 링크
-      (연동되면 storage가 자동으로 local→drive 전환). **첫 로그인 = `ADMIN_EMAIL` 치프, 이후 `/settings`에서
-      대표(owner)·스태프 Google 계정 등록**
+- [x] **Google OAuth 실연동(2026-06-28)**: GCP redirect URI 등록 → `studio@omgworks.kr` 치프 로그인 성공.
+      Drive 연동은 후속(자료 업로드 시 local→drive 자동 전환, 현재는 local 저장).
 
 ## 다음 단계 TODO
 
 1. ~~`sessions`: 캘린더 일정~~ **완료(2026-06-28)**. ~~세션 시간→작업 청구 자동 산정 연동~~ **완료(3단계,
    2026-06-28)**. 후속(선택): 월 캘린더 그리드 뷰(현재는 목록), 대시보드 임박 세션 카드, 세션 행 N+1 조회
    배치 최적화(내부 도구라 현재는 허용).
-2. Render 배포 **(진행 중)**: 코드·`render.yaml`·cron 구현 + 로컬 E2E + **GitHub 푸시 완료**
-   (`omg-sound/studio-manager`). **현재 Render Blueprint 시크릿 입력 중** — `ADMIN_EMAIL`·`GOOGLE_CLIENT_ID`
-   완료, `GOOGLE_CLIENT_SECRET`·`BACKUP_TOKEN`(web+cron 동일값)이 다음 → Apply → redirect URI → 검증.
-   세부·체크포인트 = `DEPLOY.md` ▶진행 상태.
+2. ~~Render 배포~~ **완료(2026-06-28)**: `https://omg-studios-manager.onrender.com` — Google 로그인·
+   healthz·cron 백업 전부 통과. 세부 = `DEPLOY.md`.
 3. (선택) 연체 cron이 현재는 집계·로그·JSON만 → 메일/웹훅 발송 연결(Gmail API 또는 `ALERT_WEBHOOK`).
    자료 전달/청구 발행 시 클라이언트 알림도 동일 채널 재사용.
 4. (선택) 청구서 PDF/이미지 렌더(resvg 패턴) + 채번(2026-001).
