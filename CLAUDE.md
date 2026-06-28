@@ -54,16 +54,16 @@
 - 업로드(multer 디스크) → Drive/로컬 폴백 → 인증 다운로드(프록시) + 공개 만료 토큰 링크 `/d/:token`(다운로드 카운트·철회·만료).
 
 ### 관리(/settings) — 3탭
-- **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계)·외주 작업자(로그인 없이 직접 추가).
-- **컨텐츠**: 단가표·녹음 종류·작업 템플릿.
+- **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계)·외주 작업자(로그인 없이 직접 추가). 편집=추가/삭제(토글 폐기).
+- **컨텐츠**: 단가표(녹음 종류)·**작업 종류 카탈로그**(곡·콘텐츠 후반작업 종류 + 기본단가·과금·분류·빠른추가). 모두 삭제-only.
 - **환경설정**: 스튜디오 캘린더(겹침 검사·자동 연동 대상)·예약 일정 기본 장소.
 
 ### 배포 · 운영
 - Render Blueprint(web + cron) + Disk. 일일 백업(`VACUUM INTO`·14일 보존)·연체 스캔 cron(`/internal/cron/daily`, `BACKUP_TOKEN`).
   정적 자산 캐시 버스팅(`?v=` mtime+size).
 
-### 미완 TODO (사용자 승인됨)
-- **작업 종류 정식 관리(환경설정)**: `TASK_TYPES`(config 상수)를 단가표처럼 관리(종류명+기본 단가·과금·분류)로. → 다음 작업, 사용자에게 리마인드.
+### 관리 항목 편집 = 삭제 중심 (활성/비활성 폐기)
+- 하우스 엔지니어·외주 작업자·클라이언트·단가표·작업 종류 모두 토글 없이 **삭제(하드)**. 강제 삭제 시 참조 FK는 SET NULL(인보이스·프로젝트 등), 과거 작업의 종류 라벨은 key로 폴백 보존. 본인·부트스트랩 치프만 삭제 차단.
 
 ## 주요 변경 이력 (요약)
 
@@ -120,7 +120,11 @@
 - `project_managers(name, email?, phone?, active, user_id?→users, created_at)` — 작업 담당자 마스터.
   `user_id` 있으면 **하우스 엔지니어**(로그인 사용자와 링크, `auth.syncUserToManager`가 자동 생성·동기화),
   null이면 **외주 작업자**(로그인 없이 관리에서 직접 추가). 둘 다 세션·작업 담당 드롭다운에 노출.
-- `project_service_items(key UNIQUE, label, active, created_at)` — 작업 템플릿/레거시 호환용. (TODO: 작업 종류 catalog로 정식화 예정)
+- `task_types(key UNIQUE, label, task_group, billing_type, unit_price, is_quick, sort_order, active)` — **작업 종류 카탈로그**
+  (곡·콘텐츠 후반작업). config `TASK_TYPES`를 `task_types_seed_v1` 게이트로 1회 시드 후 DB가 단일 진실원천(기존 9 key 보존, 신규=`tt_<hex>`).
+  `track_tasks.task_type`이 이 key를 문자열로 보관(FK 아님). 라벨·그룹 해석은 `data.js` 모듈 캐시(`taskTypeLabel`/`taskTypeGroup`, 쓰기 시 무효화).
+  `is_quick`=곡·콘텐츠 빠른추가 버튼 노출, `unit_price`=빠른추가 기본 단가. 삭제-only(강제), 치프가 `/settings` 컨텐츠 탭 CRUD.
+- `project_service_items(key UNIQUE, label, active, created_at)` — 레거시(구 services JSON 라벨 호환). **관리 UI 폐기**(작업 종류 카탈로그가 대체), 테이블만 잔존.
 - `rate_items(name, category[스튜디오 녹음|로케이션 녹음], base_minutes, base_price, extra_minutes, extra_price, active)` —
   **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 녹음 세션 폼의 '녹음 종류'에 분류별 optgroup으로
   묶여 표시된다. 기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
@@ -205,9 +209,8 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 
 ## 다음 단계 TODO
 
-1. **작업 종류 정식 관리(환경설정)** — `TASK_TYPES`를 단가표처럼 DB 관리(종류명+기본 단가·과금·분류). 사용자 승인됨, **다음 작업**.
+1. (선택) **청구서 PDF/거래명세서 렌더** — resvg + pdf-lib, 한글 TTF 번들, PII 게이트(`requireInvoice`·no-store). 계획 보존: `.omc/plans/invoice-pdf-plan.md`.
 2. (선택) 연체 cron 알림 발송 — 현재 집계·로그·JSON만 → 메일/웹훅(Gmail API 또는 `ALERT_WEBHOOK`). 자료/청구 알림도 동일 채널 재사용.
-3. (선택) 청구서 PDF/이미지 렌더(resvg 패턴).
-4. (선택) 월 캘린더 그리드 뷰(현재는 목록), 대시보드 임박 세션 카드.
-5. (선택) 구글 캘린더 역방향 동기화(캘린더에서 삭제→앱 반영) — 보류 중.
-6. Drive 실연동 검증.
+3. (선택) 월 캘린더 그리드 뷰(현재는 목록), 대시보드 임박 세션 카드.
+4. (선택) 구글 캘린더 역방향 동기화(캘린더에서 삭제→앱 반영) — 보류 중.
+5. Drive 실연동 검증.
