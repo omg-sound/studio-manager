@@ -5,7 +5,24 @@
  * 공통 레이아웃 + 사이드바(데스크탑 고정) + 모바일 상단바/드로어.
  */
 
+const fs = require("fs");
+const path = require("path");
 const { PROJECT_SERVICE_LABELS, ROLE_LABELS } = require("./config");
+
+/**
+ * 캐시 버스팅 버전: 배포 때마다 새로 빌드되는 정적 자산(app.css·app.js)의 mtime+size로 산출.
+ * `/css/app.css?v=...`처럼 붙여, CSS가 바뀌면 브라우저가 옛 캐시 대신 새 파일을 받게 한다.
+ * (함정: 캐시 버스팅이 없으면 배포해도 브라우저가 옛 CSS를 써서 레이아웃이 깨져 보인다.)
+ */
+const ASSET_VERSION = (() => {
+  try {
+    const css = fs.statSync(path.join(__dirname, "../public/css/app.css"));
+    const js = fs.statSync(path.join(__dirname, "../public/js/app.js"));
+    return Math.floor(Math.max(css.mtimeMs, js.mtimeMs)).toString(36) + "-" + (css.size + js.size).toString(36);
+  } catch (_e) {
+    return Date.now().toString(36);
+  }
+})();
 
 /** XSS 방지: HTML 이스케이프. 사용자 입력은 반드시 통과시킬 것. */
 function esc(s) {
@@ -153,7 +170,7 @@ function layout({ title, user, current = "", body, full = false }) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#faf9f5" />
   ${FONT_LINKS}
-  <link rel="stylesheet" href="/css/app.css" />
+  <link rel="stylesheet" href="/css/app.css?v=${ASSET_VERSION}" />
 </head>
 <body class="min-h-screen bg-bg font-sans text-fg antialiased">
   ${
@@ -186,7 +203,7 @@ function layout({ title, user, current = "", body, full = false }) {
       ${body}
     </main>
   </div>
-  <script src="/js/app.js" defer></script>
+  <script src="/js/app.js?v=${ASSET_VERSION}" defer></script>
   `
       : `<main class="mx-auto w-full max-w-md px-4 py-12">${body}</main>`
   }
