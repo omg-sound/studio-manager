@@ -15,6 +15,9 @@ const {
   deleteRateItem,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW } = require("../views");
+const { asyncHandler } = require("../lib/async");
+const drive = require("../drive");
+const calendar = require("../calendar");
 
 const router = express.Router();
 
@@ -27,9 +30,10 @@ function listUsers() {
   return db().prepare("SELECT * FROM users ORDER BY active DESC, role, email").all();
 }
 
-router.get("/", requireChief, (req, res) => {
+router.get("/", requireChief, asyncHandler(async (req, res) => {
   const managers = listProjectManagers({ includeInactive: true });
   const serviceItems = listProjectServiceItems({ includeInactive: true });
+  const calSection = await studioCalendarSection();
 
   const managerRows = managers.length
     ? managers.map((m) => managerRow(m)).join("")
@@ -68,6 +72,8 @@ router.get("/", requireChief, (req, res) => {
         </form>
         <div class="space-y-2">${userRows}</div>
       </section>
+
+      ${calSection}
 
       <section class="card space-y-4">
         <div>
@@ -127,6 +133,41 @@ router.get("/", requireChief, (req, res) => {
     </div>`;
 
   res.send(layout({ title: "관리", user: req.user, current: "/settings", body, full: true }));
+}));
+
+/** 스튜디오 캘린더(구글) 선택 섹션 — 세션 겹침 검사 대상. */
+async function studioCalendarSection() {
+  const title = `<div>
+      <h2 class="font-display text-lg font-semibold">스튜디오 캘린더 (구글)</h2>
+      <p class="mt-1 text-xs text-muted">선택한 캘린더에 이미 잡힌 일정과 겹치면 녹음·믹싱 세션 예약을 막습니다. 일정 제목은 읽지 않고 바쁜 시간대만 확인합니다. <span class="text-muted">스튜디오 전용 캘린더를 권장</span>합니다(개인 일정이 섞이면 그 시간도 막힙니다).</p>
+    </div>`;
+  let inner;
+  if (!config.googleConfigured) {
+    inner = `<p class="text-sm text-muted">Google OAuth가 설정되지 않았습니다.</p>`;
+  } else if (!drive.isLinked()) {
+    inner = `<p class="text-sm text-muted">구글 계정 연동이 필요합니다. <a class="text-primary hover:underline" href="/auth/google">구글 계정 연동(캘린더 권한 포함)</a> 후 다시 시도하세요.</p>`;
+  } else {
+    const calendars = await calendar.listCalendars();
+    const current = calendar.getStudioCalendarId();
+    if (calendars.length === 0) {
+      inner = `<p class="text-sm text-muted">캘린더 목록을 불러오지 못했습니다. 캘린더 읽기 권한이 없을 수 있습니다 — <a class="text-primary hover:underline" href="/auth/google">구글 계정 재연동</a>으로 권한을 다시 허용하세요.</p>`;
+    } else {
+      inner = `<form method="post" action="/settings/studio-calendar" class="flex gap-2">
+          <select class="input" name="calendar_id">
+            <option value="">사용 안 함 (외부 캘린더 겹침 검사 끔)</option>
+            ${calendars.map((c) => `<option value="${esc(c.id)}" ${c.id === current ? "selected" : ""}>${esc(c.summary)}${c.primary ? " · 기본" : ""}</option>`).join("")}
+          </select>
+          <button class="btn-primary shrink-0" type="submit">저장</button>
+        </form>`;
+    }
+  }
+  return `<section class="card space-y-4">${title}${inner}</section>`;
+}
+
+// ── 스튜디오 캘린더 선택 저장 ──
+router.post("/studio-calendar", requireChief, (req, res) => {
+  calendar.setStudioCalendarId(req.body.calendar_id);
+  res.redirect("/settings?flash=saved");
 });
 
 // ── 사용자(로그인 화이트리스트) 관리 ──

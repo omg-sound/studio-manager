@@ -64,6 +64,7 @@ router.get("/auth/google", (req, res) => {
       "email",
       "profile",
       "https://www.googleapis.com/auth/drive.file", // 자료 전달 스토리지용 최소권한
+      "https://www.googleapis.com/auth/calendar.readonly", // 세션 겹침 검사용 스튜디오 캘린더 읽기(FreeBusy)
     ],
     state: Buffer.from(JSON.stringify({ next })).toString("base64url"),
   });

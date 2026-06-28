@@ -106,10 +106,16 @@ Blueprint Apply 시 또는 각 서비스 **Environment** 탭에서 입력한다.
    - 로컬 검증용으로 `http://localhost:3000/auth/google/callback`도 함께 등록 가능.
 3. **OAuth 동의 화면**: 내부 도구이므로 테스트 사용자에 로그인할 직원 이메일을 추가(또는 게시).
 4. **Google Drive API 활성화**(자료 전달 스토리지가 local→drive로 자동 전환됨).
-5. 발급된 Client ID/Secret을 3단계 web 서비스 env에 입력.
+5. **Google Calendar API 활성화**(세션 겹침 검사용 — 아래 §6.5).
+6. 발급된 Client ID/Secret을 3단계 web 서비스 env에 입력.
 
 > redirect URI는 `{BASE_URL}/auth/google/callback`. Render는 `RENDER_EXTERNAL_URL`을 `BASE_URL`로
 > 자동 도출하므로, **배포 후 확정된 onrender.com 도메인**으로 redirect URI를 맞춰야 한다.
+
+### 4-1. OAuth 스코프 변경 시 재동의
+
+앱은 `openid·email·profile·drive.file·calendar.readonly` 스코프를 요청한다. **스코프를 추가한 배포 이후에는
+치프가 한 번 다시 로그인(구글 동의)** 해야 새 권한이 담긴 refresh token이 저장된다(기존 토큰엔 새 권한 없음).
 
 ---
 
@@ -143,6 +149,22 @@ curl -fsS -X POST \
 
 - 연체만 확인(부수효과 없음): `GET /internal/cron/overdue` (같은 토큰).
 - Render 대시보드 → cron 서비스 → **Trigger Run**으로 스케줄 실행을 즉시 테스트할 수도 있다.
+
+---
+
+## 6.5. 세션 겹침 검사(구글 캘린더) 활성화 — 선택
+
+녹음·믹싱 세션을 **예약할 때 이미 잡힌 일정과 겹치면 막는** 기능. 앱 안의 세션끼리 겹침은 기본 동작(설정 불필요)이고,
+**앱 밖(구글 캘린더에서 직접) 잡은 일정까지** 막으려면 아래를 설정한다.
+
+1. GCP에서 **Google Calendar API 활성화**(§4-5).
+2. **전용 스튜디오 캘린더 준비**: 구글 캘린더에서 스튜디오 일정만 모으는 캘린더를 하나 만든다(개인 일정과 분리 —
+   섞이면 개인 일정 시간도 예약이 막힌다). 앱의 "📅 구글 캘린더에 추가" 링크와 수동 예약을 모두 이 캘린더로.
+3. **치프 재로그인**(§4-1)으로 `calendar.readonly` 권한 동의.
+4. 앱 **`/settings → 스튜디오 캘린더 (구글)`** 에서 그 캘린더를 선택·저장.
+
+이후 세션을 새로 예약할 때 그 캘린더의 **바쁜 시간대**(FreeBusy, 일정 제목은 읽지 않음)와 겹치면 409로 막는다.
+미연동·권한없음·일시 오류는 **fail-open**(예약 허용)이라 검사 실패로 업무가 막히지 않는다. 비우면(사용 안 함) 외부 검사만 끈다.
 
 ---
 

@@ -15,16 +15,28 @@ const {
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, errorPage } = require("../views");
 const { sessionRow } = require("../views.sessions");
+const { asyncHandler } = require("../lib/async");
+const calendar = require("../calendar");
 
 const router = express.Router();
 
-/** 세션 시간 겹침 안내 페이지(409). */
+/** 세션 시간 겹침 안내 페이지(409, 앱 내부 세션끼리). */
 function sessionConflictMessage(c) {
   const when = [c.session_date, [c.start_time, c.end_time].filter(Boolean).join("–")].filter(Boolean).join(" ");
   return errorPage({
     code: 409,
     title: "세션 시간이 겹칩니다",
     message: `이미 같은 시간대에 ${c.session_type} 세션이 있습니다 — ${c.project_title} (${when}). 다른 시간으로 예약하세요.`,
+    user: null,
+  });
+}
+
+/** 외부(구글) 캘린더 일정과 겹칠 때 안내 페이지(409). */
+function externalConflictMessage() {
+  return errorPage({
+    code: 409,
+    title: "구글 캘린더 일정과 겹칩니다",
+    message: "선택한 시간에 스튜디오 캘린더에 이미 잡힌 일정이 있습니다. 다른 시간으로 예약하세요.",
     user: null,
   });
 }
@@ -60,8 +72,15 @@ router.get("/sessions", requireAuth, (req, res) => {
 });
 
 // ── 세션 추가(프로젝트 하위) ──
-router.post("/sessions", requireEditor, (req, res) => {
+router.post("/sessions", requireEditor, asyncHandler(async (req, res) => {
   try {
+    // 신규 예약: 외부(구글) 캘린더 겹침 먼저 검사(미연동/오류는 fail-open).
+    const ext = await calendar.findExternalConflict({
+      date: req.body.session_date,
+      start: req.body.start_time,
+      end: req.body.end_time,
+    });
+    if (ext) return res.status(409).send(externalConflictMessage());
     const s = createSession(req.user, Number(req.body.project_id), req.body);
     if (!s) return res.status(404).send("프로젝트를 찾을 수 없습니다.");
     res.redirect(`/projects/${s.project_id}?flash=added`);
@@ -70,7 +89,7 @@ router.post("/sessions", requireEditor, (req, res) => {
     if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
     throw e;
   }
-});
+}));
 
 // ── 세션 수정 ──
 router.post("/sessions/:id", requireEditor, (req, res) => {

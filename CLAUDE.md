@@ -166,6 +166,16 @@
   update 자기 제외·시간 미정 생략. **검사 대상은 앱 DB의 세션**(곧 구글 캘린더로 푸시되는 동일 데이터) — 앱 밖
   구글 캘린더에 직접 만든 외부 일정까지 막으려면 Calendar API 읽기(스코프 재동의+GCP)가 별도로 필요(미구현, 사용자 결정 대기).
   데이터계층 12케이스 + 라우트 409 E2E 통과.
+- **외부 구글 캘린더 겹침 차단(2026-06-28)**: 앱 밖(구글 캘린더에서 직접) 잡힌 일정과도 신규 세션 예약이
+  겹치면 막는다. `src/calendar.js`(Drive와 동일 refresh token 재사용, **scope `calendar.readonly` 추가** →
+  전 직원 재동의 필요): 치프가 `/settings`에서 고른 **전용 스튜디오 캘린더** 하나의 **FreeBusy**(바쁜 시간대만,
+  일정 제목 미열람)를 읽어 겹치면 차단. `findExternalConflict`(RFC3339 KST·야간 익일·반열린 비교)를
+  `POST /sessions`(신규만, `asyncHandler`)가 호출, 겹치면 409 `errorPage`. **미연동/권한없음/네트워크 오류는
+  fail-open(통과)** — 검사 실패로 예약이 마비되지 않게. `studio_calendar_id`는 `admin_state` 저장,
+  `/settings` "스튜디오 캘린더" 섹션에서 `calendarList`로 선택. **수정(update)에는 외부검사 미적용**(세션의 자체
+  gcal 이벤트와 자기충돌 방지 — 이벤트 id 미추적). 앱 DB 세션끼리 겹침은 `findSessionConflict`(위 항목)가 담당.
+  단위(상태 왕복·fail-open·검증·rfc3339·conflictFromFreebusy) + 부팅 통합(fail-open 302·설정 섹션·스코프) 통과.
+  **사용자 사전작업: GCP에서 Calendar API 활성화 + 치프 재로그인(캘린더 권한 동의) + `/settings`에서 캘린더 선택.**
 
 ## 스택
 
@@ -231,7 +241,7 @@
   start_time?, end_time? "HH:MM", booker_name?, engineer_name?, status[예정|완료|취소], memo)` — 스튜디오 일정.
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   청구 시간 산정의 기반. `rate_item_id`(→rate_items SET NULL)는 녹음 세션 시간제 자동 산정용 단가표 연결(3단계).
-- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시
+- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(겹침 검사용 스튜디오 캘린더)
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시)
 
 ## 자료 전달 아키텍처 (플레이북1 §2.3·§4.3)
