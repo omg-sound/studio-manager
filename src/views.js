@@ -251,4 +251,14 @@ function pageHeader({ title, desc = "", action = "" }) {
   </div>`;
 }
 
-module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, errorPage, flashBanner, navItemsFor, NAV };
+/**
+ * 빈 상태 표시(목록·섹션 공통). 정렬·여백을 한 곳에서 통일.
+ * @param {string} inner 이미 빌드된 HTML(동적값은 호출부에서 esc). 보통 "···가 없습니다." + 선택적 링크.
+ * @param {{card?:boolean}} opts card=true면 카드로 감싼 페이지 상단 목록용, 아니면 섹션 내부용(여백 작게).
+ */
+function emptyState(inner, { card = false } = {}) {
+  const cls = card ? "card py-12 text-center text-sm text-muted" : "py-8 text-center text-sm text-muted";
+  return `<div class="${cls}">${inner}</div>`;
+}
+
+module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV };

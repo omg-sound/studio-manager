@@ -19,7 +19,7 @@ const {
 const storage = require("../storage");
 const { activeBackend } = storage;
 const { asyncHandler } = require("../lib/async");
-const { layout, pageHeader, esc, formatBytes } = require("../views");
+const { layout, pageHeader, esc, formatBytes, emptyState } = require("../views");
 const { deliverablesSection, deliverableRow, linkStatus } = require("../views.deliverables");
 const { todayYmd, isValidYmd, formatYmdShort } = require("../lib/date");
 
@@ -73,7 +73,7 @@ router.get("/deliverables", requireAuth, (req, res) => {
         </a>`;
         })
         .join("")
-    : `<p class="py-6 text-center text-sm text-muted">전달된 자료가 없습니다.</p>`;
+    : emptyState("전달된 자료가 없습니다.");
 
   const backendNote = admin
     ? `<p class="mb-3 text-xs text-muted">스토리지: ${activeBackend() === "drive" ? "Google Drive(연동됨)" : "로컬 디스크(Drive 미연동 — 관리자 Google 로그인 시 Drive 사용)"}</p>`

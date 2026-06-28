@@ -18,7 +18,7 @@ const {
   busySessionSlots,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
-const { layout, pageHeader, esc, flashBanner, errorPage } = require("../views");
+const { layout, pageHeader, esc, flashBanner, errorPage, emptyState } = require("../views");
 const { sessionRow } = require("../views.sessions");
 const { asyncHandler } = require("../lib/async");
 const calendar = require("../calendar");
@@ -84,7 +84,7 @@ router.get("/sessions", requireAuth, (req, res) => {
 
   const upList = up.length
     ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div></div>`
-    : `<div class="card text-center text-sm text-muted">다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.</div>`;
+    : emptyState("다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
 
   const pastList = past.length
     ? `<details class="card mt-3">

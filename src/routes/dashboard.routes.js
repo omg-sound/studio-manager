@@ -3,7 +3,7 @@
 const express = require("express");
 const { requireAuth } = require("../auth");
 const { dashboardStats } = require("../data");
-const { layout, pageHeader, esc, serviceBadges, formatKRW } = require("../views");
+const { layout, pageHeader, esc, serviceBadges, formatKRW, emptyState } = require("../views");
 const { ddayLabel } = require("../lib/date");
 
 const router = express.Router();
@@ -35,7 +35,7 @@ router.get("/", requireAuth, (req, res) => {
       </a>`
         )
         .join("")
-    : `<p class="py-6 text-center text-sm text-muted">임박한 마감이 없습니다.</p>`;
+    : emptyState("임박한 마감이 없습니다.");
 
   const moneyCard = (label, amount, danger = false, sub = "") => `
     <div class="card">

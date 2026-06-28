@@ -4,7 +4,7 @@
  * 자료 전달(deliverables) 목록/행 렌더. 프로젝트 상세와 타임라인에서 공유.
  */
 
-const { esc, formatBytes } = require("./views");
+const { esc, formatBytes, emptyState } = require("./views");
 const { todayYmd } = require("./lib/date");
 
 const KIND_BADGE = {
@@ -44,7 +44,7 @@ function deliverableRow(dv, { isAdmin, baseUrl }) {
         dv.access_token
           ? `<div class="flex items-center gap-2">
                <input class="input flex-1 text-xs" readonly value="${esc(shareUrl)}" />
-               <button type="button" class="btn-ghost px-3 py-1.5 text-xs" data-copy="${esc(shareUrl)}">복사</button>
+               <button type="button" class="btn-ghost btn-xs" data-copy="${esc(shareUrl)}">복사</button>
              </div>
              <div class="text-xs ${status.cls}">${status.label} · 다운로드 ${dv.download_count}회</div>`
           : `<div class="text-xs text-muted">공유 링크가 없습니다. 아래에서 발급하세요.</div>`
@@ -55,13 +55,13 @@ function deliverableRow(dv, { isAdmin, baseUrl }) {
             <label class="label mb-0.5 text-xs">만료일(선택)</label>
             <input type="date" name="expires_at" class="input py-1 text-xs" value="${esc(dv.expires_at || "")}" />
           </div>
-          <button class="btn-ghost px-3 py-1.5 text-xs">${dv.access_token ? "링크 갱신" : "링크 발급"}</button>
+          <button class="btn-ghost btn-xs">${dv.access_token ? "링크 갱신" : "링크 발급"}</button>
         </form>
         <form method="post" action="/deliverables/${dv.id}/revoke">
-          <button class="btn-ghost px-3 py-1.5 text-xs ${dv.revoked ? "text-success" : "text-danger"}">${dv.revoked ? "철회 해제" : "철회"}</button>
+          <button class="btn-ghost btn-xs ${dv.revoked ? "text-success" : "text-danger"}">${dv.revoked ? "철회 해제" : "철회"}</button>
         </form>
         <form method="post" action="/deliverables/${dv.id}/delete" data-confirm="이 자료와 파일을 삭제할까요?">
-          <button class="btn-ghost px-3 py-1.5 text-xs text-danger">삭제</button>
+          <button class="btn-ghost btn-xs text-danger">삭제</button>
         </form>
       </div>
     </div>`
@@ -77,7 +77,7 @@ function deliverableRow(dv, { isAdmin, baseUrl }) {
           <div class="mt-0.5 truncate text-xs text-muted">${esc(dv.file_name)} · ${meta}</div>
           ${dv.note ? `<div class="mt-1 text-xs text-muted">${esc(dv.note)}</div>` : ""}
         </div>
-        <a href="/deliverables/${dv.id}/raw" class="btn-ghost shrink-0 px-3 py-1.5 text-xs">다운로드</a>
+        <a href="/deliverables/${dv.id}/raw" class="btn-ghost shrink-0 btn-xs">다운로드</a>
       </div>
       ${adminControls}
     </div>`;
@@ -87,9 +87,9 @@ function deliverableRow(dv, { isAdmin, baseUrl }) {
 function deliverablesSection({ project, rows, isAdmin, baseUrl, collapsed = false }) {
   const list = rows.length
     ? rows.map((dv) => deliverableRow(dv, { isAdmin, baseUrl })).join("")
-    : `<p class="py-4 text-center text-sm text-muted">전달된 자료가 없습니다.</p>`;
+    : emptyState("전달된 자료가 없습니다.");
   const uploadBtn = isAdmin
-    ? `<a href="/projects/${project.id}/deliverables/new" class="btn-primary px-3 py-1.5 text-sm">+ 자료 업로드</a>`
+    ? `<a href="/projects/${project.id}/deliverables/new" class="btn-primary btn-sm">+ 자료 업로드</a>`
     : "";
   if (collapsed) {
     return `

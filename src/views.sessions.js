@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
-const { esc, formatKRW } = require("./views");
+const { esc, formatKRW, emptyState } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
 /** 담당자 마스터 선택지. 현재값이 목록에 없으면 보존용으로 추가. 예약 담당자·담당 엔지니어 공용. */
@@ -196,7 +196,7 @@ function sessionCreateForm(project, managers, rateItems = []) {
     <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
       ${sessionBookingFields({}, managers, rateItems, project.project_type === "recording")}
-      <button class="btn-primary mt-3 px-3 py-1.5 text-sm" type="submit">세션 추가</button>
+      <button class="btn-primary mt-3 btn-sm" type="submit">세션 추가</button>
     </form>`;
 }
 
@@ -228,7 +228,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
            </select>
          </div>
          <input class="input py-1.5 text-sm" name="new_track_title" placeholder="새 곡·콘텐츠명(선택)" />
-         <button class="btn-primary px-3 py-1.5 text-sm" type="submit">이 세션으로 청구 작업 생성 (${formatKRW(s.billing.amount)})</button>
+         <button class="btn-primary btn-sm" type="submit">이 세션으로 청구 작업 생성 (${formatKRW(s.billing.amount)})</button>
        </form>`
     : "";
   return `
@@ -257,15 +257,15 @@ function sessionControls(s, managers, rateItems = []) {
       <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 완료 / 삭제</summary>
       <form method="post" action="/sessions/${s.id}" class="mt-2">
         ${sessionFields(s, managers, rateItems)}
-        <button class="btn-primary mt-2 px-3 py-1.5 text-xs" type="submit">세션 저장</button>
+        <button class="btn-primary mt-2 btn-xs" type="submit">세션 저장</button>
       </form>
       <div class="mt-2 flex gap-2">
         <form method="post" action="/sessions/${s.id}/status">
           <input type="hidden" name="status" value="${toggleTo}" />
-          <button class="btn-ghost px-3 py-1.5 text-xs" type="submit">${toggleTo} 처리</button>
+          <button class="btn-ghost btn-xs" type="submit">${toggleTo} 처리</button>
         </form>
         <form method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?">
-          <button class="btn-ghost px-3 py-1.5 text-xs text-danger" type="submit">삭제</button>
+          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
         </form>
       </div>
     </details>`;
@@ -276,7 +276,7 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
   const list = rows.length
     ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, tracks, projectTitle: project.title })).join("")
-    : `<p class="py-4 text-center text-sm text-muted">등록된 세션이 없습니다.</p>`;
+    : emptyState("등록된 세션이 없습니다.");
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
   const isMixing = project && project.project_type === "mixing";
   if (isMixing && !expand) {

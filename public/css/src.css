@@ -68,6 +68,13 @@
   .btn-ghost {
     @apply btn border border-border bg-surface text-fg hover:bg-elevated;
   }
+  /* 크기 모디파이어: btn-primary/btn-ghost와 함께 사용(예: "btn-primary btn-sm"). 뒤에 정의해 패딩이 우선. */
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  .btn-xs {
+    @apply px-3 py-1.5 text-xs;
+  }
   .input {
     @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-fg placeholder:text-muted/70 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
   }

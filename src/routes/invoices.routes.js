@@ -14,7 +14,7 @@ const {
   isOverdue,
   deleteInvoice,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState } = require("../views");
 const { invoiceRow, invoiceBadge } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
@@ -71,7 +71,7 @@ router.get("/", requireInvoice, (req, res) => {
 
   const list = rows.length
     ? `<div class="card">${rows.map((i) => invoiceRow(i)).join("")}</div>`
-    : `<div class="card text-center text-sm text-muted">청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}</div>`;
+    : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
 
   const action = admin ? `<a href="/invoices/new" class="btn-primary">+ 새 청구</a>` : "";
   const dueNote = totalDue > 0

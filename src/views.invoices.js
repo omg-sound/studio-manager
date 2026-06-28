@@ -3,7 +3,7 @@
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
 const { INVOICE_STATUS_BADGE } = require("./config");
-const { esc, formatKRW } = require("./views");
+const { esc, formatKRW, emptyState } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel } = require("./lib/date");
 
@@ -60,9 +60,9 @@ function invoiceRow(inv, { compact = false } = {}) {
 function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledForm = "", unbilledCount = 0, pendingSessionsHtml = "" }) {
   const list = rows.length
     ? rows.map((i) => invoiceRow(i, { compact: true })).join("")
-    : `<p class="py-4 text-center text-sm text-muted">청구 내역이 없습니다.</p>`;
+    : emptyState("청구 내역이 없습니다.");
   const addBtn = isAdmin
-    ? `<a href="/invoices/new?projectId=${project.id}" class="btn-primary px-3 py-1.5 text-sm">+ 청구 추가</a>`
+    ? `<a href="/invoices/new?projectId=${project.id}" class="btn-primary btn-sm">+ 청구 추가</a>`
     : "";
   const total = rows.reduce((s, i) => s + (i.amount || 0), 0);
   const due = rows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0);

@@ -5,7 +5,7 @@ const { db } = require("../db");
 const { requireChief } = require("../auth");
 const { CLIENT_KINDS, normalizeClientKind } = require("../config");
 const { listClients, clientKindCounts, getClient } = require("../data");
-const { layout, pageHeader, esc, flashBanner } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState } = require("../views");
 
 const router = express.Router();
 
@@ -45,12 +45,12 @@ router.get("/", (req, res) => {
               ${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}
             </div>
           </div>
-          <a href="/clients/${c.id}/edit" class="btn-ghost shrink-0 px-3 py-1 text-xs">수정</a>
+          <a href="/clients/${c.id}/edit" class="btn-ghost shrink-0 btn-xs">수정</a>
         </div>
       </div>`;
         })
         .join("")
-    : `<div class="card text-center text-sm text-muted">${activeKind ? esc(activeKind) + " 분류의 클라이언트가 없습니다." : "클라이언트가 없습니다."}</div>`;
+    : emptyState(activeKind ? esc(activeKind) + " 분류의 클라이언트가 없습니다." : "클라이언트가 없습니다.", { card: true });
 
   const body = `
     ${flashBanner(req.query)}
