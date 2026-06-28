@@ -219,6 +219,11 @@
   히스토리(`autocomplete="off"`)를 끄고, **기존 프로젝트 값 기반 `<datalist>`**(`distinctProjectFields`→
   `projectFieldDatalists`, `dl-artists`/`dl-companies`/`dl-productions`)로 자동완성. 라벨 '아티스트 소속사'→
   '소속사/레이블'. CSP 안전(순수 HTML datalist, JS 0).
+- **클라이언트 자동 등록 + 통칭 정리(2026-06-28)**: ① 프로젝트 저장 시 아티스트·소속사/레이블·제작사를
+  **클라이언트 마스터에 분류별 자동 등록**(`ensureClientsFromProject`, 이름+분류 중복 제거). 기존 프로젝트는 1회
+  백필(`project_clients_backfill_v1`). ② `/clients` 페이지의 **'실결제자' 표기를 '클라이언트'(통칭)로** 변경(제목·
+  버튼·빈상태·수정), 대시보드 카드도 '클라이언트'. **실결제자는 클라이언트가 프로젝트/인보이스에서 갖는 결제
+  역할**(`client_id` 선택)로 유지. 단위(자동 등록·중복·빈값·백필) + 부팅 통합(생성→분류 탭 반영·제목) 통과.
 
 ## 스택
 
@@ -255,7 +260,9 @@
 - `users(email, role[owner|chief|staff], name, google_sub?, active, client_id?[레거시], password_hash?[레거시])` —
   `active=0`이면 로그인 차단(화이트리스트 제거). 마이그레이션에서 기존 `admin`→`chief` 자동 승계.
   `password_hash`/`client_id`는 구 모델 잔재 컬럼(미사용).
-- `clients(name, kind, phone?, email?, memo?, biz_no?, owner_name?, address?)` — UI상 **실결제자(공급받는 자)**.
+- `clients(name, kind[아티스트|소속사/레이블|제작사|기타], phone?, email?, memo?, biz_no?, owner_name?, address?)` —
+  UI상 **클라이언트**(통칭). 프로젝트의 아티스트·소속사/레이블·제작사가 저장 시 분류별로 자동 등록되고
+  (`ensureClientsFromProject`), 그중 하나가 프로젝트/인보이스의 **실결제자(공급받는 자)** 역할로 선택된다(`client_id`).
   `biz_no`(사업자등록번호)·`owner_name`(대표자)·`address`(사업장 주소)는 세금계산서용 상세정보.
 - `projects(title, artist?, artist_company?, production_company?, client_id?→clients ON DELETE SET NULL,
   manager_id?→project_managers ON DELETE SET NULL, services JSON, due_date?, rate, memo)` — `services`는

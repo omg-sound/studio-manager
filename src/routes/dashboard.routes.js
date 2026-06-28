@@ -59,7 +59,7 @@ router.get("/", requireAuth, (req, res) => {
     cardItems.push(moneyCard("이번 달 발행", inv.thisMonthIssued));
   }
   cardItems.push(statCard("프로젝트", s.total));
-  if (s.isChief) cardItems.push(statCard("실결제자", s.clients));
+  if (s.isChief) cardItems.push(statCard("클라이언트", s.clients));
   if (!s.canInvoice) cardItems.push(statCard("임박한 마감", s.upcoming.length));
   const cols = cardItems.length >= 4 ? "sm:grid-cols-4" : cardItems.length === 3 ? "sm:grid-cols-3" : "";
   const cards = `<div class="grid grid-cols-2 gap-3 ${cols}">${cardItems.join("")}</div>`;

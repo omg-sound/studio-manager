@@ -266,6 +266,18 @@ function init() {
     backfillLegacyServicesToTracks();
     setState("legacy_backfill_v1", "done");
   }
+  // 기존 프로젝트의 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 1회 백필. 이후는 프로젝트 저장 시 자동 등록.
+  if (!getState("project_clients_backfill_v1")) {
+    for (const [col, kind] of [["artist", "아티스트"], ["artist_company", "소속사/레이블"], ["production_company", "제작사"]]) {
+      d.prepare(
+        `INSERT INTO clients (name, kind)
+         SELECT DISTINCT TRIM(p.${col}), ? FROM projects p
+         WHERE p.${col} IS NOT NULL AND TRIM(p.${col}) <> ''
+           AND NOT EXISTS (SELECT 1 FROM clients c WHERE c.name = TRIM(p.${col}) AND c.kind = ?)`
+      ).run(kind, kind);
+    }
+    setState("project_clients_backfill_v1", "done");
+  }
   // 하우스 엔지니어(이름 있는 활성 사용자)를 작업 담당자로 1회 백필. 이후는 로그인·관리에서 동기화.
   if (!getState("house_engineer_backfill_v1")) {
     d.prepare(

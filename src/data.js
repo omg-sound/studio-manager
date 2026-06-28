@@ -18,6 +18,7 @@ const {
   normalizeSessionType,
   normalizeSessionStatus,
   normalizeRecordingCategory,
+  normalizeClientKind,
 } = require("./config");
 
 /** 'HH:MM' 검증(아니면 null). */
@@ -80,6 +81,22 @@ function getClient(id) {
 }
 function clientOptions() {
   return db().prepare("SELECT id, name FROM clients ORDER BY name COLLATE NOCASE").all();
+}
+
+/** 이름+분류로 클라이언트가 없으면 생성(있으면 무시). 프로젝트 입력값 자동 등록용. */
+function ensureClient(name, kind) {
+  const n = String(name || "").trim();
+  if (!n) return;
+  const k = normalizeClientKind(kind);
+  const exists = db().prepare("SELECT id FROM clients WHERE name = ? AND kind = ?").get(n, k);
+  if (!exists) db().prepare("INSERT INTO clients (name, kind) VALUES (?, ?)").run(n, k);
+}
+
+/** 프로젝트의 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록. */
+function ensureClientsFromProject(p = {}) {
+  ensureClient(p.artist, "아티스트");
+  ensureClient(p.artist_company, "소속사/레이블");
+  ensureClient(p.production_company, "제작사");
 }
 
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
@@ -970,6 +987,7 @@ module.exports = {
   clientKindCounts,
   getClient,
   clientOptions,
+  ensureClientsFromProject,
   listProjectManagers,
   listProjectServiceItems,
   listRateItems,

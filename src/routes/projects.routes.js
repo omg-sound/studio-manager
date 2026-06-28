@@ -22,6 +22,7 @@ const {
   getProjectForUser,
   deleteProject,
   clientOptions,
+  ensureClientsFromProject,
   listProjectManagers,
   listRateItems,
   listDeliverablesForProject,
@@ -167,6 +168,7 @@ router.post("/", requireEditor, (req, res) => {
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
+  ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
 });
 
@@ -315,6 +317,7 @@ router.post("/:id", requireEditor, (req, res) => {
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
+  ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
   res.redirect(`/projects/${id}?flash=saved`);
 });
 

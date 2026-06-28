@@ -9,7 +9,7 @@ const { layout, pageHeader, esc, flashBanner } = require("../views");
 
 const router = express.Router();
 
-// 모든 클라이언트(실결제자) 라우트는 치프 전용
+// 모든 클라이언트 라우트는 치프 전용
 router.use(requireChief);
 
 // ── 목록(탭 = 분류 필터) ──
@@ -50,25 +50,25 @@ router.get("/", (req, res) => {
       </div>`;
         })
         .join("")
-    : `<div class="card text-center text-sm text-muted">${activeKind ? esc(activeKind) + " 분류의 실결제자가 없습니다." : "실결제자가 없습니다."}</div>`;
+    : `<div class="card text-center text-sm text-muted">${activeKind ? esc(activeKind) + " 분류의 클라이언트가 없습니다." : "클라이언트가 없습니다."}</div>`;
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "실결제자", desc: "공급받는 자(결제 주체) · 세금계산서 정보", action: `<a href="/clients/new" class="btn-primary">+ 새 실결제자</a>` })}
+    ${pageHeader({ title: "클라이언트", desc: "아티스트 · 소속사/레이블 · 제작사 (프로젝트에서 자동 등록). 실결제자가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
     ${tabBar}
     ${list}`;
-  res.send(layout({ title: "실결제자", user: req.user, current: "/clients", body }));
+  res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body }));
 });
 
-// ── 새 실결제자 ──
+// ── 새 클라이언트 ──
 router.get("/new", (req, res) => {
-  res.send(layout({ title: "새 실결제자", user: req.user, current: "/clients", body: clientForm({}) }));
+  res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}) }));
 });
 
 router.post("/", (req, res) => {
   const b = req.body;
   const name = String(b.name || "").trim();
-  if (!name) return res.send(layout({ title: "새 실결제자", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }) }));
+  if (!name) return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }) }));
   const info = db()
     .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, address) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@address)")
     .run({
@@ -87,17 +87,17 @@ router.post("/", (req, res) => {
 // ── 수정 ──
 router.get("/:id/edit", (req, res) => {
   const c = getClient(Number(req.params.id));
-  if (!c) return res.status(404).send("실결제자를 찾을 수 없습니다.");
-  res.send(layout({ title: "실결제자 수정", user: req.user, current: "/clients", body: clientForm(c, true) }));
+  if (!c) return res.status(404).send("클라이언트를 찾을 수 없습니다.");
+  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true) }));
 });
 
 router.post("/:id", (req, res) => {
   const id = Number(req.params.id);
   const c = getClient(id);
-  if (!c) return res.status(404).send("실결제자를 찾을 수 없습니다.");
+  if (!c) return res.status(404).send("클라이언트를 찾을 수 없습니다.");
   const b = req.body;
   const name = String(b.name || "").trim();
-  if (!name) return res.send(layout({ title: "실결제자 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
+  if (!name) return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
   db()
     .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, address=@address WHERE id=@id")
     .run({
@@ -119,7 +119,7 @@ function clientForm(c = {}, isEdit = false) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   return `
-    ${pageHeader({ title: isEdit ? "실결제자 수정" : "새 실결제자", desc: "공급받는 자 · 세금계산서 정보" })}
+    ${pageHeader({ title: isEdit ? "클라이언트 수정" : "새 클라이언트", desc: "분류 · 연락처 · 세금계산서 정보(실결제자가 될 경우)" })}
     <form method="post" action="${action}" class="card space-y-4">
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div><label class="label">상호(이름)</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
