@@ -186,6 +186,16 @@ function computeRatePrice(item, minutes) {
  * 프로젝트 목록(로그인 직원 전체 열람). 필터(service/clientId/q)는 옵션.
  * @returns {Array}
  */
+/** 프로젝트 폼 자동완성용 — 기존 프로젝트의 아티스트·소속사/레이블·제작사 중복 제거 목록. */
+function distinctProjectFields() {
+  const col = (c) =>
+    db()
+      .prepare(`SELECT DISTINCT ${c} AS v FROM projects WHERE ${c} IS NOT NULL AND TRIM(${c}) <> '' ORDER BY ${c} COLLATE NOCASE`)
+      .all()
+      .map((r) => r.v);
+  return { artists: col("artist"), companies: col("artist_company"), productions: col("production_company") };
+}
+
 function listProjects(_user, { service, clientId, q } = {}) {
   const where = [];
   const params = {};
@@ -969,6 +979,7 @@ module.exports = {
   deleteRateItem,
   computeRatePrice,
   listProjects,
+  distinctProjectFields,
   getProjectForUser,
   deleteProject,
   listTracksForProject,

@@ -18,6 +18,7 @@ const {
 const { config } = require("../config");
 const {
   listProjects,
+  distinctProjectFields,
   getProjectForUser,
   deleteProject,
   clientOptions,
@@ -419,17 +420,17 @@ function projectForm(p = {}, err = "") {
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">아티스트</label>
-          <input class="input" name="artist" value="${esc(p.artist || "")}" />
+          <input class="input" name="artist" value="${esc(p.artist || "")}" list="dl-artists" autocomplete="off" />
         </div>
         <div>
-          <label class="label">아티스트 소속사</label>
-          <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" />
+          <label class="label">소속사/레이블</label>
+          <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" list="dl-companies" autocomplete="off" />
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">제작사</label>
-          <input class="input" name="production_company" value="${esc(p.production_company || "")}" />
+          <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
         <div>
           <label class="label">실결제자(공급받는 자)</label>
@@ -444,6 +445,7 @@ function projectForm(p = {}, err = "") {
         <label class="label">메모</label>
         <textarea class="input" name="memo" rows="3" placeholder="비고">${esc(p.memo || "")}</textarea>
       </div>
+      ${projectFieldDatalists()}
       <div class="flex gap-2">
         <button class="btn-primary" type="submit">추가</button>
         <a href="/projects" class="btn-ghost">취소</a>
@@ -462,17 +464,17 @@ function projectEditForm(p = {}, err = "") {
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">아티스트</label>
-          <input class="input" name="artist" value="${esc(p.artist || "")}" />
+          <input class="input" name="artist" value="${esc(p.artist || "")}" list="dl-artists" autocomplete="off" />
         </div>
         <div>
-          <label class="label">아티스트 소속사</label>
-          <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" />
+          <label class="label">소속사/레이블</label>
+          <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" list="dl-companies" autocomplete="off" />
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">제작사</label>
-          <input class="input" name="production_company" value="${esc(p.production_company || "")}" />
+          <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
         <div>
           <label class="label">실결제자(공급받는 자)</label>
@@ -487,10 +489,18 @@ function projectEditForm(p = {}, err = "") {
         <label class="label">메모</label>
         <textarea class="input" name="memo" rows="3">${esc(p.memo || "")}</textarea>
       </div>
+      ${projectFieldDatalists()}
       <div class="flex justify-end">
         <button class="btn-primary" type="submit">저장</button>
       </div>
     </form>`;
+}
+
+/** 아티스트·소속사/레이블·제작사 자동완성 datalist(기존 프로젝트 값 기반). */
+function projectFieldDatalists() {
+  const f = distinctProjectFields();
+  const dl = (id, values) => `<datalist id="${id}">${values.map((v) => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
+  return dl("dl-artists", f.artists) + dl("dl-companies", f.companies) + dl("dl-productions", f.productions);
 }
 
 function clientSelect(selectedId) {

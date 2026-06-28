@@ -215,6 +215,10 @@
   종류+작업 템플릿)·**환경설정**(스튜디오 캘린더+기본 장소) 3탭으로. CSP 안전한 **URL 기반 탭**(`?tab=`, 링크
   전환, JS 0). 활성 탭만 렌더(환경설정 탭에서만 캘린더 API 호출). POST는 `?tab=...&flash=`로 같은 탭 복귀
   (people는 기본값). `peopleTab`/`contentTab`/`studioCalendarSection`.
+- **프로젝트 메타 자동완성(2026-06-28)**: 새/편집 프로젝트 폼의 아티스트·소속사/레이블·제작사 입력에 브라우저
+  히스토리(`autocomplete="off"`)를 끄고, **기존 프로젝트 값 기반 `<datalist>`**(`distinctProjectFields`→
+  `projectFieldDatalists`, `dl-artists`/`dl-companies`/`dl-productions`)로 자동완성. 라벨 '아티스트 소속사'→
+  '소속사/레이블'. CSP 안전(순수 HTML datalist, JS 0).
 
 ## 스택
 
