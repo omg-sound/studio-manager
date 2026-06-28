@@ -76,6 +76,22 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
         <div class="space-y-2">${userRows}</div>
       </section>
 
+      <section class="card space-y-4">
+        <div>
+          <h2 class="font-display text-lg font-semibold">외주 작업자</h2>
+          <p class="mt-1 text-xs text-muted">로그인 없이 작업 담당자로만 쓰는 외부 인력. 이름·연락처·이메일로 직접 추가합니다. (하우스 엔지니어는 위에서 관리되며 여기에 표시되지 않습니다.)</p>
+        </div>
+        <form method="post" action="/settings/managers" class="space-y-2">
+          <input class="input" name="name" placeholder="이름" required />
+          <div class="grid gap-2 sm:grid-cols-2">
+            <input class="input" name="email" placeholder="이메일" />
+            <input class="input" name="phone" placeholder="전화번호" />
+          </div>
+          <button class="btn-primary w-full" type="submit">외주 작업자 추가</button>
+        </form>
+        <div class="space-y-2">${managerRows}</div>
+      </section>
+
       ${calSection}
 
       <section class="card space-y-4">
@@ -111,22 +127,6 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
           <button class="btn-primary px-3 py-1.5 text-sm" type="submit">단가 항목 추가</button>
         </form>
         <div class="space-y-2">${rateRows}</div>
-      </section>
-
-      <section class="card space-y-4">
-        <div>
-          <h2 class="font-display text-lg font-semibold">외주 작업자</h2>
-          <p class="mt-1 text-xs text-muted">로그인 없이 작업 담당자로만 쓰는 외부 인력. 이름·연락처·이메일로 직접 추가합니다. (하우스 엔지니어는 위에서 관리되며 여기에 표시되지 않습니다.)</p>
-        </div>
-        <form method="post" action="/settings/managers" class="space-y-2">
-          <input class="input" name="name" placeholder="이름" required />
-          <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input" name="email" placeholder="이메일" />
-            <input class="input" name="phone" placeholder="전화번호" />
-          </div>
-          <button class="btn-primary w-full" type="submit">외주 작업자 추가</button>
-        </form>
-        <div class="space-y-2">${managerRows}</div>
       </section>
 
       <section class="card space-y-4">
