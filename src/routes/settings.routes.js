@@ -30,32 +30,39 @@ function listUsers() {
   return db().prepare("SELECT * FROM users ORDER BY active DESC, role, email").all();
 }
 
+const SETTINGS_TABS = [
+  { key: "people", label: "담당자" },
+  { key: "content", label: "컨텐츠" },
+  { key: "settings", label: "환경설정" },
+];
+
 router.get("/", requireChief, asyncHandler(async (req, res) => {
-  const managers = listProjectManagers({ includeInactive: true, externalOnly: true }); // 외주 작업자만(하우스 엔지니어 제외)
-  const serviceItems = listProjectServiceItems({ includeInactive: true });
-  const calSection = await studioCalendarSection();
+  const tab = SETTINGS_TABS.some((t) => t.key === req.query.tab) ? req.query.tab : "people";
+  const tabBar = `<div class="mb-4 flex gap-1 overflow-x-auto border-b border-border">
+      ${SETTINGS_TABS.map((t) => `<a href="/settings?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
+    </div>`;
 
-  const managerRows = managers.length
-    ? managers.map((m) => managerRow(m)).join("")
-    : `<div class="py-3 text-sm text-muted">등록된 외주 작업자가 없습니다.</div>`;
-  const serviceRows = serviceItems.length
-    ? serviceItems.map((s) => serviceItemRow(s)).join("")
-    : `<div class="py-3 text-sm text-muted">작업 템플릿이 없습니다.</div>`;
-
-  const users = listUsers();
-  const userRows = users.length
-    ? users.map((u) => userRow(u, req.user)).join("")
-    : `<div class="py-3 text-sm text-muted">등록된 사용자가 없습니다.</div>`;
-
-  const rates = listRateItems({ includeInactive: true });
-  const rateRows = rates.length
-    ? rates.map((r) => rateItemRow(r)).join("")
-    : `<div class="py-3 text-sm text-muted">등록된 단가 항목이 없습니다.</div>`;
+  let tabContent;
+  if (tab === "people") tabContent = peopleTab(req.user);
+  else if (tab === "content") tabContent = contentTab();
+  else tabContent = await studioCalendarSection(); // 환경설정 — 캘린더 API는 이 탭에서만 호출
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "관리", desc: "하우스 엔지니어 · 외주 작업자 · 작업 템플릿" })}
-    <div class="space-y-3">
+    ${pageHeader({ title: "관리", desc: "담당자 · 컨텐츠 · 환경설정" })}
+    ${tabBar}
+    <div class="space-y-3">${tabContent}</div>`;
+
+  res.send(layout({ title: "관리", user: req.user, current: "/settings", body, full: true }));
+}));
+
+/** 담당자 탭: 하우스 엔지니어 + 외주 작업자. */
+function peopleTab(currentUser) {
+  const users = listUsers();
+  const userRows = users.length ? users.map((u) => userRow(u, currentUser)).join("") : `<div class="py-3 text-sm text-muted">등록된 사용자가 없습니다.</div>`;
+  const managers = listProjectManagers({ includeInactive: true, externalOnly: true });
+  const managerRows = managers.length ? managers.map((m) => managerRow(m)).join("") : `<div class="py-3 text-sm text-muted">등록된 외주 작업자가 없습니다.</div>`;
+  return `
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">하우스 엔지니어 <span class="text-sm font-normal text-muted">(로그인 계정)</span></h2>
@@ -90,10 +97,16 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
           <button class="btn-primary w-full" type="submit">외주 작업자 추가</button>
         </form>
         <div class="space-y-2">${managerRows}</div>
-      </section>
+      </section>`;
+}
 
-      ${calSection}
-
+/** 컨텐츠 탭: 단가표·녹음 종류 + 작업 템플릿. */
+function contentTab() {
+  const rates = listRateItems({ includeInactive: true });
+  const rateRows = rates.length ? rates.map((r) => rateItemRow(r)).join("") : `<div class="py-3 text-sm text-muted">등록된 단가 항목이 없습니다.</div>`;
+  const serviceItems = listProjectServiceItems({ includeInactive: true });
+  const serviceRows = serviceItems.length ? serviceItems.map((s) => serviceItemRow(s)).join("") : `<div class="py-3 text-sm text-muted">작업 템플릿이 없습니다.</div>`;
+  return `
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">단가표 · 녹음 종류</h2>
@@ -138,11 +151,8 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
           <button class="btn-primary shrink-0" type="submit">추가</button>
         </form>
         <div class="space-y-2">${serviceRows}</div>
-      </section>
-    </div>`;
-
-  res.send(layout({ title: "관리", user: req.user, current: "/settings", body, full: true }));
-}));
+      </section>`;
+}
 
 /** 스튜디오 캘린더(구글) 선택 섹션 — 세션 겹침 검사 대상. */
 async function studioCalendarSection() {
@@ -184,13 +194,13 @@ async function studioCalendarSection() {
 // ── 스튜디오 캘린더 선택 저장 ──
 router.post("/studio-calendar", requireChief, (req, res) => {
   calendar.setStudioCalendarId(req.body.calendar_id);
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 예약 일정 기본 장소 저장 ──
 router.post("/studio-location", requireChief, (req, res) => {
   calendar.setStudioLocation(req.body.studio_location);
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
@@ -248,7 +258,7 @@ router.post("/rate-items", requireChief, (req, res) => {
   } catch (e) {
     if (e.message !== "RATE_NAME_REQUIRED") throw e;
   }
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=content&flash=saved");
 });
 
 router.post("/rate-items/:id", requireChief, (req, res) => {
@@ -257,17 +267,17 @@ router.post("/rate-items/:id", requireChief, (req, res) => {
   } catch (e) {
     if (e.message !== "RATE_NAME_REQUIRED") throw e;
   }
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=content&flash=saved");
 });
 
 router.post("/rate-items/:id/toggle", requireChief, (req, res) => {
   setRateItemActive(Number(req.params.id), req.body.active === "1");
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=content&flash=saved");
 });
 
 router.post("/rate-items/:id/delete", requireChief, (req, res) => {
   deleteRateItem(Number(req.params.id));
-  res.redirect("/settings?flash=deleted");
+  res.redirect("/settings?tab=content&flash=deleted");
 });
 
 router.post("/managers", requireChief, (req, res) => {
@@ -298,17 +308,17 @@ router.post("/service-items", requireChief, (req, res) => {
       .prepare("INSERT INTO project_service_items (key, label, active) VALUES (?, ?, 1)")
       .run(key, label);
   }
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=content&flash=saved");
 });
 
 router.post("/service-items/:id/deactivate", requireChief, (req, res) => {
   db().prepare("UPDATE project_service_items SET active = 0 WHERE id = ?").run(Number(req.params.id));
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=content&flash=saved");
 });
 
 router.post("/service-items/:id/activate", requireChief, (req, res) => {
   db().prepare("UPDATE project_service_items SET active = 1 WHERE id = ?").run(Number(req.params.id));
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?tab=content&flash=saved");
 });
 
 function clean(value) {
