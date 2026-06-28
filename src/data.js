@@ -6,19 +6,19 @@
  * 통계·표시 분기는 권한 술어(canInvoice/isChief, auth.js)로 판단한다(거래처 외부 열람은 폐기됨).
  */
 
+const crypto = require("crypto");
 const { db } = require("./db");
 const { todayYmd, isValidYmd, formatYmdShort, minutesBetween } = require("./lib/date");
 const { canInvoice, isChief, canEdit } = require("./auth");
 const {
-  TASK_TYPE_LABELS,
   normalizeTrackContentType,
-  normalizeTaskType,
   normalizeBillingType,
   normalizeTaskStatus,
   normalizeSessionType,
   normalizeSessionStatus,
   normalizeRecordingCategory,
   normalizeClientKind,
+  normalizeTaskGroup,
 } = require("./config");
 
 /** 'HH:MM' 검증(아니면 null). */
@@ -197,6 +197,84 @@ function computeRatePrice(item, minutes) {
   return item.base_price + units * item.extra_price;
 }
 
+// ── 작업 종류 카탈로그(task_types) — config.TASK_TYPES 시드, DB가 단일 진실원천 ──
+// 라벨·그룹 해석은 자주 호출되므로 모듈 캐시(쓰기 시 무효화)로 동기 접근.
+let _taskTypeCache = null;
+function taskTypeCache() {
+  if (_taskTypeCache) return _taskTypeCache;
+  const rows = db().prepare("SELECT * FROM task_types ORDER BY active DESC, sort_order, label COLLATE NOCASE").all();
+  _taskTypeCache = { rows, byKey: new Map(rows.map((r) => [r.key, r])) };
+  return _taskTypeCache;
+}
+function invalidateTaskTypeCache() {
+  _taskTypeCache = null;
+}
+/** 관리용 전체 목록(설정 화면). 캐시 사용. */
+function listTaskTypes({ includeInactive = false } = {}) {
+  const rows = taskTypeCache().rows;
+  return includeInactive ? rows : rows.filter((r) => r.active);
+}
+/** 활성 종류(작업 폼 옵션·빠른추가 출처). */
+function activeTaskTypes() {
+  return taskTypeCache().rows.filter((r) => r.active);
+}
+/** key → 표시 라벨(없으면 key 폴백 — 삭제된 종류의 과거 작업도 깨지지 않게). */
+function taskTypeLabel(key) {
+  const r = taskTypeCache().byKey.get(key);
+  return (r && r.label) || key;
+}
+/** key → 분류(그룹). 없으면 '기타'. */
+function taskTypeGroup(key) {
+  const r = taskTypeCache().byKey.get(key);
+  return (r && r.task_group) || "기타";
+}
+/** 카탈로그에 있는 key면 통과, 없으면 첫 활성 종류로 폴백(없으면 raw 유지). 신규 종류도 정규화 통과. */
+function normalizeTaskTypeDb(key) {
+  const k = String(key || "").trim();
+  if (taskTypeCache().byKey.has(k)) return k;
+  const first = activeTaskTypes()[0];
+  return first ? first.key : k;
+}
+
+function taskTypeFields(input) {
+  return {
+    label: String(input.label || "").trim(),
+    task_group: normalizeTaskGroup(input.task_group),
+    billing_type: normalizeBillingType(input.billing_type),
+    unit_price: parseWon(input.unit_price),
+    is_quick: input.is_quick ? 1 : 0,
+    sort_order: Number.isFinite(Number(input.sort_order)) ? Number(input.sort_order) : 100,
+  };
+}
+function createTaskType(input = {}) {
+  const f = taskTypeFields(input);
+  if (!f.label) throw new Error("TASK_TYPE_LABEL_REQUIRED");
+  const key = `tt_${crypto.randomBytes(5).toString("hex")}`; // 안정 불투명 key(라벨 변경에도 불변)
+  db()
+    .prepare(
+      `INSERT INTO task_types (key, label, task_group, billing_type, unit_price, is_quick, sort_order, active)
+       VALUES (@key,@label,@task_group,@billing_type,@unit_price,@is_quick,@sort_order,1)`
+    )
+    .run({ key, ...f });
+  invalidateTaskTypeCache();
+}
+function updateTaskType(id, input = {}) {
+  const f = taskTypeFields(input);
+  if (!f.label) throw new Error("TASK_TYPE_LABEL_REQUIRED");
+  db()
+    .prepare(
+      `UPDATE task_types SET label=@label, task_group=@task_group, billing_type=@billing_type,
+       unit_price=@unit_price, is_quick=@is_quick, sort_order=@sort_order WHERE id=@id`
+    )
+    .run({ id, ...f });
+  invalidateTaskTypeCache();
+}
+/** 강제 삭제(연결 가드 없음, 사용자 결정). 과거 track_tasks는 key 문자열을 유지(라벨만 폴백). */
+function deleteTaskType(id) {
+  db().prepare("DELETE FROM task_types WHERE id = ?").run(id);
+  invalidateTaskTypeCache();
+}
+
 // ── 프로젝트(클라이언트 범위 강제) ──
 
 /**
@@ -373,7 +451,7 @@ function updateTask(user, taskId, input = {}) {
     )
     .run({
       id: task.id,
-      task_type: normalizeTaskType(input.task_type),
+      task_type: normalizeTaskTypeDb(input.task_type),
       billing_type: normalizeBillingType(input.billing_type),
       quantity,
       unit_price: unitPrice,
@@ -402,7 +480,7 @@ function createTask(user, trackId, input = {}) {
   if (!track) return null;
   const quantity = parseQuantity(input.quantity);
   const unitPrice = parseWon(input.unit_price);
-  const taskType = normalizeTaskType(input.task_type);
+  const taskType = normalizeTaskTypeDb(input.task_type);
   const info = db()
     .prepare(
       `INSERT INTO track_tasks
@@ -515,7 +593,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, issueDate, dueDate, 
     );
     const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ? WHERE id = ?");
     for (const task of tasks) {
-      const taskLabel = TASK_TYPE_LABELS[task.task_type] || task.task_type;
+      const taskLabel = taskTypeLabel(task.task_type);
       const description = `${task.track_title} - ${taskLabel}`;
       insertItem.run(
         invoiceId,
@@ -927,7 +1005,7 @@ function createTaskFromSession(user, sessionId, { trackId, newTrackTitle, taskTy
       track = d.prepare("SELECT * FROM project_tracks WHERE id = ?").get(tinfo.lastInsertRowid);
     }
     // 작업 종류: 폼에서 선택한 값(악기/ADR 녹음 등) 우선, 없으면 보컬 녹음 기본.
-    const resolvedTaskType = normalizeTaskType(taskType || "Vocal_Recording");
+    const resolvedTaskType = normalizeTaskTypeDb(taskType || "Vocal_Recording");
     const info = d
       .prepare(
         `INSERT INTO track_tasks
@@ -996,6 +1074,13 @@ module.exports = {
   setRateItemActive,
   deleteRateItem,
   computeRatePrice,
+  listTaskTypes,
+  activeTaskTypes,
+  taskTypeLabel,
+  taskTypeGroup,
+  createTaskType,
+  updateTaskType,
+  deleteTaskType,
   listProjects,
   distinctProjectFields,
   getProjectForUser,

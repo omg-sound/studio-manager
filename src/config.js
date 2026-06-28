@@ -113,19 +113,25 @@ const TRACK_CONTENT_TYPE_LABELS = {
   Music: "음악",
   Video_Post: "영상 후시/포스트",
 };
+// 작업 종류: DB 카탈로그(task_types)의 시드 데이터. 부팅 시 1회 시드 후로는 DB가 단일 진실원천.
+// billing=기본 과금, price=기본 단가(원), quick=곡·콘텐츠 '빠른 추가' 버튼 노출.
 const TASK_TYPES = [
-  { key: "Vocal_Recording", label: "보컬 녹음", group: "Recording" },
-  { key: "Instrument_Recording", label: "악기 녹음", group: "Recording" },
-  { key: "ADR_Recording", label: "ADR/후시 녹음", group: "Recording" },
-  { key: "Vocal_Tuning", label: "보컬튠", group: "Post_Production" },
-  { key: "Audio_Editing", label: "오디오 편집", group: "Post_Production" },
-  { key: "Mixing", label: "믹싱", group: "Mix_Master" },
-  { key: "Mastering", label: "마스터링", group: "Mix_Master" },
-  { key: "Audio_Dub_Mixing", label: "더빙 믹싱", group: "Video_Audio" },
-  { key: "SFX_Foley", label: "SFX/Foley", group: "Video_Audio" },
+  { key: "Vocal_Recording", label: "보컬 녹음", group: "Recording", billing: "Time_Charge", price: 0, quick: false },
+  { key: "Instrument_Recording", label: "악기 녹음", group: "Recording", billing: "Time_Charge", price: 0, quick: false },
+  { key: "ADR_Recording", label: "ADR/후시 녹음", group: "Recording", billing: "Time_Charge", price: 0, quick: false },
+  { key: "Vocal_Tuning", label: "보컬튠", group: "Post_Production", billing: "Fixed_Per_Track", price: 0, quick: true },
+  { key: "Audio_Editing", label: "오디오 편집", group: "Post_Production", billing: "Fixed_Per_Track", price: 0, quick: true },
+  { key: "Mixing", label: "믹싱", group: "Mix_Master", billing: "Fixed_Per_Track", price: 0, quick: true },
+  { key: "Mastering", label: "마스터링", group: "Mix_Master", billing: "Fixed_Per_Track", price: 0, quick: true },
+  { key: "Audio_Dub_Mixing", label: "더빙 믹싱", group: "Video_Audio", billing: "Fixed_Per_Track", price: 0, quick: false },
+  { key: "SFX_Foley", label: "SFX/Foley", group: "Video_Audio", billing: "Fixed_Per_Track", price: 0, quick: false },
 ];
 const TASK_TYPE_KEYS = TASK_TYPES.map((t) => t.key);
+// 레거시 폴백용(런타임 라벨 해석은 data.js 캐시가 담당). 시드 라벨 맵.
 const TASK_TYPE_LABELS = Object.fromEntries(TASK_TYPES.map((t) => [t.key, t.label]));
+// 작업 종류 분류(그룹) — 구조적 상수(요약·빠른버튼 그룹핑). 카탈로그 행이 이를 참조.
+const TASK_GROUPS = ["Recording", "Post_Production", "Mix_Master", "Video_Audio"];
+const TASK_GROUP_LABELS = { Recording: "녹음", Post_Production: "후반 작업", Mix_Master: "믹스·마스터", Video_Audio: "영상 오디오" };
 const BILLING_TYPES = ["Time_Charge", "Fixed_Per_Track"];
 const BILLING_TYPE_LABELS = {
   Time_Charge: "시간 과금",
@@ -208,6 +214,8 @@ module.exports = {
   TASK_TYPES,
   TASK_TYPE_KEYS,
   TASK_TYPE_LABELS,
+  TASK_GROUPS,
+  TASK_GROUP_LABELS,
   BILLING_TYPES,
   BILLING_TYPE_LABELS,
   TASK_STATUSES,
@@ -228,6 +236,7 @@ module.exports = {
   normalizeInvoiceStatus: (v) => normalize(v, INVOICE_STATUSES),
   normalizeTrackContentType: (v) => normalize(v, TRACK_CONTENT_TYPES),
   normalizeTaskType: (v) => normalize(v, TASK_TYPE_KEYS),
+  normalizeTaskGroup: (v) => normalize(v, TASK_GROUPS),
   normalizeBillingType: (v) => normalize(v, BILLING_TYPES),
   normalizeTaskStatus: (v) => normalize(v, TASK_STATUSES),
   normalize,

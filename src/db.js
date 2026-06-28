@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { config } = require("./config");
+const { config, TASK_TYPES } = require("./config");
 const { openDatabase } = require("./sqlite");
 
 let _db = null;
@@ -101,6 +101,21 @@ function init() {
       extra_price   INTEGER NOT NULL DEFAULT 0,    -- 초과 단위당 가격(원)
       active        INTEGER NOT NULL DEFAULT 1,
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- 작업 종류 카탈로그(곡·콘텐츠 후반작업 종류). config.TASK_TYPES를 1회 시드 후 DB가 단일 진실원천.
+    -- track_tasks.task_type은 이 key를 문자열로 저장(FK 아님). CHECK 제약 없음(코드 상수가 분류·과금 정규화).
+    CREATE TABLE IF NOT EXISTS task_types (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      key          TEXT NOT NULL UNIQUE,                       -- 안정 식별자(기존 Vocal_Recording… / 신규 tt_xxx)
+      label        TEXT NOT NULL,                              -- 표시명(예: 보컬튠)
+      task_group   TEXT NOT NULL DEFAULT 'Post_Production',    -- 분류(TASK_GROUPS 참조)
+      billing_type TEXT NOT NULL DEFAULT 'Fixed_Per_Track',    -- 기본 과금(BILLING_TYPES)
+      unit_price   INTEGER NOT NULL DEFAULT 0,                 -- 기본 단가(원)
+      is_quick     INTEGER NOT NULL DEFAULT 0,                 -- 곡·콘텐츠 '빠른 추가' 버튼 노출
+      sort_order   INTEGER NOT NULL DEFAULT 100,
+      active       INTEGER NOT NULL DEFAULT 1,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     -- 프로젝트 하위 트랙/콘텐츠. 한 프로젝트는 1..N개의 음악 트랙 또는 영상 콘텐츠를 가진다.
@@ -202,6 +217,7 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
     CREATE INDEX IF NOT EXISTS idx_project_service_items_active ON project_service_items(active, label);
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
+    CREATE INDEX IF NOT EXISTS idx_task_types_active ON task_types(active, sort_order, label);
     CREATE INDEX IF NOT EXISTS idx_project_tracks_project ON project_tracks(project_id);
     CREATE INDEX IF NOT EXISTS idx_track_tasks_track ON track_tasks(track_id);
     CREATE INDEX IF NOT EXISTS idx_track_tasks_invoice ON track_tasks(invoice_id, is_invoiced);
@@ -309,6 +325,18 @@ function seedDefaultCatalogs() {
      ON CONFLICT(key) DO UPDATE SET label = excluded.label`
   );
   for (const [key, label] of services) upsertService.run(key, label);
+
+  // 작업 종류 카탈로그 1회 시드(이후 치프의 편집·삭제가 영구히 유지되도록 플래그 게이트). ON CONFLICT으로 멱등.
+  if (!getState("task_types_seed_v1")) {
+    const insTaskType = d.prepare(
+      `INSERT INTO task_types (key, label, task_group, billing_type, unit_price, is_quick, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO NOTHING`
+    );
+    TASK_TYPES.forEach((t, i) =>
+      insTaskType.run(t.key, t.label, t.group, t.billing || "Fixed_Per_Track", t.price || 0, t.quick ? 1 : 0, (i + 1) * 10)
+    );
+    setState("task_types_seed_v1", "done");
+  }
 
   const hasManager = d.prepare("SELECT id FROM project_managers LIMIT 1").get();
   if (!hasManager) {
