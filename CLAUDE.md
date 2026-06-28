@@ -126,7 +126,7 @@
   묶여 표시된다. 기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
   (`base_minutes=0`이면 정액). `computeRatePrice(item, minutes)`가 산정. 관리 메뉴에서 치프가 CRUD.
 - `project_tracks(project_id→projects CASCADE, title, content_type[Music|Video_Post], created_at)` —
-  프로젝트 하위 곡/영상 콘텐츠.
+  프로젝트 하위 곡·콘텐츠. `content_type` 상수·정규화(`config.js`)는 있으나 **현재 UI 미노출 → 전부 Music**, 영상 구분은 향후 확장용.
 - `track_tasks(track_id→project_tracks CASCADE, task_type, billing_type[Time_Charge|Fixed_Per_Track],
   quantity, unit_price, total_price, engineer_name?, status[Pending|In_Progress|Completed],
   is_invoiced, invoice_id?, session_id?→sessions SET NULL)` — 실제 청구 가능한 모듈형 작업 단위.

@@ -4,10 +4,10 @@
 > 이 문서는 **다음 작업을 빠르게 이어받기 위한 현재 스냅샷 + 실행 가이드**다.
 > 상세 설계 변천사·함정은 [`CLAUDE.md`](./CLAUDE.md) 참조.
 >
-> **현재 상태(2026-06-28)**: MVP 동작 + 권한 3단계 + UX 개선 + **세션(일정)** + 클라이언트 분류 탭 +
-> **세션 시간→청구 자동 산정(3단계)** + **백업/연체 cron + Render Blueprint** 완료. 로컬 검증 통과.
-> **GitHub 푸시 완료**(`omg-sound/studio-manager`). **현재: Render Blueprint 시크릿 입력 중** —
-> `GOOGLE_CLIENT_SECRET`·`BACKUP_TOKEN`이 다음 작업(`DEPLOY.md` ▶진행 상태). 미완: Drive 실연동, 청구서 PDF.
+> **현재 상태(2026-06-29)**: **프로덕션 라이브**(`omg-studios-manager.onrender.com`) — Google OAuth 로그인·
+> `/healthz`·일일 백업 cron 통과. MVP + 권한 3단계 + 세션(예약 그리드·겹침 차단·구글 캘린더 자동 연동) +
+> 녹음 종류=단가표 + 곡·콘텐츠(후반작업) + 클라이언트 자동 등록 + 프로젝트/관리 **탭** 그룹화 + 청구 '청구 대기'.
+> 미완: **작업 종류 정식 관리(다음 작업)**, Drive 실연동 검증, 청구서 PDF.
 
 ---
 
@@ -69,14 +69,14 @@ DEV_LOGIN=1 npm run dev     # build:css 후 서버 (http://localhost:3000)
 | 테이블 | 역할 |
 |---|---|
 | `users` | 로그인 계정. `role[owner\|chief\|staff]`·`active`·`google_sub`. `password_hash`/`client_id`는 레거시 |
-| `clients` | **실결제자**(공급받는 자). `biz_no`·`owner_name`·`address`(세금계산서) |
+| `clients` | **클라이언트**(통칭: 아티스트·소속사·제작사). 그중 하나가 프로젝트/청구의 **실결제자**(`client_id`). `biz_no`·`owner_name`·`address`(세금계산서) |
 | `projects` | 프로젝트 메타. `client_id`=실결제자, `manager_id`=담당자 |
-| `project_tracks` | **곡·콘텐츠**. `content_type`은 잔존 컬럼(UI 미사용, 기본 Music) |
+| `project_tracks` | **곡·콘텐츠**. `content_type[Music\|Video_Post]` 상수·정규화는 있으나 **UI 미노출 → 현재 전부 Music** |
 | `track_tasks` | **작업**. `task_type`·`billing_type`·`unit_price`·`engineer_name`·`status`·`is_invoiced` |
-| `sessions` | **세션(일정)**. `session_type`·`session_date`·`start_time`/`end_time`·`engineer_name`·`status` |
+| `sessions` | **세션(일정)**. `session_type`·`session_date`·`start_time`/`end_time`·`booker_name`·`engineer_name`·`status`·`rate_item_id`·`gcal_event_id` |
 | `invoices` / `invoice_items` | 청구 + 라인아이템 스냅샷 |
-| `project_managers` | **담당자(외주)** 마스터. 작업 엔지니어 select 출처 |
-| `project_service_items` | 작업 템플릿(레거시 호환) |
+| `project_managers` | **담당자 마스터**. `user_id` 링크=하우스 엔지니어(로그인 자동 연계), null=외주 작업자. 세션·작업 담당 select 출처 |
+| `project_service_items` | 작업 템플릿/레거시 호환. (TODO: 작업 종류 catalog로 정식화 예정) |
 | `deliverables` | 자료 전달(Drive/로컬, 토큰 공개링크) |
 | `admin_state` | drive folder_id·refresh token(암호화)·테마 |
 
@@ -102,7 +102,7 @@ src/
     projects.routes.js   목록(검색)·상세(곡콘텐츠·작업·자료·청구)·CRUD
     invoices.routes.js   청구 CRUD · 입금/상태
     sessions.routes.js   전역 일정(/sessions) + 세션 CRUD
-    clients.routes.js    실결제자 CRUD + 분류 탭 (치프)
+    clients.routes.js    클라이언트 CRUD + 분류 탭 (치프)
     settings.routes.js   사용자·담당자·작업템플릿 관리 (치프)
     deliverables.routes.js  업로드·토큰링크·다운로드
     api.routes.js        REST blueprint
@@ -160,7 +160,7 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 | UI 표기 | 코드 식별자 | 비고 |
 |---|---|---|
-| 곡 · 콘텐츠 | `project_tracks` / `track` | 음악(곡)·영상(콘텐츠) 포괄. 녹음과 별개의 후반작업 단위 |
+| 곡 · 콘텐츠 | `project_tracks` / `track` | 녹음과 별개의 후반작업 단위. `content_type`(Music\|Video_Post)은 UI 미노출(현재 전부 Music) |
 | 작업 | `track_tasks` / `task` | 보컬튠·믹싱·마스터링 등 모듈 단위 |
 | 일정 / 세션 | `sessions` | 녹음/믹싱/마스터링 예약. 사이드바 "일정" |
 | 녹음 종류 / 단가표 | `rate_items` | 스튜디오/로케이션 분류. 녹음 세션 1Pro 산정 출처 |
