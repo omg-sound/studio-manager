@@ -250,6 +250,7 @@ function init() {
   addColumn("invoices", "tax_amount", "INTEGER NOT NULL DEFAULT 0");
   addColumn("rate_items", "category", "TEXT NOT NULL DEFAULT '스튜디오 녹음'"); // 단가표(녹음 종류) 분류: 스튜디오 녹음 | 로케이션 녹음
   addColumn("sessions", "rate_item_id", "INTEGER REFERENCES rate_items(id) ON DELETE SET NULL"); // 녹음 세션 시간제 단가표 연결
+  addColumn("project_managers", "user_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL"); // 하우스 엔지니어(로그인 사용자)와 링크. null=외주 작업자
   addColumn("sessions", "booker_name", "TEXT"); // 예약 담당자(담당자 마스터에서 선택, 담당 엔지니어와 별개)
   addColumn("sessions", "gcal_event_id", "TEXT"); // 예약 시 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적)
   addColumn("track_tasks", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 세션에서 생성된 청구 작업 추적
@@ -264,6 +265,16 @@ function init() {
     backfillProjectServices();
     backfillLegacyServicesToTracks();
     setState("legacy_backfill_v1", "done");
+  }
+  // 하우스 엔지니어(이름 있는 활성 사용자)를 작업 담당자로 1회 백필. 이후는 로그인·관리에서 동기화.
+  if (!getState("house_engineer_backfill_v1")) {
+    d.prepare(
+      `INSERT INTO project_managers (name, email, active, user_id)
+       SELECT u.name, u.email, 1, u.id FROM users u
+       WHERE u.active = 1 AND u.name IS NOT NULL AND TRIM(u.name) <> ''
+         AND NOT EXISTS (SELECT 1 FROM project_managers pm WHERE pm.user_id = u.id)`
+    ).run();
+    setState("house_engineer_backfill_v1", "done");
   }
 
   // ── 후속 단계 테이블 자리(스키마만; 아직 미사용) ──

@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const express = require("express");
 const { db } = require("../db");
-const { requireChief } = require("../auth");
+const { requireChief, syncUserToManager, findUserById } = require("../auth");
 const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES } = require("../config");
 const {
   listProjectManagers,
@@ -31,13 +31,13 @@ function listUsers() {
 }
 
 router.get("/", requireChief, asyncHandler(async (req, res) => {
-  const managers = listProjectManagers({ includeInactive: true });
+  const managers = listProjectManagers({ includeInactive: true, externalOnly: true }); // 외주 작업자만(하우스 엔지니어 제외)
   const serviceItems = listProjectServiceItems({ includeInactive: true });
   const calSection = await studioCalendarSection();
 
   const managerRows = managers.length
     ? managers.map((m) => managerRow(m)).join("")
-    : `<div class="py-3 text-sm text-muted">담당자가 없습니다.</div>`;
+    : `<div class="py-3 text-sm text-muted">등록된 외주 작업자가 없습니다.</div>`;
   const serviceRows = serviceItems.length
     ? serviceItems.map((s) => serviceItemRow(s)).join("")
     : `<div class="py-3 text-sm text-muted">작업 템플릿이 없습니다.</div>`;
@@ -54,20 +54,23 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "관리", desc: "사용자 · 담당자 · 작업 템플릿" })}
+    ${pageHeader({ title: "관리", desc: "하우스 엔지니어 · 외주 작업자 · 작업 템플릿" })}
     <div class="space-y-3">
       <section class="card space-y-4">
         <div>
-          <h2 class="font-display text-lg font-semibold">사용자(로그인 계정)</h2>
-          <p class="mt-1 text-xs text-muted">여기에 등록한 Google 계정만 로그인할 수 있습니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.</p>
+          <h2 class="font-display text-lg font-semibold">하우스 엔지니어 <span class="text-sm font-normal text-muted">(로그인 계정)</span></h2>
+          <p class="mt-1 text-xs text-muted">등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지. 외부 인력은 아래 '외주 작업자'에 직접 추가하세요.</p>
         </div>
         <form method="post" action="/settings/users" class="space-y-2">
-          <input class="input" type="email" name="email" placeholder="Google 이메일" required />
+          <div class="grid gap-2 sm:grid-cols-2">
+            <input class="input" name="name" placeholder="이름 (작업 담당자 표시명)" />
+            <input class="input" type="email" name="email" placeholder="Google 이메일" required />
+          </div>
           <div class="flex gap-2">
             <select class="input" name="role">
               ${ROLES.map((r) => `<option value="${esc(r)}" ${r === "staff" ? "selected" : ""}>${esc(ROLE_LABELS[r] || r)}</option>`).join("")}
             </select>
-            <button class="btn-primary shrink-0" type="submit">사용자 추가</button>
+            <button class="btn-primary shrink-0" type="submit">엔지니어 추가</button>
           </div>
         </form>
         <div class="space-y-2">${userRows}</div>
@@ -112,7 +115,8 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
 
       <section class="card space-y-4">
         <div>
-          <h2 class="font-display text-lg font-semibold">담당자</h2>
+          <h2 class="font-display text-lg font-semibold">외주 작업자</h2>
+          <p class="mt-1 text-xs text-muted">로그인 없이 작업 담당자로만 쓰는 외부 인력. 이름·연락처·이메일로 직접 추가합니다. (하우스 엔지니어는 위에서 관리되며 여기에 표시되지 않습니다.)</p>
         </div>
         <form method="post" action="/settings/managers" class="space-y-2">
           <input class="input" name="name" placeholder="이름" required />
@@ -120,7 +124,7 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
             <input class="input" name="email" placeholder="이메일" />
             <input class="input" name="phone" placeholder="전화번호" />
           </div>
-          <button class="btn-primary w-full" type="submit">담당자 추가</button>
+          <button class="btn-primary w-full" type="submit">외주 작업자 추가</button>
         </form>
         <div class="space-y-2">${managerRows}</div>
       </section>
@@ -189,16 +193,21 @@ router.post("/studio-location", requireChief, (req, res) => {
   res.redirect("/settings?flash=saved");
 });
 
-// ── 사용자(로그인 화이트리스트) 관리 ──
+// ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
 router.post("/users", requireChief, (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
+  const name = String(req.body.name || "").trim();
   const role = normalizeRole(req.body.role);
   if (email && /^\S+@\S+\.\S+$/.test(email)) {
     const exists = db().prepare("SELECT id FROM users WHERE email = ?").get(email);
     if (exists) {
-      db().prepare("UPDATE users SET role = ?, active = 1 WHERE id = ?").run(role, exists.id);
+      // 이름은 비어있지 않을 때만 갱신(로그인으로 받은 Google 이름 보존)
+      if (name) db().prepare("UPDATE users SET role = ?, name = ?, active = 1 WHERE id = ?").run(role, name, exists.id);
+      else db().prepare("UPDATE users SET role = ?, active = 1 WHERE id = ?").run(role, exists.id);
+      syncUserToManager(findUserById(exists.id));
     } else {
-      db().prepare("INSERT INTO users (email, role, name, active) VALUES (?, ?, '', 1)").run(email, role);
+      const info = db().prepare("INSERT INTO users (email, role, name, active) VALUES (?, ?, ?, 1)").run(email, role, name);
+      syncUserToManager(findUserById(info.lastInsertRowid));
     }
   }
   res.redirect("/settings?flash=saved");
@@ -220,12 +229,15 @@ router.post("/users/:id/deactivate", requireChief, (req, res) => {
   const target = db().prepare("SELECT * FROM users WHERE id = ?").get(id);
   if (target && !isBootstrapChief(target) && target.id !== req.user.id) {
     db().prepare("UPDATE users SET active = 0 WHERE id = ?").run(id);
+    syncUserToManager(findUserById(id)); // 비활성 → 링크된 작업 담당자도 비활성
   }
   res.redirect("/settings?flash=saved");
 });
 
 router.post("/users/:id/activate", requireChief, (req, res) => {
-  db().prepare("UPDATE users SET active = 1 WHERE id = ?").run(Number(req.params.id));
+  const id = Number(req.params.id);
+  db().prepare("UPDATE users SET active = 1 WHERE id = ?").run(id);
+  syncUserToManager(findUserById(id)); // 활성 → 링크된 작업 담당자도 활성(이름 있으면)
   res.redirect("/settings?flash=saved");
 });
 

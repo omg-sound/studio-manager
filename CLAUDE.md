@@ -204,6 +204,13 @@
   믹스 등 비-녹음 프로젝트는 기존 종류 select+단가 항목 유지(`sessionBookingFields(isRecording)` 분기). 1Pro 계산은
   녹음 종류 항목의 `base_minutes`(data-minutes) 사용. 단위(분류 저장/변경·녹음 폼 optgroup·믹스 폼 유지·세션 생성) +
   부팅 통합(분류 추가 302·녹음 폼 optgroup·종류 select 제거) 통과.
+- **하우스 엔지니어 ↔ 작업 담당자 연계(2026-06-28)**: 관리의 '사용자(로그인)'→**'하우스 엔지니어'**로 개념화.
+  `project_managers.user_id`로 로그인 사용자와 작업 담당자를 링크, **`auth.syncUserToManager`** 가 하우스
+  엔지니어를 작업 담당자로 자동 생성/이름·이메일 동기화/활성 연동(비활성 사용자→담당자 비활성). 사용자 추가
+  폼에 **이름** 필드 추가, 로그인 시 Google 이름으로 동기화. **외주 작업자**는 `user_id=null`로 관리에서 직접
+  추가(이름·연락처·이메일), 관리의 '외주 작업자' 목록은 `listProjectManagers({externalOnly})`로 외주만 표시.
+  세션·작업 담당 드롭다운은 하우스+외주 모두 포함. 기존 활성 사용자(이름 有)는 1회 백필
+  (`house_engineer_backfill_v1`). 단위 8케이스 + 부팅 통합(추가·라벨·드롭다운 노출) 통과.
 
 ## 스택
 
@@ -247,7 +254,9 @@
   `{key,label,track_title?,requested_at,completed_at,amount}` 배열. `rate`는 항목별 금액 합계,
   `due_date`는 가장 늦은 완료일.
   `status`, `kind` 컬럼은 기존 데이터 호환용으로만 유지.
-- `project_managers(name, email?, phone?, active, created_at)` — 프로젝트 담당자 마스터.
+- `project_managers(name, email?, phone?, active, user_id?→users, created_at)` — 작업 담당자 마스터.
+  `user_id` 있으면 **하우스 엔지니어**(로그인 사용자와 링크, `auth.syncUserToManager`가 자동 생성·동기화),
+  null이면 **외주 작업자**(로그인 없이 관리에서 직접 추가). 둘 다 세션·작업 담당 드롭다운에 노출.
 - `project_service_items(key UNIQUE, label, active, created_at)` — 작업 템플릿/레거시 호환용. 기본값은 녹음/보컬튠/믹싱/마스터링.
 - `rate_items(name, category[스튜디오 녹음|로케이션 녹음], base_minutes, base_price, extra_minutes, extra_price, active)` —
   **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 녹음 세션 폼의 '녹음 종류'에 분류별 optgroup으로

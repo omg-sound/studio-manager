@@ -82,11 +82,14 @@ function clientOptions() {
   return db().prepare("SELECT id, name FROM clients ORDER BY name COLLATE NOCASE").all();
 }
 
-function listProjectManagers({ includeInactive = false } = {}) {
+function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
+  const where = [];
+  if (!includeInactive) where.push("active = 1");
+  if (externalOnly) where.push("user_id IS NULL"); // 외주 작업자만(하우스 엔지니어 제외)
   return db()
     .prepare(
       `SELECT * FROM project_managers
-       ${includeInactive ? "" : "WHERE active = 1"}
+       ${where.length ? "WHERE " + where.join(" AND ") : ""}
        ORDER BY active DESC, name COLLATE NOCASE`
     )
     .all();

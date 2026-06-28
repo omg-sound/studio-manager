@@ -61,7 +61,9 @@ function upsertUserFromGoogle(profile) {
     db()
       .prepare("UPDATE users SET name=?, google_sub=?, role=?, active=1 WHERE id=?")
       .run(profile.name || existing.name || "", profile.sub || existing.google_sub || null, role, existing.id);
-    return findUserById(existing.id);
+    const u = findUserById(existing.id);
+    syncUserToManager(u); // 로그인 시 하우스 엔지니어 이름을 작업 담당자로 동기화
+    return u;
   }
 
   // 신규: 부트스트랩 치프만 자동 생성, 그 외 미등록 이메일은 거부.
@@ -69,7 +71,29 @@ function upsertUserFromGoogle(profile) {
   const info = db()
     .prepare("INSERT INTO users (email, role, name, google_sub, active) VALUES (?, 'chief', ?, ?, 1)")
     .run(email, profile.name || "", profile.sub || null);
-  return findUserById(info.lastInsertRowid);
+  const u = findUserById(info.lastInsertRowid);
+  syncUserToManager(u);
+  return u;
+}
+
+/**
+ * 하우스 엔지니어(로그인 사용자) → 작업 담당자(project_managers) 자동 동기화.
+ * 활성 + 이름 있으면 링크 담당자 행 upsert(이름·이메일·활성), 비활성/이름없음이면 링크 담당자 비활성.
+ * 외주 작업자(user_id=null)는 건드리지 않는다.
+ */
+function syncUserToManager(user) {
+  if (!user || !user.id) return;
+  const name = String(user.name || "").trim();
+  const existing = db().prepare("SELECT * FROM project_managers WHERE user_id = ?").get(user.id);
+  if (!name || !user.active) {
+    if (existing) db().prepare("UPDATE project_managers SET active = 0 WHERE id = ?").run(existing.id);
+    return;
+  }
+  if (existing) {
+    db().prepare("UPDATE project_managers SET name = ?, email = ?, active = 1 WHERE id = ?").run(name, user.email || null, existing.id);
+  } else {
+    db().prepare("INSERT INTO project_managers (name, email, active, user_id) VALUES (?, ?, 1, ?)").run(name, user.email || null, user.id);
+  }
 }
 
 // ── 미들웨어 ──
@@ -161,6 +185,7 @@ module.exports = {
   findUserById,
   findUserByEmail,
   upsertUserFromGoogle,
+  syncUserToManager,
   attachUser,
   isOwner,
   isChief,
