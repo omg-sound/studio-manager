@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const express = require("express");
 const { db } = require("../db");
 const { requireChief } = require("../auth");
-const { config, ROLES, ROLE_LABELS, normalizeRole } = require("../config");
+const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES } = require("../config");
 const {
   listProjectManagers,
   listProjectServiceItems,
@@ -77,11 +77,16 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
 
       <section class="card space-y-4">
         <div>
-          <h2 class="font-display text-lg font-semibold">단가표 (과금 항목)</h2>
-          <p class="mt-1 text-xs text-muted">기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금. 세션 진행시간으로 자동 산정됩니다.</p>
+          <h2 class="font-display text-lg font-semibold">단가표 · 녹음 종류</h2>
+          <p class="mt-1 text-xs text-muted">분류(스튜디오 녹음 / 로케이션 녹음)별로 녹음 종류(보컬 녹음, 악기 녹음 등)를 추가합니다. 녹음 세션 폼의 '녹음 종류'에 이 항목이 분류로 묶여 표시됩니다. 기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금.</p>
         </div>
         <form method="post" action="/settings/rate-items" class="space-y-2 rounded-lg border border-border bg-bg p-3">
-          <input class="input py-1.5 text-sm" name="name" placeholder="항목명 (예: 보컬 녹음)" required />
+          <div class="grid gap-2 sm:grid-cols-2">
+            <input class="input py-1.5 text-sm" name="name" placeholder="녹음 종류명 (예: 보컬 녹음)" required />
+            <select class="input py-1.5 text-sm" name="category">
+              ${RECORDING_CATEGORIES.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}
+            </select>
+          </div>
           <div class="grid gap-2 sm:grid-cols-2">
             <div>
               <label class="label mb-0.5 text-xs">기준 시간(1Pro, 시간)</label>
@@ -348,11 +353,12 @@ function rateItemRow(r) {
   const summary = r.base_minutes
     ? `기준 ${hourLabel(r.base_minutes)} · ${formatKRW(r.base_price)} · 초과 ${hourLabel(r.extra_minutes)}당 ${formatKRW(r.extra_price)}`
     : `정액 ${formatKRW(r.base_price)}`;
+  const cat = r.category || RECORDING_CATEGORIES[0];
   return `
     <div class="rounded-lg border border-border bg-bg p-3 ${r.active ? "" : "opacity-60"}">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-medium">${esc(r.name)}${r.active ? "" : ' <span class="text-xs text-muted">(비활성)</span>'}</div>
+          <div class="flex flex-wrap items-center gap-2"><span class="font-medium">${esc(r.name)}</span><span class="badge bg-bg text-muted">${esc(cat)}</span>${r.active ? "" : '<span class="text-xs text-muted">(비활성)</span>'}</div>
           <div class="mt-0.5 text-xs text-muted">${summary}</div>
         </div>
         <div class="flex shrink-0 items-center gap-1">
@@ -365,7 +371,12 @@ function rateItemRow(r) {
       <details class="mt-2 border-t border-border pt-2">
         <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
         <form method="post" action="/settings/rate-items/${r.id}" class="mt-2 space-y-2">
-          <input class="input py-1.5 text-sm" name="name" value="${esc(r.name)}" required />
+          <div class="grid gap-2 sm:grid-cols-2">
+            <input class="input py-1.5 text-sm" name="name" value="${esc(r.name)}" required />
+            <select class="input py-1.5 text-sm" name="category">
+              ${RECORDING_CATEGORIES.map((c) => `<option value="${esc(c)}" ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}
+            </select>
+          </div>
           <div class="grid gap-2 sm:grid-cols-2">
             <div><label class="label mb-0.5 text-xs">기준 시간(시간)</label><input class="input py-1.5 text-sm" name="base_hours" inputmode="decimal" value="${esc(String(baseHours))}" /></div>
             <div><label class="label mb-0.5 text-xs">기준 가격(원)</label><input class="input py-1.5 text-sm" name="base_price" inputmode="numeric" value="${esc(String(r.base_price || ""))}" /></div>

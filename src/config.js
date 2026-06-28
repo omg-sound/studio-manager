@@ -103,6 +103,8 @@ const PROJECT_SERVICES = [
   { key: "mixing", label: "믹싱" },
   { key: "mastering", label: "마스터링" },
 ];
+// 단가표(녹음 종류) 분류 — 녹음 세션 폼에서 이 분류로 묶어 보여준다.
+const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
 const CLIENT_KINDS = ["아티스트", "소속사/레이블", "제작사", "기타"];
 const DELIVERABLE_KINDS = ["녹음본", "튠본", "믹스", "스템", "마스터", "레퍼런스", "기타"];
 const INVOICE_STATUSES = ["미발행", "발행", "입금완료"];
@@ -216,6 +218,8 @@ module.exports = {
   SESSION_STATUS_BADGE,
   SESSION_TIME_SLOTS,
   SESSION_START_SLOTS,
+  RECORDING_CATEGORIES,
+  normalizeRecordingCategory: (v) => normalize(v, RECORDING_CATEGORIES),
   normalizeSessionType: (v) => normalize(v, SESSION_TYPES),
   normalizeSessionStatus: (v) => normalize(v, SESSION_STATUSES),
   normalizeProjectServices,

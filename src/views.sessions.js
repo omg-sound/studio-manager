@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -129,8 +129,36 @@ function durationButtons() {
   return `<div class="flex flex-wrap gap-1.5" data-duration-group>${opt("pro1", "1Pro")}${opt("pro2", "2Pro")}${opt("custom", "직접입력")}</div>`;
 }
 
-/** 예약(생성)용 폼 필드 — 시작 버튼 그리드 + 소요시간 버튼. 종료는 서버가 계산. */
-function sessionBookingFields(s, managers, rateItems = []) {
+/** 단가표 항목을 분류(스튜디오/로케이션 녹음)로 묶은 '녹음 종류' select. data-minutes로 1Pro 계산. */
+function rateSelectGrouped(rateItems, currentId) {
+  const groups = {};
+  rateItems.forEach((r) => {
+    const c = r.category || RECORDING_CATEGORIES[0];
+    (groups[c] = groups[c] || []).push(r);
+  });
+  const cats = [...RECORDING_CATEGORIES.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !RECORDING_CATEGORIES.includes(c))];
+  const opt = (r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`;
+  const body = cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
+  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>
+      <option value="" data-minutes="0">녹음 종류 미지정</option>
+      ${body}
+    </select>`;
+}
+
+/**
+ * 예약(생성)용 폼 필드 — 시작 버튼 그리드 + 소요시간 버튼. 종료는 서버가 계산.
+ * 녹음 프로젝트: '녹음 종류'(단가표 항목을 분류로 묶음) 한 필드 + session_type='녹음' 고정.
+ * 그 외(믹스 등): 기존 종류(session_type) + 단가 항목 두 필드.
+ */
+function sessionBookingFields(s, managers, rateItems = [], isRecording = false) {
+  const typeRateRow = isRecording
+    ? `<input type="hidden" name="session_type" value="녹음" />
+       <div class="sm:col-span-2"><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(관리 → 단가표에서 추가)</span></label>
+        ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>`
+    : `<div><label class="label mb-0.5 text-xs">종류</label>
+        <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
+       <div><label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(1Pro 기준)</span></label>
+        ${rateSelectWithMinutes(rateItems, s.rate_item_id)}</div>`;
   return `
     <div class="grid gap-2 sm:grid-cols-2">
       <div><label class="label mb-0.5 text-xs">날짜</label>
@@ -141,17 +169,14 @@ function sessionBookingFields(s, managers, rateItems = []) {
         <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select></div>
       <div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>
-      <div><label class="label mb-0.5 text-xs">녹음 종류</label>
-        <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-      <div><label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(1Pro 기준)</span></label>
-        ${rateSelectWithMinutes(rateItems, s.rate_item_id)}</div>
+      ${typeRateRow}
     </div>
     <div class="mt-3">
       <label class="label mb-1 text-xs">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span></label>
       ${startSlotGrid(s.start_time || "")}
     </div>
     <div class="mt-3">
-      <label class="label mb-1 text-xs">소요 시간 <span class="font-normal text-muted">(1Pro = 단가 항목 기준시간)</span></label>
+      <label class="label mb-1 text-xs">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 종류 기준시간)</span></label>
       ${durationButtons()}
       <div class="mt-1.5 flex items-center gap-1.5" data-custom-wrap hidden>
         <input class="input w-24 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="3.5" data-custom-hours />
@@ -167,7 +192,7 @@ function sessionCreateForm(project, managers, rateItems = []) {
   return `
     <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
-      ${sessionBookingFields({}, managers, rateItems)}
+      ${sessionBookingFields({}, managers, rateItems, project.project_type === "recording")}
       <button class="btn-primary mt-3 px-3 py-1.5 text-sm" type="submit">세션 추가</button>
     </form>`;
 }

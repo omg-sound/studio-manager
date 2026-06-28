@@ -248,6 +248,7 @@ function init() {
   addColumn("projects", "manager_id", "INTEGER REFERENCES project_managers(id) ON DELETE SET NULL");
   addColumn("invoices", "invoice_number", "TEXT");
   addColumn("invoices", "tax_amount", "INTEGER NOT NULL DEFAULT 0");
+  addColumn("rate_items", "category", "TEXT NOT NULL DEFAULT '스튜디오 녹음'"); // 단가표(녹음 종류) 분류: 스튜디오 녹음 | 로케이션 녹음
   addColumn("sessions", "rate_item_id", "INTEGER REFERENCES rate_items(id) ON DELETE SET NULL"); // 녹음 세션 시간제 단가표 연결
   addColumn("sessions", "booker_name", "TEXT"); // 예약 담당자(담당자 마스터에서 선택, 담당 엔지니어와 별개)
   addColumn("sessions", "gcal_event_id", "TEXT"); // 예약 시 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적)

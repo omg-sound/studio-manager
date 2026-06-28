@@ -197,6 +197,13 @@
   소요시간 반영) 기준으로 createSession 후 검사→겹치면 롤백. ③ 수동 "구글 캘린더에 추가" 링크는 자동화로 **제거**.
   ④ `/settings`에 **기본 장소** 입력. 단위 10케이스 + 부팅 통합(생성·직접입력·장소·full calendar 스코프·삭제 async) 통과.
   **사용자 사전작업: 치프 재로그인(쓰기 권한 동의) + `/settings`에서 기본 장소 입력.**
+- **녹음 종류 = 단가표 분류(2026-06-28)**: ① 새 프로젝트 드롭다운 '녹음 세션'→'녹음 세션 작성하기'(`menuLabel`).
+  ② `rate_items.category`(`RECORDING_CATEGORIES`=스튜디오 녹음/로케이션 녹음) 신설. 관리 단가표에 분류 select 추가,
+  목록에 분류 배지. ③ **녹음 프로젝트 세션 폼**: 기존 종류(녹음/믹싱/마스터링) select를 빼고(`session_type='녹음'` 고정
+  hidden), '단가 항목'을 **'녹음 종류'**로 바꿔 단가표 항목을 분류별 **optgroup**으로 묶어 표시(`rateSelectGrouped`).
+  믹스 등 비-녹음 프로젝트는 기존 종류 select+단가 항목 유지(`sessionBookingFields(isRecording)` 분기). 1Pro 계산은
+  녹음 종류 항목의 `base_minutes`(data-minutes) 사용. 단위(분류 저장/변경·녹음 폼 optgroup·믹스 폼 유지·세션 생성) +
+  부팅 통합(분류 추가 302·녹음 폼 optgroup·종류 select 제거) 통과.
 
 ## 스택
 
@@ -242,8 +249,9 @@
   `status`, `kind` 컬럼은 기존 데이터 호환용으로만 유지.
 - `project_managers(name, email?, phone?, active, created_at)` — 프로젝트 담당자 마스터.
 - `project_service_items(key UNIQUE, label, active, created_at)` — 작업 템플릿/레거시 호환용. 기본값은 녹음/보컬튠/믹싱/마스터링.
-- `rate_items(name, base_minutes, base_price, extra_minutes, extra_price, active)` — **단가표(과금 항목)**.
-  기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
+- `rate_items(name, category[스튜디오 녹음|로케이션 녹음], base_minutes, base_price, extra_minutes, extra_price, active)` —
+  **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 녹음 세션 폼의 '녹음 종류'에 분류별 optgroup으로
+  묶여 표시된다. 기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
   (`base_minutes=0`이면 정액). `computeRatePrice(item, minutes)`가 산정. 관리 메뉴에서 치프가 CRUD.
 - `project_tracks(project_id→projects CASCADE, title, content_type[Music|Video_Post], created_at)` —
   프로젝트 하위 곡/영상 콘텐츠.

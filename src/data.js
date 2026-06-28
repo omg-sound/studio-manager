@@ -17,6 +17,7 @@ const {
   normalizeTaskStatus,
   normalizeSessionType,
   normalizeSessionStatus,
+  normalizeRecordingCategory,
 } = require("./config");
 
 /** 'HH:MM' 검증(아니면 null). */
@@ -112,6 +113,7 @@ function parseHoursToMinutes(v) {
 function rateFields(input) {
   return {
     name: String(input.name || "").trim(),
+    category: normalizeRecordingCategory(input.category),
     base_minutes: parseHoursToMinutes(input.base_hours),
     base_price: parseWon(input.base_price),
     extra_minutes: parseHoursToMinutes(input.extra_hours) || 60,
@@ -134,8 +136,8 @@ function createRateItem(input = {}) {
   if (!f.name) throw new Error("RATE_NAME_REQUIRED");
   const info = db()
     .prepare(
-      `INSERT INTO rate_items (name, base_minutes, base_price, extra_minutes, extra_price, active)
-       VALUES (@name,@base_minutes,@base_price,@extra_minutes,@extra_price,1)`
+      `INSERT INTO rate_items (name, category, base_minutes, base_price, extra_minutes, extra_price, active)
+       VALUES (@name,@category,@base_minutes,@base_price,@extra_minutes,@extra_price,1)`
     )
     .run(f);
   return db().prepare("SELECT * FROM rate_items WHERE id = ?").get(info.lastInsertRowid);
@@ -146,7 +148,7 @@ function updateRateItem(id, input = {}) {
   if (!f.name) throw new Error("RATE_NAME_REQUIRED");
   db()
     .prepare(
-      `UPDATE rate_items SET name=@name, base_minutes=@base_minutes, base_price=@base_price,
+      `UPDATE rate_items SET name=@name, category=@category, base_minutes=@base_minutes, base_price=@base_price,
        extra_minutes=@extra_minutes, extra_price=@extra_price WHERE id=@id`
     )
     .run({ id, ...f });
