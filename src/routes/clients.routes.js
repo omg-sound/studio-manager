@@ -151,7 +151,7 @@ function clientForm(c = {}, isEdit = false) {
       </div>
     </form>
     ${isEdit ? `
-    <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")} 를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
+    <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
       <button class="btn-ghost text-danger" type="submit">클라이언트 삭제</button>
     </form>` : ""}`;
 }

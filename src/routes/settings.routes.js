@@ -14,7 +14,7 @@ const {
   setRateItemActive,
   deleteRateItem,
 } = require("../data");
-const { layout, pageHeader, esc, flashBanner, formatKRW } = require("../views");
+const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState } = require("../views");
 const { asyncHandler } = require("../lib/async");
 const drive = require("../drive");
 const calendar = require("../calendar");
@@ -59,9 +59,9 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
 /** 담당자 탭: 하우스 엔지니어 + 외주 작업자. */
 function peopleTab(currentUser) {
   const users = listUsers();
-  const userRows = users.length ? users.map((u) => userRow(u, currentUser)).join("") : `<div class="py-3 text-sm text-muted">등록된 사용자가 없습니다.</div>`;
+  const userRows = users.length ? users.map((u) => userRow(u, currentUser)).join("") : emptyState("등록된 사용자가 없습니다.");
   const managers = listProjectManagers({ includeInactive: true, externalOnly: true });
-  const managerRows = managers.length ? managers.map((m) => managerRow(m)).join("") : `<div class="py-3 text-sm text-muted">등록된 외주 작업자가 없습니다.</div>`;
+  const managerRows = managers.length ? managers.map((m) => managerRow(m)).join("") : emptyState("등록된 외주 작업자가 없습니다.");
   return `
       <section class="card space-y-4">
         <div>
