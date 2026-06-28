@@ -74,6 +74,8 @@
   var customWrap = form.querySelector("[data-custom-wrap]");
   var customInput = form.querySelector("[data-custom-hours]");
   var customStart = form.querySelector("[data-custom-start]");
+  var customStartWrap = form.querySelector("[data-custom-start-wrap]");
+  var customStartToggle = form.querySelector("[data-custom-start-toggle]");
   var preview = form.querySelector("[data-end-preview]");
   var durationRadios = form.querySelectorAll("[data-duration]");
 
@@ -157,12 +159,22 @@
   if (dateInput) dateInput.addEventListener("change", refreshAvailability);
   if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); });
   if (customInput) customInput.addEventListener("input", updatePreview);
+  // '직접입력' 버튼 → 시간 입력칸 펼치고 그리드 선택 해제.
+  if (customStartToggle) customStartToggle.addEventListener("click", function () {
+    if (customStartWrap) customStartWrap.hidden = false;
+    clearGridStart();
+    if (customStart) customStart.focus();
+    updatePreview();
+  });
   // 직접입력 시작 ↔ 그리드 시작은 상호 배타: 직접입력하면 그리드 선택 해제(서버도 직접입력 우선).
   if (customStart) customStart.addEventListener("input", function () { if (customStart.value) clearGridStart(); updatePreview(); });
   form.addEventListener("change", function (e) {
     if (!e.target) return;
-    if (e.target.name === "start_time") { if (customStart) customStart.value = ""; updatePreview(); }
-    else if (e.target.name === "duration_mode") updatePreview();
+    if (e.target.name === "start_time") {
+      if (customStart) customStart.value = "";
+      if (customStartWrap) customStartWrap.hidden = true; // 그리드 고르면 직접입력 칸 닫기
+      updatePreview();
+    } else if (e.target.name === "duration_mode") updatePreview();
   });
 
   updateProAvailability();

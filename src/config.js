@@ -144,8 +144,8 @@ function timeSlots(startMin, endMin) {
 }
 // 전체 운영시간(12:00~23:30) — 편집 폼 드롭다운·가용성 검사용.
 const SESSION_TIME_SLOTS = timeSlots(12 * 60, 23 * 60 + 30);
-// 예약 그리드 기본 노출(14:00~20:00) — 그 외 시간은 '직접입력'.
-const SESSION_START_SLOTS = timeSlots(14 * 60, 20 * 60);
+// 예약 그리드 기본 노출(14:00~18:30) — 그 외 시간은 '직접입력' 버튼으로.
+const SESSION_START_SLOTS = timeSlots(14 * 60, 18 * 60 + 30);
 const SESSION_STATUS_BADGE = {
   예정: "bg-primary/10 text-primary",
   완료: "bg-success/10 text-success",

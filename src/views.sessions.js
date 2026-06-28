@@ -105,6 +105,7 @@ function rateSelectWithMinutes(rateItems, currentId) {
  */
 function startSlotGrid(current) {
   const inGrid = SESSION_START_SLOTS.includes(current);
+  const showCustom = !inGrid && !!current; // 편집 시 그리드 밖 값이면 직접입력 칸 펼침
   const cells = SESSION_START_SLOTS.map(
     (t) => `
       <label class="cursor-pointer">
@@ -112,10 +113,12 @@ function startSlotGrid(current) {
         <span class="block rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
       </label>`
   ).join("");
-  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}</div>
-    <div class="mt-1.5 flex items-center gap-1.5">
-      <span class="text-xs text-muted">또는 직접입력</span>
-      <input class="input w-28 py-1.5 text-sm" type="time" name="start_time_custom" value="${!inGrid && current ? esc(current) : ""}" step="1800" data-custom-start />
+  // 그리드 맨 뒤에 '직접입력' 버튼 — 클릭하면 아래 시간 입력칸을 펼친다(app.js).
+  const customBtn = `<button type="button" class="rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated" data-custom-start-toggle>직접입력</button>`;
+  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customBtn}</div>
+    <div class="mt-1.5 flex items-center gap-1.5" data-custom-start-wrap ${showCustom ? "" : "hidden"}>
+      <span class="text-xs text-muted">직접입력</span>
+      <input class="input w-28 py-1.5 text-sm" type="time" name="start_time_custom" value="${showCustom ? esc(current) : ""}" step="1800" data-custom-start />
     </div>`;
 }
 
