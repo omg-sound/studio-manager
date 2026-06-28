@@ -161,12 +161,26 @@ async function studioCalendarSection() {
         </form>`;
     }
   }
-  return `<section class="card space-y-4">${title}${inner}</section>`;
+  const location = `
+    <div class="border-t border-border pt-3">
+      <label class="label mb-1 text-xs">기본 장소 <span class="font-normal text-muted">(예약 시 일정 장소로 자동 입력)</span></label>
+      <form method="post" action="/settings/studio-location" class="flex gap-2">
+        <input class="input py-1.5 text-sm" name="studio_location" value="${esc(calendar.getStudioLocation())}" placeholder="예: OMG 스튜디오 (서울 ...)" />
+        <button class="btn-primary shrink-0 px-3 py-1.5 text-sm" type="submit">저장</button>
+      </form>
+    </div>`;
+  return `<section class="card space-y-4">${title}${inner}${location}</section>`;
 }
 
 // ── 스튜디오 캘린더 선택 저장 ──
 router.post("/studio-calendar", requireChief, (req, res) => {
   calendar.setStudioCalendarId(req.body.calendar_id);
+  res.redirect("/settings?flash=saved");
+});
+
+// ── 예약 일정 기본 장소 저장 ──
+router.post("/studio-location", requireChief, (req, res) => {
+  calendar.setStudioLocation(req.body.studio_location);
   res.redirect("/settings?flash=saved");
 });
 

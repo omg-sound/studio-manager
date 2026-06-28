@@ -73,6 +73,7 @@
   var rateSel = form.querySelector("[data-rate-select]");
   var customWrap = form.querySelector("[data-custom-wrap]");
   var customInput = form.querySelector("[data-custom-hours]");
+  var customStart = form.querySelector("[data-custom-start]");
   var preview = form.querySelector("[data-end-preview]");
   var durationRadios = form.querySelectorAll("[data-duration]");
 
@@ -85,6 +86,15 @@
   function checkedValue(name) {
     var r = form.querySelector('input[name="' + name + '"]:checked');
     return r ? r.value : "";
+  }
+  // 시작 = 직접입력이 있으면 우선, 없으면 그리드에서 고른 값(서버 로직과 동일).
+  function currentStart() {
+    if (customStart && customStart.value) return customStart.value;
+    return checkedValue("start_time");
+  }
+  function clearGridStart() {
+    if (!grid) return;
+    Array.prototype.forEach.call(grid.querySelectorAll('input[name="start_time"]'), function (r) { r.checked = false; });
   }
   function addMin(hhmm, mins) {
     var p = String(hhmm).split(":");
@@ -113,7 +123,7 @@
     if (customWrap) customWrap.hidden = checkedValue("duration_mode") !== "custom";
     if (!preview) return;
     var mode = checkedValue("duration_mode");
-    var start = checkedValue("start_time");
+    var start = currentStart();
     if ((mode === "pro1" || mode === "pro2") && baseMinutes() <= 0) {
       preview.textContent = "1Pro·2Pro는 단가 항목을 먼저 고르세요.";
       return;
@@ -147,8 +157,12 @@
   if (dateInput) dateInput.addEventListener("change", refreshAvailability);
   if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); });
   if (customInput) customInput.addEventListener("input", updatePreview);
+  // 직접입력 시작 ↔ 그리드 시작은 상호 배타: 직접입력하면 그리드 선택 해제(서버도 직접입력 우선).
+  if (customStart) customStart.addEventListener("input", function () { if (customStart.value) clearGridStart(); updatePreview(); });
   form.addEventListener("change", function (e) {
-    if (e.target && (e.target.name === "start_time" || e.target.name === "duration_mode")) updatePreview();
+    if (!e.target) return;
+    if (e.target.name === "start_time") { if (customStart) customStart.value = ""; updatePreview(); }
+    else if (e.target.name === "duration_mode") updatePreview();
   });
 
   updateProAvailability();

@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, config } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS } = require("./config");
 const { esc, formatKRW } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -19,38 +19,6 @@ function managerOptions(managers, current, placeholder = "담당자 미지정") 
   return out.join("");
 }
 
-/** 'YYYYMMDD'(compact)에 하루 더하기 — 종일 일정의 종료일(익일, end-exclusive)용. */
-function ymdPlusOneCompact(ymd) {
-  const dt = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)) + 1));
-  const p = (n) => String(n).padStart(2, "0");
-  return `${dt.getUTCFullYear()}${p(dt.getUTCMonth() + 1)}${p(dt.getUTCDate())}`;
-}
-
-/**
- * 구글 캘린더 '일정 추가' 템플릿 링크. OAuth 권한·Calendar API 불필요 — 클릭하면 제목·날짜·
- * 시간이 채워진 새 일정 작성 화면이 열리고, 저장은 사용자가 직접 한다(앱이 일정을 만들지 않음).
- * 시작·종료가 둘 다 있으면 시간 일정(KST), 없으면 종일 일정.
- */
-function googleCalendarLink(s, projectTitle = "") {
-  const ymd = String(s.session_date || "").replace(/-/g, "");
-  if (ymd.length !== 8) return "";
-  let dates;
-  if (s.start_time && s.end_time) {
-    dates = `${ymd}T${s.start_time.replace(":", "")}00/${ymd}T${s.end_time.replace(":", "")}00`;
-  } else {
-    dates = `${ymd}/${ymdPlusOneCompact(ymd)}`;
-  }
-  const title = [projectTitle || s.project_title || "스튜디오 세션", s.session_type].filter(Boolean).join(" · ");
-  const details = [
-    s.booker_name ? `예약 담당자: ${s.booker_name}` : "",
-    s.engineer_name ? `담당 엔지니어: ${s.engineer_name}` : "",
-    s.memo ? `메모: ${s.memo}` : "",
-    s.project_id && config.baseUrl ? `${config.baseUrl}/projects/${s.project_id}` : "",
-  ].filter(Boolean).join("\n");
-  const params = new URLSearchParams({ action: "TEMPLATE", text: title, dates, ctz: "Asia/Seoul" });
-  if (details) params.set("details", details);
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
 
 function timeLabel(s) {
   if (s.start_time && s.end_time) return `${esc(s.start_time)}–${esc(s.end_time)}`;
@@ -131,16 +99,24 @@ function rateSelectWithMinutes(rateItems, currentId) {
     </select>`;
 }
 
-/** 시작 시간 30분 버튼 그리드(라디오). 비활성(예약됨) 표시는 app.js가 data-slot 기준으로 처리. */
+/**
+ * 시작 시간 30분 버튼 그리드(라디오, 기본 14:00~20:00). 비활성(예약됨) 표시는 app.js가 data-slot 기준 처리.
+ * 그리드 밖 시간은 아래 '직접입력'(start_time_custom)으로 — 서버에서 직접입력이 있으면 우선한다.
+ */
 function startSlotGrid(current) {
-  const cells = SESSION_TIME_SLOTS.map(
+  const inGrid = SESSION_START_SLOTS.includes(current);
+  const cells = SESSION_START_SLOTS.map(
     (t) => `
       <label class="cursor-pointer">
         <input type="radio" name="start_time" value="${t}" class="peer sr-only" data-slot="${t}" ${t === current ? "checked" : ""} />
         <span class="block rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
       </label>`
   ).join("");
-  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}</div>`;
+  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}</div>
+    <div class="mt-1.5 flex items-center gap-1.5">
+      <span class="text-xs text-muted">또는 직접입력</span>
+      <input class="input w-28 py-1.5 text-sm" type="time" name="start_time_custom" value="${!inGrid && current ? esc(current) : ""}" step="1800" data-custom-start />
+    </div>`;
 }
 
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
@@ -213,10 +189,6 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
   const billLine = s.billing
     ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${s.billed_task_id ? ' · <span class="text-muted">작업 생성됨</span>' : ""}</div>`
     : "";
-  const calLink = s.status !== "취소" ? googleCalendarLink(s, projectTitle) : "";
-  const calBtn = calLink
-    ? `<div class="mt-1"><a href="${esc(calLink)}" target="_blank" rel="noopener noreferrer" class="badge bg-primary/10 text-primary hover:bg-primary/20">📅 구글 캘린더에 추가</a></div>`
-    : "";
   const controls = isAdmin ? sessionControls(s, managers, rateItems) : "";
   const billForm = (isAdmin && Array.isArray(tracks) && s.billing && s.status === "완료" && !s.billed_task_id)
     ? `<form method="post" action="/sessions/${s.id}/bill" class="mt-2 flex flex-wrap items-end gap-2 border-t border-border pt-2">
@@ -242,7 +214,6 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
           </div>
           <div class="mt-0.5 text-xs text-muted">${sub}</div>
           ${billLine}
-          ${calBtn}
         </div>
         <div class="flex shrink-0 items-center gap-1">${statusBadge}</div>
       </div>
@@ -302,4 +273,4 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
     </section>`;
 }
 
-module.exports = { sessionRow, sessionsSection, sessionCreateForm, googleCalendarLink };
+module.exports = { sessionRow, sessionsSection, sessionCreateForm };

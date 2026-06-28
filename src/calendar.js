@@ -19,6 +19,7 @@ const { oauthClient } = require("./auth");
 const { getRefreshToken } = require("./drive"); // Drive와 같은 refresh token 재사용
 
 const STATE_STUDIO_CALENDAR = "studio_calendar_id"; // admin_state에 저장된 스튜디오 캘린더 id
+const STATE_STUDIO_LOCATION = "studio_location"; // 예약 일정 기본 장소(관리에서 설정)
 
 function getStudioCalendarId() {
   return getState(STATE_STUDIO_CALENDAR) || null;
@@ -26,6 +27,14 @@ function getStudioCalendarId() {
 
 function setStudioCalendarId(id) {
   setState(STATE_STUDIO_CALENDAR, String(id || "").trim() || null);
+}
+
+function getStudioLocation() {
+  return getState(STATE_STUDIO_LOCATION) || "";
+}
+
+function setStudioLocation(v) {
+  setState(STATE_STUDIO_LOCATION, String(v || "").trim() || null);
 }
 
 /** refresh token으로 인증된 Calendar 클라이언트. 미연동이면 null. */
@@ -132,10 +141,75 @@ async function busySlotsForDate(date, slots) {
   }
 }
 
+/** 일정 시간 본문: 시작·종료 있으면 시간 일정(KST·야간 익일), 없으면 종일. */
+function eventTimes(date, start, end) {
+  if (RE_TIME.test(start) && RE_TIME.test(end)) {
+    const overnight = end <= start;
+    return {
+      start: { dateTime: rfc3339Kst(date, start), timeZone: "Asia/Seoul" },
+      end: { dateTime: rfc3339Kst(date, end, overnight ? 1 : 0), timeZone: "Asia/Seoul" },
+    };
+  }
+  const dt = new Date(`${date}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return { start: { date }, end: { date: dt.toISOString().slice(0, 10) } };
+}
+
+function eventBody({ title, location, description, date, start, end }) {
+  const body = Object.assign({ summary: title || "스튜디오 세션" }, eventTimes(date, start, end));
+  if (location) body.location = location;
+  if (description) body.description = description;
+  return body;
+}
+
+/** 스튜디오 캘린더에 일정 생성 → event id. 미연동/오류면 null(예약 자체는 막지 않음). */
+async function createEvent(input = {}) {
+  const cal = calendarClient();
+  const calId = getStudioCalendarId();
+  if (!cal || !calId || !RE_DATE.test(input.date)) return null;
+  try {
+    const { data } = await cal.events.insert({ calendarId: calId, requestBody: eventBody(input) });
+    return data.id || null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/** 기존 일정 수정(시간/제목/장소). 성공 true. 일정이 없으면(404) 새로 만들어 새 id 반환(string). */
+async function updateEvent(eventId, input = {}) {
+  const cal = calendarClient();
+  const calId = getStudioCalendarId();
+  if (!cal || !calId || !RE_DATE.test(input.date)) return null;
+  if (!eventId) return createEvent(input); // 연동 후 처음 수정되는 옛 세션 → 새로 생성
+  try {
+    await cal.events.patch({ calendarId: calId, eventId, requestBody: eventBody(input) });
+    return eventId;
+  } catch (e) {
+    if (e && e.code === 404) return createEvent(input); // 외부에서 지워졌으면 재생성
+    return eventId; // 기타 오류는 기존 id 유지(fail-safe)
+  }
+}
+
+/** 일정 삭제. 미연동/없음/오류는 조용히 무시. */
+async function deleteEvent(eventId) {
+  const cal = calendarClient();
+  const calId = getStudioCalendarId();
+  if (!cal || !calId || !eventId) return false;
+  try {
+    await cal.events.delete({ calendarId: calId, eventId });
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
 module.exports = {
   STATE_STUDIO_CALENDAR,
+  STATE_STUDIO_LOCATION,
   getStudioCalendarId,
   setStudioCalendarId,
+  getStudioLocation,
+  setStudioLocation,
   calendarClient,
   isCalendarLinked,
   listCalendars,
@@ -143,4 +217,8 @@ module.exports = {
   conflictFromFreebusy,
   findExternalConflict,
   busySlotsForDate,
+  eventBody,
+  createEvent,
+  updateEvent,
+  deleteEvent,
 };

@@ -686,7 +686,8 @@ function resolveEndTime(input, start, rateItemId) {
 function sessionFields(input) {
   const date = String(input.session_date || "").trim();
   if (!isValidYmd(date)) throw new Error("SESSION_DATE_REQUIRED");
-  const start = cleanTime(input.start_time);
+  // 직접입력(그리드 밖 시간)이 있으면 우선, 없으면 그리드에서 고른 시작.
+  const start = cleanTime(input.start_time_custom) || cleanTime(input.start_time);
   const rateItemId = Number(input.rate_item_id) || null;
   return {
     session_type: normalizeSessionType(input.session_type),
@@ -812,6 +813,11 @@ function updateSession(user, sessionId, input = {}) {
     )
     .run({ id: s.id, ...f });
   return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
+}
+
+/** 세션에 자동 생성한 구글 캘린더 일정 id 저장(null이면 해제). */
+function setSessionEventId(sessionId, eventId) {
+  db().prepare("UPDATE sessions SET gcal_event_id = ? WHERE id = ?").run(eventId || null, sessionId);
 }
 
 function setSessionStatus(user, sessionId, status) {
@@ -989,6 +995,7 @@ module.exports = {
   getSessionForUser,
   createSession,
   updateSession,
+  setSessionEventId,
   busySessionSlots,
   setSessionStatus,
   deleteSession,

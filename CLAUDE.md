@@ -185,6 +185,18 @@
   fetch해 갱신(날짜 변경 시 재조회·예상 종료 미리보기·1Pro/2Pro는 단가 없으면 비활성). `SESSION_TIME_SLOTS`는
   `config.js`로 단일출처화. **편집 폼은 드롭다운 유지**(편집은 부차적, `end_time` 직접). 종료 자동계산 후에도
   겹침 차단·하위호환 유지. 데이터 11케이스 + 부팅 통합(가용성 JSON·생성 302·그리드 렌더·app.js 서빙) 통과.
+- **정적 자산 캐시 버스팅(2026-06-28)**: `views.js ASSET_VERSION`(app.css·app.js mtime+size) → `/css/app.css?v=..`로
+  참조. 캐시 버스팅이 없어 배포 후 브라우저가 옛 CSS를 재사용→레이아웃이 깨져 보이던 함정 해결(시작 그리드가
+  한 줄씩 쌓이고 라디오 노출). **함정: 정적 자산 URL에 버전을 안 붙이면 배포해도 옛 CSS 캐시가 남는다.**
+- **예약 시 구글 캘린더 자동 추가 + 그리드 14–20 + 직접입력(2026-06-28)**: ① 시작 그리드 기본 노출을
+  **14:00~20:00**(`SESSION_START_SLOTS`)로 좁히고, 그 밖 시간은 **직접입력**(`start_time_custom`, 서버에서 우선).
+  ② **예약하면 스튜디오 캘린더에 일정 자동 생성**(`calendar.createEvent`, 수정=`updateEvent`/취소·삭제=`deleteEvent`,
+  `sessions.gcal_event_id` 추적). 제목=**제작사 · 아티스트**(`eventInputForSession`), 장소=관리에서 설정한
+  `studio_location`(기본 장소). **OAuth 스코프 `calendar.readonly`→`calendar`(읽기+쓰기)**로 확대 → **전 직원 재동의 필요**.
+  미연동/권한없음/오류는 **fail-safe**(일정 생성 건너뛰고 예약은 정상). 외부 겹침 검사는 **해석된 시작/종료**(직접입력·
+  소요시간 반영) 기준으로 createSession 후 검사→겹치면 롤백. ③ 수동 "구글 캘린더에 추가" 링크는 자동화로 **제거**.
+  ④ `/settings`에 **기본 장소** 입력. 단위 10케이스 + 부팅 통합(생성·직접입력·장소·full calendar 스코프·삭제 async) 통과.
+  **사용자 사전작업: 치프 재로그인(쓰기 권한 동의) + `/settings`에서 기본 장소 입력.**
 
 ## 스택
 
@@ -247,10 +259,11 @@
 - `invoice_items(invoice_id→invoices CASCADE, task_id?→track_tasks SET NULL, track_title, task_type,
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,
-  start_time?, end_time? "HH:MM", booker_name?, engineer_name?, status[예정|완료|취소], memo)` — 스튜디오 일정.
+  start_time?, end_time? "HH:MM", booker_name?, engineer_name?, status[예정|완료|취소], memo, gcal_event_id?)` —
+  스튜디오 일정. `gcal_event_id`는 예약 시 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적).
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   청구 시간 산정의 기반. `rate_item_id`(→rate_items SET NULL)는 녹음 세션 시간제 자동 산정용 단가표 연결(3단계).
-- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(겹침 검사용 스튜디오 캘린더)
+- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(예약 일정 기본 장소)
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시)
 
 ## 자료 전달 아키텍처 (플레이북1 §2.3·§4.3)

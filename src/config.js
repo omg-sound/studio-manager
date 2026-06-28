@@ -131,14 +131,18 @@ const BILLING_TYPE_LABELS = {
 // 세션(스튜디오 일정). 청구 시간 산정의 기반.
 const SESSION_TYPES = ["녹음", "믹싱", "마스터링", "기타"];
 const SESSION_STATUSES = ["예정", "완료", "취소"];
-// 세션 시간 슬롯 — 스튜디오 운영시간(낮 12:00부터 30분 단위, 23:30까지). 시작 버튼 그리드·가용성 검사 공용.
-const SESSION_TIME_SLOTS = (() => {
+// 세션 시간 슬롯(30분 단위). 범위별 생성기.
+function timeSlots(startMin, endMin) {
   const out = [];
-  for (let m = 12 * 60; m <= 23 * 60 + 30; m += 30) {
+  for (let m = startMin; m <= endMin; m += 30) {
     out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
   }
   return out;
-})();
+}
+// 전체 운영시간(12:00~23:30) — 편집 폼 드롭다운·가용성 검사용.
+const SESSION_TIME_SLOTS = timeSlots(12 * 60, 23 * 60 + 30);
+// 예약 그리드 기본 노출(14:00~20:00) — 그 외 시간은 '직접입력'.
+const SESSION_START_SLOTS = timeSlots(14 * 60, 20 * 60);
 const SESSION_STATUS_BADGE = {
   예정: "bg-primary/10 text-primary",
   완료: "bg-success/10 text-success",
@@ -210,6 +214,7 @@ module.exports = {
   SESSION_STATUSES,
   SESSION_STATUS_BADGE,
   SESSION_TIME_SLOTS,
+  SESSION_START_SLOTS,
   normalizeSessionType: (v) => normalize(v, SESSION_TYPES),
   normalizeSessionStatus: (v) => normalize(v, SESSION_STATUSES),
   normalizeProjectServices,
