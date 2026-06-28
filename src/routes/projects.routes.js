@@ -40,7 +40,7 @@ const {
   deleteTask,
   createInvoiceFromTasks,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -73,8 +73,8 @@ router.get("/", requireAuth, (req, res) => {
   const list = rows.length
     ? rows.map((p) => projectListCard(p)).join("")
     : searched
-      ? `<div class="card text-center text-sm text-muted">"${esc(filters.q)}" 검색 결과가 없습니다.</div>`
-      : `<div class="card text-center text-sm text-muted">프로젝트가 없습니다.${canCreate ? ' <a href="/projects/new" class="text-primary hover:underline">새로 추가</a>' : ""}</div>`;
+      ? emptyState(`"${esc(filters.q)}" 검색 결과가 없습니다.`, { card: true })
+      : emptyState(`프로젝트가 없습니다.${canCreate ? ' <a href="/projects/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
 
   const action = canCreate ? newProjectMenu() : "";
 
@@ -285,7 +285,7 @@ function projectMetaCard(p, err = "") {
         ${projectEditForm(p, err)}
         <div class="mt-4 border-t border-border pt-4">
           <form method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?">
-            <button class="btn-ghost px-3 py-1.5 text-xs text-danger" type="submit">프로젝트 삭제</button>
+            <button class="btn-ghost btn-xs text-danger" type="submit">프로젝트 삭제</button>
           </form>
         </div>
       </div>
@@ -539,7 +539,7 @@ function managerSelect(selectedId) {
 function tracksSection({ project, tracks, isAdmin, managers = [] }) {
   const list = tracks.length
     ? tracks.map((track) => trackCard(track, { isAdmin, managers })).join("")
-    : `<p class="py-4 text-center text-sm text-muted">등록된 곡·콘텐츠가 없습니다.</p>`;
+    : emptyState("등록된 곡·콘텐츠가 없습니다.");
   const isRecording = project && project.project_type === "recording";
   const hint = isRecording && isAdmin
     ? `<p class="text-xs text-muted">녹음(세션 일정)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 한 세션에 여러 곡을 넣을 수 있고, 각 곡은 단계별로 이어집니다.</p>`
@@ -568,7 +568,7 @@ function trackCreateForm(project) {
 function trackCard(track, { isAdmin, managers = [] }) {
   const tasks = track.tasks && track.tasks.length
     ? track.tasks.map((task) => taskRow(task, { isAdmin, managers })).join("")
-    : `<p class="py-3 text-center text-xs text-muted">아직 등록된 작업이 없습니다. 아래에서 진행 단계를 추가하세요.</p>`;
+    : emptyState("아직 등록된 작업이 없습니다. 아래에서 진행 단계를 추가하세요.");
   const hasInvoiced = (track.tasks || []).some((t) => t.is_invoiced);
   return `
     <div class="rounded-lg border border-border bg-bg p-3">
@@ -603,12 +603,12 @@ function trackEditMenu(track, hasInvoiced) {
       <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집</summary>
       <form method="post" action="/projects/tracks/${track.id}" class="mt-2 flex gap-2 rounded-lg border border-border bg-surface p-3 text-left">
         <input class="input flex-1 py-1.5 text-sm" name="title" value="${esc(track.title)}" required />
-        <button class="btn-primary shrink-0 px-3 py-1.5 text-xs" type="submit">저장</button>
+        <button class="btn-primary shrink-0 btn-xs" type="submit">저장</button>
       </form>
       ${hasInvoiced
         ? `<p class="mt-2 text-xs text-muted">청구된 작업이 있어 삭제할 수 없습니다.</p>`
         : `<form method="post" action="/projects/tracks/${track.id}/delete" data-confirm="이 곡·콘텐츠와 하위 작업을 삭제할까요?" class="mt-2 text-left">
-             <button class="btn-ghost px-3 py-1.5 text-xs text-danger" type="submit">곡·콘텐츠 삭제</button>
+             <button class="btn-ghost btn-xs text-danger" type="submit">곡·콘텐츠 삭제</button>
            </form>`}
     </details>`;
 }
@@ -675,10 +675,10 @@ function taskEditMenu(task, managers = []) {
         <select class="input py-1.5 text-sm" name="status">
           ${TASK_STATUSES.map((status) => `<option value="${esc(status)}" ${sel(status, task.status)}>${esc(TASK_STATUS_LABELS[status] || status)}</option>`).join("")}
         </select>
-        <button class="btn-primary px-3 py-1.5 text-xs sm:col-span-2" type="submit">작업 저장</button>
+        <button class="btn-primary btn-xs sm:col-span-2" type="submit">작업 저장</button>
       </form>
       <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
-        <button class="btn-ghost px-3 py-1.5 text-xs text-danger" type="submit">작업 삭제</button>
+        <button class="btn-ghost btn-xs text-danger" type="submit">작업 삭제</button>
       </form>
     </details>`;
 }
@@ -694,7 +694,7 @@ function taskQuickAdd(track) {
       <input type="hidden" name="unit_price" value="${t.unit_price || 0}" />
       <input type="hidden" name="quantity" value="1" />
       <input type="hidden" name="status" value="Pending" />
-      <button class="rounded-md border border-border bg-bg px-3 py-1.5 text-xs hover:border-primary hover:text-primary" type="submit">${esc(t.label)}</button>
+      <button class="rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary" type="submit">${esc(t.label)}</button>
     </form>`;
   const groups = {};
   for (const t of types) (groups[t.task_group] = groups[t.task_group] || []).push(t);
@@ -703,7 +703,7 @@ function taskQuickAdd(track) {
     .join("");
   const other = `
     <details class="align-top">
-      <summary class="cursor-pointer list-none rounded-md border border-border bg-bg px-3 py-1.5 text-xs hover:border-primary hover:text-primary">+ 기타</summary>
+      <summary class="cursor-pointer list-none rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary">+ 기타</summary>
       <form method="post" action="/projects/tracks/${track.id}/tasks" class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
         <select class="input py-1.5 text-sm" name="task_type">${grouped}</select>
         <select class="input py-1.5 text-sm" name="billing_type">${BILLING_TYPES.map((type) => `<option value="${esc(type)}">${esc(BILLING_TYPE_LABELS[type] || type)}</option>`).join("")}</select>
@@ -788,7 +788,7 @@ function unbilledInvoiceForm(project, rows) {
             <input class="input py-1.5 text-sm" type="date" name="due_date" />
           </div>
         </div>
-        <button class="btn-primary w-full px-3 py-1.5 text-sm" type="submit">선택 작업으로 청구 생성</button>
+        <button class="btn-primary w-full btn-sm" type="submit">선택 작업으로 청구 생성</button>
       </div>
     </form>`;
 }

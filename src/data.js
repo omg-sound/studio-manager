@@ -112,16 +112,6 @@ function listProjectManagers({ includeInactive = false, externalOnly = false } =
     .all();
 }
 
-function listProjectServiceItems({ includeInactive = false } = {}) {
-  return db()
-    .prepare(
-      `SELECT * FROM project_service_items
-       ${includeInactive ? "" : "WHERE active = 1"}
-       ORDER BY active DESC, label COLLATE NOCASE`
-    )
-    .all();
-}
-
 // ── 단가표(과금 항목) ──
 
 /** 시간(소수, "3.5") → 분. 빈 값/0 이하면 0. */
@@ -1067,7 +1057,6 @@ module.exports = {
   clientOptions,
   ensureClientsFromProject,
   listProjectManagers,
-  listProjectServiceItems,
   listRateItems,
   createRateItem,
   updateRateItem,
