@@ -99,7 +99,7 @@ function newProjectMenu() {
       <div class="absolute right-0 z-20 mt-1 w-64 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
         ${PROJECT_TYPES.map(
           (t) => `<a href="/projects/new?type=${esc(t.key)}" class="block border-b border-border px-3 py-2.5 last:border-0 hover:bg-elevated">
-            <div class="text-sm font-medium">${esc(t.label)}</div>
+            <div class="text-sm font-medium">${esc(t.menuLabel || t.label)}</div>
             <div class="text-xs text-muted">${esc(t.hint)}</div>
           </a>`
         ).join("")}

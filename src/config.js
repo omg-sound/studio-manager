@@ -90,7 +90,8 @@ const ROLE_LABELS = { owner: "대표", chief: "치프 엔지니어", staff: "스
 
 // 프로젝트 유형: 녹음 세션(일정 먼저) vs 믹스·작업 세션(곡·콘텐츠 먼저). 상세 화면 순서를 분기.
 const PROJECT_TYPES = [
-  { key: "recording", label: "녹음 세션", hint: "일정을 먼저 잡고 진행" },
+  // label = 배지·제목용, menuLabel = '+ 새 프로젝트' 드롭다운 표기(액션형).
+  { key: "recording", label: "녹음 세션", menuLabel: "녹음 세션 작성하기", hint: "일정을 먼저 잡고 진행" },
   { key: "mixing", label: "믹스 및 작업 세션", hint: "곡·콘텐츠 단위 수주" },
 ];
 const PROJECT_TYPE_LABELS = Object.fromEntries(PROJECT_TYPES.map((t) => [t.key, t.label]));
