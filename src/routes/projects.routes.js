@@ -133,7 +133,6 @@ function projectListCard(p) {
       </div>
       <div class="shrink-0 text-right">
         ${amount}
-        <div class="text-xs text-muted">${p.due_date ? `완료 ${esc(formatYmdShort(p.due_date))}` : "완료일 미정"}</div>
       </div>
     </a>`;
 }
