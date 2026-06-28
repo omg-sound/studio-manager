@@ -135,7 +135,7 @@ router.post("/projects/:pid/deliverables", requireEditor, upload.single("file"),
         expires_at: cleanYmd(b.expires_at),
         note: String(b.note || "").trim() || null,
       });
-    res.redirect(`/projects/${project.id}`);
+    res.redirect(`/projects/${project.id}?tab=deliverables&flash=added`);
   } catch (e) {
     console.error("[deliverable upload]", e);
     const msg = e && e.code === "DRIVE_NOT_LINKED" ? "Drive 미연동(관리자 Google 로그인 필요)" : "업로드 실패: " + (e.message || "");
@@ -160,7 +160,7 @@ router.post("/deliverables/:id/token", requireEditor, (req, res) => {
   db()
     .prepare("UPDATE deliverables SET access_token=?, expires_at=?, revoked=0 WHERE id=?")
     .run(token, cleanYmd(req.body.expires_at), dv.id);
-  res.redirect(`/projects/${dv.project_id}`);
+  res.redirect(`/projects/${dv.project_id}?tab=deliverables&flash=saved`);
 });
 
 // ── 철회/복구 토글(관리자) ──
@@ -168,7 +168,7 @@ router.post("/deliverables/:id/revoke", requireEditor, (req, res) => {
   const dv = db().prepare("SELECT * FROM deliverables WHERE id = ?").get(Number(req.params.id));
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
   db().prepare("UPDATE deliverables SET revoked=? WHERE id=?").run(dv.revoked ? 0 : 1, dv.id);
-  res.redirect(`/projects/${dv.project_id}`);
+  res.redirect(`/projects/${dv.project_id}?tab=deliverables&flash=saved`);
 });
 
 // ── 삭제(관리자) — 파일 + 행 ──
@@ -177,7 +177,7 @@ router.post("/deliverables/:id/delete", requireEditor, asyncHandler(async (req, 
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
   await storage.remove(dv.storage_backend, dv.file_id);
   db().prepare("DELETE FROM deliverables WHERE id = ?").run(dv.id);
-  res.redirect(dv.project_id ? `/projects/${dv.project_id}?flash=deleted` : "/deliverables");
+  res.redirect(dv.project_id ? `/projects/${dv.project_id}?tab=deliverables&flash=deleted` : "/deliverables");
 }));
 
 // ── 공개 토큰 링크(로그인 불필요) ──

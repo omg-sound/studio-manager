@@ -271,15 +271,15 @@ function sessionControls(s, managers, rateItems = []) {
     </details>`;
 }
 
-/** 프로젝트 상세용 세션 섹션. */
-function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], tracks = [] }) {
+/** 프로젝트 상세용 세션 섹션. expand=true(탭 안)면 믹스도 접지 않고 펼쳐 렌더. */
+function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], tracks = [], expand = false }) {
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
   const list = rows.length
     ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, tracks, projectTitle: project.title })).join("")
     : `<p class="py-4 text-center text-sm text-muted">등록된 세션이 없습니다.</p>`;
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
   const isMixing = project && project.project_type === "mixing";
-  if (isMixing) {
+  if (isMixing && !expand) {
     return `
     <details class="card mt-3">
       <summary class="flex cursor-pointer list-none items-center justify-between gap-3">

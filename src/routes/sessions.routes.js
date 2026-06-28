@@ -138,7 +138,7 @@ router.post("/sessions", requireEditor, asyncHandler(async (req, res) => {
     return res.status(409).send(externalConflictMessage());
   }
   await syncSessionEvent(req.user, s); // 구글 캘린더에 일정 자동 생성
-  res.redirect(`/projects/${s.project_id}?flash=added`);
+  res.redirect(`/projects/${s.project_id}?tab=sessions&flash=added`);
 }));
 
 // ── 세션 수정 ──
@@ -151,14 +151,14 @@ router.post("/sessions/:id", requireEditor, asyncHandler(async (req, res) => {
   }
   if (!s) return res.status(404).send("세션을 찾을 수 없습니다.");
   await syncSessionEvent(req.user, s); // 일정 수정(취소면 삭제, id 없으면 생성)
-  res.redirect(`/projects/${s.project_id}?flash=saved`);
+  res.redirect(`/projects/${s.project_id}?tab=sessions&flash=saved`);
 }));
 
 // ── 상태 토글(예정 ↔ 완료) ──
 router.post("/sessions/:id/status", requireEditor, (req, res) => {
   const r = setSessionStatus(req.user, Number(req.params.id), req.body.status);
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
-  res.redirect(`/projects/${r.project_id}?flash=saved`);
+  res.redirect(`/projects/${r.project_id}?tab=sessions&flash=saved`);
 });
 
 // ── 세션 삭제 ──
@@ -168,7 +168,7 @@ router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res)
   const r = deleteSession(req.user, id);
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
   if (existing && existing.gcal_event_id) await calendar.deleteEvent(existing.gcal_event_id);
-  res.redirect(`/projects/${r.project_id}?flash=deleted`);
+  res.redirect(`/projects/${r.project_id}?tab=sessions&flash=deleted`);
 }));
 
 // ── 세션 → 청구 작업 생성(녹음 시간제) ──
@@ -179,7 +179,7 @@ router.post("/sessions/:id/bill", requireEditor, (req, res) => {
       newTrackTitle: req.body.new_track_title,
     });
     if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
-    res.redirect(`/projects/${r.project_id}?flash=billed`);
+    res.redirect(`/projects/${r.project_id}?tab=sessions&flash=billed`);
   } catch (e) {
     const map = {
       SESSION_NOT_COMPLETED: "완료된 세션만 청구 작업으로 만들 수 있습니다.",

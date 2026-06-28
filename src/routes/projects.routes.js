@@ -190,44 +190,52 @@ router.post("/:id/delete", requireChief, (req, res) => {
 function renderProjectDetail(req, res, p, formState = null, err = "") {
   const editable = canEdit(req.user); // 치프/스태프는 편집, 대표는 열람 전용
   const showInvoice = canInvoice(req.user); // 청구 섹션은 치프/대표만
-  const deliv = listDeliverablesForProject(req.user, p.id);
-  const trackBundle = listTracksForProject(req.user, p.id);
-  const sessionBundle = listSessionsForProject(req.user, p.id);
   const managers = editable ? listProjectManagers() : []; // 작업·세션 엔지니어 선택용(담당자 마스터)
 
   const meta = editable
     ? projectMetaCard({ ...p, ...(formState || {}) }, err)
     : projectMetaReadonly(p);
 
-  // 녹음 세션은 일정이 먼저, 믹스·작업은 곡·콘텐츠가 먼저.
   const isRecording = p.project_type === "recording";
-  const tracks = tracksSection({ project: p, tracks: trackBundle ? trackBundle.tracks : [], isAdmin: editable, managers });
-  const rateItems = editable ? listRateItems() : [];
-  const projectTracks = trackBundle ? trackBundle.tracks : [];
-  const sessions = sessionsSection({ project: p, rows: sessionBundle ? sessionBundle.rows : [], isAdmin: editable, managers, rateItems, tracks: projectTracks });
   const typeLabel = PROJECT_TYPE_LABELS[p.project_type] || "";
   const desc = [typeLabel, p.artist || p.client_name].filter(Boolean).join(" · ") || "프로젝트";
 
-  const sections = [
-    flashBanner(req.query),
-    pageHeader({ title: p.title, desc }),
-    meta,
-    ...(isRecording ? [sessions, tracks] : [tracks, sessions]),
-    deliverablesSection({ project: p, rows: deliv ? deliv.rows : [], isAdmin: editable, baseUrl: config.baseUrl, collapsed: true }),
+  // ── 탭: 세션 일정 / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
+  const tabs = [
+    { key: "sessions", label: "세션 일정" },
+    { key: "tracks", label: "곡 · 콘텐츠" },
+    { key: "deliverables", label: "자료 전달" },
   ];
+  if (showInvoice) tabs.push({ key: "invoice", label: "청구" });
+  const validKeys = tabs.map((t) => t.key);
+  const defaultTab = isRecording ? "sessions" : "tracks";
+  const tab = validKeys.includes(req.query.tab) ? req.query.tab : defaultTab;
+  const tabBar = `<div class="mb-3 mt-3 flex gap-1 overflow-x-auto border-b border-border">
+      ${tabs.map((t) => `<a href="/projects/${p.id}?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
+    </div>`;
 
-  // 청구는 청구권자(치프/대표)만 — 스태프에게는 청구 섹션 자체를 노출하지 않는다.
-  if (showInvoice) {
+  let tabContent = "";
+  if (tab === "tracks") {
+    const trackBundle = listTracksForProject(req.user, p.id);
+    tabContent = tracksSection({ project: p, tracks: trackBundle ? trackBundle.tracks : [], isAdmin: editable, managers });
+  } else if (tab === "deliverables") {
+    const deliv = listDeliverablesForProject(req.user, p.id);
+    tabContent = deliverablesSection({ project: p, rows: deliv ? deliv.rows : [], isAdmin: editable, baseUrl: config.baseUrl, collapsed: false });
+  } else if (tab === "invoice" && showInvoice) {
     const inv = listInvoicesForProject(req.user, p.id);
     const unbilled = listUnbilledTasksForProject(req.user, p.id);
     const unbilledRows = unbilled ? unbilled.rows : [];
     const unbilledForm = unbilledRows.length ? unbilledInvoiceForm(p, unbilledRows) : "";
-    sections.push(
-      invoicesSection({ project: p, rows: inv ? inv.rows : [], isAdmin: showInvoice, collapsed: true, unbilledForm, unbilledCount: unbilledRows.length })
-    );
+    tabContent = invoicesSection({ project: p, rows: inv ? inv.rows : [], isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length });
+  } else {
+    const rateItems = editable ? listRateItems() : [];
+    const trackBundle = listTracksForProject(req.user, p.id);
+    const sessionBundle2 = listSessionsForProject(req.user, p.id);
+    tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems, tracks: trackBundle ? trackBundle.tracks : [], expand: true });
   }
 
-  res.send(layout({ title: p.title, user: req.user, current: "/projects", body: sections.join("\n") }));
+  const body = [flashBanner(req.query), pageHeader({ title: p.title, desc }), meta, tabBar, tabContent].join("\n");
+  res.send(layout({ title: p.title, user: req.user, current: "/projects", body }));
 }
 
 /** 메타 한 줄 요약(아티스트 · 거래처 · 담당자 / 견적 · 완료일). */
@@ -325,7 +333,7 @@ router.post("/:id/tracks", requireEditor, (req, res) => {
   try {
     const track = createTrack(req.user, Number(req.params.id), req.body);
     if (!track) return res.status(404).send("프로젝트를 찾을 수 없습니다.");
-    res.redirect(`/projects/${track.project_id}?flash=added`);
+    res.redirect(`/projects/${track.project_id}?tab=tracks&flash=added`);
   } catch (e) {
     if (e.message === "TRACK_TITLE_REQUIRED") return res.status(400).send("곡·콘텐츠 이름을 입력하세요.");
     throw e;
@@ -336,7 +344,7 @@ router.post("/tracks/:trackId", requireEditor, (req, res) => {
   try {
     const track = updateTrack(req.user, Number(req.params.trackId), req.body);
     if (!track) return res.status(404).send("곡·콘텐츠를 찾을 수 없습니다.");
-    res.redirect(`/projects/${track.project_id}?flash=saved`);
+    res.redirect(`/projects/${track.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
     if (e.message === "TRACK_TITLE_REQUIRED") return res.status(400).send("곡·콘텐츠 이름을 입력하세요.");
     throw e;
@@ -347,7 +355,7 @@ router.post("/tracks/:trackId/delete", requireEditor, (req, res) => {
   try {
     const result = deleteTrack(req.user, Number(req.params.trackId));
     if (!result) return res.status(404).send("곡·콘텐츠를 찾을 수 없습니다.");
-    res.redirect(`/projects/${result.project_id}?flash=deleted`);
+    res.redirect(`/projects/${result.project_id}?tab=tracks&flash=deleted`);
   } catch (e) {
     if (e.message === "TRACK_HAS_INVOICED") {
       return res.status(400).send("이미 청구된 작업이 있는 곡·콘텐츠는 삭제할 수 없습니다.");
@@ -360,14 +368,14 @@ router.post("/tracks/:trackId/tasks", requireEditor, (req, res) => {
   const task = createTask(req.user, Number(req.params.trackId), req.body);
   if (!task) return res.status(404).send("곡·콘텐츠를 찾을 수 없습니다.");
   const track = db().prepare("SELECT project_id FROM project_tracks WHERE id = ?").get(task.track_id);
-  res.redirect(track ? `/projects/${track.project_id}?flash=added` : "/projects");
+  res.redirect(track ? `/projects/${track.project_id}?tab=tracks&flash=added` : "/projects");
 });
 
 router.post("/tasks/:taskId", requireEditor, (req, res) => {
   try {
     const task = updateTask(req.user, Number(req.params.taskId), req.body);
     if (!task) return res.status(404).send("작업을 찾을 수 없습니다.");
-    res.redirect(`/projects/${task.project_id}?flash=saved`);
+    res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
     if (e.message === "TASK_LOCKED") return res.status(400).send("이미 청구된 작업은 수정할 수 없습니다.");
     throw e;
@@ -378,7 +386,7 @@ router.post("/tasks/:taskId/delete", requireEditor, (req, res) => {
   try {
     const result = deleteTask(req.user, Number(req.params.taskId));
     if (!result) return res.status(404).send("작업을 찾을 수 없습니다.");
-    res.redirect(`/projects/${result.project_id}?flash=deleted`);
+    res.redirect(`/projects/${result.project_id}?tab=tracks&flash=deleted`);
   } catch (e) {
     if (e.message === "TASK_LOCKED") return res.status(400).send("이미 청구된 작업은 삭제할 수 없습니다.");
     throw e;
@@ -530,7 +538,7 @@ function tracksSection({ project, tracks, isAdmin, managers = [] }) {
     : `<p class="py-4 text-center text-sm text-muted">등록된 곡·콘텐츠가 없습니다.</p>`;
   const isRecording = project && project.project_type === "recording";
   const hint = isRecording && isAdmin
-    ? `<p class="text-xs text-muted">녹음이 진행된 곡·콘텐츠를 기록하세요. <span class="text-muted">일정과는 별개</span>이며, 한 세션에 여러 곡을 넣을 수 있습니다. 각 곡은 이후 튠·믹스 작업으로 이어집니다.</p>`
+    ? `<p class="text-xs text-muted">녹음(세션 일정)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 한 세션에 여러 곡을 넣을 수 있고, 각 곡은 단계별로 이어집니다.</p>`
     : "";
   return `
     <section class="card mt-3 space-y-4">
@@ -663,11 +671,10 @@ function taskEditMenu(task, managers = []) {
 
 // 작업 단계 그룹 라벨(요약·기타 드롭다운 그룹용).
 const TASK_GROUP_LABELS = { Recording: "녹음", Post_Production: "후반 작업", Mix_Master: "믹스·마스터", Video_Audio: "영상 오디오" };
-// 빠른 추가 단계 — 녹음은 시간제, 후반/믹스마스터는 트랙 고정 기본값.
+// 빠른 추가 단계 — 곡·콘텐츠는 녹음과 별개의 후반작업(튠·믹스·마스터링). 녹음은 세션 일정에서 관리.
 const QUICK_STAGES = [
-  { key: "Vocal_Recording", label: "보컬 녹음", billing: "Time_Charge" },
-  { key: "Instrument_Recording", label: "악기 녹음", billing: "Time_Charge" },
   { key: "Vocal_Tuning", label: "보컬튠", billing: "Fixed_Per_Track" },
+  { key: "Audio_Editing", label: "오디오 편집", billing: "Fixed_Per_Track" },
   { key: "Mixing", label: "믹싱", billing: "Fixed_Per_Track" },
   { key: "Mastering", label: "마스터링", billing: "Fixed_Per_Track" },
 ];
