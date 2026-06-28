@@ -664,6 +664,7 @@ function sessionFields(input) {
     session_date: date,
     start_time: cleanTime(input.start_time),
     end_time: cleanTime(input.end_time),
+    booker_name: String(input.booker_name || "").trim() || null,
     engineer_name: String(input.engineer_name || "").trim() || null,
     status: normalizeSessionStatus(input.status),
     rate_item_id: Number(input.rate_item_id) || null,
@@ -687,8 +688,8 @@ function createSession(user, projectId, input = {}) {
   const f = sessionFields(input);
   const info = db()
     .prepare(
-      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, engineer_name, status, rate_item_id, memo)
-       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @engineer_name, @status, @rate_item_id, @memo)`
+      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, memo)
+       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @memo)`
     )
     .run({ project_id: project.id, ...f });
   return db().prepare("SELECT * FROM sessions WHERE id = ?").get(info.lastInsertRowid);
@@ -701,7 +702,8 @@ function updateSession(user, sessionId, input = {}) {
   db()
     .prepare(
       `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
-       end_time=@end_time, engineer_name=@engineer_name, status=@status, rate_item_id=@rate_item_id, memo=@memo WHERE id=@id`
+       end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
+       rate_item_id=@rate_item_id, memo=@memo WHERE id=@id`
     )
     .run({ id: s.id, ...f });
   return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };

@@ -515,11 +515,16 @@ function tracksSection({ project, tracks, isAdmin, managers = [] }) {
   const list = tracks.length
     ? tracks.map((track) => trackCard(track, { isAdmin, managers })).join("")
     : `<p class="py-4 text-center text-sm text-muted">등록된 곡·콘텐츠가 없습니다.</p>`;
+  const isRecording = project && project.project_type === "recording";
+  const hint = isRecording && isAdmin
+    ? `<p class="text-xs text-muted">녹음이 진행된 곡·콘텐츠를 기록하세요. <span class="text-muted">일정과는 별개</span>이며, 한 세션에 여러 곡을 넣을 수 있습니다. 각 곡은 이후 튠·믹스 작업으로 이어집니다.</p>`
+    : "";
   return `
     <section class="card mt-3 space-y-4">
       <div class="flex items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">곡 · 콘텐츠</h2>
       </div>
+      ${hint}
       ${isAdmin ? trackCreateForm(project) : ""}
       <div class="space-y-3">${list}</div>
     </section>`;

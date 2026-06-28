@@ -2,14 +2,14 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, config } = require("./config");
 const { esc, formatKRW } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
-/** 엔지니어(담당자) 선택지. 현재값이 목록에 없으면 보존용으로 추가. */
-function engineerOptions(managers, current) {
+/** 담당자 마스터 선택지. 현재값이 목록에 없으면 보존용으로 추가. 예약 담당자·담당 엔지니어 공용. */
+function managerOptions(managers, current, placeholder = "담당자 미지정") {
   const names = managers.map((m) => m.name);
-  const out = [`<option value="">담당자 미지정</option>`];
+  const out = [`<option value="">${esc(placeholder)}</option>`];
   if (current && !names.includes(current)) {
     out.push(`<option value="${esc(current)}" selected>${esc(current)} (목록 외)</option>`);
   }
@@ -19,13 +19,49 @@ function engineerOptions(managers, current) {
   return out.join("");
 }
 
+/** 'YYYYMMDD'(compact)에 하루 더하기 — 종일 일정의 종료일(익일, end-exclusive)용. */
+function ymdPlusOneCompact(ymd) {
+  const dt = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)) + 1));
+  const p = (n) => String(n).padStart(2, "0");
+  return `${dt.getUTCFullYear()}${p(dt.getUTCMonth() + 1)}${p(dt.getUTCDate())}`;
+}
+
+/**
+ * 구글 캘린더 '일정 추가' 템플릿 링크. OAuth 권한·Calendar API 불필요 — 클릭하면 제목·날짜·
+ * 시간이 채워진 새 일정 작성 화면이 열리고, 저장은 사용자가 직접 한다(앱이 일정을 만들지 않음).
+ * 시작·종료가 둘 다 있으면 시간 일정(KST), 없으면 종일 일정.
+ */
+function googleCalendarLink(s, projectTitle = "") {
+  const ymd = String(s.session_date || "").replace(/-/g, "");
+  if (ymd.length !== 8) return "";
+  let dates;
+  if (s.start_time && s.end_time) {
+    dates = `${ymd}T${s.start_time.replace(":", "")}00/${ymd}T${s.end_time.replace(":", "")}00`;
+  } else {
+    dates = `${ymd}/${ymdPlusOneCompact(ymd)}`;
+  }
+  const title = [projectTitle || s.project_title || "스튜디오 세션", s.session_type].filter(Boolean).join(" · ");
+  const details = [
+    s.booker_name ? `예약 담당자: ${s.booker_name}` : "",
+    s.engineer_name ? `담당 엔지니어: ${s.engineer_name}` : "",
+    s.memo ? `메모: ${s.memo}` : "",
+    s.project_id && config.baseUrl ? `${config.baseUrl}/projects/${s.project_id}` : "",
+  ].filter(Boolean).join("\n");
+  const params = new URLSearchParams({ action: "TEMPLATE", text: title, dates, ctz: "Asia/Seoul" });
+  if (details) params.set("details", details);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 function timeLabel(s) {
   if (s.start_time && s.end_time) return `${esc(s.start_time)}–${esc(s.end_time)}`;
   if (s.start_time) return esc(s.start_time);
   return "시간 미정";
 }
 
-/** 세션 폼 필드(생성/편집 공유). */
+/**
+ * 세션 폼 필드(생성/편집 공유). 순서 = 예약 시 정하는 값 먼저, 실제 진행 시간(시작·종료)은 뒤.
+ * 날짜·상태 → 예약 담당자·담당 엔지니어 → 녹음 종류·단가 → 시작·종료 → 메모.
+ */
 function sessionFields(s, managers, rateItems = []) {
   return `
     <div class="grid gap-2 sm:grid-cols-2">
@@ -34,23 +70,27 @@ function sessionFields(s, managers, rateItems = []) {
         <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" required />
       </div>
       <div>
-        <label class="label mb-0.5 text-xs">종류</label>
-        <select class="input py-1.5 text-sm" name="session_type">
-          ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
-        </select>
-      </div>
-      <div>
-        <label class="label mb-0.5 text-xs">엔지니어</label>
-        <select class="input py-1.5 text-sm" name="engineer_name">${engineerOptions(managers, s.engineer_name || "")}</select>
-      </div>
-      <div>
         <label class="label mb-0.5 text-xs">상태</label>
         <select class="input py-1.5 text-sm" name="status">
           ${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}
         </select>
       </div>
       <div>
-        <label class="label mb-0.5 text-xs">단가 항목 (녹음 시간제)</label>
+        <label class="label mb-0.5 text-xs">예약 담당자</label>
+        <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select>
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">담당 엔지니어</label>
+        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select>
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">녹음 종류</label>
+        <select class="input py-1.5 text-sm" name="session_type">
+          ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
+        </select>
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(녹음 시간제 · 선택)</span></label>
         <select class="input py-1.5 text-sm" name="rate_item_id">
           <option value="">단가 미지정</option>
           ${rateItems.map((r) => `<option value="${r.id}" ${String(r.id) === String(s.rate_item_id || "") ? "selected" : ""}>${esc(r.name)}</option>`).join("")}
@@ -79,17 +119,25 @@ function sessionCreateForm(project, managers, rateItems = []) {
 }
 
 /** 세션 한 행. showProject=true면 프로젝트명 링크 표시(전역 일정). tracks 전달 시 청구 작업 생성 폼 노출. */
-function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showProject = false, tracks = null } = {}) {
+function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showProject = false, tracks = null, projectTitle = "" } = {}) {
   const typeBadge = `<span class="badge bg-bg text-muted">${esc(s.session_type)}</span>`;
   const statusBadge = `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
+  const people = [
+    s.booker_name ? `예약 ${esc(s.booker_name)}` : "",
+    s.engineer_name ? `엔지니어 ${esc(s.engineer_name)}` : "",
+  ].filter(Boolean).join(" · ") || "담당자 미정";
   const sub = [
     showProject && s.project_title ? `<a href="/projects/${s.project_id}" class="text-primary hover:underline">${esc(s.project_title)}</a>` : "",
-    s.engineer_name ? esc(s.engineer_name) : "담당자 미정",
+    people,
     s.memo ? esc(s.memo) : "",
   ].filter(Boolean).join(" · ");
   const billLine = s.billing
     ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${s.billed_task_id ? ' · <span class="text-muted">작업 생성됨</span>' : ""}</div>`
+    : "";
+  const calLink = s.status !== "취소" ? googleCalendarLink(s, projectTitle) : "";
+  const calBtn = calLink
+    ? `<div class="mt-1"><a href="${esc(calLink)}" target="_blank" rel="noopener noreferrer" class="badge bg-primary/10 text-primary hover:bg-primary/20">📅 구글 캘린더에 추가</a></div>`
     : "";
   const controls = isAdmin ? sessionControls(s, managers, rateItems) : "";
   const billForm = (isAdmin && Array.isArray(tracks) && s.billing && s.status === "완료" && !s.billed_task_id)
@@ -116,6 +164,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
           </div>
           <div class="mt-0.5 text-xs text-muted">${sub}</div>
           ${billLine}
+          ${calBtn}
         </div>
         <div class="flex shrink-0 items-center gap-1">${statusBadge}</div>
       </div>
@@ -149,7 +198,7 @@ function sessionControls(s, managers, rateItems = []) {
 function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], tracks = [] }) {
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
   const list = rows.length
-    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, tracks })).join("")
+    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, tracks, projectTitle: project.title })).join("")
     : `<p class="py-4 text-center text-sm text-muted">등록된 세션이 없습니다.</p>`;
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
   const isMixing = project && project.project_type === "mixing";
@@ -175,4 +224,4 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
     </section>`;
 }
 
-module.exports = { sessionRow, sessionsSection, sessionCreateForm };
+module.exports = { sessionRow, sessionsSection, sessionCreateForm, googleCalendarLink };

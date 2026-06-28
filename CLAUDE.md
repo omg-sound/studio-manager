@@ -142,6 +142,22 @@
   `/healthz`·일일 백업 cron 수동 트리거(172KB DB 생성·연체 스캔) 전부 통과. 빌드 함정: `tailwindcss`가
   `devDependencies`라 `NODE_ENV=production`에서 `npm ci`가 건너뜀(exit 127) → `npm install --include=dev`로
   변경해 해결. 세부 체크포인트 = `DEPLOY.md`(전 단계 ✅).
+- **프로젝트 삭제(2026-06-28)**: 상세 메타 카드 편집 영역 하단에 `프로젝트 삭제`(치프 전용,
+  `POST /projects/:id/delete`=requireChief, `data-confirm` 경고). 트랙·세션·자료는 CASCADE, 인보이스는
+  `project_id=NULL`로 보존. 프로젝트 목록에는 삭제 버튼 없음(상세에서만).
+- **마감일 제거(2026-06-28)**: 녹음은 세션 일정으로 관리하므로 프로젝트의 `마감일(완료 예정)` 입력·표시를
+  새 폼·편집 폼·메타 요약·목록 카드에서 제거. DB `due_date` 컬럼·인보이스 연체 로직은 유지.
+- **믹스 세션 섹션 접힘(2026-06-28)**: `sessionsSection`에서 `project_type==='mixing'`이면 세션 일정을
+  `<details>` 기본 접힘으로(필요 시 펼침). 녹음은 세션이 핵심이라 항상 펼침.
+- **녹음 프로젝트 작성 경험 개편(2026-06-28)**: ① 세션 폼 순서를 **날짜·상태 → 예약 담당자·담당 엔지니어 →
+  녹음 종류·단가 → 시작·종료 → 메모**로 재배치(예약 시 정하는 값 먼저). ② `sessions.booker_name`(예약 담당자)
+  컬럼 신설 — 담당 엔지니어와 별개 역할, 둘 다 담당자 마스터 select(`managerOptions`). ③ **구글 캘린더 '일정
+  추가' 링크**(`googleCalendarLink`, `views.sessions.js`): 저장된 세션 행마다 제목·날짜·시간(KST)·상세가 채워진
+  `calendar.google.com/.../render?action=TEMPLATE` 링크 노출. **OAuth 스코프/ Calendar API 불필요**(앱이 일정을
+  만들지 않고 사용자가 새 탭에서 저장) → 재동의·GCP 변경 0. 시작·종료 둘 다 있으면 시간 일정, 없으면 종일(종료=익일).
+  취소 세션은 링크 미노출. URLSearchParams 인코딩 + href `esc`로 XSS 안전. ④ 곡·콘텐츠 섹션에 녹음 의도 안내
+  (일정 무관·한 세션 다곡·튠/믹스로 이어짐). 데이터 왕복·렌더·브라우저 헤더 통합 E2E(로그인 302·생성 302·예약
+  담당자·캘린더 링크·시간 반영·폼 순서) 통과. **곡→튠/믹스 후속 워크플로·청구 연동은 추후(청구 개편과 함께).**
 
 ## 스택
 
@@ -204,9 +220,9 @@
 - `invoice_items(invoice_id→invoices CASCADE, task_id?→track_tasks SET NULL, track_title, task_type,
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,
-  start_time?, end_time? "HH:MM", engineer_name?, status[예정|완료|취소], memo)` — 스튜디오 일정.
-  엔지니어는 담당자 마스터에서 선택, 청구 시간 산정의 기반. `rate_item_id`(→rate_items SET NULL)는 녹음
-  세션 시간제 자동 산정용 단가표 연결(3단계).
+  start_time?, end_time? "HH:MM", booker_name?, engineer_name?, status[예정|완료|취소], memo)` — 스튜디오 일정.
+  `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
+  청구 시간 산정의 기반. `rate_item_id`(→rate_items SET NULL)는 녹음 세션 시간제 자동 산정용 단가표 연결(3단계).
 - `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시)
 
