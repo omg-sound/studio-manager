@@ -226,7 +226,9 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     const unbilled = listUnbilledTasksForProject(req.user, p.id);
     const unbilledRows = unbilled ? unbilled.rows : [];
     const unbilledForm = unbilledRows.length ? unbilledInvoiceForm(p, unbilledRows) : "";
-    tabContent = invoicesSection({ project: p, rows: inv ? inv.rows : [], isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length });
+    const sessionBundle = listSessionsForProject(req.user, p.id);
+    const pendingSessionsHtml = pendingSessionsForm(sessionBundle ? sessionBundle.rows : []);
+    tabContent = invoicesSection({ project: p, rows: inv ? inv.rows : [], isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length, pendingSessionsHtml });
   } else {
     const rateItems = editable ? listRateItems() : [];
     const trackBundle = listTracksForProject(req.user, p.id);
@@ -709,6 +711,33 @@ function taskQuickAdd(track) {
     <div class="mt-3">
       <div class="mb-1.5 text-xs text-muted">다음 단계 추가</div>
       <div class="flex flex-wrap items-center gap-1.5">${QUICK_STAGES.map(quick).join("")}${other}</div>
+    </div>`;
+}
+
+/** 청구 대기 — 완료된 녹음 세션(예상 청구액, 아직 청구 작업으로 전환 안 됨)을 청구 탭에 노출 + '청구 확정' 버튼. */
+function pendingSessionsForm(sessions) {
+  const rows = (sessions || []).filter((s) => s.status === "완료" && s.billing && !s.billed_task_id);
+  if (!rows.length) return "";
+  const items = rows
+    .map((s) => `
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-bg p-2.5">
+        <div class="min-w-0 text-sm">
+          <span class="badge bg-bg text-muted">${esc(s.session_type)}</span>
+          <span class="font-medium">${esc(formatYmdShort(s.session_date))}</span>
+          <span class="text-xs text-muted">${esc([s.start_time, s.end_time].filter(Boolean).join("–"))} · ${esc(s.billing.item.name)}</span>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <span class="text-sm font-semibold text-success">${formatKRW(s.billing.amount)}</span>
+          <form method="post" action="/sessions/${s.id}/bill">
+            <button class="btn-primary px-3 py-1.5 text-xs" type="submit">청구 확정</button>
+          </form>
+        </div>
+      </div>`)
+    .join("");
+  return `
+    <div class="rounded-lg border border-border bg-surface p-3">
+      <div class="mb-2 text-sm font-medium">청구 대기 · 완료된 녹음 세션 <span class="text-xs font-normal text-muted">(확정하면 청구 작업으로 전환됩니다)</span></div>
+      <div class="space-y-2">${items}</div>
     </div>`;
 }
 

@@ -57,7 +57,7 @@ function invoiceRow(inv, { compact = false } = {}) {
  * unbilledForm: 완료·미청구 작업 청구 생성 폼 HTML(있으면 펼친 내용 맨 위에 표시).
  * unbilledCount: 미청구 작업 수(>0이면 섹션 자동 펼침 + 헤더 배지).
  */
-function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledForm = "", unbilledCount = 0 }) {
+function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledForm = "", unbilledCount = 0, pendingSessionsHtml = "" }) {
   const list = rows.length
     ? rows.map((i) => invoiceRow(i, { compact: true })).join("")
     : `<p class="py-4 text-center text-sm text-muted">청구 내역이 없습니다.</p>`;
@@ -73,6 +73,7 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
        </div>`
     : "";
   const inner = `
+        ${pendingSessionsHtml ? `<div class="mb-3">${pendingSessionsHtml}</div>` : ""}
         ${unbilledForm ? `<div class="mb-3">${unbilledForm}</div>` : ""}
         ${addBtn ? `<div class="mb-2 flex justify-end">${addBtn}</div>` : ""}
         ${summary}

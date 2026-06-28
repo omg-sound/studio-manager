@@ -179,7 +179,7 @@ router.post("/sessions/:id/bill", requireEditor, (req, res) => {
       newTrackTitle: req.body.new_track_title,
     });
     if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
-    res.redirect(`/projects/${r.project_id}?tab=sessions&flash=billed`);
+    res.redirect(`/projects/${r.project_id}?tab=invoice&flash=billed`);
   } catch (e) {
     const map = {
       SESSION_NOT_COMPLETED: "완료된 세션만 청구 작업으로 만들 수 있습니다.",
