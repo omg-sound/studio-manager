@@ -6,30 +6,43 @@
 
 ---
 
+## ▶ 진행 상태 (2026-06-28 기준 · VSCode 이어가기용)
+
+| 단계 | 상태 |
+|---|---|
+| 1. Git 저장소 + 푸시 | ✅ 완료 — `github.com/omg-sound/studio-manager` (main) |
+| 2. Render Blueprint 연결 | ✅ 진행 — 두 서비스 인식됨 |
+| 3. 시크릿 입력 | ⏳ **진행 중** — `ADMIN_EMAIL`✅ · `GOOGLE_CLIENT_ID`✅ · **`GOOGLE_CLIENT_SECRET` ❌(다음 작업)** · **`BACKUP_TOKEN`(web+cron 동일값) ❌** |
+| 4. Apply → 빌드·배포 | ⬜ 대기 |
+| 5. OAuth redirect URI(배포 도메인) | ⬜ 대기 |
+| 6. 첫 로그인·검증·cron 트리거 | ⬜ 대기 |
+
+**바로 다음 할 일**: GCP에서 `GOOGLE_CLIENT_SECRET`(=Client ID와 같은 OAuth 웹 클라이언트의 "클라이언트
+보안 비밀", `GOCSPX-…`)을 복사해 Render web 서비스에 입력 → `BACKUP_TOKEN`을 web·cron 두 곳에 **동일한
+강한 값**(`openssl rand -hex 32`) 입력 → **Apply**. 이후 §4~§6.
+
+> ⚠️ 프로덕션 fail-fast: `GOOGLE_CLIENT_SECRET`·`BACKUP_TOKEN`이 비거나 약하면 web 부팅이 거부된다(`src/config.js`).
+
+---
+
 ## 0. 사전 준비물
 
-- **GitHub(또는 GitLab) 저장소** — Render Blueprint는 Git 저장소에서 배포한다. (이 프로젝트는 아직 git 미초기화 → 1단계)
+- **GitHub 저장소** — ✅ `github.com/omg-sound/studio-manager` (Render Blueprint는 Git 저장소에서 배포).
 - **Render 계정** — https://render.com (Blueprint는 유료 Starter 플랜 기준: web + cron).
 - **Google Cloud 프로젝트** — OAuth 클라이언트(웹) + Drive API. (로그인·자료 스토리지에 필요)
 
 ---
 
-## 1. Git 저장소 준비
+## 1. Git 저장소 (✅ 완료)
 
-이 프로젝트는 아직 git 저장소가 아니다. 최초 1회:
+이미 초기화·푸시 완료: `github.com/omg-sound/studio-manager` (`main`). 이후 변경은 평소대로:
 
 ```bash
-cd omg-studios-manager
-git init
-git add -A                 # .gitignore가 .env·data/·node_modules·백업을 제외함
-git commit -m "Initial commit: OMG Studios Manager"
-git branch -M main
-git remote add origin https://github.com/<계정>/omg-studios-manager.git
-git push -u origin main
+git add -A && git commit -m "..." && git push   # autoDeploy=commit → web/cron 자동 재배포
 ```
 
-> `.env`, `data/*.db`, `data/backups/`, `data/uploads/`, `node_modules/`, `public/css/app.css`는
-> `.gitignore`로 제외된다. **시크릿이 저장소에 올라가지 않는지 `git status`로 반드시 확인**할 것.
+> `.env`, `data/*.db`, `data/backups/`, `data/uploads/`, `node_modules/`, `public/css/app.css`,
+> `.claude/settings.local.json`은 `.gitignore`로 제외된다. **시크릿이 올라가지 않는지 `git status`로 확인**.
 
 ---
 

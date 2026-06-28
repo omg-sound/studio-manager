@@ -5,8 +5,9 @@
 > 상세 설계 변천사·함정은 [`CLAUDE.md`](./CLAUDE.md) 참조.
 >
 > **현재 상태(2026-06-28)**: MVP 동작 + 권한 3단계 + UX 개선 + **세션(일정)** + 클라이언트 분류 탭 +
-> **세션 시간→청구 자동 산정(3단계)** + **백업/연체 cron + Render Blueprint(코드 준비 완료)** 완료. 로컬 검증
-> 통과. 미완: **Render 실배포(사용자 단계, `DEPLOY.md`)**, Google OAuth 실연동, 청구서 PDF.
+> **세션 시간→청구 자동 산정(3단계)** + **백업/연체 cron + Render Blueprint** 완료. 로컬 검증 통과.
+> **GitHub 푸시 완료**(`omg-sound/studio-manager`). **현재: Render Blueprint 시크릿 입력 중** —
+> `GOOGLE_CLIENT_SECRET`·`BACKUP_TOKEN`이 다음 작업(`DEPLOY.md` ▶진행 상태). 미완: Drive 실연동, 청구서 PDF.
 
 ---
 
@@ -143,9 +144,10 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 ## 7. 다음 작업 후보 (우선순위 순)
 
-1. **Render 배포** — 코드·`render.yaml`(web+Disk+cron)·백업/연체 cron **구현·로컬 E2E 완료(2026-06-28)**.
-   남은 것은 **사용자 실행 단계**: `git init`+GitHub 푸시 → Render Blueprint Apply → 시크릿(`ADMIN_EMAIL`·
-   `BACKUP_TOKEN`·GCP OAuth) 입력 → 검증. **절차서 = [`DEPLOY.md`](./DEPLOY.md)**.
+1. **Render 배포 (진행 중)** — 코드·`render.yaml`·백업/연체 cron 구현·로컬 E2E 완료 + **GitHub 푸시 완료**
+   (`github.com/omg-sound/studio-manager`, main). **현재 Render Blueprint 시크릿 입력 단계**: `ADMIN_EMAIL`·
+   `GOOGLE_CLIENT_ID` 입력됨, **`GOOGLE_CLIENT_SECRET`·`BACKUP_TOKEN`(web+cron 동일값)이 다음 작업** → Apply →
+   배포 도메인으로 OAuth redirect URI → 첫 로그인·검증. **체크포인트·절차 = [`DEPLOY.md`](./DEPLOY.md) ▶진행 상태**.
 2. **Google OAuth 실연동** — GCP 동의화면·redirect URI·refresh token → Drive 링크(연동 시 storage가 local→drive 자동 전환). 첫 로그인=`ADMIN_EMAIL` 치프. (DEPLOY.md §4)
 3. **(선택) 세션 심화** — 월 캘린더 그리드 뷰(현재 목록), 대시보드 임박 세션 카드. (세션 시간→작업 청구 자동 산정은 **완료**: 3단계)
 4. **(선택) 청구서 PDF/이미지** — resvg 패턴, 채번.
