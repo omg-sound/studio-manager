@@ -14,7 +14,7 @@ services:
     runtime: node
     plan: starter
     region: singapore
-    buildCommand: npm ci && npm run build:css
+    buildCommand: npm install --include=dev && npm run build:css
     startCommand: node src/server.js
     healthCheckPath: /healthz
     autoDeploy: true
