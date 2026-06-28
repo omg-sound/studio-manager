@@ -234,21 +234,15 @@ router.post("/users/:id/role", requireChief, (req, res) => {
   res.redirect("/settings?flash=saved");
 });
 
-router.post("/users/:id/deactivate", requireChief, (req, res) => {
+router.post("/users/:id/delete", requireChief, (req, res) => {
   const id = Number(req.params.id);
   const target = db().prepare("SELECT * FROM users WHERE id = ?").get(id);
+  // 본인·부트스트랩 치프는 삭제 금지(자기 잠금/락아웃 방지)
   if (target && !isBootstrapChief(target) && target.id !== req.user.id) {
-    db().prepare("UPDATE users SET active = 0 WHERE id = ?").run(id);
-    syncUserToManager(findUserById(id)); // 비활성 → 링크된 작업 담당자도 비활성
+    db().prepare("DELETE FROM project_managers WHERE user_id = ?").run(id); // 하우스 엔지니어 링크 제거(projects.manager_id → SET NULL)
+    db().prepare("DELETE FROM users WHERE id = ?").run(id);
   }
-  res.redirect("/settings?flash=saved");
-});
-
-router.post("/users/:id/activate", requireChief, (req, res) => {
-  const id = Number(req.params.id);
-  db().prepare("UPDATE users SET active = 1 WHERE id = ?").run(id);
-  syncUserToManager(findUserById(id)); // 활성 → 링크된 작업 담당자도 활성(이름 있으면)
-  res.redirect("/settings?flash=saved");
+  res.redirect("/settings?flash=deleted");
 });
 
 // ── 단가표(과금 항목) 관리 ──
@@ -290,14 +284,9 @@ router.post("/managers", requireChief, (req, res) => {
   res.redirect("/settings?flash=saved");
 });
 
-router.post("/managers/:id/deactivate", requireChief, (req, res) => {
-  db().prepare("UPDATE project_managers SET active = 0 WHERE id = ?").run(Number(req.params.id));
-  res.redirect("/settings?flash=saved");
-});
-
-router.post("/managers/:id/activate", requireChief, (req, res) => {
-  db().prepare("UPDATE project_managers SET active = 1 WHERE id = ?").run(Number(req.params.id));
-  res.redirect("/settings?flash=saved");
+router.post("/managers/:id/delete", requireChief, (req, res) => {
+  db().prepare("DELETE FROM project_managers WHERE id = ?").run(Number(req.params.id)); // projects.manager_id → SET NULL
+  res.redirect("/settings?flash=deleted");
 });
 
 router.post("/service-items", requireChief, (req, res) => {
@@ -339,11 +328,11 @@ function userRow(u, currentUser) {
            ${ROLES.map((r) => `<option value="${esc(r)}" ${r === u.role ? "selected" : ""}>${esc(ROLE_LABELS[r] || r)}</option>`).join("")}
          </select>
        </form>`;
-  const toggle = locked
+  const del = locked
     ? ""
-    : u.active
-      ? toggleForm(`/settings/users/${u.id}/deactivate`, "비활성")
-      : toggleForm(`/settings/users/${u.id}/activate`, "활성");
+    : `<form method="post" action="/settings/users/${u.id}/delete" data-confirm="${esc(u.name || u.email)} 계정을 삭제할까요? 로그인 화이트리스트와 작업 담당자에서 제거됩니다.">
+         <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
+       </form>`;
   return `
     <div class="rounded-lg border border-border bg-bg p-3">
       <div class="flex items-start justify-between gap-3">
@@ -355,7 +344,7 @@ function userRow(u, currentUser) {
         </div>
         <div class="flex shrink-0 items-center gap-2">
           ${locked ? "" : roleControl}
-          ${toggle}
+          ${del}
         </div>
       </div>
     </div>`;
@@ -422,7 +411,9 @@ function managerRow(m) {
           <div class="font-medium">${esc(m.name)}</div>
           <div class="mt-0.5 truncate text-xs text-muted">${esc([m.email, m.phone].filter(Boolean).join(" · ") || "연락처 없음")}</div>
         </div>
-        ${toggleForm(`/settings/managers/${m.id}/${m.active ? "deactivate" : "activate"}`, m.active ? "비활성" : "활성")}
+        <form method="post" action="/settings/managers/${m.id}/delete" data-confirm="${esc(m.name)} (외주 작업자)를 삭제할까요?">
+          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
+        </form>
       </div>
     </div>`;
 }

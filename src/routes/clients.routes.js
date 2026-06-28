@@ -114,6 +114,12 @@ router.post("/:id", (req, res) => {
   res.redirect("/clients?flash=saved#c" + id);
 });
 
+// ── 삭제(강제: 연결된 프로젝트·청구서·사용자의 client_id는 SET NULL로 자동 해제) ──
+router.post("/:id/delete", (req, res) => {
+  db().prepare("DELETE FROM clients WHERE id = ?").run(Number(req.params.id));
+  res.redirect("/clients?flash=deleted");
+});
+
 // ── 폼 ──
 function clientForm(c = {}, isEdit = false) {
   const e = c._err || "";
@@ -143,7 +149,11 @@ function clientForm(c = {}, isEdit = false) {
         <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
         <a href="/clients" class="btn-ghost">취소</a>
       </div>
-    </form>`;
+    </form>
+    ${isEdit ? `
+    <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")} 를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
+      <button class="btn-ghost text-danger" type="submit">클라이언트 삭제</button>
+    </form>` : ""}`;
 }
 
 module.exports = router;
