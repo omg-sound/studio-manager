@@ -224,8 +224,7 @@ function projectMetaLine(p) {
   const amount = projectAmount(p)
     ? `<div class="text-sm font-semibold">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
-  const dueLine = p.due_date ? `<div class="text-xs text-muted">완료 ${esc(formatYmdShort(p.due_date))}</div>` : "";
-  return { left: esc(left), amount, dueLine };
+  return { left: esc(left), amount, dueLine: "" };
 }
 
 /** 클라이언트(읽기 전용) 메타 카드. */
@@ -423,15 +422,9 @@ function projectForm(p = {}, err = "") {
           ${clientSelect(p.client_id)}
         </div>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="label">담당자</label>
-          ${managerSelect(p.manager_id)}
-        </div>
-        <div>
-          <label class="label">마감일(완료 예정)</label>
-          <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
-        </div>
+      <div>
+        <label class="label">담당자</label>
+        ${managerSelect(p.manager_id)}
       </div>
       <div>
         <label class="label">메모</label>
@@ -472,15 +465,9 @@ function projectEditForm(p = {}, err = "") {
           ${clientSelect(p.client_id)}
         </div>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="label">담당자</label>
-          ${managerSelect(p.manager_id)}
-        </div>
-        <div>
-          <label class="label">마감일(완료 예정)</label>
-          <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
-        </div>
+      <div>
+        <label class="label">담당자</label>
+        ${managerSelect(p.manager_id)}
       </div>
       <div>
         <label class="label">메모</label>
