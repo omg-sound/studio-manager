@@ -656,20 +656,78 @@ function getSessionForUser(_user, sessionId) {
   return db().prepare("SELECT * FROM sessions WHERE id = ?").get(sessionId) || null;
 }
 
+/** 'HH:MM' + 분 → 'HH:MM'(24시간 모듈러, 자정 넘김 허용). 입력 무효면 null. */
+function addMinutesToHHMM(hhmm, mins) {
+  const m = timeToMin(hhmm);
+  if (m == null || !Number.isFinite(mins)) return null;
+  let t = (m + mins) % 1440;
+  if (t < 0) t += 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/**
+ * 종료시간 결정: 소요시간 모드(duration_mode)가 있으면 시작+길이로 계산, 없으면 입력된 end_time 사용.
+ *  - pro1/pro2: 단가표 항목 기준시간(base_minutes)×1 또는 ×2. 단가 미선택/기준 0이면 SESSION_PRO_NEEDS_RATE.
+ *  - custom: custom_hours(시간, 소수 가능)만큼.
+ */
+function resolveEndTime(input, start, rateItemId) {
+  const mode = String(input.duration_mode || "");
+  if (!start || !["pro1", "pro2", "custom"].includes(mode)) return cleanTime(input.end_time);
+  if (mode === "custom") {
+    const hours = parseFloat(input.custom_hours);
+    return hours > 0 ? addMinutesToHHMM(start, Math.round(hours * 60)) : cleanTime(input.end_time);
+  }
+  const item = rateItemId ? db().prepare("SELECT base_minutes FROM rate_items WHERE id = ?").get(rateItemId) : null;
+  const base = item && item.base_minutes > 0 ? item.base_minutes : 0;
+  if (base <= 0) throw new Error("SESSION_PRO_NEEDS_RATE");
+  return addMinutesToHHMM(start, mode === "pro2" ? base * 2 : base);
+}
+
 function sessionFields(input) {
   const date = String(input.session_date || "").trim();
   if (!isValidYmd(date)) throw new Error("SESSION_DATE_REQUIRED");
+  const start = cleanTime(input.start_time);
+  const rateItemId = Number(input.rate_item_id) || null;
   return {
     session_type: normalizeSessionType(input.session_type),
     session_date: date,
-    start_time: cleanTime(input.start_time),
-    end_time: cleanTime(input.end_time),
+    start_time: start,
+    end_time: resolveEndTime(input, start, rateItemId),
     booker_name: String(input.booker_name || "").trim() || null,
     engineer_name: String(input.engineer_name || "").trim() || null,
     status: normalizeSessionStatus(input.status),
-    rate_item_id: Number(input.rate_item_id) || null,
+    rate_item_id: rateItemId,
     memo: String(input.memo || "").trim() || null,
   };
+}
+
+/**
+ * 해당 날짜에 이미 예약된(녹음/믹싱, 취소 제외) 30분 시작 슬롯 목록 — 가용성 표시용.
+ * slots = 후보 'HH:MM' 배열. 스튜디오 전체. excludeId로 수정 중 세션 제외.
+ */
+function busySessionSlots(date, slots, { excludeId = null } = {}) {
+  if (!isValidYmd(date) || !Array.isArray(slots) || !slots.length) return [];
+  const rows = db()
+    .prepare(
+      `SELECT start_time, end_time FROM sessions
+       WHERE session_date = ? AND status <> '취소' AND session_type IN ('녹음','믹싱')
+         AND start_time IS NOT NULL AND end_time IS NOT NULL AND id <> ?`
+    )
+    .all(date, excludeId == null ? -1 : excludeId);
+  const ranges = rows
+    .map((r) => {
+      const s = timeToMin(r.start_time);
+      let e = timeToMin(r.end_time);
+      if (s == null || e == null) return null;
+      if (e <= s) e += 1440;
+      return [s, e];
+    })
+    .filter(Boolean);
+  if (!ranges.length) return [];
+  return slots.filter((slot) => {
+    const m = timeToMin(slot);
+    return m != null && ranges.some(([s, e]) => m < e && s < m + 30);
+  });
 }
 
 /** 녹음 세션의 진행시간 → 단가표 자동 산정. 시간제 대상(녹음+단가+시간)이 아니면 null. */
@@ -931,6 +989,7 @@ module.exports = {
   getSessionForUser,
   createSession,
   updateSession,
+  busySessionSlots,
   setSessionStatus,
   deleteSession,
   upcomingSessions,

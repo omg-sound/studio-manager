@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, config } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, config } = require("./config");
 const { esc, formatKRW } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -58,16 +58,7 @@ function timeLabel(s) {
   return "시간 미정";
 }
 
-/** 세션 시간 슬롯 — 스튜디오 운영시간(낮 12:00부터 30분 단위, 23:30까지). */
-const SESSION_TIME_SLOTS = (() => {
-  const out = [];
-  for (let m = 12 * 60; m <= 23 * 60 + 30; m += 30) {
-    out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
-  }
-  return out;
-})();
-
-/** 시작/종료 시간 select 옵션. 목록 밖 기존값(레거시·야간)은 보존용으로 추가. */
+/** 시작/종료 시간 select 옵션(편집 폼용). 목록 밖 기존값(레거시·야간)은 보존용으로 추가. */
 function timeOptions(current) {
   const cur = current || "";
   const out = [`<option value="">선택</option>`];
@@ -130,13 +121,78 @@ function sessionFields(s, managers, rateItems = []) {
     <input class="input mt-2 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;
 }
 
-/** 프로젝트 상세용 세션 추가 폼. */
+/** 단가 항목 select(옵션마다 data-minutes=기준시간 분 — app.js의 1Pro/2Pro 계산용). */
+function rateSelectWithMinutes(rateItems, currentId) {
+  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>
+      <option value="" data-minutes="0">단가 미지정</option>
+      ${rateItems
+        .map((r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`)
+        .join("")}
+    </select>`;
+}
+
+/** 시작 시간 30분 버튼 그리드(라디오). 비활성(예약됨) 표시는 app.js가 data-slot 기준으로 처리. */
+function startSlotGrid(current) {
+  const cells = SESSION_TIME_SLOTS.map(
+    (t) => `
+      <label class="cursor-pointer">
+        <input type="radio" name="start_time" value="${t}" class="peer sr-only" data-slot="${t}" ${t === current ? "checked" : ""} />
+        <span class="block rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
+      </label>`
+  ).join("");
+  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}</div>`;
+}
+
+/** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
+function durationButtons() {
+  const opt = (val, label) => `
+      <label class="cursor-pointer">
+        <input type="radio" name="duration_mode" value="${val}" class="peer sr-only" data-duration="${val}" />
+        <span class="block rounded-md border border-border px-3 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:text-muted/40">${label}</span>
+      </label>`;
+  return `<div class="flex flex-wrap gap-1.5" data-duration-group>${opt("pro1", "1Pro")}${opt("pro2", "2Pro")}${opt("custom", "직접입력")}</div>`;
+}
+
+/** 예약(생성)용 폼 필드 — 시작 버튼 그리드 + 소요시간 버튼. 종료는 서버가 계산. */
+function sessionBookingFields(s, managers, rateItems = []) {
+  return `
+    <div class="grid gap-2 sm:grid-cols-2">
+      <div><label class="label mb-0.5 text-xs">날짜</label>
+        <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date required /></div>
+      <div><label class="label mb-0.5 text-xs">상태</label>
+        <select class="input py-1.5 text-sm" name="status">${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}</select></div>
+      <div><label class="label mb-0.5 text-xs">예약 담당자</label>
+        <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select></div>
+      <div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
+        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>
+      <div><label class="label mb-0.5 text-xs">녹음 종류</label>
+        <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
+      <div><label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(1Pro 기준)</span></label>
+        ${rateSelectWithMinutes(rateItems, s.rate_item_id)}</div>
+    </div>
+    <div class="mt-3">
+      <label class="label mb-1 text-xs">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span></label>
+      ${startSlotGrid(s.start_time || "")}
+    </div>
+    <div class="mt-3">
+      <label class="label mb-1 text-xs">소요 시간 <span class="font-normal text-muted">(1Pro = 단가 항목 기준시간)</span></label>
+      ${durationButtons()}
+      <div class="mt-1.5 flex items-center gap-1.5" data-custom-wrap hidden>
+        <input class="input w-24 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="3.5" data-custom-hours />
+        <span class="text-xs text-muted">시간</span>
+      </div>
+      <div class="mt-1.5 text-xs text-success" data-end-preview></div>
+    </div>
+    <input class="input mt-3 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;
+}
+
+/** 프로젝트 상세용 세션 추가 폼(버튼형 예약 UX). */
 function sessionCreateForm(project, managers, rateItems = []) {
   return `
-    <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3">
+    <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
-      ${sessionFields({}, managers, rateItems)}
-      <button class="btn-primary mt-2 px-3 py-1.5 text-sm" type="submit">세션 추가</button>
+      ${sessionBookingFields({}, managers, rateItems)}
+      <button class="btn-primary mt-3 px-3 py-1.5 text-sm" type="submit">세션 추가</button>
     </form>`;
 }
 

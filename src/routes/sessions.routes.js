@@ -12,7 +12,9 @@ const {
   setSessionStatus,
   deleteSession,
   createTaskFromSession,
+  busySessionSlots,
 } = require("../data");
+const { SESSION_TIME_SLOTS } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage } = require("../views");
 const { sessionRow } = require("../views.sessions");
 const { asyncHandler } = require("../lib/async");
@@ -71,6 +73,17 @@ router.get("/sessions", requireAuth, (req, res) => {
   res.send(layout({ title: "일정", user: req.user, current: "/sessions", body }));
 });
 
+// ── 시간 슬롯 가용성(JSON) — 시작 버튼 그리드 비활성 표시용 ──
+// 그 날짜에 이미 예약된(앱 DB 세션 + 구글 캘린더) 30분 슬롯을 반환. 외부 캘린더 오류는 fail-open([]).
+router.get("/sessions/availability", requireEditor, asyncHandler(async (req, res) => {
+  const date = String(req.query.date || "");
+  const excludeId = Number(req.query.exclude) || null;
+  const dbBusy = busySessionSlots(date, SESSION_TIME_SLOTS, { excludeId });
+  const calBusy = await calendar.busySlotsForDate(date, SESSION_TIME_SLOTS);
+  const busy = Array.from(new Set([...dbBusy, ...calBusy])).sort();
+  res.json({ date, slots: SESSION_TIME_SLOTS, busy });
+}));
+
 // ── 세션 추가(프로젝트 하위) ──
 router.post("/sessions", requireEditor, asyncHandler(async (req, res) => {
   try {
@@ -86,6 +99,7 @@ router.post("/sessions", requireEditor, asyncHandler(async (req, res) => {
     res.redirect(`/projects/${s.project_id}?flash=added`);
   } catch (e) {
     if (e.message === "SESSION_DATE_REQUIRED") return res.status(400).send("세션 날짜를 입력하세요.");
+    if (e.message === "SESSION_PRO_NEEDS_RATE") return res.status(400).send("1Pro·2Pro는 단가 항목을 먼저 선택하세요(기준시간 필요). 또는 '직접입력'을 쓰세요.");
     if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
     throw e;
   }
@@ -99,6 +113,7 @@ router.post("/sessions/:id", requireEditor, (req, res) => {
     res.redirect(`/projects/${s.project_id}?flash=saved`);
   } catch (e) {
     if (e.message === "SESSION_DATE_REQUIRED") return res.status(400).send("세션 날짜를 입력하세요.");
+    if (e.message === "SESSION_PRO_NEEDS_RATE") return res.status(400).send("1Pro·2Pro는 단가 항목을 먼저 선택하세요(기준시간 필요). 또는 '직접입력'을 쓰세요.");
     if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
     throw e;
   }

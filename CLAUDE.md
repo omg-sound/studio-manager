@@ -176,6 +176,15 @@
   gcal 이벤트와 자기충돌 방지 — 이벤트 id 미추적). 앱 DB 세션끼리 겹침은 `findSessionConflict`(위 항목)가 담당.
   단위(상태 왕복·fail-open·검증·rfc3339·conflictFromFreebusy) + 부팅 통합(fail-open 302·설정 섹션·스코프) 통과.
   **사용자 사전작업: GCP에서 Calendar API 활성화 + 치프 재로그인(캘린더 권한 동의) + `/settings`에서 캘린더 선택.**
+- **세션 예약 UX 버튼화(2026-06-28)**: 생성(예약) 폼의 시간 선택을 드롭다운 → **버튼 그리드**로. ① 시작 시간 =
+  30분 슬롯 라디오 그리드(Tailwind `peer-checked`/`peer-disabled`, JS 없이 동작), **이미 예약된 슬롯은 회색
+  비활성**(`peer-disabled:line-through`). ② 소요시간 = `[1Pro][2Pro][직접입력]` 라디오 → **종료는 서버가 시작+길이로
+  계산**(`resolveEndTime`): 1Pro=단가 항목 기준시간(`base_minutes`), 2Pro=2배, custom=`custom_hours`. 단가 미선택
+  +Pro는 `SESSION_PRO_NEEDS_RATE`(400). 야간(자정 넘김) `addMinutesToHHMM` 모듈러. ③ 비활성 표시는 `GET
+  /sessions/availability?date=`(JSON: DB `busySessionSlots` ∪ 캘린더 `busySlotsForDate`, 외부 fail-open)를 `app.js`가
+  fetch해 갱신(날짜 변경 시 재조회·예상 종료 미리보기·1Pro/2Pro는 단가 없으면 비활성). `SESSION_TIME_SLOTS`는
+  `config.js`로 단일출처화. **편집 폼은 드롭다운 유지**(편집은 부차적, `end_time` 직접). 종료 자동계산 후에도
+  겹침 차단·하위호환 유지. 데이터 11케이스 + 부팅 통합(가용성 JSON·생성 302·그리드 렌더·app.js 서빙) 통과.
 
 ## 스택
 
