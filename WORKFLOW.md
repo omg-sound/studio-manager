@@ -144,16 +144,15 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 ## 7. 다음 작업 후보 (우선순위 순)
 
-1. **Render 배포 (진행 중)** — 코드·`render.yaml`·백업/연체 cron 구현·로컬 E2E 완료 + **GitHub 푸시 완료**
-   (`github.com/omg-sound/studio-manager`, main). **현재 Render Blueprint 시크릿 입력 단계**: `ADMIN_EMAIL`·
-   `GOOGLE_CLIENT_ID` 입력됨, **`GOOGLE_CLIENT_SECRET`·`BACKUP_TOKEN`(web+cron 동일값)이 다음 작업** → Apply →
-   배포 도메인으로 OAuth redirect URI → 첫 로그인·검증. **체크포인트·절차 = [`DEPLOY.md`](./DEPLOY.md) ▶진행 상태**.
-2. **Google OAuth 실연동** — GCP 동의화면·redirect URI·refresh token → Drive 링크(연동 시 storage가 local→drive 자동 전환). 첫 로그인=`ADMIN_EMAIL` 치프. (DEPLOY.md §4)
-3. **(선택) 세션 심화** — 월 캘린더 그리드 뷰(현재 목록), 대시보드 임박 세션 카드. (세션 시간→작업 청구 자동 산정은 **완료**: 3단계)
-4. **(선택) 청구서 PDF/이미지** — resvg 패턴, 채번.
-5. **(선택) 메일 알림** — 자료 전달/청구 발행 시(Gmail API 또는 `ALERT_WEBHOOK`).
+1. **작업 종류 정식 관리(환경설정)** — `TASK_TYPES`(config 상수)를 단가표처럼 DB 관리(종류명+기본 단가·과금·분류). 사용자 승인됨, **다음 작업**.
+2. (선택) 연체 cron 알림 발송 — Gmail API 또는 `ALERT_WEBHOOK`. 자료 전달/청구 발행 알림도 동일 채널.
+3. (선택) 청구서 PDF/이미지 렌더(resvg 패턴).
+4. (선택) 월 캘린더 그리드 뷰(현재 목록)·대시보드 임박 세션 카드.
+5. (선택) 구글 캘린더 역방향 동기화(캘린더 삭제→앱 반영) — 보류 중.
+6. Drive 실연동 검증.
 
-> 완료: UX 점검 후속(검색·저장 피드백·엔지니어 선택·용어), **세션(일정)**, 클라이언트 분류 탭. 온보딩은 불필요로 결정.
+> 완료: **Render 실배포·Google OAuth 로그인**, 세션(예약 버튼 그리드·겹침 차단·구글 캘린더 자동 연동), 녹음 종류=단가표 분류,
+> 클라이언트 자동 등록, 프로젝트 상세/관리 페이지 **탭** 그룹화, 청구 '청구 대기' 목록.
 
 ---
 
@@ -161,9 +160,10 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 | UI 표기 | 코드 식별자 | 비고 |
 |---|---|---|
-| 곡 · 콘텐츠 | `project_tracks` / `track` | 음악(곡)·영상(콘텐츠) 포괄 |
-| 작업 | `track_tasks` / `task` | 믹싱·마스터링 등 모듈 단위 |
+| 곡 · 콘텐츠 | `project_tracks` / `track` | 음악(곡)·영상(콘텐츠) 포괄. 녹음과 별개의 후반작업 단위 |
+| 작업 | `track_tasks` / `task` | 보컬튠·믹싱·마스터링 등 모듈 단위 |
 | 일정 / 세션 | `sessions` | 녹음/믹싱/마스터링 예약. 사이드바 "일정" |
-| 실결제자(공급받는 자) | `clients` | 프로젝트 폼·청구·세금계산서. **사이드바 메뉴만 "클라이언트"** |
-| 담당자(외주) | `project_managers` | 작업 엔지니어 select 출처, 치프가 관리 |
+| 녹음 종류 / 단가표 | `rate_items` | 스튜디오/로케이션 분류. 녹음 세션 1Pro 산정 출처 |
+| 클라이언트 | `clients` | 통칭(아티스트·소속사·제작사). **실결제자**=프로젝트/청구의 결제 역할(`client_id`) |
+| 하우스 엔지니어 / 외주 작업자 | `project_managers`(`user_id` 유/무) | 작업 담당자 select 출처, 치프가 관리 |
 | 대표 / 치프 / 스태프 | `owner` / `chief` / `staff` | 권한 3단계 |

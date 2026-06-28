@@ -2,15 +2,15 @@
 
 녹음/믹싱 스튜디오 **프로젝트 관리 · 자료 전달 · 청구** 내부 운영 웹앱.
 
-- **스택**: Node 20 / Express 4(CommonJS) / SQLite(`better-sqlite3` ↔ `node:sqlite` 폴백) / Google OAuth·Drive /
+- **스택**: Node 20 / Express 4(CommonJS) / SQLite(`better-sqlite3` ↔ `node:sqlite` 폴백) / Google OAuth·Drive·Calendar /
   서버 렌더 HTML + Tailwind / helmet CSP(인라인 스크립트 0).
 - **인증**: 전원 **Google OAuth + 화이트리스트**(치프가 허용한 계정만). 비밀번호 로그인 없음. 권한 3단계:
   - **대표(owner)** — 전체 모니터링 + 청구 열람·관리(편집은 안 함)
   - **치프(chief)** — 운영 전반(스태프·담당자·클라이언트·설정 관리 + 프로젝트 편집 + 청구)
   - **스태프(staff)** — 프로젝트·곡/콘텐츠·작업·자료 편집
-  - **거래처(실결제자)** 는 프로젝트 데이터로만 존재하며 **로그인하지 않습니다.**
-- **데이터 흐름**: 프로젝트 → 곡·콘텐츠(트랙) → 모듈형 작업(Task) → 완료+미청구 작업을 라인아이템 청구서로 생성.
-  세션(일정)·자료 전달(Drive/로컬)·연체 파생·VAT 10%·`INV-YYYYMM-###` 채번 포함.
+  - **클라이언트**(아티스트·소속사·제작사) 는 프로젝트 데이터로만 존재하며 **로그인하지 않습니다.** 그중 하나가 프로젝트/청구의 **실결제자**.
+- **데이터 흐름**: 프로젝트(녹음/믹스 유형) → 세션 일정(예약·시간제 산정) + 곡·콘텐츠(후반작업: 튠·믹스·마스터링) →
+  완료된 세션·작업이 **청구 대기**로 모여 라인아이템 청구서 생성. 자료 전달(Drive/로컬)·구글 캘린더 자동 연동·VAT 10%·`INV-YYYYMM-###` 채번 포함.
 - 설계·아키텍처·검증 상태는 [`CLAUDE.md`](./CLAUDE.md)(살아있는 설계 일지), 이어가기는 [`WORKFLOW.md`](./WORKFLOW.md),
   배포는 [`DEPLOY.md`](./DEPLOY.md) 참고.
 
@@ -20,7 +20,7 @@
 cp .env.example .env       # 값 채우기(로컬 검증은 DEV_LOGIN=1 권장)
 npm install                # better-sqlite3 빌드 실패해도 node:sqlite로 동작
 npm run build:css          # Tailwind 빌드(public/css/app.css)
-npm run seed               # 더미 사용자·거래처·프로젝트
+npm run seed               # 더미 사용자·클라이언트·프로젝트
 
 # 개발 로그인 활성으로 실행
 DEV_LOGIN=1 npm start
