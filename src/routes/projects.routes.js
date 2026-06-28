@@ -4,8 +4,7 @@ const express = require("express");
 const { db } = require("../db");
 const { requireAuth, requireEditor, requireChief, requireInvoice, canEdit, canInvoice } = require("../auth");
 const {
-  TASK_TYPES,
-  TASK_TYPE_LABELS,
+  TASK_GROUP_LABELS,
   BILLING_TYPES,
   BILLING_TYPE_LABELS,
   TASK_STATUSES,
@@ -25,6 +24,9 @@ const {
   ensureClientsFromProject,
   listProjectManagers,
   listRateItems,
+  activeTaskTypes,
+  taskTypeLabel,
+  taskTypeGroup,
   listDeliverablesForProject,
   listInvoicesForProject,
   listTracksForProject,
@@ -588,7 +590,7 @@ function trackProgressSummary(tasks) {
   const order = { Pending: 0, In_Progress: 1, Completed: 2 };
   const byGroup = {};
   for (const t of tasks) {
-    const g = (TASK_TYPES.find((x) => x.key === t.task_type) || {}).group || "기타";
+    const g = taskTypeGroup(t.task_type);
     if (byGroup[g] == null || (order[t.status] || 0) > (order[byGroup[g]] || 0)) byGroup[g] = t.status;
   }
   const parts = Object.keys(byGroup).map((g) => `${TASK_GROUP_LABELS[g] || g} ${TASK_STATUS_LABELS[byGroup[g]] || byGroup[g]}`);
@@ -612,7 +614,7 @@ function trackEditMenu(track, hasInvoiced) {
 }
 
 function taskRow(task, { isAdmin, managers = [] } = {}) {
-  const label = TASK_TYPE_LABELS[task.task_type] || task.task_type;
+  const label = taskTypeLabel(task.task_type);
   const status = TASK_STATUS_LABELS[task.status] || task.status;
   const statusCls = TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted";
   const billed = task.is_invoiced ? `<span class="badge bg-success/10 text-success">청구됨</span>` : "";
@@ -645,6 +647,16 @@ function engineerSelect(managers, current) {
   return out.join("");
 }
 
+/** 작업 종류 select 옵션 — 활성 종류 + 현재값이 비활성/삭제됐으면 보존용 옵션(과거 작업 깨짐 방지). */
+function taskTypeOptions(current) {
+  const types = activeTaskTypes();
+  const out = types.map((t) => `<option value="${esc(t.key)}" ${t.key === current ? "selected" : ""}>${esc(t.label)}</option>`);
+  if (current && !types.some((t) => t.key === current)) {
+    out.unshift(`<option value="${esc(current)}" selected>${esc(taskTypeLabel(current))} (삭제됨)</option>`);
+  }
+  return out.join("");
+}
+
 function taskEditMenu(task, managers = []) {
   const sel = (val, cur) => (val === cur ? "selected" : "");
   return `
@@ -652,7 +664,7 @@ function taskEditMenu(task, managers = []) {
       <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
       <form method="post" action="/projects/tasks/${task.id}" class="mt-2 grid gap-2 sm:grid-cols-2">
         <select class="input py-1.5 text-sm" name="task_type">
-          ${TASK_TYPES.map((t) => `<option value="${esc(t.key)}" ${sel(t.key, task.task_type)}>${esc(t.label)}</option>`).join("")}
+          ${taskTypeOptions(task.task_type)}
         </select>
         <select class="input py-1.5 text-sm" name="billing_type">
           ${BILLING_TYPES.map((type) => `<option value="${esc(type)}" ${sel(type, task.billing_type)}>${esc(BILLING_TYPE_LABELS[type] || type)}</option>`).join("")}
@@ -671,28 +683,21 @@ function taskEditMenu(task, managers = []) {
     </details>`;
 }
 
-// 작업 단계 그룹 라벨(요약·기타 드롭다운 그룹용).
-const TASK_GROUP_LABELS = { Recording: "녹음", Post_Production: "후반 작업", Mix_Master: "믹스·마스터", Video_Audio: "영상 오디오" };
-// 빠른 추가 단계 — 곡·콘텐츠는 녹음과 별개의 후반작업(튠·믹스·마스터링). 녹음은 세션 일정에서 관리.
-const QUICK_STAGES = [
-  { key: "Vocal_Tuning", label: "보컬튠", billing: "Fixed_Per_Track" },
-  { key: "Audio_Editing", label: "오디오 편집", billing: "Fixed_Per_Track" },
-  { key: "Mixing", label: "믹싱", billing: "Fixed_Per_Track" },
-  { key: "Mastering", label: "마스터링", billing: "Fixed_Per_Track" },
-];
-
-/** 다음 단계 빠른 추가 — 버튼 한 번에 작업 생성(기본 상태=대기), 세부는 행의 '편집'에서. */
+/** 다음 단계 빠른 추가 — is_quick 작업 종류 버튼(기본 단가·과금 주입), +기타는 전체 활성 종류 그룹. 세부는 행의 '편집'에서. */
 function taskQuickAdd(track) {
-  const quick = (s) => `
+  const types = activeTaskTypes();
+  const quickTypes = types.filter((t) => t.is_quick);
+  const quick = (t) => `
     <form method="post" action="/projects/tracks/${track.id}/tasks">
-      <input type="hidden" name="task_type" value="${esc(s.key)}" />
-      <input type="hidden" name="billing_type" value="${esc(s.billing)}" />
+      <input type="hidden" name="task_type" value="${esc(t.key)}" />
+      <input type="hidden" name="billing_type" value="${esc(t.billing_type)}" />
+      <input type="hidden" name="unit_price" value="${t.unit_price || 0}" />
       <input type="hidden" name="quantity" value="1" />
       <input type="hidden" name="status" value="Pending" />
-      <button class="rounded-md border border-border bg-bg px-3 py-1.5 text-xs hover:border-primary hover:text-primary" type="submit">${esc(s.label)}</button>
+      <button class="rounded-md border border-border bg-bg px-3 py-1.5 text-xs hover:border-primary hover:text-primary" type="submit">${esc(t.label)}</button>
     </form>`;
   const groups = {};
-  for (const t of TASK_TYPES) (groups[t.group] = groups[t.group] || []).push(t);
+  for (const t of types) (groups[t.task_group] = groups[t.task_group] || []).push(t);
   const grouped = Object.keys(groups)
     .map((g) => `<optgroup label="${esc(TASK_GROUP_LABELS[g] || g)}">${groups[g].map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join("")}</optgroup>`)
     .join("");
@@ -704,13 +709,13 @@ function taskQuickAdd(track) {
         <select class="input py-1.5 text-sm" name="billing_type">${BILLING_TYPES.map((type) => `<option value="${esc(type)}">${esc(BILLING_TYPE_LABELS[type] || type)}</option>`).join("")}</select>
         <input type="hidden" name="quantity" value="1" />
         <input type="hidden" name="status" value="Pending" />
-        <button class="btn-primary px-3 py-1.5 text-xs" type="submit">추가</button>
+        <button class="btn-primary btn-xs" type="submit">추가</button>
       </form>
     </details>`;
   return `
     <div class="mt-3">
       <div class="mb-1.5 text-xs text-muted">다음 단계 추가</div>
-      <div class="flex flex-wrap items-center gap-1.5">${QUICK_STAGES.map(quick).join("")}${other}</div>
+      <div class="flex flex-wrap items-center gap-1.5">${quickTypes.map(quick).join("")}${other}</div>
     </div>`;
 }
 
@@ -729,7 +734,7 @@ function pendingSessionsForm(sessions) {
         <div class="flex shrink-0 items-center gap-2">
           <span class="text-sm font-semibold text-success">${formatKRW(s.billing.amount)}</span>
           <form method="post" action="/sessions/${s.id}/bill">
-            <button class="btn-primary px-3 py-1.5 text-xs" type="submit">청구 확정</button>
+            <button class="btn-primary btn-xs" type="submit">청구 확정</button>
           </form>
         </div>
       </div>`)
@@ -749,7 +754,7 @@ function unbilledInvoiceForm(project, rows) {
   const tax = Math.round(subtotal * 0.1);
   const list = rows
     .map((task) => {
-      const label = TASK_TYPE_LABELS[task.task_type] || task.task_type;
+      const label = taskTypeLabel(task.task_type);
       return `
         <label class="flex items-start gap-2 border-b border-border py-2 last:border-0">
           <input class="mt-1" type="checkbox" name="task_id" value="${task.id}" checked />

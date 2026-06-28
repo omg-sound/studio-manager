@@ -1,18 +1,19 @@
 "use strict";
 
-const crypto = require("crypto");
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, syncUserToManager, findUserById } = require("../auth");
-const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES } = require("../config");
+const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, TASK_GROUPS, TASK_GROUP_LABELS, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
 const {
   listProjectManagers,
-  listProjectServiceItems,
   listRateItems,
   createRateItem,
   updateRateItem,
-  setRateItemActive,
   deleteRateItem,
+  listTaskTypes,
+  createTaskType,
+  updateTaskType,
+  deleteTaskType,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState } = require("../views");
 const { asyncHandler } = require("../lib/async");
@@ -100,12 +101,12 @@ function peopleTab(currentUser) {
       </section>`;
 }
 
-/** 컨텐츠 탭: 단가표·녹음 종류 + 작업 템플릿. */
+/** 컨텐츠 탭: 단가표·녹음 종류 + 작업 종류 카탈로그. */
 function contentTab() {
   const rates = listRateItems({ includeInactive: true });
-  const rateRows = rates.length ? rates.map((r) => rateItemRow(r)).join("") : `<div class="py-3 text-sm text-muted">등록된 단가 항목이 없습니다.</div>`;
-  const serviceItems = listProjectServiceItems({ includeInactive: true });
-  const serviceRows = serviceItems.length ? serviceItems.map((s) => serviceItemRow(s)).join("") : `<div class="py-3 text-sm text-muted">작업 템플릿이 없습니다.</div>`;
+  const rateRows = rates.length ? rates.map((r) => rateItemRow(r)).join("") : emptyState("등록된 단가 항목이 없습니다.");
+  const taskTypes = listTaskTypes({ includeInactive: true });
+  const taskTypeRows = taskTypes.length ? taskTypes.map((t) => taskTypeRow(t)).join("") : emptyState("등록된 작업 종류가 없습니다.");
   return `
       <section class="card space-y-4">
         <div>
@@ -137,20 +138,33 @@ function contentTab() {
               <input class="input py-1.5 text-sm" name="extra_price" inputmode="numeric" placeholder="예: 100000" />
             </div>
           </div>
-          <button class="btn-primary px-3 py-1.5 text-sm" type="submit">단가 항목 추가</button>
+          <button class="btn-primary btn-sm" type="submit">단가 항목 추가</button>
         </form>
         <div class="space-y-2">${rateRows}</div>
       </section>
 
       <section class="card space-y-4">
         <div>
-          <h2 class="font-display text-lg font-semibold">작업 템플릿</h2>
+          <h2 class="font-display text-lg font-semibold">작업 종류 <span class="text-sm font-normal text-muted">(곡·콘텐츠 후반작업)</span></h2>
+          <p class="mt-1 text-xs text-muted">곡·콘텐츠의 작업 종류(보컬튠·믹싱·마스터링 등)와 기본 단가·과금·분류를 관리합니다. '빠른추가'를 켜면 곡·콘텐츠의 빠른 추가 버튼에 노출됩니다.</p>
         </div>
-        <form method="post" action="/settings/service-items" class="flex gap-2">
-          <input class="input" name="label" placeholder="예: 보컬 디렉팅" required />
-          <button class="btn-primary shrink-0" type="submit">추가</button>
+        <form method="post" action="/settings/task-types" class="space-y-2 rounded-lg border border-border bg-bg p-3">
+          <div class="grid gap-2 sm:grid-cols-2">
+            <input class="input py-1.5 text-sm" name="label" placeholder="작업 종류명 (예: 보컬튠)" required />
+            <select class="input py-1.5 text-sm" name="task_group">
+              ${TASK_GROUPS.map((g) => `<option value="${esc(g)}">${esc(TASK_GROUP_LABELS[g] || g)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <select class="input py-1.5 text-sm" name="billing_type">
+              ${BILLING_TYPES.map((b) => `<option value="${esc(b)}">${esc(BILLING_TYPE_LABELS[b] || b)}</option>`).join("")}
+            </select>
+            <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="기본 단가(원)" />
+          </div>
+          <label class="flex items-center gap-2 text-sm text-muted"><input type="checkbox" name="is_quick" value="1" /> 곡·콘텐츠 '빠른 추가' 버튼에 노출</label>
+          <button class="btn-primary btn-sm" type="submit">작업 종류 추가</button>
         </form>
-        <div class="space-y-2">${serviceRows}</div>
+        <div class="space-y-2">${taskTypeRows}</div>
       </section>`;
 }
 
@@ -185,7 +199,7 @@ async function studioCalendarSection() {
       <label class="label mb-1 text-xs">기본 장소 <span class="font-normal text-muted">(예약 시 일정 장소로 자동 입력)</span></label>
       <form method="post" action="/settings/studio-location" class="flex gap-2">
         <input class="input py-1.5 text-sm" name="studio_location" value="${esc(calendar.getStudioLocation())}" placeholder="예: OMG 스튜디오 (서울 ...)" />
-        <button class="btn-primary shrink-0 px-3 py-1.5 text-sm" type="submit">저장</button>
+        <button class="btn-primary shrink-0 btn-sm" type="submit">저장</button>
       </form>
     </div>`;
   return `<section class="card space-y-4">${title}${inner}${location}</section>`;
@@ -264,11 +278,6 @@ router.post("/rate-items/:id", requireChief, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/rate-items/:id/toggle", requireChief, (req, res) => {
-  setRateItemActive(Number(req.params.id), req.body.active === "1");
-  res.redirect("/settings?tab=content&flash=saved");
-});
-
 router.post("/rate-items/:id/delete", requireChief, (req, res) => {
   deleteRateItem(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
@@ -289,25 +298,28 @@ router.post("/managers/:id/delete", requireChief, (req, res) => {
   res.redirect("/settings?flash=deleted");
 });
 
-router.post("/service-items", requireChief, (req, res) => {
-  const label = String(req.body.label || "").trim();
-  if (label) {
-    const key = `custom_${crypto.randomBytes(5).toString("hex")}`;
-    db()
-      .prepare("INSERT INTO project_service_items (key, label, active) VALUES (?, ?, 1)")
-      .run(key, label);
+// ── 작업 종류 카탈로그 관리(삭제-only) ──
+router.post("/task-types", requireChief, (req, res) => {
+  try {
+    createTaskType(req.body);
+  } catch (e) {
+    if (e.message !== "TASK_TYPE_LABEL_REQUIRED") throw e;
   }
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/service-items/:id/deactivate", requireChief, (req, res) => {
-  db().prepare("UPDATE project_service_items SET active = 0 WHERE id = ?").run(Number(req.params.id));
+router.post("/task-types/:id", requireChief, (req, res) => {
+  try {
+    updateTaskType(Number(req.params.id), req.body);
+  } catch (e) {
+    if (e.message !== "TASK_TYPE_LABEL_REQUIRED") throw e;
+  }
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/service-items/:id/activate", requireChief, (req, res) => {
-  db().prepare("UPDATE project_service_items SET active = 1 WHERE id = ?").run(Number(req.params.id));
-  res.redirect("/settings?tab=content&flash=saved");
+router.post("/task-types/:id/delete", requireChief, (req, res) => {
+  deleteTaskType(Number(req.params.id));
+  res.redirect("/settings?tab=content&flash=deleted");
 });
 
 function clean(value) {
@@ -372,12 +384,6 @@ function rateItemRow(r) {
           <div class="flex flex-wrap items-center gap-2"><span class="font-medium">${esc(r.name)}</span><span class="badge bg-bg text-muted">${esc(cat)}</span>${r.active ? "" : '<span class="text-xs text-muted">(비활성)</span>'}</div>
           <div class="mt-0.5 text-xs text-muted">${summary}</div>
         </div>
-        <div class="flex shrink-0 items-center gap-1">
-          <form method="post" action="/settings/rate-items/${r.id}/toggle">
-            <input type="hidden" name="active" value="${r.active ? "0" : "1"}" />
-            <button class="btn-ghost px-3 py-1 text-xs" type="submit">${r.active ? "비활성" : "활성"}</button>
-          </form>
-        </div>
       </div>
       <details class="mt-2 border-t border-border pt-2">
         <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
@@ -394,10 +400,10 @@ function rateItemRow(r) {
             <div><label class="label mb-0.5 text-xs">초과 단위(시간)</label><input class="input py-1.5 text-sm" name="extra_hours" inputmode="decimal" value="${esc(String(extraHours))}" /></div>
             <div><label class="label mb-0.5 text-xs">초과 단가(원)</label><input class="input py-1.5 text-sm" name="extra_price" inputmode="numeric" value="${esc(String(r.extra_price || ""))}" /></div>
           </div>
-          <button class="btn-primary px-3 py-1.5 text-xs" type="submit">저장</button>
+          <button class="btn-primary btn-xs" type="submit">저장</button>
         </form>
         <form method="post" action="/settings/rate-items/${r.id}/delete" data-confirm="이 단가 항목을 삭제할까요?" class="mt-2">
-          <button class="btn-ghost px-3 py-1.5 text-xs text-danger" type="submit">삭제</button>
+          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
         </form>
       </details>
     </div>`;
@@ -418,24 +424,46 @@ function managerRow(m) {
     </div>`;
 }
 
-function serviceItemRow(s) {
+/** 작업 종류 카탈로그 행(삭제-only). 편집/삭제는 details 안. */
+function taskTypeRow(t) {
+  const groupLabel = TASK_GROUP_LABELS[t.task_group] || t.task_group;
+  const billLabel = BILLING_TYPE_LABELS[t.billing_type] || t.billing_type;
+  const priceLabel = t.unit_price ? formatKRW(t.unit_price) : "단가 미정";
   return `
     <div class="rounded-lg border border-border bg-bg p-3">
-      <div class="flex items-center justify-between gap-3">
-        <div>
-          <div class="font-medium">${esc(s.label)}</div>
-          <div class="mt-0.5 text-xs text-muted">${s.active ? "사용 중" : "비활성"}</div>
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-medium">${esc(t.label)}</span>
+            <span class="badge bg-bg text-muted">${esc(groupLabel)}</span>
+            ${t.is_quick ? '<span class="badge bg-primary/10 text-primary">빠른추가</span>' : ""}
+          </div>
+          <div class="mt-0.5 text-xs text-muted">${esc(billLabel)} · ${priceLabel}</div>
         </div>
-        ${toggleForm(`/settings/service-items/${s.id}/${s.active ? "deactivate" : "activate"}`, s.active ? "비활성" : "활성")}
       </div>
+      <details class="mt-2 border-t border-border pt-2">
+        <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
+        <form method="post" action="/settings/task-types/${t.id}" class="mt-2 space-y-2">
+          <div class="grid gap-2 sm:grid-cols-2">
+            <input class="input py-1.5 text-sm" name="label" value="${esc(t.label)}" required />
+            <select class="input py-1.5 text-sm" name="task_group">
+              ${TASK_GROUPS.map((g) => `<option value="${esc(g)}" ${g === t.task_group ? "selected" : ""}>${esc(TASK_GROUP_LABELS[g] || g)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <select class="input py-1.5 text-sm" name="billing_type">
+              ${BILLING_TYPES.map((b) => `<option value="${esc(b)}" ${b === t.billing_type ? "selected" : ""}>${esc(BILLING_TYPE_LABELS[b] || b)}</option>`).join("")}
+            </select>
+            <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" value="${esc(String(t.unit_price || ""))}" placeholder="기본 단가(원)" />
+          </div>
+          <label class="flex items-center gap-2 text-sm text-muted"><input type="checkbox" name="is_quick" value="1" ${t.is_quick ? "checked" : ""} /> 빠른 추가 노출</label>
+          <button class="btn-primary btn-xs" type="submit">저장</button>
+        </form>
+        <form method="post" action="/settings/task-types/${t.id}/delete" data-confirm="'${esc(t.label)}' 작업 종류를 삭제할까요? 이 종류로 만든 기존 작업은 유지되지만 종류명이 코드값으로 표시됩니다." class="mt-2">
+          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
+        </form>
+      </details>
     </div>`;
-}
-
-function toggleForm(action, label) {
-  return `
-    <form method="post" action="${action}">
-      <button class="btn-ghost px-3 py-1.5 text-xs" type="submit">${label}</button>
-    </form>`;
 }
 
 module.exports = router;
