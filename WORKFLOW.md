@@ -7,7 +7,7 @@
 > **현재 상태(2026-06-29)**: **프로덕션 라이브**(`omg-studios-manager.onrender.com`) — Google OAuth 로그인·
 > `/healthz`·일일 백업 cron 통과. MVP + 권한 3단계 + 세션(예약 그리드·겹침 차단·구글 캘린더 자동 연동) +
 > 녹음 종류=단가표 + 곡·콘텐츠(후반작업) + 클라이언트 자동 등록 + 프로젝트/관리 **탭** 그룹화 + 청구 '청구 대기'.
-> 미완: **작업 종류 정식 관리(다음 작업)**, Drive 실연동 검증, 청구서 PDF.
+> 미완: 거래명세서 PDF(계획 `.omc/plans/invoice-pdf-plan.md`), 알림 채널, Drive 실연동 검증.
 
 ---
 
@@ -76,7 +76,8 @@ DEV_LOGIN=1 npm run dev     # build:css 후 서버 (http://localhost:3000)
 | `sessions` | **세션(일정)**. `session_type`·`session_date`·`start_time`/`end_time`·`booker_name`·`engineer_name`·`status`·`rate_item_id`·`gcal_event_id` |
 | `invoices` / `invoice_items` | 청구 + 라인아이템 스냅샷 |
 | `project_managers` | **담당자 마스터**. `user_id` 링크=하우스 엔지니어(로그인 자동 연계), null=외주 작업자. 세션·작업 담당 select 출처 |
-| `project_service_items` | 작업 템플릿/레거시 호환. (TODO: 작업 종류 catalog로 정식화 예정) |
+| `task_types` | **작업 종류 카탈로그**(곡·콘텐츠 후반작업). config `TASK_TYPES` 1회 시드 후 DB 단일 출처. `track_tasks.task_type`이 key 보관(FK 아님), 라벨/그룹은 data.js 캐시. 삭제-only |
+| `project_service_items` | 레거시(구 services JSON 라벨 호환). 관리 UI 폐기(작업 종류 카탈로그가 대체), 테이블만 잔존 |
 | `deliverables` | 자료 전달(Drive/로컬, 토큰 공개링크) |
 | `admin_state` | drive folder_id·refresh token(암호화)·테마 |
 
@@ -144,15 +145,15 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 ## 7. 다음 작업 후보 (우선순위 순)
 
-1. **작업 종류 정식 관리(환경설정)** — `TASK_TYPES`(config 상수)를 단가표처럼 DB 관리(종류명+기본 단가·과금·분류). 사용자 승인됨, **다음 작업**.
+1. (선택) **거래명세서 PDF** — resvg + pdf-lib, 한글 폰트 번들, PII 게이트. 계획 `.omc/plans/invoice-pdf-plan.md`.
 2. (선택) 연체 cron 알림 발송 — Gmail API 또는 `ALERT_WEBHOOK`. 자료 전달/청구 발행 알림도 동일 채널.
-3. (선택) 청구서 PDF/이미지 렌더(resvg 패턴).
-4. (선택) 월 캘린더 그리드 뷰(현재 목록)·대시보드 임박 세션 카드.
-5. (선택) 구글 캘린더 역방향 동기화(캘린더 삭제→앱 반영) — 보류 중.
-6. Drive 실연동 검증.
+3. (선택) 월 캘린더 그리드 뷰(현재 목록)·대시보드 임박 세션 카드.
+4. (선택) 구글 캘린더 역방향 동기화(캘린더 삭제→앱 반영) — 보류 중.
+5. Drive 실연동 검증.
 
 > 완료: **Render 실배포·Google OAuth 로그인**, 세션(예약 버튼 그리드·겹침 차단·구글 캘린더 자동 연동), 녹음 종류=단가표 분류,
-> 클라이언트 자동 등록, 프로젝트 상세/관리 페이지 **탭** 그룹화, 청구 '청구 대기' 목록.
+> 클라이언트 자동 등록, 프로젝트 상세/관리 페이지 **탭** 그룹화, 청구 '청구 대기' 목록,
+> **작업 종류 카탈로그(DB 관리, 삭제-only)**, 관리 항목 삭제 기능(엔지니어·외주·클라이언트).
 
 ---
 
