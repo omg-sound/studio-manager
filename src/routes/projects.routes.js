@@ -202,22 +202,24 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   const typeLabel = PROJECT_TYPE_LABELS[p.project_type] || "";
   const desc = [typeLabel, p.artist || p.client_name].filter(Boolean).join(" · ") || "프로젝트";
 
-  // ── 탭: 세션 일정(작업형 제외) / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
-  // 작업형(task)만 예약이 없으므로 세션 일정 탭을 숨긴다. 세션형·레거시(NULL)는 노출(기존 세션 보존).
-  const tabs = [];
+  // ── 탭: 프로젝트 / 세션 일정(작업형 제외) / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
+  // 메타 카드는 '프로젝트' 탭(첫 탭·기본). 작업형(task)만 세션 일정 탭을 숨긴다. 세션형·레거시(NULL)는 노출.
+  const tabs = [{ key: "project", label: "프로젝트" }];
   if (!isTask) tabs.push({ key: "sessions", label: "세션 일정" });
   tabs.push({ key: "tracks", label: "곡 · 콘텐츠" });
   tabs.push({ key: "deliverables", label: "자료 전달" });
   if (showInvoice) tabs.push({ key: "invoice", label: "청구" });
   const validKeys = tabs.map((t) => t.key);
-  const defaultTab = isSession ? "sessions" : "tracks";
+  const defaultTab = "project";
   const tab = validKeys.includes(req.query.tab) ? req.query.tab : defaultTab;
   const tabBar = `<div class="mb-3 mt-3 flex gap-1 overflow-x-auto border-b border-border">
       ${tabs.map((t) => `<a href="/projects/${p.id}?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
     </div>`;
 
   let tabContent = "";
-  if (tab === "tracks") {
+  if (tab === "project") {
+    tabContent = meta;
+  } else if (tab === "tracks") {
     const trackBundle = listTracksForProject(req.user, p.id);
     tabContent = tracksSection({ project: p, tracks: trackBundle ? trackBundle.tracks : [], isAdmin: editable, managers, expandTaskId: Number(req.query.expand) || null });
   } else if (tab === "deliverables") {
@@ -237,7 +239,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems, expand: true });
   }
 
-  const body = [flashBanner(req.query), pageHeader({ title: p.title, desc }), meta, tabBar, tabContent].join("\n");
+  const body = [flashBanner(req.query), pageHeader({ title: p.title, desc }), tabBar, tabContent].join("\n");
   res.send(layout({ title: p.title, user: req.user, current: "/projects", body }));
 }
 

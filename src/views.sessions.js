@@ -265,7 +265,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
       <div class="border-t border-border p-3">
         <form method="post" action="/sessions/${s.id}">
           ${sessionFields(s, managers, rateItems)}
-          <button class="btn-primary mt-2 btn-xs" type="submit">세션 저장</button>
+          <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">세션 저장</button>
         </form>
         <div class="mt-2 flex gap-2">
           <form method="post" action="/sessions/${s.id}/status">
