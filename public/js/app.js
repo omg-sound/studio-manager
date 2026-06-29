@@ -200,16 +200,21 @@
       setDuration(b.getAttribute("data-duration-preset") === "pro2" ? base * 2 : base);
     });
   });
-  // 그리드 '직접입력' 버튼 → 시간 입력칸 펼치고 네이티브 시간 선택기 바로 열기.
+  // 그리드 '직접입력' 버튼 → 시간 입력칸 펼치고 포커스(텍스트로 HH:MM 입력).
   if (customStartToggle) customStartToggle.addEventListener("click", function () {
     if (!startEnabled()) return;
     if (customStartWrap) customStartWrap.hidden = false;
     clearGridStart();
-    if (customStart) { customStart.focus(); try { customStart.showPicker(); } catch (e) {} }
+    if (customStart) customStart.focus();
     updatePreview();
   });
-  // 직접입력 시작 ↔ 그리드 시작은 상호 배타: 직접입력하면 그리드 선택 해제(서버도 직접입력 우선).
-  if (customStart) customStart.addEventListener("change", function () { if (customStart.value) clearGridStart(); updatePreview(); });
+  // 직접입력 시작 시간: 숫자만 받아 HH:MM 자동 포맷("1425"→"14:25"). 입력 시 그리드 선택 해제(서버도 직접입력 우선).
+  if (customStart) customStart.addEventListener("input", function () {
+    var digits = customStart.value.replace(/[^0-9]/g, "").slice(0, 4);
+    customStart.value = digits.length >= 3 ? digits.slice(0, 2) + ":" + digits.slice(2) : digits;
+    if (customStart.value) clearGridStart();
+    updatePreview();
+  });
   form.addEventListener("change", function (e) {
     if (!e.target) return;
     if (e.target.name === "start_time") {

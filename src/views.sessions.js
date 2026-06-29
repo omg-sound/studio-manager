@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, SESSION_CUSTOM_SLOTS, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -61,7 +61,13 @@ function sessionFields(s, managers, rateItems = []) {
         </select>
       </div>
     </div>
-    <div class="mt-2 grid gap-2 sm:grid-cols-2">
+    <div class="mt-2 grid gap-2 sm:grid-cols-3">
+      <div>
+        <label class="label mb-0.5 text-xs">세션 종류</label>
+        <select class="input py-1.5 text-sm" name="session_type">
+          ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
+        </select>
+      </div>
       <div>
         <label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
         ${rateSelectGrouped(rateItems, s.rate_item_id)}
@@ -71,13 +77,7 @@ function sessionFields(s, managers, rateItems = []) {
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select>
       </div>
     </div>
-    <div class="mt-2 grid gap-2 sm:grid-cols-3">
-      <div>
-        <label class="label mb-0.5 text-xs">세션 종류</label>
-        <select class="input py-1.5 text-sm" name="session_type">
-          ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
-        </select>
-      </div>
+    <div class="mt-2 grid gap-2 sm:grid-cols-2">
       <div>
         <label class="label mb-0.5 text-xs">시작</label>
         <select class="input py-1.5 text-sm" name="start_time">${timeOptions(s.start_time)}</select>
@@ -109,10 +109,10 @@ function startSlotGrid(current) {
   return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customBtn}</div>
     <div class="mt-1.5 flex items-center gap-1.5" data-custom-start-wrap ${showCustom ? "" : "hidden"}>
       <span class="text-xs text-muted">직접입력</span>
-      <select class="input w-32 py-1.5 text-sm" name="start_time_custom" data-custom-start>
-        <option value="">시간 선택</option>
-        ${SESSION_CUSTOM_SLOTS.map((t) => `<option value="${t}" ${showCustom && t === current ? "selected" : ""}>${t}</option>`).join("")}
-      </select>
+      <input class="input w-24 py-1.5 text-sm" type="text" inputmode="numeric" name="start_time_custom" data-custom-start
+        placeholder="예: 14:25" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
+        value="${showCustom ? esc(current) : ""}" />
+      <span class="text-xs text-muted">(시:분)</span>
     </div>`;
 }
 
