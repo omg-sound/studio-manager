@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -24,76 +24,6 @@ function timeLabel(s) {
   if (s.start_time && s.end_time) return `${esc(s.start_time)}–${esc(s.end_time)}`;
   if (s.start_time) return esc(s.start_time);
   return "시간 미정";
-}
-
-/** 시작/종료 시간 select 옵션(편집 폼용). 목록 밖 기존값(레거시·야간)은 보존용으로 추가. */
-function timeOptions(current) {
-  const cur = current || "";
-  const out = [`<option value="">선택</option>`];
-  if (cur && !SESSION_TIME_SLOTS.includes(cur)) {
-    out.push(`<option value="${esc(cur)}" selected>${esc(cur)}</option>`);
-  }
-  for (const t of SESSION_TIME_SLOTS) {
-    out.push(`<option value="${t}" ${t === cur ? "selected" : ""}>${t}</option>`);
-  }
-  return out.join("");
-}
-
-/**
- * 세션 폼 필드(생성/편집 공유). 순서 = 예약 시 정하는 값 먼저, 실제 진행 시간(시작·종료)은 뒤.
- * 날짜·상태 → 예약 담당자·담당 엔지니어 → 녹음 종류·단가 → 시작·종료 → 메모.
- */
-function sessionFields(s, managers, rateItems = []) {
-  return `
-    <div class="grid gap-2 sm:grid-cols-3">
-      <div>
-        <label class="label mb-0.5 text-xs">날짜</label>
-        <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" required />
-      </div>
-      <div>
-        <label class="label mb-0.5 text-xs">예약 담당자</label>
-        <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select>
-      </div>
-      <div>
-        <label class="label mb-0.5 text-xs">상태</label>
-        <select class="input py-1.5 text-sm" name="status">
-          ${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}
-        </select>
-      </div>
-    </div>
-    <div class="mt-2 grid gap-2 sm:grid-cols-3">
-      <div>
-        <label class="label mb-0.5 text-xs">세션 종류</label>
-        <select class="input py-1.5 text-sm" name="session_type">
-          ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
-        </select>
-      </div>
-      <div>
-        <label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
-        ${rateSelectGrouped(rateItems, s.rate_item_id)}
-      </div>
-      <div>
-        <label class="label mb-0.5 text-xs">담당 엔지니어</label>
-        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select>
-      </div>
-    </div>
-    <div class="mt-2 grid gap-2 sm:grid-cols-2">
-      <div>
-        <label class="label mb-0.5 text-xs">시작 <span class="font-normal text-muted">(또는 직접입력)</span></label>
-        <div class="flex gap-1.5">
-          <select class="input py-1.5 text-sm" name="start_time">${timeOptions(s.start_time)}</select>
-          <input class="input w-24 py-1.5 text-sm" type="text" name="start_time_custom" placeholder="HH:MM" inputmode="numeric" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" />
-        </div>
-      </div>
-      <div>
-        <label class="label mb-0.5 text-xs">종료 <span class="font-normal text-muted">(또는 직접입력)</span></label>
-        <div class="flex gap-1.5">
-          <select class="input py-1.5 text-sm" name="end_time">${timeOptions(s.end_time)}</select>
-          <input class="input w-24 py-1.5 text-sm" type="text" name="end_time_custom" placeholder="HH:MM" inputmode="numeric" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" />
-        </div>
-      </div>
-    </div>
-    <input class="input mt-2 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;
 }
 
 /**
@@ -125,12 +55,26 @@ function startSlotGrid(current) {
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
 // 소요 시간 = 슬라이더(30분 단위·0~12시간)가 주 입력. 아래 1Pro/2Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
 // 전송값은 custom_hours + duration_mode=custom(hidden) → 서버 resolveEndTime이 그대로 산정(슬라이더 자체는 미전송 UI).
-function durationButtons() {
+function timeToMin(hhmm) {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+/** 시작·종료(HH:MM) 사이 분. 야간(자정 넘김) 처리. 유효하지 않으면 0. */
+function minutesBetween(start, end) {
+  const a = timeToMin(start), b = timeToMin(end);
+  if (a == null || b == null) return 0;
+  let d = b - a;
+  if (d < 0) d += 1440;
+  return d;
+}
+function durationButtons(initMinutes = 0) {
+  const m = Number(initMinutes) > 0 ? Math.round(Number(initMinutes)) : 0;
+  const hours = m > 0 ? (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(1)) : "";
   const presetBtn = (val, label) =>
     `<button type="button" class="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="${val}">${label}</button>`;
   return `
     <div data-duration-group>
-      <input type="range" min="0" max="720" step="30" value="0" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
+      <input type="range" min="0" max="720" step="30" value="${Math.min(m, 720)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
       <div class="mt-1 flex items-center justify-between text-xs">
         <span class="font-medium text-primary" data-duration-label>설정 안 함</span>
         <span class="text-muted">0 ~ 12시간 · 30분 단위</span>
@@ -138,7 +82,7 @@ function durationButtons() {
       <div class="mt-2 flex flex-wrap items-center gap-1.5">
         ${presetBtn("pro1", "1Pro")}${presetBtn("pro2", "2Pro")}
         <span class="ml-auto flex items-center gap-1.5">
-          <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" data-custom-hours />
+          <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" value="${hours}" data-custom-hours />
           <span class="text-xs text-muted">시간</span>
         </span>
       </div>
@@ -171,6 +115,7 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
  * 그 외(믹스 등): '세션 종류'(session_type) + '녹음 종류'(단가표 항목) 두 필드. 라벨은 편집 폼과 통일.
  */
 function sessionBookingFields(s, managers, rateItems = []) {
+  const initMins = s && s.start_time && s.end_time ? minutesBetween(s.start_time, s.end_time) : 0;
   const engineerField = `<div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
   // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 종류(단가표)는 녹음 세션 시간제 산정용(선택).
@@ -197,7 +142,7 @@ function sessionBookingFields(s, managers, rateItems = []) {
     </div>
     <div class="mt-3">
       <label class="label mb-1 text-xs">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 종류 기준시간)</span></label>
-      ${durationButtons()}
+      ${durationButtons(initMins)}
       <div class="mt-1.5 text-xs text-success" data-end-preview></div>
     </div>
     <input class="input mt-3 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;
@@ -263,8 +208,8 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
         <span class="flex shrink-0 items-center gap-2">${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
-        <form method="post" action="/sessions/${s.id}">
-          ${sessionFields(s, managers, rateItems)}
+        <form method="post" action="/sessions/${s.id}" data-session-form>
+          ${sessionBookingFields(s, managers, rateItems)}
           <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">세션 저장</button>
         </form>
         <div class="mt-2 flex gap-2">

@@ -66,8 +66,10 @@
 // 세션 예약 폼: 녹음 종류 게이트 + 시작 슬롯 가용성 + 소요시간 슬라이더(30분·최대 12시간, 1Pro/2Pro/직접입력 프리셋) + 예상 종료.
 (function () {
   "use strict";
-  var form = document.querySelector("[data-session-form]");
-  if (!form) return;
+  // 추가 폼 + 각 세션 편집 폼이 모두 동일 인터랙션(그리드·슬라이더·가용성)을 갖도록 폼별로 초기화.
+  Array.prototype.forEach.call(document.querySelectorAll("[data-session-form]"), initSessionForm);
+
+  function initSessionForm(form) {
   var dateInput = form.querySelector("[data-session-date]");
   var grid = form.querySelector("[data-start-grid]");
   var rateSel = form.querySelector("[data-rate-select]");
@@ -228,6 +230,7 @@
   updateProAvailability();
   refreshDuration();
   refreshAvailability();
+  }
 })();
 
 // 저장 플래시 배너([data-flash]): URL에서 flash 파라미터 제거 + 2.5초 후 페이드아웃.
