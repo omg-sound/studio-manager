@@ -70,6 +70,32 @@ function clientKindCounts() {
 function getClient(id) {
   return db().prepare("SELECT * FROM clients WHERE id = ?").get(id);
 }
+
+/** 클라이언트가 관여한 프로젝트(아티스트/소속사/제작사 이름 매칭 또는 실결제자). */
+function listProjectsForClient(client) {
+  if (!client) return [];
+  return db()
+    .prepare(
+      `SELECT p.*, c.name AS client_name FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       WHERE p.artist = @name OR p.artist_company = @name OR p.production_company = @name OR p.client_id = @id
+       ORDER BY p.created_at DESC, p.id DESC`
+    )
+    .all({ name: client.name, id: client.id });
+}
+
+/** 클라이언트가 실결제자(client_id)인 인보이스 전체 — 청구·결제 히스토리. */
+function listInvoicesForClientEntity(client) {
+  if (!client) return [];
+  return db()
+    .prepare(
+      `SELECT i.*, p.title AS project_title FROM invoices i
+       LEFT JOIN projects p ON p.id = i.project_id
+       WHERE i.client_id = @id
+       ORDER BY i.created_at DESC, i.id DESC`
+    )
+    .all({ id: client.id });
+}
 function clientOptions() {
   return db().prepare("SELECT id, name FROM clients ORDER BY name COLLATE NOCASE").all();
 }
@@ -1085,6 +1111,8 @@ module.exports = {
   listClients,
   clientKindCounts,
   getClient,
+  listProjectsForClient,
+  listInvoicesForClientEntity,
   clientOptions,
   ensureClientsFromProject,
   listProjectManagers,

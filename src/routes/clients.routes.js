@@ -4,8 +4,9 @@ const express = require("express");
 const { db } = require("../db");
 const { requireChief } = require("../auth");
 const { CLIENT_KINDS, normalizeClientKind } = require("../config");
-const { listClients, clientKindCounts, getClient } = require("../data");
-const { layout, pageHeader, esc, flashBanner, emptyState } = require("../views");
+const { listClients, clientKindCounts, getClient, listProjectsForClient, listInvoicesForClientEntity } = require("../data");
+const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage } = require("../views");
+const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.get("/", (req, res) => {
           return `
       <div class="card mb-3">
         <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
+          <a href="/clients/${c.id}" class="min-w-0 hover:opacity-80">
             <div class="flex items-center gap-2">
               <span class="badge bg-bg text-muted">${esc(c.kind)}</span>
               <span class="font-semibold">${esc(c.name)}</span>
@@ -44,7 +45,7 @@ router.get("/", (req, res) => {
             <div class="mt-0.5 text-sm text-muted">
               ${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}
             </div>
-          </div>
+          </a>
           <a href="/clients/${c.id}/edit" class="btn-ghost shrink-0 btn-xs">수정</a>
         </div>
       </div>`;
@@ -125,6 +126,59 @@ router.post("/:id/delete", (req, res) => {
 });
 
 // ── 폼 ──
+// ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리) ──
+router.get("/:id", (req, res) => {
+  const c = getClient(Number(req.params.id));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const tab = req.query.tab === "invoices" ? "invoices" : "projects";
+  const projects = listProjectsForClient(c);
+  const invoices = listInvoicesForClientEntity(c);
+  const tabLink = (key, label, n) =>
+    `<a href="/clients/${c.id}?tab=${key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${tab === key ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${label} ${n}</a>`;
+  const tabBar = `<div class="mb-3 mt-3 flex gap-1 overflow-x-auto border-b border-border">${tabLink("projects", "프로젝트", projects.length)}${tabLink("invoices", "청구·결제", invoices.length)}</div>`;
+
+  let content;
+  if (tab === "invoices") {
+    if (invoices.length) {
+      const total = invoices.reduce((s, i) => s + (i.amount || 0), 0);
+      const paid = invoices.reduce((s, i) => s + (i.paid_amount || 0), 0);
+      const due = total - paid;
+      content = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
+          <span>청구 합계 <b class="text-fg">${formatKRW(total)}</b></span>
+          <span>입금 <b class="text-success">${formatKRW(paid)}</b></span>
+          <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"}">${formatKRW(due)}</b></span>
+        </div>
+        <div class="space-y-2">${invoices.map((i) => invoiceRow(i, { compact: true })).join("")}</div>`;
+    } else {
+      content = emptyState("이 클라이언트가 실결제자인 청구 내역이 없습니다.", { card: true });
+    }
+  } else {
+    content = projects.length
+      ? `<div class="space-y-2">${projects.map((p) => clientProjectCard(p)).join("")}</div>`
+      : emptyState("연결된 프로젝트가 없습니다.", { card: true });
+  }
+
+  const body = `
+    ${flashBanner(req.query)}
+    ${pageHeader({ title: esc(c.name), desc: c.kind, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
+    ${tabBar}
+    ${content}`;
+  res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
+});
+
+/** 클라이언트 상세용 프로젝트 카드(제목·유형·메타 → 프로젝트 상세 링크). */
+function clientProjectCard(p) {
+  const typeLabel = p.project_type === "session" ? "세션" : p.project_type === "task" ? "작업" : "";
+  const meta = [p.artist, p.artist_company, p.production_company].filter(Boolean).join(" · ");
+  return `<a href="/projects/${p.id}" class="card flex items-center justify-between gap-3 hover:opacity-80">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(p.title)}</span>${typeLabel ? `<span class="badge bg-bg text-muted">${typeLabel}</span>` : ""}</div>
+      ${meta ? `<div class="mt-0.5 truncate text-xs text-muted">${esc(meta)}</div>` : ""}
+    </div>
+    <span class="shrink-0 text-xs text-muted">열기 ›</span>
+  </a>`;
+}
+
 function clientForm(c = {}, isEdit = false) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
