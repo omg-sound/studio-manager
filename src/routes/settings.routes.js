@@ -19,7 +19,7 @@ const {
   getStudioLogo,
   setStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState } = require("../views");
+const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron } = require("../views");
 const { asyncHandler } = require("../lib/async");
 const multer = require("multer");
 const drive = require("../drive");
@@ -488,8 +488,8 @@ function rateItemRow(r) {
           <div class="mt-0.5 text-xs text-muted">${summary}</div>
         </div>
       </div>
-      <details class="mt-2 border-t border-border pt-2">
-        <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
+      <details class="group mt-2 border-t border-border pt-2">
+        <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
         <form method="post" action="/settings/rate-items/${r.id}" class="mt-2 space-y-2">
           <div class="grid gap-2 sm:grid-cols-2">
             <input class="input py-1.5 text-sm" name="name" value="${esc(r.name)}" required />
@@ -544,8 +544,8 @@ function taskTypeRow(t) {
           <div class="mt-0.5 text-xs text-muted">${esc(billLabel)} · ${priceLabel}</div>
         </div>
       </div>
-      <details class="mt-2 border-t border-border pt-2">
-        <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
+      <details class="group mt-2 border-t border-border pt-2">
+        <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
         <form method="post" action="/settings/task-types/${t.id}" class="mt-2 space-y-2">
           <div class="grid gap-2 sm:grid-cols-2">
             <input class="input py-1.5 text-sm" name="label" value="${esc(t.label)}" required />

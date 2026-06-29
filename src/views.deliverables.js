@@ -4,7 +4,7 @@
  * 자료 전달(deliverables) 목록/행 렌더. 프로젝트 상세와 타임라인에서 공유.
  */
 
-const { esc, formatBytes, emptyState } = require("./views");
+const { esc, formatBytes, emptyState, detailsChevron } = require("./views");
 const { todayYmd } = require("./lib/date");
 
 const KIND_BADGE = {
@@ -93,10 +93,10 @@ function deliverablesSection({ project, rows, isAdmin, baseUrl, collapsed = fals
     : "";
   if (collapsed) {
     return `
-    <details class="card mt-3">
+    <details class="card group mt-3">
       <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">자료 전달 <span class="text-sm font-normal text-muted">${rows.length}</span></h2>
-        <span class="text-xs text-muted">열기</span>
+        ${detailsChevron()}
       </summary>
       <div class="mt-3 border-t border-border pt-3">
         ${uploadBtn ? `<div class="mb-2 flex justify-end">${uploadBtn}</div>` : ""}

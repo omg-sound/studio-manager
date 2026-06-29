@@ -39,7 +39,7 @@ const {
   deleteTask,
   createInvoiceFromTasks,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -272,12 +272,12 @@ function projectMetaReadonly(p) {
 function projectMetaCard(p, err = "") {
   const { left, amount, dueLine } = projectMetaLine(p);
   return `
-    <details class="card"${err ? " open" : ""}>
+    <details class="card group"${err ? " open" : ""}>
       <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
         <div class="min-w-0 text-sm text-muted">${left}</div>
         <div class="flex shrink-0 items-center gap-3">
           <div class="text-right">${amount}${dueLine}</div>
-          <span class="text-xs font-medium text-primary">편집</span>
+          ${detailsChevron()}
         </div>
       </summary>
       <div class="mt-3 border-t border-border pt-3">
@@ -599,8 +599,8 @@ function trackProgressSummary(tasks) {
 
 function trackEditMenu(track, hasInvoiced) {
   return `
-    <details class="shrink-0 text-right">
-      <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집</summary>
+    <details class="group shrink-0 text-right">
+      <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
       <form method="post" action="/projects/tracks/${track.id}" class="mt-2 flex gap-2 rounded-lg border border-border bg-surface p-3 text-left">
         <input class="input flex-1 py-1.5 text-sm" name="title" value="${esc(track.title)}" required />
         <button class="btn-primary shrink-0 btn-xs" type="submit">저장</button>
@@ -638,7 +638,7 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
         <span class="flex shrink-0 items-center gap-2">
           ${amount}
           ${statusBadge}
-          <svg class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+          ${detailsChevron()}
         </span>
       </summary>
       <div class="border-t border-border p-2.5">

@@ -3,7 +3,7 @@
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
 const { INVOICE_STATUS_BADGE } = require("./config");
-const { esc, formatKRW, emptyState } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel } = require("./lib/date");
 
@@ -84,10 +84,10 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
       : "";
     const dueHint = due > 0 ? `<span class="text-xs text-danger">미수 ${formatKRW(due)}</span>` : "";
     return `
-    <details class="card mt-3"${open}>
+    <details class="card group mt-3"${open}>
       <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">청구 <span class="text-sm font-normal text-muted">${rows.length}</span></h2>
-        <span class="flex items-center gap-3">${unbilledHint}${dueHint}<span class="text-xs text-muted">열기</span></span>
+        <span class="flex items-center gap-3">${unbilledHint}${dueHint}${detailsChevron()}</span>
       </summary>
       <div class="mt-3 border-t border-border pt-3">${inner}</div>
     </details>`;

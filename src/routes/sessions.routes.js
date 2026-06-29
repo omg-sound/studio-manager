@@ -17,7 +17,7 @@ const {
   busySessionSlots,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
-const { layout, pageHeader, esc, flashBanner, errorPage, emptyState } = require("../views");
+const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, detailsChevron } = require("../views");
 const { sessionRow } = require("../views.sessions");
 const { asyncHandler } = require("../lib/async");
 const calendar = require("../calendar");
@@ -86,10 +86,10 @@ router.get("/sessions", requireAuth, (req, res) => {
     : emptyState("다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
 
   const pastList = past.length
-    ? `<details class="card mt-3">
+    ? `<details class="card group mt-3">
          <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
            <h2 class="font-display text-base font-semibold">지난 세션 <span class="text-sm font-normal text-muted">${past.length}</span></h2>
-           <span class="text-xs text-muted">열기</span>
+           ${detailsChevron()}
          </summary>
          <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div>
        </details>`

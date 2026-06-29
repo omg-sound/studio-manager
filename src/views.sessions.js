@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
-const { esc, formatKRW, emptyState } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
 /** 담당자 마스터 선택지. 현재값이 목록에 없으면 보존용으로 추가. 예약 담당자·담당 엔지니어 공용. */
@@ -234,10 +234,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
   const billLine = s.billing
     ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${billStatus}</div>`
     : "";
-  const controls = isAdmin ? sessionControls(s, managers, rateItems) : "";
-  return `
-    <div class="rounded-lg border border-border bg-surface p-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
+  const header = `
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             ${typeBadge}
@@ -246,30 +243,39 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
           </div>
           <div class="mt-0.5 text-xs text-muted">${sub}</div>
           ${billLine}
+        </div>`;
+  // 비관리자: 단순 행(접기 없음).
+  if (!isAdmin) {
+    return `
+      <div class="rounded-lg border border-border bg-surface p-3">
+        <div class="flex items-start justify-between gap-2">
+          ${header}
+          <div class="flex shrink-0 items-center gap-1">${statusBadge}</div>
         </div>
-        <div class="flex shrink-0 items-center gap-1">${statusBadge}</div>
-      </div>
-      ${controls}
-    </div>`;
-}
-
-function sessionControls(s, managers, rateItems = []) {
+      </div>`;
+  }
+  // 편집 가능: 행 헤더 전체가 접기 토글. 오른쪽 끝 접기 버튼(chevron), 그 앞에 상태 배지.
   const toggleTo = s.status === "완료" ? "예정" : "완료";
   return `
-    <details class="mt-2 border-t border-border pt-2">
-      <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 완료 / 삭제</summary>
-      <form method="post" action="/sessions/${s.id}" class="mt-2">
-        ${sessionFields(s, managers, rateItems)}
-        <button class="btn-primary mt-2 btn-xs" type="submit">세션 저장</button>
-      </form>
-      <div class="mt-2 flex gap-2">
-        <form method="post" action="/sessions/${s.id}/status">
-          <input type="hidden" name="status" value="${toggleTo}" />
-          <button class="btn-ghost btn-xs" type="submit">${toggleTo} 처리</button>
+    <details class="group rounded-lg border border-border bg-surface">
+      <summary class="flex cursor-pointer list-none items-start justify-between gap-2 p-3">
+        ${header}
+        <span class="flex shrink-0 items-center gap-2">${statusBadge}${detailsChevron()}</span>
+      </summary>
+      <div class="border-t border-border p-3">
+        <form method="post" action="/sessions/${s.id}">
+          ${sessionFields(s, managers, rateItems)}
+          <button class="btn-primary mt-2 btn-xs" type="submit">세션 저장</button>
         </form>
-        <form method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?">
-          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
-        </form>
+        <div class="mt-2 flex gap-2">
+          <form method="post" action="/sessions/${s.id}/status">
+            <input type="hidden" name="status" value="${toggleTo}" />
+            <button class="btn-ghost btn-xs" type="submit">${toggleTo} 처리</button>
+          </form>
+          <form method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?">
+            <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
+          </form>
+        </div>
       </div>
     </details>`;
 }

@@ -261,4 +261,9 @@ function emptyState(inner, { card = false } = {}) {
   return `<div class="${cls}">${inner}</div>`;
 }
 
-module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV };
+/** 접기 토글 chevron — `<details class="group">` 안 summary 우측에. 펼치면 180° 회전(group-open). */
+function detailsChevron() {
+  return `<svg class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>`;
+}
+
+module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron };
