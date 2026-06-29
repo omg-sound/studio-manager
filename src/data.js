@@ -492,9 +492,17 @@ function updateTask(user, taskId, input = {}) {
   return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
 }
 
-/** 작업 삭제. 이미 청구된 작업은 거부. */
+/** 프로젝트 삭제. 청구된 작업·세션이 있으면 거부(매출 추적 보존, deleteTrack과 정합). */
 function deleteProject(projectId) {
-  db().prepare("DELETE FROM projects WHERE id = ?").run(Number(projectId));
+  const pid = Number(projectId);
+  const invoicedTask = db()
+    .prepare("SELECT 1 FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = ? AND t.is_invoiced = 1 LIMIT 1")
+    .get(pid);
+  const invoicedSession = db()
+    .prepare("SELECT 1 FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id WHERE s.project_id = ? LIMIT 1")
+    .get(pid);
+  if (invoicedTask || invoicedSession) throw new Error("PROJECT_HAS_INVOICED");
+  db().prepare("DELETE FROM projects WHERE id = ?").run(pid);
 }
 
 function deleteTask(user, taskId) {
@@ -1042,8 +1050,9 @@ function setSessionEventId(sessionId, eventId) {
 function setSessionStatus(user, sessionId, status) {
   const s = getSessionForUser(user, sessionId);
   if (!s) return null;
+  if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED"); // 청구된 세션은 상태 되돌리기 금지(매출 정합)
   db().prepare("UPDATE sessions SET status=? WHERE id=?").run(normalizeSessionStatus(status), s.id);
-  return { project_id: s.project_id };
+  return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
 }
 
 function deleteSession(user, sessionId) {

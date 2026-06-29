@@ -169,12 +169,22 @@ router.post("/sessions/:id", requireEditor, asyncHandler(async (req, res) => {
   res.redirect(`/projects/${s.project_id}?tab=sessions&flash=saved`);
 }));
 
-// ── 상태 토글(예정 ↔ 완료) ──
-router.post("/sessions/:id/status", requireEditor, (req, res) => {
-  const r = setSessionStatus(req.user, Number(req.params.id), req.body.status);
+// ── 상태 토글(예정 ↔ 완료 ↔ 취소) ──
+router.post("/sessions/:id/status", requireEditor, asyncHandler(async (req, res) => {
+  let r;
+  try {
+    r = setSessionStatus(req.user, Number(req.params.id), req.body.status);
+  } catch (e) {
+    if (e.message === "SESSION_INVOICED") {
+      const ex = getSessionForUser(req.user, Number(req.params.id));
+      return res.redirect(`/projects/${ex ? ex.project_id : ""}?tab=sessions&error=session_invoiced`);
+    }
+    throw e;
+  }
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
+  await syncSessionEvent(req.user, r); // 상태변경(취소→일정 삭제) 캘린더 동기화
   res.redirect(`/projects/${r.project_id}?tab=sessions&flash=saved`);
-});
+}));
 
 // ── 세션 삭제 ──
 router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res) => {

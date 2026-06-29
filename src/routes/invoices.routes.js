@@ -304,7 +304,7 @@ router.post("/:id/pay", requireInvoice, (req, res) => {
   else status = inv.status === "입금완료" ? "발행" : inv.status; // paid=0 완납 취소 시 발행으로
   db().prepare("UPDATE invoices SET paid_amount=?, status=? WHERE id=?").run(paid, status, inv.id);
   ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 승격 시 채번 보장
-  if (status === "발행" && inv.status !== "발행") notifyInvoiceIssued(req.user, inv.id);
+  if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(req.user, inv.id); // 미발행→발행/입금완료 첫 전이 시 1회 알림
   res.redirect(`/invoices/${inv.id}?flash=paid`);
 });
 
@@ -317,7 +317,7 @@ router.post("/:id/status", requireInvoice, (req, res) => {
   const paid = status === "입금완료" ? inv.amount : inv.paid_amount;
   db().prepare("UPDATE invoices SET status=?, paid_amount=? WHERE id=?").run(status, paid, inv.id);
   ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 전이 시 채번 보장
-  if (status === "발행" && inv.status !== "발행") notifyInvoiceIssued(req.user, inv.id);
+  if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(req.user, inv.id); // 미발행→발행/입금완료 첫 전이 시 1회 알림
   res.redirect(`/invoices/${inv.id}?flash=saved`);
 });
 

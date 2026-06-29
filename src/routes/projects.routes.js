@@ -184,7 +184,14 @@ router.get("/:id", requireAuth, (req, res) => {
 router.post("/:id/delete", requireChief, (req, res) => {
   const p = getProjectForUser(req.user, Number(req.params.id));
   if (!p) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  deleteProject(p.id);
+  try {
+    deleteProject(p.id);
+  } catch (e) {
+    if (e.message === "PROJECT_HAS_INVOICED") {
+      return res.status(409).send(errorPage({ code: 409, title: "청구된 프로젝트는 삭제할 수 없습니다", message: "이 프로젝트에 청구된 작업·세션이 있습니다. 먼저 관련 청구서를 삭제한 뒤 다시 시도하세요(매출 추적 보존).", user: req.user }));
+    }
+    throw e;
+  }
   res.redirect("/projects?flash=deleted");
 });
 

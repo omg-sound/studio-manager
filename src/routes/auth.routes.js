@@ -120,10 +120,10 @@ router.post("/dev-login", (req, res) => {
   res.redirect(safeNext(req.body.next));
 });
 
-/** open-redirect 방지: 내부 경로만 허용. */
+/** open-redirect 방지: 내부 절대경로만 허용. 역슬래시(\)는 브라우저가 //로 정규화해 protocol-relative 우회가 되므로 차단. */
 function safeNext(next) {
   const v = typeof next === "string" ? next : "";
-  return v.startsWith("/") && !v.startsWith("//") ? v : "/";
+  return /^\/(?![/\\])/.test(v) ? v : "/";
 }
 
 module.exports = router;
