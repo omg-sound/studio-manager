@@ -39,7 +39,7 @@ const {
   deleteTask,
   createInvoiceFromTasks,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, projectTypeBadge } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -135,11 +135,7 @@ function trackCount(p) {
 function projectListCard(p) {
   const metaLine = [p.artist, p.client_name, p.manager_name].filter(Boolean).join(" · ") || "정보 미정";
   const n = trackCount(p);
-  const typeBadge = p.project_type === "session"
-    ? `<span class="badge bg-warning/10 text-warning">세션</span>`
-    : p.project_type === "task"
-      ? `<span class="badge bg-primary/10 text-primary">작업</span>`
-      : "";
+  const typeBadge = p.project_type ? projectTypeBadge(p.project_type) : "";
   const amount = projectAmount(p)
     ? `<div class="text-sm font-medium">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;

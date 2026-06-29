@@ -4,7 +4,7 @@ const express = require("express");
 const { db } = require("../db");
 const { requireChief } = require("../auth");
 const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel } = require("../data");
-const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE } = require("../config");
 
 const router = express.Router();
@@ -69,9 +69,11 @@ router.get("/:id", (req, res) => {
   const tab = req.query.tab === "payout" ? "payout" : "tasks";
   const tasks = listTasksForWorker(w);
 
-  const tabLink = (key, label, n) =>
-    `<a href="/workers/${w.id}?tab=${key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${tab === key ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${label} ${n}</a>`;
-  const tabBar = `<div class="mb-3 mt-3 flex gap-1 overflow-x-auto border-b border-border">${tabLink("tasks", "작업 히스토리", tasks.length)}${tabLink("payout", "정산", tasks.length)}</div>`;
+  const tabBarHtml = tabBar({
+    tabs: [{ key: "tasks", label: `작업 히스토리 ${tasks.length}` }, { key: "payout", label: `정산 ${tasks.length}` }],
+    activeKey: tab,
+    hrefFn: (key) => `/workers/${w.id}?tab=${key}`,
+  });
 
   const taskMeta = (t) => `<span class="text-xs text-muted"> · ${esc(t.project_title)} / ${esc(t.track_title)}</span>`;
 
@@ -128,7 +130,7 @@ router.get("/:id", (req, res) => {
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: esc(w.name), desc: "외주 작업자", action: `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` })}
-    ${tabBar}
+    ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: w.name, user: req.user, current: "/workers", body }));
 });
