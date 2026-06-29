@@ -232,7 +232,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   const tabs = [{ key: "project", label: "프로젝트" }];
   if (!isTask) tabs.push({ key: "sessions", label: "세션 일정" });
   tabs.push({ key: "tracks", label: "곡 · 콘텐츠" });
-  tabs.push({ key: "deliverables", label: "자료 전달" });
+  if (editable) tabs.push({ key: "deliverables", label: "자료 전달" }); // 자료 전달은 편집자(치프·스태프)만, 대표 제외
   if (showInvoice) tabs.push({ key: "invoice", label: "청구" });
   const validKeys = tabs.map((t) => t.key);
   const defaultTab = "project";
@@ -247,7 +247,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   } else if (tab === "tracks") {
     const trackBundle = listTracksForProject(req.user, p.id);
     tabContent = tracksSection({ project: p, tracks: trackBundle ? trackBundle.tracks : [], isAdmin: editable, managers, expandTaskId: Number(req.query.expand) || null });
-  } else if (tab === "deliverables") {
+  } else if (tab === "deliverables" && editable) {
     const deliv = listDeliverablesForProject(req.user, p.id);
     tabContent = deliverablesSection({ project: p, rows: deliv ? deliv.rows : [], isAdmin: editable, baseUrl: config.baseUrl, collapsed: false });
   } else if (tab === "invoice" && showInvoice) {

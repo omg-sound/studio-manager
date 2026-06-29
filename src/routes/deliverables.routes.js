@@ -9,7 +9,7 @@ const multer = require("multer");
 const { config, DELIVERABLE_KINDS, normalizeDeliverableKind } = require("../config");
 const { notifyAsync } = require("../notify");
 const { db } = require("../db");
-const { requireAuth, requireEditor, canEdit } = require("../auth");
+const { requireEditor, canEdit } = require("../auth");
 const {
   getProjectForUser,
   listDeliverablesForProject,
@@ -54,7 +54,7 @@ function newToken() {
 }
 
 // ── 자료 타임라인(인증) — admin 전체 / client 자기 프로젝트 ──
-router.get("/deliverables", requireAuth, (req, res) => {
+router.get("/deliverables", requireEditor, (req, res) => {
   const rows = recentDeliverables(req.user);
   const admin = canEdit(req.user);
   const list = rows.length
@@ -147,7 +147,7 @@ router.post("/projects/:pid/deliverables", requireEditor, upload.single("file"),
 }));
 
 // ── 인증 다운로드(프록시 스트리밍, 범위 강제) ──
-router.get("/deliverables/:id/raw", requireAuth, asyncHandler(async (req, res) => {
+router.get("/deliverables/:id/raw", requireEditor, asyncHandler(async (req, res) => {
   const dv = getDeliverableForUser(req.user, Number(req.params.id));
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
   await sendFile(dv, res);

@@ -120,7 +120,7 @@ const NAV = [
   { href: "/", label: "대시보드", key: "dashboard", access: "all" },
   { href: "/projects", label: "프로젝트", key: "projects", access: "all" },
   { href: "/sessions", label: "일정", key: "sessions", access: "all" },
-  { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "all" },
+  { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "editor" },
   { href: "/invoices", label: "청구", key: "invoices", access: "invoice" },
   { href: "/clients", label: "클라이언트", key: "clients", access: "chief" },
   { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice" },
@@ -131,9 +131,11 @@ function navItemsFor(user) {
   const role = user && user.role;
   const canInvoice = role === "chief" || role === "owner";
   const isChief = role === "chief";
+  const canEditNav = role === "chief" || role === "staff"; // 편집자(대표 제외)
   return NAV.filter((i) => {
     if (i.access === "invoice") return canInvoice;
     if (i.access === "chief") return isChief;
+    if (i.access === "editor") return canEditNav;
     return true; // all
   });
 }
