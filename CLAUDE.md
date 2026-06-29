@@ -63,6 +63,8 @@
 ### 배포 · 운영
 - Render Blueprint(web + cron) + Disk. 일일 백업(`VACUUM INTO`·14일 보존)·연체 스캔 cron(`/internal/cron/daily`, `BACKUP_TOKEN`).
   정적 자산 캐시 버스팅(`?v=` mtime+size).
+- **알림(웹훅)**: 연체·청구 발행·자료 공유 시 Slack/Discord 등 팀 알림(`src/notify.js`, fail-safe·비차단, 미설정 시 무음).
+  URL은 환경설정에서 암호화 저장 또는 `ALERT_WEBHOOK`. 자료 공유는 공개 토큰 대신 내부 프로젝트 링크로 통지(PII 보호).
 
 ### 관리 항목 편집 = 삭제 중심 (활성/비활성 폐기)
 - 하우스 엔지니어·외주 작업자·클라이언트·단가표·작업 종류 모두 토글 없이 **삭제(하드)**. 강제 삭제 시 참조 FK는 SET NULL(인보이스·프로젝트 등), 과거 작업의 종류 라벨은 key로 폴백 보존. 본인·부트스트랩 치프만 삭제 차단.
@@ -149,7 +151,7 @@
   rate_item_id?→rate_items SET NULL, gcal_event_id?)` — 스튜디오 일정.
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   `rate_item_id`는 녹음 세션 시간제 자동 산정용 단가표 연결. `gcal_event_id`는 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적).
-- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문).
+- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`alert_webhook_url`(알림 웹훅, 암호화).
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시).
 
 ## 자료 전달 아키텍처 (플레이북1 §2.3·§4.3)
@@ -176,6 +178,7 @@
 | `DEV_LOGIN` | =1 시 `/dev-login` 활성(로컬 검증용, **프로덕션 금지**) |
 | `BACKUP_TOKEN` | cron이 `POST /internal/cron/daily`(백업+연체 스캔)를 트리거하는 인증 토큰. 미설정 시 라우트 비활성(404). web·cron 동일값 |
 | `CRON_TRIGGER_URL` / `WEB_HOSTPORT` | (cron 서비스) 트리거 대상 web URL. `WEB_HOSTPORT`는 Render `fromService hostport` 자동 주입 |
+| `ALERT_WEBHOOK` | (선택) 알림 웹훅 URL 운영 오버라이드. 미설정 시 `/settings` 환경설정에서 암호화 저장한 값 사용(Slack/Discord 등) |
 
 프로덕션(`NODE_ENV=production`)에서는 `ADMIN_EMAIL`, 강한 `SESSION_SECRET`/`TOKEN_ENC_KEY`,
 Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가 시작되지 않는다.
@@ -211,8 +214,8 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 
 ## 다음 단계 TODO
 
-1. (선택) 연체 cron 알림 발송 — 현재 집계·로그·JSON만 → 메일/웹훅(Gmail API 또는 `ALERT_WEBHOOK`). 자료/청구 알림도 동일 채널 재사용.
-2. (선택) 월 캘린더 그리드 뷰(현재는 목록), 대시보드 임박 세션 카드.
-3. (선택) 구글 캘린더 역방향 동기화(캘린더에서 삭제→앱 반영) — 보류 중.
-4. Drive 실연동 검증.
-5. **거래명세서 PDF 프로덕션 확인** — Render Linux에서 `@resvg/resvg-js` 네이티브 prebuilt 설치·렌더 동작 확인(로컬 검증 완료).
+1. (선택) 월 캘린더 그리드 뷰(현재는 목록), 대시보드 임박 세션 카드.
+2. (선택) 구글 캘린더 역방향 동기화(캘린더에서 삭제→앱 반영) — 보류 중.
+3. Drive 실연동 검증.
+4. **거래명세서 PDF 프로덕션 확인** — Render Linux에서 `@resvg/resvg-js` 네이티브 prebuilt 설치·렌더 동작 확인(로컬 검증 완료).
+5. (선택) 알림 Gmail 어댑터 — 현재 웹훅만. 클라이언트 직접 메일 통지가 필요해지면 `notify.js`에 어댑터 추가.
