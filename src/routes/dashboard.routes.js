@@ -2,15 +2,25 @@
 
 const express = require("express");
 const { requireAuth } = require("../auth");
-const { dashboardStats } = require("../data");
+const { dashboardStats, upcomingSessions } = require("../data");
 const { layout, pageHeader, esc, serviceBadges, formatKRW, emptyState } = require("../views");
-const { ddayLabel } = require("../lib/date");
+const { ddayLabel, todayYmd, formatYmdShort } = require("../lib/date");
 
 const router = express.Router();
 
 router.get("/", requireAuth, (req, res) => {
   const user = req.user;
   const s = dashboardStats(user);
+  const today = todayYmd();
+  // 이번 주: 오늘부터 6일 이내(오늘 포함 7일)
+  const weekEnd = (() => {
+    const d = new Date(today + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 6);
+    return d.toISOString().slice(0, 10);
+  })();
+  const allSessions = upcomingSessions(user, { limit: 30 });
+  const todaySessions = allSessions.filter((ss) => ss.session_date === today);
+  const weekSessions = allSessions.filter((ss) => ss.session_date >= today && ss.session_date <= weekEnd);
 
   const statCard = (label, value, sub = "") => `
     <div class="card">
@@ -64,6 +74,24 @@ router.get("/", requireAuth, (req, res) => {
   const cols = cardItems.length >= 4 ? "sm:grid-cols-4" : cardItems.length === 3 ? "sm:grid-cols-3" : "";
   const cards = `<div class="grid grid-cols-2 gap-3 ${cols}">${cardItems.join("")}</div>`;
 
+  const sessionList = weekSessions.length
+    ? weekSessions
+        .map(
+          (ss) => `
+      <a href="/projects/${ss.project_id}?tab=sessions" class="flex items-center justify-between gap-3 border-b border-border py-2.5 last:border-0">
+        <div class="min-w-0">
+          <div class="truncate text-sm font-medium">${esc(ss.project_title)}</div>
+          <div class="text-xs text-muted">${esc(ss.session_type)}${ss.engineer_name ? " · " + esc(ss.engineer_name) : ""}</div>
+        </div>
+        <div class="shrink-0 text-right">
+          <div class="text-xs font-medium">${esc(formatYmdShort(ss.session_date))}${ss.start_time ? " " + esc(ss.start_time) : ""}</div>
+          <div class="text-xs text-muted">${ss.session_date === today ? "오늘" : ""}</div>
+        </div>
+      </a>`
+        )
+        .join("")
+    : emptyState("이번 주 예정된 세션이 없습니다.");
+
   const body = `
     ${pageHeader({
       title: "대시보드",
@@ -71,6 +99,13 @@ router.get("/", requireAuth, (req, res) => {
     })}
     ${overdueBanner}
     ${cards}
+    <div class="card mt-4">
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <h2 class="font-display text-base font-semibold">오늘 · 이번 주 세션</h2>
+        <span class="text-xs text-muted">오늘 ${todaySessions.length}건 · 이번 주 ${weekSessions.length}건</span>
+      </div>
+      ${sessionList}
+    </div>
     <div class="card mt-4">
       <h2 class="mb-2 font-display text-base font-semibold">임박한 마감</h2>
       ${upcomingList}

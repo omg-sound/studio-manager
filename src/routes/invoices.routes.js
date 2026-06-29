@@ -68,6 +68,7 @@ router.get("/", requireInvoice, (req, res) => {
   const user = req.user;
   const admin = canInvoice(user);
   const f = req.query.f || ""; // '', 미발행, 발행, 연체, 입금완료
+  const q = (req.query.q || "").toString().trim();
   let rows;
   if (admin) {
     if (f === "연체") rows = listInvoices(user, { overdue: true });
@@ -77,11 +78,26 @@ router.get("/", requireInvoice, (req, res) => {
     rows = listInvoices(user, {});
   }
 
+  // 라우트 레벨 q 필터(제목·채번·클라이언트명 부분일치, 소문자 비교). data.js 수정 없음.
+  if (q) {
+    const ql = q.toLowerCase();
+    rows = rows.filter(
+      (i) =>
+        (i.title || "").toLowerCase().includes(ql) ||
+        (i.invoice_number || "").toLowerCase().includes(ql) ||
+        (i.client_name || "").toLowerCase().includes(ql)
+    );
+  }
+
   const totalDue = rows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0);
 
+  // 칩 링크는 현재 q를 함께 전달해 필터와 공존.
   const chip = (label, val) => {
     const active = f === val || (!f && val === "");
-    return `<a href="/invoices${val ? "?f=" + encodeURIComponent(val) : ""}" class="badge ${active ? "bg-primary text-primary-fg" : "bg-surface border border-border text-muted"}">${esc(label)}</a>`;
+    const href = val
+      ? `/invoices?f=${encodeURIComponent(val)}${q ? "&q=" + encodeURIComponent(q) : ""}`
+      : `/invoices${q ? "?q=" + encodeURIComponent(q) : ""}`;
+    return `<a href="${href}" class="badge ${active ? "bg-primary text-primary-fg" : "bg-surface border border-border text-muted"}">${esc(label)}</a>`;
   };
   const filterBar = admin
     ? `<div class="mb-4 flex flex-wrap gap-2">
@@ -89,9 +105,22 @@ router.get("/", requireInvoice, (req, res) => {
        </div>`
     : "";
 
+  // 검색바: GET form. f 필터가 선택된 경우 hidden으로 보존.
+  const searchBar = `
+    <form method="get" action="/invoices" class="mb-4 flex gap-2">
+      ${f ? `<input type="hidden" name="f" value="${esc(f)}" />` : ""}
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="제목 · 채번 · 클라이언트 검색" />
+      <button class="btn-primary shrink-0" type="submit">검색</button>
+    </form>`;
+  const resultNote = q
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/invoices${f ? "?f=" + encodeURIComponent(f) : ""}" class="text-primary hover:underline">검색 초기화</a></div>`
+    : "";
+
   const list = rows.length
     ? `<div class="card">${rows.map((i) => invoiceRow(i)).join("")}</div>`
-    : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
+    : q
+      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
+      : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
 
   const action = admin ? `<a href="/invoices/new" class="btn-primary">+ 새 청구</a>` : "";
   const dueNote = totalDue > 0
@@ -102,7 +131,9 @@ router.get("/", requireInvoice, (req, res) => {
     ${flashBanner(req.query)}
     ${pageHeader({ title: "청구", desc: admin ? "발행·입금·미수금" : "내 청구 내역", action })}
     ${dueNote}
+    ${searchBar}
     ${filterBar}
+    ${resultNote}
     ${list}`;
   res.send(layout({ title: "청구", user, current: "/invoices", body }));
 });
@@ -207,18 +238,20 @@ router.get("/:id", requireInvoice, (req, res) => {
   res.send(layout({ title: inv.title, user: req.user, current: "/invoices", body }));
 });
 
-// ── 거래명세서 PDF (발행/입금완료만, PII → 인증 필수·no-store·영속 저장 없이 즉석 스트리밍) ──
+// ── 거래명세서 PDF (발행/입금완료 또는 견적서 타입은 미발행도 허용. PII → 인증 필수·no-store·즉석 스트리밍) ──
 router.get("/:id/statement.pdf", requireInvoice, asyncHandler(async (req, res) => {
   let inv = getInvoiceForUser(req.user, Number(req.params.id));
-  if (!inv) return res.status(404).send("청구를 찾을 수 없습니다.");
-  inv = ensureInvoiceNumber(inv); // 수동 발행분도 채번 보장
-  if (inv.status !== "발행" && inv.status !== "입금완료") {
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const docType = normalizeDocType(req.query.type);
+  inv = ensureInvoiceNumber(inv); // 수동 발행분도 채번 보장(발행/입금완료 한정, 내부 가드 있음)
+  // 견적서는 미발행 상태에서도 PDF 허용. 거래명세서·내역서는 발행/입금완료만.
+  if (inv.status !== "발행" && inv.status !== "입금완료" && docType !== "견적서") {
     return res.status(400).send(errorPage({ code: 400, title: "발행된 청구만 명세서를 만들 수 있습니다", message: "먼저 청구를 '발행' 상태로 전환하세요.", user: req.user }));
   }
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
   const client = inv.client_id ? getClient(inv.client_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
-  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType: normalizeDocType(req.query.type) });
+  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
   res.setHeader("Cache-Control", "private, no-store");
@@ -253,14 +286,14 @@ function invoiceItemsCard(items) {
 // ── 수정(관리자) ──
 router.get("/:id/edit", requireInvoice, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
-  if (!inv) return res.status(404).send("청구를 찾을 수 없습니다.");
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm(inv, true) }));
 });
 
 router.post("/:id", requireInvoice, (req, res) => {
   const id = Number(req.params.id);
   const inv = db().prepare("SELECT id FROM invoices WHERE id = ?").get(id);
-  if (!inv) return res.status(404).send("청구를 찾을 수 없습니다.");
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
   const title = String(b.title || "").trim();
   if (!title) return res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm({ ...b, id }, true, "제목을 입력하세요.") }));
@@ -294,7 +327,7 @@ router.post("/:id", requireInvoice, (req, res) => {
 // ── 입금 처리(관리자) ──
 router.post("/:id/pay", requireInvoice, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
-  if (!inv) return res.status(404).send("청구를 찾을 수 없습니다.");
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const paid = req.body.full === "1" ? inv.amount : parseMoney(req.body.paid_amount);
   // 입금액에 따라 상태 자동 보정: 전액→입금완료, 일부>0→발행(미발행이면 발행 승격).
   // 입금액이 총액 미만이면 입금완료로 남지 않도록 발행으로 강등(부분 환불·완납 취소 정합성).
@@ -302,8 +335,17 @@ router.post("/:id/pay", requireInvoice, (req, res) => {
   if (inv.amount > 0 && paid >= inv.amount) status = "입금완료";
   else if (paid > 0) status = inv.status === "미발행" ? "발행" : inv.status === "입금완료" ? "발행" : inv.status;
   else status = inv.status === "입금완료" ? "발행" : inv.status; // paid=0 완납 취소 시 발행으로
-  db().prepare("UPDATE invoices SET paid_amount=?, status=? WHERE id=?").run(paid, status, inv.id);
-  ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 승격 시 채번 보장
+  // 채번 원자화: status UPDATE + invoice_number 채번을 BEGIN IMMEDIATE로 묶어 부분 실패 방지.
+  const d = db();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare("UPDATE invoices SET paid_amount=?, status=? WHERE id=?").run(paid, status, inv.id);
+    ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 승격 시 채번 보장
+    d.exec("COMMIT");
+  } catch (e) {
+    try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
+    throw e;
+  }
   if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(req.user, inv.id); // 미발행→발행/입금완료 첫 전이 시 1회 알림
   res.redirect(`/invoices/${inv.id}?flash=paid`);
 });
@@ -311,12 +353,21 @@ router.post("/:id/pay", requireInvoice, (req, res) => {
 // ── 상태 변경(관리자) ──
 router.post("/:id/status", requireInvoice, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
-  if (!inv) return res.status(404).send("청구를 찾을 수 없습니다.");
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const status = normalizeInvoiceStatus(req.body.status);
   // 입금완료로 변경 시 입금액=총액 자동
   const paid = status === "입금완료" ? inv.amount : inv.paid_amount;
-  db().prepare("UPDATE invoices SET status=?, paid_amount=? WHERE id=?").run(status, paid, inv.id);
-  ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 전이 시 채번 보장
+  // 채번 원자화: status UPDATE + invoice_number 채번을 BEGIN IMMEDIATE로 묶어 부분 실패 방지.
+  const d = db();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare("UPDATE invoices SET status=?, paid_amount=? WHERE id=?").run(status, paid, inv.id);
+    ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 전이 시 채번 보장
+    d.exec("COMMIT");
+  } catch (e) {
+    try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
+    throw e;
+  }
   if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(req.user, inv.id); // 미발행→발행/입금완료 첫 전이 시 1회 알림
   res.redirect(`/invoices/${inv.id}?flash=saved`);
 });

@@ -43,13 +43,28 @@ const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, 
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
-const { isValidYmd, formatYmdShort, todayYmd } = require("../lib/date");
+const { isValidYmd, formatYmdShort, todayYmd, ddayLabel } = require("../lib/date");
 
 const router = express.Router();
 
 function cleanYmd(v) {
   const s = String(v || "").trim();
   return isValidYmd(s) ? s : null;
+}
+
+/** 프로젝트 저장 정보로 실결제자를 우선순위(제작사>소속사/레이블>아티스트)로 자동 선택. ensureClientsFromProject 후 호출. */
+function resolveAutoClientId(b) {
+  const candidates = [
+    [String(b.production_company || "").trim(), "제작사"],
+    [String(b.artist_company || "").trim(), "소속사/레이블"],
+    [String(b.artist || "").trim(), "아티스트"],
+  ];
+  for (const [name, kind] of candidates) {
+    if (!name) continue;
+    const c = db().prepare("SELECT id FROM clients WHERE name = ? AND kind = ?").get(name, kind);
+    if (c) return c.id;
+  }
+  return null;
 }
 
 function toArray(value) {
@@ -128,6 +143,7 @@ function projectListCard(p) {
   const amount = projectAmount(p)
     ? `<div class="text-sm font-medium">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
+  const dueLine = p.due_date ? `<div class="mt-0.5 text-xs text-muted">${esc(ddayLabel(p.due_date))}</div>` : "";
   return `
     <a href="/projects/${p.id}" class="card mb-3 flex items-center justify-between gap-4">
       <div class="min-w-0 flex-1">
@@ -137,6 +153,7 @@ function projectListCard(p) {
       </div>
       <div class="shrink-0 text-right">
         ${amount}
+        ${dueLine}
       </div>
     </a>`;
 }
@@ -170,6 +187,11 @@ router.post("/", requireEditor, (req, res) => {
       memo: String(b.memo || "").trim() || null,
     });
   ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
+  // 실결제자 미지정 시 우선순위(제작사>소속사/레이블>아티스트)로 자동 연결
+  if (!b.client_id) {
+    const autoId = resolveAutoClientId(b);
+    if (autoId) db().prepare("UPDATE projects SET client_id = ? WHERE id = ?").run(autoId, info.lastInsertRowid);
+  }
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
 });
 
@@ -272,7 +294,8 @@ function projectMetaLine(p) {
   const amount = projectAmount(p)
     ? `<div class="text-sm font-semibold">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
-  return { left: esc(left), amount, dueLine: "" };
+  const dueLine = p.due_date ? `<div class="mt-0.5 text-xs text-muted">${esc(ddayLabel(p.due_date))}</div>` : "";
+  return { left: esc(left), amount, dueLine };
 }
 
 /** 클라이언트(읽기 전용) 메타 카드. */
@@ -307,7 +330,10 @@ function projectMetaCard(p, err = "") {
 }
 
 function projectAmount(project) {
-  return Number(project.task_total || 0) || Number(project.rate || 0) || 0;
+  const task = Number(project.task_total || 0);
+  const sess = Number(project.session_amount_total || 0);
+  const combined = task + sess;
+  return combined || Number(project.rate || 0) || 0;
 }
 
 // ── 예전 수정 URL은 상세 편집 화면으로 정규화 ──
@@ -319,7 +345,7 @@ router.get("/:id/edit", requireEditor, (req, res) => {
 router.post("/:id", requireEditor, (req, res) => {
   const id = Number(req.params.id);
   const exists = db().prepare("SELECT id FROM projects WHERE id = ?").get(id);
-  if (!exists) return res.status(404).send("프로젝트를 찾을 수 없습니다.");
+  if (!exists) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
   const title = String(b.title || "").trim();
   if (!title) {
@@ -328,13 +354,14 @@ router.post("/:id", requireEditor, (req, res) => {
   }
   db()
     .prepare(
-      `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
+      `UPDATE projects SET title=@title, project_type=@project_type, artist=@artist, artist_company=@artist_company,
        production_company=@production_company, client_id=@client_id, manager_id=@manager_id,
        due_date=@due_date, memo=@memo WHERE id=@id`
     )
     .run({
       id,
       title,
+      project_type: normalizeProjectType(b.project_type),
       artist: String(b.artist || "").trim() || null,
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
@@ -348,23 +375,29 @@ router.post("/:id", requireEditor, (req, res) => {
 });
 
 router.post("/:id/tracks", requireEditor, (req, res) => {
-  try {
-    const track = createTrack(req.user, Number(req.params.id), req.body);
-    if (!track) return res.status(404).send("프로젝트를 찾을 수 없습니다.");
-    res.redirect(`/projects/${track.project_id}?tab=tracks&flash=added`);
-  } catch (e) {
-    if (e.message === "TRACK_TITLE_REQUIRED") return res.status(400).send("곡·콘텐츠 이름을 입력하세요.");
-    throw e;
+  const projectId = Number(req.params.id);
+  // titles(textarea 다건) 또는 title(단건 하위호환) 모두 지원
+  const raw = String(req.body.titles || req.body.title || "");
+  const titles = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!titles.length) {
+    return res.status(400).send(errorPage({ code: 400, title: "이름 필요", message: "곡·콘텐츠 이름을 입력하세요.", user: req.user }));
   }
+  let lastTrack = null;
+  for (const title of titles) {
+    const track = createTrack(req.user, projectId, { title });
+    if (!track) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+    lastTrack = track;
+  }
+  res.redirect(`/projects/${lastTrack.project_id}?tab=tracks&flash=added`);
 });
 
 router.post("/tracks/:trackId", requireEditor, (req, res) => {
   try {
     const track = updateTrack(req.user, Number(req.params.trackId), req.body);
-    if (!track) return res.status(404).send("곡·콘텐츠를 찾을 수 없습니다.");
+    if (!track) return res.status(404).send(errorPage({ code: 404, title: "곡·콘텐츠를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     res.redirect(`/projects/${track.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
-    if (e.message === "TRACK_TITLE_REQUIRED") return res.status(400).send("곡·콘텐츠 이름을 입력하세요.");
+    if (e.message === "TRACK_TITLE_REQUIRED") return res.status(400).send(errorPage({ code: 400, title: "이름 필요", message: "곡·콘텐츠 이름을 입력하세요.", user: req.user }));
     throw e;
   }
 });
@@ -372,11 +405,11 @@ router.post("/tracks/:trackId", requireEditor, (req, res) => {
 router.post("/tracks/:trackId/delete", requireEditor, (req, res) => {
   try {
     const result = deleteTrack(req.user, Number(req.params.trackId));
-    if (!result) return res.status(404).send("곡·콘텐츠를 찾을 수 없습니다.");
+    if (!result) return res.status(404).send(errorPage({ code: 404, title: "곡·콘텐츠를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     res.redirect(`/projects/${result.project_id}?tab=tracks&flash=deleted`);
   } catch (e) {
     if (e.message === "TRACK_HAS_INVOICED") {
-      return res.status(400).send("이미 청구된 작업이 있는 곡·콘텐츠는 삭제할 수 없습니다.");
+      return res.status(400).send(errorPage({ code: 400, title: "삭제 불가", message: "이미 청구된 작업이 있는 곡·콘텐츠는 삭제할 수 없습니다.", user: req.user }));
     }
     throw e;
   }
@@ -384,7 +417,7 @@ router.post("/tracks/:trackId/delete", requireEditor, (req, res) => {
 
 router.post("/tracks/:trackId/tasks", requireEditor, (req, res) => {
   const task = createTask(req.user, Number(req.params.trackId), req.body);
-  if (!task) return res.status(404).send("곡·콘텐츠를 찾을 수 없습니다.");
+  if (!task) return res.status(404).send(errorPage({ code: 404, title: "곡·콘텐츠를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const track = db().prepare("SELECT project_id FROM project_tracks WHERE id = ?").get(task.track_id);
   res.redirect(track ? `/projects/${track.project_id}?tab=tracks&flash=added&expand=${task.id}#task-${task.id}` : "/projects");
 });
@@ -392,10 +425,10 @@ router.post("/tracks/:trackId/tasks", requireEditor, (req, res) => {
 router.post("/tasks/:taskId", requireEditor, (req, res) => {
   try {
     const task = updateTask(req.user, Number(req.params.taskId), req.body);
-    if (!task) return res.status(404).send("작업을 찾을 수 없습니다.");
+    if (!task) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
-    if (e.message === "TASK_LOCKED") return res.status(400).send("이미 청구된 작업은 수정할 수 없습니다.");
+    if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "수정 불가", message: "이미 청구된 작업은 수정할 수 없습니다.", user: req.user }));
     throw e;
   }
 });
@@ -403,10 +436,10 @@ router.post("/tasks/:taskId", requireEditor, (req, res) => {
 router.post("/tasks/:taskId/delete", requireEditor, (req, res) => {
   try {
     const result = deleteTask(req.user, Number(req.params.taskId));
-    if (!result) return res.status(404).send("작업을 찾을 수 없습니다.");
+    if (!result) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     res.redirect(`/projects/${result.project_id}?tab=tracks&flash=deleted`);
   } catch (e) {
-    if (e.message === "TASK_LOCKED") return res.status(400).send("이미 청구된 작업은 삭제할 수 없습니다.");
+    if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "삭제 불가", message: "이미 청구된 작업은 삭제할 수 없습니다.", user: req.user }));
     throw e;
   }
 });
@@ -421,11 +454,11 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
     });
-    if (!inv) return res.status(404).send("청구할 프로젝트를 찾을 수 없습니다.");
+    if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     res.redirect(`/invoices/${inv.id}?flash=created`);
   } catch (e) {
     const message = e.message === "TASK_IDS_REQUIRED" ? "청구할 작업·세션을 선택하세요." : "청구 가능한 작업·세션만 선택할 수 있습니다.";
-    return res.status(400).send(message);
+    return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message, user: req.user }));
   }
 });
 
@@ -472,6 +505,10 @@ function projectForm(p = {}, err = "") {
         ${managerSelect(p.manager_id)}
       </div>
       <div>
+        <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
+        <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
+      </div>
+      <div>
         <label class="label">메모</label>
         <textarea class="input" name="memo" rows="3" placeholder="비고">${esc(p.memo || "")}</textarea>
       </div>
@@ -514,6 +551,19 @@ function projectEditForm(p = {}, err = "") {
       <div>
         <label class="label">담당자</label>
         ${managerSelect(p.manager_id)}
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
+          <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
+        </div>
+        <div>
+          <label class="label">프로젝트 유형</label>
+          <select name="project_type" class="input">
+            <option value="session" ${p.project_type === "session" ? "selected" : ""}>세션 — 클라이언트 방문·예약</option>
+            <option value="task" ${(p.project_type === "task" || !p.project_type) ? "selected" : ""}>작업 — 예약 없이 후반작업만</option>
+          </select>
+        </div>
       </div>
       <div>
         <label class="label">메모</label>
@@ -573,9 +623,10 @@ function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId =
 function trackCreateForm(project) {
   return `
     <form method="post" action="/projects/${project.id}/tracks" class="rounded-lg border border-border bg-bg p-3">
+      <label class="label mb-1 text-xs">곡·콘텐츠 이름 <span class="font-normal text-muted">— 여러 곡은 줄바꿈으로 구분</span></label>
       <div class="flex gap-2">
-        <input class="input flex-1 py-1.5 text-sm" name="title" placeholder="곡·콘텐츠 이름(곡명 또는 영상 콘텐츠명)" required />
-        <button class="btn-primary shrink-0 px-4 py-1.5 text-sm" type="submit">곡·콘텐츠 추가</button>
+        <textarea class="input flex-1 py-1.5 text-sm" name="titles" rows="2" placeholder="곡명 또는 콘텐츠명&#10;한 줄에 하나씩 입력"></textarea>
+        <button class="btn-primary shrink-0 self-end px-4 py-1.5 text-sm" type="submit">추가</button>
       </div>
     </form>`;
 }

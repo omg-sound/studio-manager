@@ -324,6 +324,32 @@ function distinctProjectFields() {
   return { artists: col("artist"), companies: col("artist_company"), productions: col("production_company") };
 }
 
+/** 프로젝트 ID 배열의 녹음 세션 금액 합계 맵(단가표 산정, 취소 제외). 내부 헬퍼. */
+function sessionAmountsByProject(projectIds) {
+  if (!projectIds || !projectIds.length) return {};
+  const placeholders = projectIds.map(() => "?").join(",");
+  const rows = db()
+    .prepare(
+      `SELECT s.project_id, s.start_time, s.end_time,
+              ri.base_minutes, ri.base_price, ri.extra_minutes, ri.extra_price
+       FROM sessions s
+       JOIN rate_items ri ON ri.id = s.rate_item_id
+       WHERE s.project_id IN (${placeholders})
+         AND s.session_type = '녹음'
+         AND s.rate_item_id IS NOT NULL
+         AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+         AND s.status <> '취소'`
+    )
+    .all(...projectIds);
+  const sums = {};
+  for (const row of rows) {
+    const mins = minutesBetween(row.start_time, row.end_time);
+    if (mins <= 0) continue;
+    sums[row.project_id] = (sums[row.project_id] || 0) + computeRatePrice(row, mins);
+  }
+  return sums;
+}
+
 function listProjects(_user, { service, clientId, q } = {}) {
   const where = [];
   const params = {};
@@ -356,7 +382,10 @@ function listProjects(_user, { service, clientId, q } = {}) {
       CASE WHEN p.due_date IS NULL OR p.due_date = '' THEN 1 ELSE 0 END,
       p.due_date ASC,
       p.created_at DESC`;
-  return db().prepare(sql).all(params);
+  const rows = db().prepare(sql).all(params);
+  if (!rows.length) return rows;
+  const sessionAmounts = sessionAmountsByProject(rows.map((r) => r.id));
+  return rows.map((r) => ({ ...r, session_amount_total: sessionAmounts[r.id] || 0 }));
 }
 
 /** 단건 조회 + 권한 검사. 권한 없으면 null(클라이언트가 타 프로젝트 접근 시도 시 404 처리용). */
@@ -380,7 +409,9 @@ function getProjectForUser(user, id) {
        WHERE p.id = ?`
     )
     .get(id);
-  return row || null;
+  if (!row) return null;
+  const sessionAmounts = sessionAmountsByProject([row.id]);
+  return { ...row, session_amount_total: sessionAmounts[row.id] || 0 };
 }
 
 // ── 트랙/콘텐츠 + 모듈형 작업(Task) ──
