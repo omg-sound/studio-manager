@@ -45,6 +45,8 @@
   채번 `INV-YYYYMM-###`, VAT=공급가 10%, 돈=정수(원).
 - 청구 탭 **'청구 대기'**: 완료 녹음 세션(예상 청구액, `청구 확정`→track_task 전환)·완료 미청구 작업을 모아 청구서로.
 - 대시보드: 미수금·이번 달 발행·연체(치프/대표만).
+- **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
+  공급자=스튜디오 세금정보(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
 
 ### 클라이언트
 - 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록.
@@ -56,7 +58,7 @@
 ### 관리(/settings) — 3탭
 - **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계)·외주 작업자(로그인 없이 직접 추가). 편집=추가/삭제(토글 폐기).
 - **컨텐츠**: 단가표(녹음 종류)·**작업 종류 카탈로그**(곡·콘텐츠 후반작업 종류 + 기본단가·과금·분류·빠른추가). 모두 삭제-only.
-- **환경설정**: 스튜디오 캘린더(겹침 검사·자동 연동 대상)·예약 일정 기본 장소.
+- **환경설정**: 스튜디오 캘린더(겹침 검사·자동 연동 대상)·예약 일정 기본 장소·**공급자(스튜디오) 세금정보**(거래명세서 PDF용).
 
 ### 배포 · 운영
 - Render Blueprint(web + cron) + Disk. 일일 백업(`VACUUM INTO`·14일 보존)·연체 스캔 cron(`/internal/cron/daily`, `BACKUP_TOKEN`).
@@ -147,7 +149,7 @@
   rate_item_id?→rate_items SET NULL, gcal_event_id?)` — 스튜디오 일정.
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   `rate_item_id`는 녹음 세션 시간제 자동 산정용 단가표 연결. `gcal_event_id`는 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적).
-- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소).
+- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문).
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시).
 
 ## 자료 전달 아키텍처 (플레이북1 §2.3·§4.3)
@@ -209,8 +211,8 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 
 ## 다음 단계 TODO
 
-1. (선택) **청구서 PDF/거래명세서 렌더** — resvg + pdf-lib, 한글 TTF 번들, PII 게이트(`requireInvoice`·no-store). 계획 보존: `.omc/plans/invoice-pdf-plan.md`.
-2. (선택) 연체 cron 알림 발송 — 현재 집계·로그·JSON만 → 메일/웹훅(Gmail API 또는 `ALERT_WEBHOOK`). 자료/청구 알림도 동일 채널 재사용.
-3. (선택) 월 캘린더 그리드 뷰(현재는 목록), 대시보드 임박 세션 카드.
-4. (선택) 구글 캘린더 역방향 동기화(캘린더에서 삭제→앱 반영) — 보류 중.
-5. Drive 실연동 검증.
+1. (선택) 연체 cron 알림 발송 — 현재 집계·로그·JSON만 → 메일/웹훅(Gmail API 또는 `ALERT_WEBHOOK`). 자료/청구 알림도 동일 채널 재사용.
+2. (선택) 월 캘린더 그리드 뷰(현재는 목록), 대시보드 임박 세션 카드.
+3. (선택) 구글 캘린더 역방향 동기화(캘린더에서 삭제→앱 반영) — 보류 중.
+4. Drive 실연동 검증.
+5. **거래명세서 PDF 프로덕션 확인** — Render Linux에서 `@resvg/resvg-js` 네이티브 prebuilt 설치·렌더 동작 확인(로컬 검증 완료).
