@@ -5,7 +5,7 @@ const { db } = require("../db");
 const { requireChief } = require("../auth");
 const { CLIENT_KINDS, normalizeClientKind } = require("../config");
 const { listClients, clientKindCounts, getClient, listProjectsForClient, listInvoicesForClientEntity } = require("../data");
-const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -21,14 +21,11 @@ router.get("/", (req, res) => {
   const counts = clientKindCounts();
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
-  const tab = (label, kind, count) => {
-    const active = activeKind === kind;
-    return `<a href="/clients${kind ? "?kind=" + encodeURIComponent(kind) : ""}" class="badge ${active ? "bg-primary text-primary-fg" : "bg-surface border border-border text-muted"}">${esc(label)} ${count}</a>`;
-  };
-  const tabBar = `<div class="mb-4 flex flex-wrap gap-2">
-      ${tab("전체목록", "", total)}
-      ${TAB_KINDS.map((k) => tab(k, k, counts[k] || 0)).join("")}
-    </div>`;
+  const kindChips = filterChips({
+    chips: [{ key: "", label: `전체목록 ${total}` }, ...TAB_KINDS.map((k) => ({ key: k, label: `${k} ${counts[k] || 0}` }))],
+    activeKey: activeKind,
+    hrefFn: (key) => (key ? "/clients?kind=" + encodeURIComponent(key) : "/clients"),
+  });
   const list = rows.length
     ? rows
         .map((c) => {
@@ -38,7 +35,7 @@ router.get("/", (req, res) => {
         <div class="flex items-start justify-between gap-3">
           <a href="/clients/${c.id}" class="min-w-0 hover:opacity-80">
             <div class="flex items-center gap-2">
-              <span class="badge bg-bg text-muted">${esc(c.kind)}</span>
+              <span class="badge-neutral">${esc(c.kind)}</span>
               <span class="font-semibold">${esc(c.name)}</span>
             </div>
             ${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}
@@ -56,7 +53,7 @@ router.get("/", (req, res) => {
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "클라이언트", desc: "아티스트 · 소속사/레이블 · 제작사 (프로젝트에서 자동 등록). 실결제자가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
-    ${tabBar}
+    ${kindChips}
     ${list}`;
   res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body }));
 });
@@ -133,9 +130,11 @@ router.get("/:id", (req, res) => {
   const tab = req.query.tab === "invoices" ? "invoices" : "projects";
   const projects = listProjectsForClient(c);
   const invoices = listInvoicesForClientEntity(c);
-  const tabLink = (key, label, n) =>
-    `<a href="/clients/${c.id}?tab=${key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${tab === key ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${label} ${n}</a>`;
-  const tabBar = `<div class="mb-3 mt-3 flex gap-1 overflow-x-auto border-b border-border">${tabLink("projects", "프로젝트", projects.length)}${tabLink("invoices", "청구·결제", invoices.length)}</div>`;
+  const tabBarHtml = tabBar({
+    tabs: [{ key: "projects", label: `프로젝트 ${projects.length}` }, { key: "invoices", label: `청구·결제 ${invoices.length}` }],
+    activeKey: tab,
+    hrefFn: (key) => `/clients/${c.id}?tab=${key}`,
+  });
 
   let content;
   if (tab === "invoices") {
@@ -161,18 +160,17 @@ router.get("/:id", (req, res) => {
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: esc(c.name), desc: c.kind, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
-    ${tabBar}
+    ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
 });
 
 /** 클라이언트 상세용 프로젝트 카드(제목·유형·메타 → 프로젝트 상세 링크). */
 function clientProjectCard(p) {
-  const typeLabel = p.project_type === "session" ? "세션" : p.project_type === "task" ? "작업" : "";
   const meta = [p.artist, p.artist_company, p.production_company].filter(Boolean).join(" · ");
   return `<a href="/projects/${p.id}" class="card flex items-center justify-between gap-3 hover:opacity-80">
     <div class="min-w-0">
-      <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(p.title)}</span>${typeLabel ? `<span class="badge bg-bg text-muted">${typeLabel}</span>` : ""}</div>
+      <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(p.title)}</span>${projectTypeBadge(p.project_type)}</div>
       ${meta ? `<div class="mt-0.5 truncate text-xs text-muted">${esc(meta)}</div>` : ""}
     </div>
     <span class="shrink-0 text-xs text-muted">열기 ›</span>
