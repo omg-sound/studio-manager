@@ -52,7 +52,7 @@
   **녹음 세션은 곡·콘텐츠/버튼 없이 직접 청구**: 세션 생성 즉시 예상 청구액이 청구 탭에 자동 반영, 선택 시 `invoice_items.session_id` 스냅샷으로 청구(곡·콘텐츠 안 거침). 청구되면 세션 수정·삭제 잠금(`SESSION_INVOICED`), 인보이스 삭제 시 자동 미청구 복원. 관련: `listBillableSessionsForProject`·`unbilledInvoiceForm`·`createInvoiceFromTasks`(task+session 혼합)·`isSessionInvoiced`.
 - 대시보드: 미수금·이번 달 발행·연체(치프/대표만).
 - **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
-  레이아웃: 좌측 '내역서' 타이틀 + 공급자 헤더·**로고**(우측), 청구처 박스, **품목|금액** 표(수량·단가 생략 — 곡/세션 단위 고정), 소계/VAT/합계, **납부하실금액** 강조.
+  레이아웃: 좌측 **제목**(거래명세서/내역서/견적서 — 발행 시 `?type=`로 선택, `DOC_TYPES`) + 공급자 헤더·**로고**(우측), 청구처 박스, **품목|금액** 표(수량·단가 생략 — 곡/세션 단위 고정), 소계/VAT/합계, **납부하실금액** 강조(견적서는 '견적 금액'·전용 푸터).
   공급자=스튜디오 세금정보·로고(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
 
 ### 클라이언트

@@ -63,11 +63,17 @@ function rect(x, y, w, h, { fill = "none", stroke = "#cfcabb", sw = 1 } = {}) {
 }
 
 /** 내역서(거래명세서) A4 SVG(1240×1754 px, ~150dpi). 좌측 타이틀·공급자 헤더 + 로고(우측), 청구처 박스, 품목|금액 표, 소계/VAT/합계, 납부하실금액 강조. */
-function buildSvg({ studio, client, invoice, items, logo }) {
+function buildSvg({ studio, client, invoice, items, logo, docType }) {
   const W = 1240;
   const H = 1754;
   const M = 80;
   const right = W - M;
+  const title = docType || "거래명세서";
+  const isQuote = title === "견적서";
+  const payLabel = isQuote ? "견적 금액" : "납부하실금액";
+  const footerText = isQuote
+    ? "본 견적서는 참고용이며, 실제 청구 시 금액이 변동될 수 있습니다."
+    : `본 ${title}는 참고용이며, 세금계산서는 별도(국세청 홈택스)로 발행됩니다.`;
 
   const supply = Math.max(0, (invoice.amount || 0) - (invoice.tax_amount || 0));
   const tax = invoice.tax_amount || 0;
@@ -81,7 +87,7 @@ function buildSvg({ studio, client, invoice, items, logo }) {
   svg += `<rect width="${W}" height="${H}" fill="#ffffff" />`;
 
   // 타이틀(좌측)
-  svg += text(M, 132, "내역서", { size: 52, weight: 700 });
+  svg += text(M, 132, title, { size: 52, weight: 700 });
 
   // 공급자 헤더(좌측) + 로고(우측 상단)
   svg += text(M, 210, studio.studio_biz_name || "공급자", { size: 27, weight: 700 });
@@ -107,7 +113,7 @@ function buildSvg({ studio, client, invoice, items, logo }) {
   svg += text(M + 26, boxY + 42, "청구처", { size: 17, color: "#8a8678" });
   svg += text(M + 26, boxY + 88, truncate(client.name || "—", 28), { size: 26, weight: 700 });
   const metaLabelX = right - 320;
-  svg += text(metaLabelX, boxY + 42, "내역서 번호", { size: 17, color: "#8a8678" });
+  svg += text(metaLabelX, boxY + 42, `${title} 번호`, { size: 17, color: "#8a8678" });
   svg += text(right - 26, boxY + 42, invoice.invoice_number || "—", { size: 19, weight: 600, anchor: "end" });
   svg += text(metaLabelX, boxY + 90, "발행됨", { size: 17, color: "#8a8678" });
   svg += text(right - 26, boxY + 90, invoice.issued_date || "—", { size: 19, weight: 500, anchor: "end" });
@@ -149,11 +155,11 @@ function buildSvg({ studio, client, invoice, items, logo }) {
   // 납부하실금액(강조)
   sy += 24;
   svg += line(sumLabelX, sy - 34, right, sy - 34, "#cfcabb", 1.5);
-  svg += text(sumLabelX, sy + 14, "납부하실금액", { size: 27, weight: 700 });
+  svg += text(sumLabelX, sy + 14, payLabel, { size: 27, weight: 700 });
   svg += text(right - 18, sy + 14, won(grand), { size: 31, weight: 700, anchor: "end" });
 
   // 푸터
-  svg += text(M, H - 64, "본 내역서는 참고용이며, 세금계산서는 별도(국세청 홈택스)로 발행됩니다.", { size: 15, color: "#9c9688" });
+  svg += text(M, H - 64, footerText, { size: 15, color: "#9c9688" });
 
   svg += `</svg>`;
   return svg;
@@ -179,7 +185,7 @@ async function renderInvoicePdf(data) {
   const page = doc.addPage(A4);
   const img = await doc.embedPng(png);
   page.drawImage(img, { x: 0, y: 0, width: A4[0], height: A4[1] });
-  doc.setTitle(`거래명세서 ${data.invoice.invoice_number || ""}`.trim());
+  doc.setTitle(`${data.docType || "거래명세서"} ${data.invoice.invoice_number || ""}`.trim());
   return Buffer.from(await doc.save());
 }
 

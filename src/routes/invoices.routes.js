@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireInvoice, canInvoice } = require("../auth");
-const { config, INVOICE_STATUSES, normalizeInvoiceStatus } = require("../config");
+const { config, INVOICE_STATUSES, normalizeInvoiceStatus, normalizeDocType, DOC_TYPES } = require("../config");
 const {
   clientOptions,
   listInvoices,
@@ -197,7 +197,10 @@ router.get("/:id", requireInvoice, (req, res) => {
       ${row("마감일", inv.due_date ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}` : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
     </div>
-    ${(inv.status === "발행" || inv.status === "입금완료") ? `<div class="mt-3"><a href="/invoices/${inv.id}/statement.pdf" class="btn-ghost btn-sm" target="_blank" rel="noopener">거래명세서 PDF 보기</a></div>` : ""}
+    ${(inv.status === "발행" || inv.status === "입금완료") ? `<div class="mt-3 flex flex-wrap items-center gap-1.5">
+        <span class="text-xs text-muted">PDF 발행:</span>
+        ${DOC_TYPES.map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
+      </div>` : ""}
     ${invoiceItemsCard(items)}
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
     ${adminControls}`;
@@ -215,7 +218,7 @@ router.get("/:id/statement.pdf", requireInvoice, asyncHandler(async (req, res) =
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
   const client = inv.client_id ? getClient(inv.client_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
-  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items });
+  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType: normalizeDocType(req.query.type) });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
   res.setHeader("Cache-Control", "private, no-store");

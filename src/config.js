@@ -110,6 +110,8 @@ const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
 const CLIENT_KINDS = ["아티스트", "소속사/레이블", "제작사", "기타"];
 const DELIVERABLE_KINDS = ["녹음본", "튠본", "믹스", "스템", "마스터", "레퍼런스", "기타"];
 const INVOICE_STATUSES = ["미발행", "발행", "입금완료"];
+// 청구 PDF 문서 제목 — 발행 시 골라서(내용 동일, 제목·일부 문구만 분기).
+const DOC_TYPES = ["거래명세서", "내역서", "견적서"];
 const TRACK_CONTENT_TYPES = ["Music", "Video_Post"];
 const TRACK_CONTENT_TYPE_LABELS = {
   Music: "음악",
@@ -210,6 +212,8 @@ module.exports = {
   CLIENT_KINDS,
   DELIVERABLE_KINDS,
   INVOICE_STATUSES,
+  DOC_TYPES,
+  normalizeDocType: (v) => normalize(v, DOC_TYPES, "거래명세서"),
   INVOICE_STATUS_BADGE,
   TRACK_CONTENT_TYPES,
   TRACK_CONTENT_TYPE_LABELS,
