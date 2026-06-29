@@ -299,3 +299,14 @@
     } catch (err) {}
   });
 })();
+
+// 클라이언트 폼: 아티스트(개인)는 사업자등록번호·대표자·주소가 없으므로 분류=아티스트면 세금정보 숨김.
+(function () {
+  "use strict";
+  var kindSel = document.querySelector("[data-client-kind]");
+  var tax = document.querySelector("[data-client-tax]");
+  if (!kindSel || !tax) return;
+  function sync() { tax.hidden = kindSel.value === "아티스트"; }
+  kindSel.addEventListener("change", sync);
+  sync();
+})();

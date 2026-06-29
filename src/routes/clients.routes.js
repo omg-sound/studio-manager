@@ -69,17 +69,19 @@ router.post("/", (req, res) => {
   const b = req.body;
   const name = String(b.name || "").trim();
   if (!name) return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }) }));
+  const kind = normalizeClientKind(b.kind);
+  const artist = kind === "아티스트"; // 아티스트(개인)는 사업자등록번호·대표자·주소가 없음
   const info = db()
     .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, address) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@address)")
     .run({
       name,
-      kind: normalizeClientKind(b.kind),
+      kind,
       phone: String(b.phone || "").trim() || null,
       email: String(b.email || "").trim().toLowerCase() || null,
       memo: String(b.memo || "").trim() || null,
-      biz_no: String(b.biz_no || "").trim() || null,
-      owner_name: String(b.owner_name || "").trim() || null,
-      address: String(b.address || "").trim() || null,
+      biz_no: artist ? null : String(b.biz_no || "").trim() || null,
+      owner_name: artist ? null : String(b.owner_name || "").trim() || null,
+      address: artist ? null : String(b.address || "").trim() || null,
     });
   res.redirect("/clients?flash=created#c" + info.lastInsertRowid);
 });
@@ -98,18 +100,20 @@ router.post("/:id", (req, res) => {
   const b = req.body;
   const name = String(b.name || "").trim();
   if (!name) return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
+  const kind = normalizeClientKind(b.kind);
+  const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
   db()
     .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, address=@address WHERE id=@id")
     .run({
       id,
       name,
-      kind: normalizeClientKind(b.kind),
+      kind,
       phone: String(b.phone || "").trim() || null,
       email: String(b.email || "").trim().toLowerCase() || null,
       memo: String(b.memo || "").trim() || null,
-      biz_no: String(b.biz_no || "").trim() || null,
-      owner_name: String(b.owner_name || "").trim() || null,
-      address: String(b.address || "").trim() || null,
+      biz_no: artist ? null : String(b.biz_no || "").trim() || null,
+      owner_name: artist ? null : String(b.owner_name || "").trim() || null,
+      address: artist ? null : String(b.address || "").trim() || null,
     });
   res.redirect("/clients?flash=saved#c" + id);
 });
@@ -131,15 +135,17 @@ function clientForm(c = {}, isEdit = false) {
       <div><label class="label">상호(이름)</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
       <div>
         <label class="label">분류</label>
-        <select name="kind" class="input">
+        <select name="kind" class="input" data-client-kind>
           ${CLIENT_KINDS.map((k) => `<option ${k === (c.kind || CLIENT_KINDS[0]) ? "selected" : ""}>${esc(k)}</option>`).join("")}
         </select>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
-        <div><label class="label">대표자</label><input class="input" name="owner_name" value="${esc(c.owner_name || "")}" /></div>
+      <div data-client-tax class="space-y-4">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
+          <div><label class="label">대표자</label><input class="input" name="owner_name" value="${esc(c.owner_name || "")}" /></div>
+        </div>
+        <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
       </div>
-      <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>
         <div><label class="label">전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" /></div>
