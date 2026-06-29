@@ -102,7 +102,8 @@ function getWorker(id) {
   return db().prepare("SELECT * FROM project_managers WHERE id = ? AND user_id IS NULL").get(id) || null;
 }
 
-/** 외주 작업자가 담당한 작업(track_tasks, engineer_name 매칭) + 프로젝트/트랙 — 작업 히스토리·정산. */
+/** 외주 작업자가 담당한 작업(track_tasks) + 프로젝트/트랙 — 작업 히스토리·정산.
+ *  매칭: engineer_id 우선(rename 내성), 폴백 (engineer_id IS NULL AND engineer_name = 이름)(레거시·미매칭분). */
 function listTasksForWorker(worker) {
   if (!worker) return [];
   return db()
@@ -111,10 +112,10 @@ function listTasksForWorker(worker) {
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        JOIN projects p ON p.id = tr.project_id
-       WHERE t.engineer_name = ?
+       WHERE t.engineer_id = @id OR (t.engineer_id IS NULL AND t.engineer_name = @name)
        ORDER BY t.created_at DESC, t.id DESC`
     )
-    .all(worker.name);
+    .all({ id: worker.id, name: worker.name });
 }
 
 /** 외주 작업자 작업의 지급 처리/해제(정산). 작업자 소속 확인 후 호출. */
@@ -534,6 +535,24 @@ function getTaskForUser(user, taskId) {
   return task || null;
 }
 
+/**
+ * 작업 폼의 engineer_id(담당자 마스터 id) → { engineer_id, engineer_name } 결정.
+ *  - 숫자 id면 그 manager로 id+name 동기 기록(표시·정산 매칭·레거시 호환).
+ *  - 'legacy'면 제출된 engineer_name(레거시 자유입력) 보존(engineer_id는 NULL → 이름 폴백 정산).
+ *  - 그 외(빈 값·미지정)면 둘 다 NULL.
+ */
+function resolveTaskEngineer(input) {
+  const raw = String(input.engineer_id == null ? "" : input.engineer_id).trim();
+  if (/^\d+$/.test(raw)) {
+    const m = db().prepare("SELECT id, name FROM project_managers WHERE id = ?").get(Number(raw));
+    if (m) return { engineer_id: m.id, engineer_name: m.name };
+  }
+  if (raw === "legacy") {
+    return { engineer_id: null, engineer_name: String(input.engineer_name || "").trim() || null };
+  }
+  return { engineer_id: null, engineer_name: null };
+}
+
 /** 작업 수정. 이미 청구된 작업은 거부(라인아이템 스냅샷이 잠금). total_price는 재계산. */
 function updateTask(user, taskId, input = {}) {
   const task = getTaskForUser(user, taskId);
@@ -541,19 +560,22 @@ function updateTask(user, taskId, input = {}) {
   if (task.is_invoiced) throw new Error("TASK_LOCKED");
   // 후반작업은 전부 트랙/콘텐츠 고정(곡 1건당) — billing_type='Fixed_Per_Track'·quantity=1 고정, 금액(unit_price)만 직접 입력.
   const unitPrice = parseWon(input.unit_price);
+  const eng = resolveTaskEngineer(input);
   db()
     .prepare(
       `UPDATE track_tasks SET
          task_type = @task_type, billing_type = 'Fixed_Per_Track', quantity = 1,
          unit_price = @unit_price, total_price = @unit_price, engineer_name = @engineer_name,
-         status = @status
+         engineer_id = @engineer_id, worker_rate = @worker_rate, status = @status
        WHERE id = @id`
     )
     .run({
       id: task.id,
       task_type: normalizeTaskTypeDb(input.task_type),
       unit_price: unitPrice,
-      engineer_name: String(input.engineer_name || "").trim() || null,
+      engineer_name: eng.engineer_name,
+      engineer_id: eng.engineer_id,
+      worker_rate: parseWon(input.worker_rate),
       status: normalizeTaskStatus(input.status),
     });
   return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
@@ -586,17 +608,20 @@ function createTask(user, trackId, input = {}) {
   // 후반작업은 전부 트랙/콘텐츠 고정 — billing_type·quantity 고정, 금액(unit_price=total_price)만 직접 입력.
   const unitPrice = parseWon(input.unit_price);
   const taskType = normalizeTaskTypeDb(input.task_type);
+  const eng = resolveTaskEngineer(input);
   const info = db()
     .prepare(
       `INSERT INTO track_tasks
-       (track_id, task_type, billing_type, quantity, unit_price, total_price, engineer_name, status, is_invoiced)
-       VALUES (@track_id, @task_type, 'Fixed_Per_Track', 1, @unit_price, @unit_price, @engineer_name, @status, 0)`
+       (track_id, task_type, billing_type, quantity, unit_price, total_price, engineer_name, engineer_id, worker_rate, status, is_invoiced)
+       VALUES (@track_id, @task_type, 'Fixed_Per_Track', 1, @unit_price, @unit_price, @engineer_name, @engineer_id, @worker_rate, @status, 0)`
     )
     .run({
       track_id: track.id,
       task_type: taskType,
       unit_price: unitPrice,
-      engineer_name: String(input.engineer_name || "").trim() || null,
+      engineer_name: eng.engineer_name,
+      engineer_id: eng.engineer_id,
+      worker_rate: parseWon(input.worker_rate),
       status: normalizeTaskStatus(input.status),
     });
   return db().prepare("SELECT * FROM track_tasks WHERE id = ?").get(info.lastInsertRowid);

@@ -149,7 +149,8 @@ function sessionBookingFields(s, managers, rateItems = [], rooms) {
          <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
           ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
          ${engineerField}
-       </div>`;
+       </div>
+       <p class="mt-1 text-xs text-muted">청구하려면 <b>세션 종류=녹음</b> + <b>녹음 종류(단가표)</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)</p>`;
   return `
     <div class="grid gap-2 sm:grid-cols-3">
       <div><label class="label mb-0.5 text-xs">날짜</label>

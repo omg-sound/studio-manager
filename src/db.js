@@ -286,6 +286,8 @@ function init() {
   addColumn("track_tasks", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 세션에서 생성된 청구 작업 추적(레거시 전환분)
   addColumn("track_tasks", "worker_paid", "INTEGER NOT NULL DEFAULT 0"); // 외주 작업자 지급(정산) 여부
   addColumn("track_tasks", "worker_paid_date", "TEXT"); // 지급 처리일(YYYY-MM-DD)
+  addColumn("track_tasks", "worker_rate", "INTEGER NOT NULL DEFAULT 0"); // 외주 지급단가(원). 정산 합계 기준(고객청구 total_price와 별개, 미입력=0)
+  addColumn("track_tasks", "engineer_id", "INTEGER"); // 담당 엔지니어(project_managers 참조 의미·FK 없음). rename 내성 정산 매칭 키
   addColumn("invoice_items", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 녹음 세션 직접 청구 라인(곡·콘텐츠 안 거침). 청구 여부 = 이 컬럼 역참조
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
@@ -334,6 +336,21 @@ function init() {
          AND NOT EXISTS (SELECT 1 FROM project_managers pm WHERE pm.user_id = u.id)`
     ).run();
     setState("house_engineer_backfill_v1", "done");
+  }
+  // 기존 작업의 engineer_name을 담당자 마스터(project_managers.name)와 매칭해 engineer_id 1회 백필.
+  // 동명이인 방지: 정확히 1건 매칭일 때만 채운다(0건·2건↑은 NULL 유지 → 정산은 이름 폴백으로 동작).
+  // house_engineer_backfill 뒤에 둬서 하우스 엔지니어 이름도 매칭 대상에 포함된다.
+  if (!getState("track_engineer_id_backfill_v1")) {
+    d.exec(`
+      UPDATE track_tasks
+      SET engineer_id = (
+        SELECT pm.id FROM project_managers pm WHERE pm.name = track_tasks.engineer_name
+      )
+      WHERE engineer_id IS NULL
+        AND engineer_name IS NOT NULL AND TRIM(engineer_name) <> ''
+        AND (SELECT COUNT(*) FROM project_managers pm2 WHERE pm2.name = track_tasks.engineer_name) = 1
+    `);
+    setState("track_engineer_id_backfill_v1", "done");
   }
 
   // ── 후속 단계 테이블 자리(스키마만; 아직 미사용) ──

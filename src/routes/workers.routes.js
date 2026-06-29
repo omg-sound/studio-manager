@@ -79,13 +79,16 @@ router.get("/:id", (req, res) => {
   if (!tasks.length) {
     content = emptyState("담당한 작업이 없습니다.", { card: true });
   } else if (tab === "payout") {
-    const total = tasks.reduce((s, t) => s + (t.total_price || 0), 0);
-    const paid = tasks.filter((t) => t.worker_paid).reduce((s, t) => s + (t.total_price || 0), 0);
-    const unpaid = total - paid;
+    // 정산 합계는 외주 지급단가(worker_rate) 기준. 고객청구(total_price)는 마진 가시화용 참고 표기.
+    const payTotal = tasks.reduce((s, t) => s + (t.worker_rate || 0), 0);
+    const paid = tasks.filter((t) => t.worker_paid).reduce((s, t) => s + (t.worker_rate || 0), 0);
+    const unpaid = payTotal - paid;
+    const clientTotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0);
     const summary = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
-        <span>작업 합계 <b class="text-fg">${formatKRW(total)}</b></span>
+        <span>지급 합계 <b class="text-fg">${formatKRW(payTotal)}</b></span>
         <span>지급완료 <b class="text-success">${formatKRW(paid)}</b></span>
         <span>미지급 <b class="${unpaid > 0 ? "text-danger" : "text-fg"}">${formatKRW(unpaid)}</b></span>
+        <span class="text-muted">고객청구 ${formatKRW(clientTotal)} (참고)</span>
       </div>`;
     const rows = tasks
       .map(
@@ -96,7 +99,8 @@ router.get("/:id", (req, res) => {
             ${t.worker_paid ? `<span class="badge ml-1 bg-success/10 text-success">지급완료 ${esc(t.worker_paid_date || "")}</span>` : `<span class="badge ml-1 bg-warning/10 text-warning">미지급</span>`}
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <span class="text-sm font-semibold">${formatKRW(t.total_price)}</span>
+            <span class="text-sm font-semibold">${formatKRW(t.worker_rate || 0)}</span>
+            ${t.total_price ? `<span class="text-xs text-muted">/ 고객 ${formatKRW(t.total_price)}</span>` : ""}
             <form method="post" action="/workers/${w.id}/payout/${t.id}">
               <button class="btn-ghost btn-xs ${t.worker_paid ? "text-muted" : "text-primary"}" type="submit">${t.worker_paid ? "지급 취소" : "지급 처리"}</button>
             </form>
@@ -133,7 +137,10 @@ router.get("/:id", (req, res) => {
 router.post("/:id/payout/:taskId", (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
-  const task = db().prepare("SELECT id, worker_paid FROM track_tasks WHERE id = ? AND engineer_name = ?").get(Number(req.params.taskId), w.name);
+  // 소속 확인: engineer_id 우선(rename 내성), 폴백 (engineer_id IS NULL AND engineer_name = 이름)(레거시·미매칭분).
+  const task = db()
+    .prepare("SELECT id, worker_paid FROM track_tasks WHERE id = ? AND (engineer_id = ? OR (engineer_id IS NULL AND engineer_name = ?))")
+    .get(Number(req.params.taskId), w.id, w.name);
   if (task) setTaskPayout(task.id, !task.worker_paid);
   res.redirect(`/workers/${w.id}?tab=payout`);
 });

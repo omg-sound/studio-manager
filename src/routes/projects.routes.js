@@ -713,15 +713,19 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
     </details>`;
 }
 
-/** 작업 엔지니어 선택지(담당자 마스터). 현재값이 목록에 없으면 보존용 옵션으로 추가. */
-function engineerSelect(managers, current) {
-  const names = managers.map((m) => m.name);
+/**
+ * 담당 엔지니어 select 옵션(담당자 마스터, value=manager.id). 선택 기준은 task.engineer_id.
+ * 레거시(engineer_id 없이 engineer_name만 있는) 작업은 value='legacy' 보존 옵션으로 표시 — 저장 시 이름이 유지된다.
+ */
+function engineerSelect(managers, task) {
+  const curId = task && task.engineer_id ? Number(task.engineer_id) : null;
+  const legacyName = !curId && task && task.engineer_name ? String(task.engineer_name) : "";
   const out = [`<option value="">담당자 미지정</option>`];
-  if (current && !names.includes(current)) {
-    out.push(`<option value="${esc(current)}" selected>${esc(current)} (목록 외)</option>`);
+  if (legacyName) {
+    out.push(`<option value="legacy" selected>${esc(legacyName)} (목록 외)</option>`);
   }
   for (const m of managers) {
-    out.push(`<option value="${esc(m.name)}" ${m.name === current ? "selected" : ""}>${esc(m.name)}</option>`);
+    out.push(`<option value="${m.id}" ${curId === m.id ? "selected" : ""}>${esc(m.name)}</option>`);
   }
   return out.join("");
 }
@@ -737,6 +741,7 @@ function taskTypeOptions(current) {
 }
 
 function taskEditForm(task, managers = []) {
+  const legacyName = !task.engineer_id && task.engineer_name ? String(task.engineer_name) : "";
   return `
     <form method="post" action="/projects/tasks/${task.id}" class="grid gap-2 sm:grid-cols-2">
       <div>
@@ -744,12 +749,16 @@ function taskEditForm(task, managers = []) {
         <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
       </div>
       <div>
-        <label class="label mb-0.5 text-xs">금액 <span class="font-normal text-muted">(원)</span></label>
+        <label class="label mb-0.5 text-xs">금액 <span class="font-normal text-muted">(고객 청구 · 원)</span></label>
         <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="0" value="${esc(String(task.unit_price || ""))}" />
       </div>
       <div>
-        <label class="label mb-0.5 text-xs">담당자</label>
-        <select class="input py-1.5 text-sm" name="engineer_name">${engineerSelect(managers, task.engineer_name || "")}</select>
+        <label class="label mb-0.5 text-xs">담당 엔지니어</label>
+        <select class="input py-1.5 text-sm" name="engineer_id">${engineerSelect(managers, task)}</select>
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">외주 지급단가 <span class="font-normal text-muted">(정산 기준 · 원)</span></label>
+        <input class="input py-1.5 text-sm" name="worker_rate" inputmode="numeric" placeholder="0" value="${esc(String(task.worker_rate || ""))}" />
       </div>
       <div>
         <label class="label mb-0.5 text-xs">상태</label>
@@ -757,6 +766,7 @@ function taskEditForm(task, managers = []) {
           ${TASK_STATUSES.map((status) => `<option value="${esc(status)}" ${status === task.status ? "selected" : ""}>${esc(TASK_STATUS_LABELS[status] || status)}</option>`).join("")}
         </select>
       </div>
+      ${legacyName ? `<input type="hidden" name="engineer_name" value="${esc(legacyName)}" />` : ""}
       <button class="btn-primary btn-xs sm:col-span-2" type="submit">작업 저장</button>
     </form>
     <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
@@ -801,18 +811,23 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   if (!tasks.length && !sessionRows.length) {
     return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-center text-sm text-muted">청구할 작업·세션이 없습니다.</div>`;
   }
+  // 세션 '완료 강제'와 규칙 통일: 완료 상태 작업만 기본 체크. 미완료(대기·진행중)는 체크 해제·흐리게(선택은 가능).
+  const isDone = (t) => t.status === "Completed";
+  const hasPending = tasks.some((t) => !isDone(t));
   const subtotal =
-    tasks.reduce((sum, task) => sum + (task.total_price || 0), 0) +
+    tasks.filter(isDone).reduce((sum, task) => sum + (task.total_price || 0), 0) +
     sessionRows.reduce((sum, s) => sum + (s.billing ? s.billing.amount : 0), 0);
   const tax = Math.round(subtotal * 0.1);
   const taskList = tasks
     .map((task) => {
       const label = taskTypeLabel(task.task_type);
+      const done = isDone(task);
+      const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(TASK_STATUS_LABELS[task.status] || task.status)}</span>`;
       return `
-        <label class="flex items-start gap-2 border-b border-border py-2 last:border-0">
-          <input class="mt-1" type="checkbox" name="task_id" value="${task.id}" checked />
+        <label class="flex items-start gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}">
+          <input class="mt-1" type="checkbox" name="task_id" value="${task.id}" ${done ? "checked" : ""} />
           <span class="min-w-0 flex-1">
-            <span class="block text-sm font-medium">${esc(task.track_title)} · ${esc(label)}</span>
+            <span class="block text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</span>
             <span class="block text-xs text-muted">${esc(formatQuantity(task.quantity))} x ${formatKRW(task.unit_price)}</span>
           </span>
           <span class="text-sm font-semibold">${formatKRW(task.total_price)}</span>
@@ -843,6 +858,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <div class="text-right text-xs text-muted">공급가 ${formatKRW(subtotal)} · VAT ${formatKRW(tax)}</div>
       </div>
       <div class="rounded-lg border border-border bg-surface px-3">${taskList}${sessionList}</div>
+      ${hasPending ? `<p class="mt-1.5 text-xs text-muted">미완료(대기·진행중) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.</p>` : ""}
       <div class="mt-3 space-y-2">
         <div>
           <label class="label mb-1 text-xs">청구 제목</label>
