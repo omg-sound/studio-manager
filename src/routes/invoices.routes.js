@@ -14,6 +14,7 @@ const {
   isOverdue,
   deleteInvoice,
   getStudioInfo,
+  getStudioLogo,
   getClient,
   ensureInvoiceNumber,
 } = require("../data");
@@ -214,7 +215,7 @@ router.get("/:id/statement.pdf", requireInvoice, asyncHandler(async (req, res) =
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
   const client = inv.client_id ? getClient(inv.client_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
-  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), client, invoice: inv, items });
+  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
   res.setHeader("Cache-Control", "private, no-store");

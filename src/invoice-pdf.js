@@ -62,131 +62,98 @@ function rect(x, y, w, h, { fill = "none", stroke = "#cfcabb", sw = 1 } = {}) {
   return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
 }
 
-/** 당사자 박스(공급자/공급받는 자). rows = [[label, value], ...]. */
-function partyBox(x, y, w, title, rows) {
-  const pad = 18;
-  const headH = 40;
-  const rowH = 36;
-  const h = headH + rows.length * rowH + 12;
-  let out = rect(x, y, w, h, { stroke: "#bdb8a8" });
-  out += rect(x, y, w, headH, { fill: "#f0eee6", stroke: "#bdb8a8" });
-  out += text(x + pad, y + 27, title, { size: 21, weight: 700 });
-  let ry = y + headH + 26;
-  for (const [label, value] of rows) {
-    out += text(x + pad, ry, label, { size: 18, color: "#7c776c" });
-    out += text(x + pad + 130, ry, truncate(value || "—", 28), { size: 18, weight: 500 });
-    ry += rowH;
-  }
-  return out;
-}
-
-/** 거래명세서 A4 SVG(1240×1754 px, ~150dpi). */
-function buildSvg({ studio, client, invoice, items }) {
+/** 내역서(거래명세서) A4 SVG(1240×1754 px, ~150dpi). 좌측 타이틀·공급자 헤더 + 로고(우측), 청구처 박스, 품목|금액 표, 소계/VAT/합계, 납부하실금액 강조. */
+function buildSvg({ studio, client, invoice, items, logo }) {
   const W = 1240;
   const H = 1754;
-  const M = 70;
+  const M = 80;
   const right = W - M;
-  const colW = (W - 2 * M - 20) / 2; // 두 당사자 박스 너비
 
-  const supplyTotal = Math.max(0, (invoice.amount || 0) - (invoice.tax_amount || 0));
+  const supply = Math.max(0, (invoice.amount || 0) - (invoice.tax_amount || 0));
   const tax = invoice.tax_amount || 0;
   const grand = invoice.amount || 0;
 
-  // 라인아이템: 단일 페이지 행 상한(초과 시 요약 행)
-  const MAX_ROWS = 20;
+  const MAX_ROWS = 22;
   const shown = items.slice(0, MAX_ROWS);
   const overflow = items.length - shown.length;
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
   svg += `<rect width="${W}" height="${H}" fill="#ffffff" />`;
 
-  // 제목
-  svg += text(W / 2, 120, "거 래 명 세 서", { size: 46, weight: 700, anchor: "middle" });
-  svg += text(W / 2, 154, "(공급받는 자 보관용 · 참고용)", { size: 17, anchor: "middle", color: "#9c9688" });
+  // 타이틀(좌측)
+  svg += text(M, 132, "내역서", { size: 52, weight: 700 });
 
-  // 메타(번호/발행일)
-  svg += text(M, 200, `청구번호  ${invoice.invoice_number || "—"}`, { size: 19, weight: 500 });
-  svg += text(right, 200, `발행일  ${invoice.issued_date || "—"}`, { size: 19, weight: 500, anchor: "end" });
-  svg += line(M, 214, right, 214, "#bdb8a8", 1.5);
+  // 공급자 헤더(좌측) + 로고(우측 상단)
+  svg += text(M, 210, studio.studio_biz_name || "공급자", { size: 27, weight: 700 });
+  let hy = 250;
+  const supplierLines = [
+    studio.studio_address,
+    studio.studio_tel,
+    studio.studio_biz_no ? `사업자등록번호 : ${studio.studio_biz_no}` : "",
+    studio.studio_owner_name ? `대표 : ${studio.studio_owner_name}` : "",
+  ].filter(Boolean);
+  for (const ln of supplierLines) {
+    svg += text(M, hy, truncate(ln, 54), { size: 18, color: "#6b6b6b" });
+    hy += 30;
+  }
+  if (logo) {
+    svg += `<image href="${svgEsc(logo)}" x="${right - 280}" y="185" width="280" height="130" preserveAspectRatio="xMaxYMin meet" />`;
+  }
 
-  // 당사자 박스
-  const boxY = 240;
-  svg += partyBox(M, boxY, colW, "공급자", [
-    ["상호", studio.studio_biz_name],
-    ["사업자번호", studio.studio_biz_no],
-    ["대표자", studio.studio_owner_name],
-    ["주소", studio.studio_address],
-    ["업태/종목", [studio.studio_biz_type, studio.studio_biz_item].filter(Boolean).join(" / ")],
-    ["연락처", studio.studio_tel],
-  ]);
-  svg += partyBox(M + colW + 20, boxY, colW, "공급받는 자", [
-    ["상호", client.name],
-    ["사업자번호", client.biz_no],
-    ["대표자", client.owner_name],
-    ["주소", client.address],
-    ["", ""],
-    ["", ""],
-  ]);
+  // 청구처 / 번호·발행일 박스
+  const boxY = 440;
+  const boxH = 130;
+  svg += `<rect x="${M}" y="${boxY}" width="${W - 2 * M}" height="${boxH}" rx="10" fill="none" stroke="#e2e0d8" stroke-width="1.5" />`;
+  svg += text(M + 26, boxY + 42, "청구처", { size: 17, color: "#8a8678" });
+  svg += text(M + 26, boxY + 88, truncate(client.name || "—", 28), { size: 26, weight: 700 });
+  const metaLabelX = right - 320;
+  svg += text(metaLabelX, boxY + 42, "내역서 번호", { size: 17, color: "#8a8678" });
+  svg += text(right - 26, boxY + 42, invoice.invoice_number || "—", { size: 19, weight: 600, anchor: "end" });
+  svg += text(metaLabelX, boxY + 90, "발행됨", { size: 17, color: "#8a8678" });
+  svg += text(right - 26, boxY + 90, invoice.issued_date || "—", { size: 19, weight: 500, anchor: "end" });
 
-  // 품목 표
-  const tableY = boxY + 280;
-  const headH = 46;
-  const rowH = 42;
-  // 컬럼 경계(x): 품목 | 수량 | 단가 | 공급가액
-  const c0 = M;
-  const c1 = M + 600; // 수량 시작
-  const c2 = M + 710; // 단가 시작
-  const c3 = M + 895; // 공급가액 시작
-  const tableRight = right;
-
-  svg += rect(c0, tableY, tableRight - c0, headH, { fill: "#f0eee6", stroke: "#bdb8a8" });
-  svg += text(c0 + 18, tableY + 30, "품목", { size: 19, weight: 700 });
-  svg += text(c1 + 70, tableY + 30, "수량", { size: 19, weight: 700, anchor: "end" });
-  svg += text(c2 + 155, tableY + 30, "단가", { size: 19, weight: 700, anchor: "end" });
-  svg += text(tableRight - 18, tableY + 30, "공급가액", { size: 19, weight: 700, anchor: "end" });
+  // 품목 표(품목 | 금액 — 수량/단가는 곡·세션 단위 고정이라 생략)
+  const tableY = boxY + boxH + 60;
+  const headH = 50;
+  svg += `<rect x="${M}" y="${tableY}" width="${W - 2 * M}" height="${headH}" fill="#f4f3ee" />`;
+  svg += text(M + 18, tableY + 33, "품목", { size: 18, weight: 700 });
+  svg += text(right - 18, tableY + 33, "금액", { size: 18, weight: 700, anchor: "end" });
 
   let ry = tableY + headH;
-  const bodyRows = Math.max(shown.length, 6); // 최소 높이 확보
-  for (let i = 0; i < bodyRows; i++) {
-    const it = shown[i];
-    if (it) {
-      const label = it.description || [it.track_title, it.task_type].filter(Boolean).join(" - ") || "작업";
-      const qty = it.quantity == null ? "" : String(it.quantity).replace(/\.0+$/, "");
-      svg += text(c0 + 18, ry + 28, truncate(label, 38), { size: 18 });
-      svg += text(c1 + 70, ry + 28, qty, { size: 18, anchor: "end" });
-      svg += text(c2 + 155, ry + 28, commas(it.unit_price), { size: 18, anchor: "end" });
-      svg += text(tableRight - 18, ry + 28, commas(it.amount), { size: 18, anchor: "end" });
-    }
-    svg += line(c0, ry + rowH, tableRight, ry + rowH, "#e0dccf");
-    ry += rowH;
+  const lineRowH = 60;
+  for (const it of shown) {
+    const label = it.description || [it.track_title, it.task_type].filter(Boolean).join(" - ") || "작업";
+    svg += text(M + 18, ry + 38, truncate(label, 44), { size: 19, weight: 600 });
+    svg += text(right - 18, ry + 38, won(it.amount), { size: 19, weight: 600, anchor: "end" });
+    ry += lineRowH;
+    svg += line(M, ry, right, ry, "#ece9df");
   }
   if (overflow > 0) {
-    svg += text(c0 + 18, ry + 28, `… 외 ${overflow}건 (상세는 청구서 참조)`, { size: 16, color: "#9c9688" });
-    ry += rowH;
+    svg += text(M + 18, ry + 38, `… 외 ${overflow}건 (상세는 청구서 참조)`, { size: 16, color: "#9c9688" });
+    ry += lineRowH;
   }
-  // 표 외곽 + 세로 구분선
-  svg += rect(c0, tableY, tableRight - c0, ry - tableY, { stroke: "#bdb8a8" });
-  for (const cx of [c1, c2, c3]) svg += line(cx, tableY, cx, ry, "#e0dccf");
 
-  // 합계
-  const sumX = c2;
-  let sy = ry + 40;
+  // 소계 / VAT / 합계(우측)
+  const sumLabelX = right - 360;
+  let sy = ry + 56;
   const sumRow = (label, value, bold) => {
-    let r = text(sumX, sy, label, { size: 19, weight: bold ? 700 : 400, color: "#7c776c" });
-    r += text(tableRight - 18, sy, value, { size: 20, weight: bold ? 700 : 500, anchor: "end" });
-    sy += 40;
+    let r = text(sumLabelX, sy, label, { size: 18, color: bold ? "#1f1d1b" : "#6b6b6b", weight: bold ? 700 : 400 });
+    r += text(right - 18, sy, value, { size: 19, weight: bold ? 700 : 500, anchor: "end" });
+    sy += 44;
     return r;
   };
-  svg += sumRow("공급가액", won(supplyTotal));
-  svg += sumRow("부가세 (10%)", won(tax));
-  svg += line(sumX, sy - 30, tableRight, sy - 30, "#bdb8a8");
-  svg += sumRow("합계금액", won(grand), true);
+  svg += sumRow("소계", won(supply));
+  svg += sumRow("VAT (10%)", won(tax));
+  svg += sumRow("합계", won(grand));
+
+  // 납부하실금액(강조)
+  sy += 24;
+  svg += line(sumLabelX, sy - 34, right, sy - 34, "#cfcabb", 1.5);
+  svg += text(sumLabelX, sy + 14, "납부하실금액", { size: 27, weight: 700 });
+  svg += text(right - 18, sy + 14, won(grand), { size: 31, weight: 700, anchor: "end" });
 
   // 푸터
-  svg += text(M, H - 70, "본 거래명세서는 참고용이며, 세금계산서는 별도(국세청 홈택스)로 발행됩니다.", {
-    size: 16,
-    color: "#9c9688",
-  });
+  svg += text(M, H - 64, "본 내역서는 참고용이며, 세금계산서는 별도(국세청 홈택스)로 발행됩니다.", { size: 15, color: "#9c9688" });
 
   svg += `</svg>`;
   return svg;

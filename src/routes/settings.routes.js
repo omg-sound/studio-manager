@@ -16,10 +16,16 @@ const {
   deleteTaskType,
   getStudioInfo,
   setStudioInfo,
+  getStudioLogo,
+  setStudioLogo,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState } = require("../views");
 const { asyncHandler } = require("../lib/async");
+const multer = require("multer");
 const drive = require("../drive");
+
+// 로고 업로드(작은 이미지) — 메모리 버퍼로 받아 base64 data URI로 저장. 2MB 제한.
+const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const calendar = require("../calendar");
 const alerts = require("../notify");
 
@@ -211,6 +217,7 @@ async function studioCalendarSection() {
 /** 공급자(스튜디오) 세금정보 — 거래명세서 PDF의 '공급자'란. */
 function studioInfoSection() {
   const s = getStudioInfo();
+  const logo = getStudioLogo();
   const field = (name, label, ph = "") =>
     `<div><label class="label mb-0.5 text-xs">${esc(label)}</label><input class="input py-1.5 text-sm" name="${esc(name)}" value="${esc(s[name] || "")}" placeholder="${esc(ph)}" /></div>`;
   return `
@@ -231,6 +238,19 @@ function studioInfoSection() {
         <div><label class="label mb-0.5 text-xs">사업장 주소</label><input class="input py-1.5 text-sm" name="studio_address" value="${esc(s.studio_address || "")}" /></div>
         <button class="btn-primary btn-sm" type="submit">공급자 정보 저장</button>
       </form>
+      <div class="border-t border-border pt-4">
+        <label class="label mb-1 text-xs">로고 <span class="font-normal text-muted">(거래명세서 PDF 우측 상단 · PNG/JPG, 최대 2MB)</span></label>
+        ${logo
+          ? `<div class="mb-2"><img src="${esc(logo)}" alt="로고" class="max-h-20 rounded border border-border bg-white p-2" /></div>`
+          : `<p class="mb-2 text-xs text-muted">등록된 로고가 없습니다.</p>`}
+        <div class="flex flex-wrap items-center gap-2">
+          <form method="post" action="/settings/studio-logo" enctype="multipart/form-data" class="flex items-center gap-2">
+            <input class="text-sm" type="file" name="logo" accept="image/png,image/jpeg" required />
+            <button class="btn-primary btn-sm" type="submit">로고 업로드</button>
+          </form>
+          ${logo ? `<form method="post" action="/settings/studio-logo/delete" data-confirm="로고를 삭제할까요?"><button class="btn-ghost btn-xs text-danger" type="submit">로고 삭제</button></form>` : ""}
+        </div>
+      </div>
     </section>`;
 }
 
@@ -255,6 +275,21 @@ function alertWebhookSection() {
       ${canTest ? `<form method="post" action="/settings/alert-webhook/test"><button class="btn-ghost btn-sm" type="submit">테스트 알림 보내기</button></form>` : ""}
     </section>`;
 }
+
+// ── 거래명세서 로고 업로드/삭제(base64 data URI, admin_state) ──
+router.post("/studio-logo", requireChief, logoUpload.single("logo"), (req, res) => {
+  const f = req.file;
+  if (f && f.buffer && f.buffer.length) {
+    const mime = f.mimetype || "";
+    if (!/^image\/(png|jpe?g)$/.test(mime)) return res.status(400).send("PNG 또는 JPG 이미지만 업로드할 수 있습니다.");
+    setStudioLogo(`data:${mime};base64,${f.buffer.toString("base64")}`);
+  }
+  res.redirect("/settings?tab=settings&flash=saved");
+});
+router.post("/studio-logo/delete", requireChief, (req, res) => {
+  setStudioLogo(null);
+  res.redirect("/settings?tab=settings&flash=deleted");
+});
 
 // ── 스튜디오 캘린더 선택 저장 ──
 router.post("/studio-calendar", requireChief, (req, res) => {

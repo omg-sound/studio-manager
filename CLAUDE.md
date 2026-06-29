@@ -52,7 +52,8 @@
   **녹음 세션은 곡·콘텐츠/버튼 없이 직접 청구**: 세션 생성 즉시 예상 청구액이 청구 탭에 자동 반영, 선택 시 `invoice_items.session_id` 스냅샷으로 청구(곡·콘텐츠 안 거침). 청구되면 세션 수정·삭제 잠금(`SESSION_INVOICED`), 인보이스 삭제 시 자동 미청구 복원. 관련: `listBillableSessionsForProject`·`unbilledInvoiceForm`·`createInvoiceFromTasks`(task+session 혼합)·`isSessionInvoiced`.
 - 대시보드: 미수금·이번 달 발행·연체(치프/대표만).
 - **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
-  공급자=스튜디오 세금정보(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
+  레이아웃: 좌측 '내역서' 타이틀 + 공급자 헤더·**로고**(우측), 청구처 박스, **품목|금액** 표(수량·단가 생략 — 곡/세션 단위 고정), 소계/VAT/합계, **납부하실금액** 강조.
+  공급자=스튜디오 세금정보·로고(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
 
 ### 클라이언트
 - 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록.
@@ -64,7 +65,7 @@
 ### 관리(/settings) — 3탭
 - **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계)·외주 작업자(로그인 없이 직접 추가). 편집=추가/삭제(토글 폐기).
 - **컨텐츠**: 단가표(녹음 종류)·**작업 종류 카탈로그**(곡·콘텐츠 후반작업 종류 + 기본단가·과금·분류·빠른추가). 모두 삭제-only.
-- **환경설정**: 스튜디오 캘린더(겹침 검사·자동 연동 대상)·예약 일정 기본 장소·**공급자(스튜디오) 세금정보**(거래명세서 PDF용).
+- **환경설정**: 스튜디오 캘린더(겹침 검사·자동 연동 대상)·예약 일정 기본 장소·**공급자(스튜디오) 세금정보 + 로고**(거래명세서 PDF용; 로고는 PNG/JPG 업로드→base64).
 
 ### 배포 · 운영
 - Render Blueprint(web + cron) + Disk. 일일 백업(`VACUUM INTO`·14일 보존)·연체 스캔 cron(`/internal/cron/daily`, `BACKUP_TOKEN`).
@@ -159,7 +160,7 @@
   rate_item_id?→rate_items SET NULL, gcal_event_id?)` — 스튜디오 일정.
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   `rate_item_id`는 녹음 세션 시간제 자동 산정용 단가표 연결. `gcal_event_id`는 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적).
-- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`alert_webhook_url`(알림 웹훅, 암호화).
+- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`studio_logo`(거래명세서 로고, base64 data URI)·`alert_webhook_url`(알림 웹훅, 암호화).
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시).
 
 ## 자료 전달 아키텍처 (플레이북1 §2.3·§4.3)

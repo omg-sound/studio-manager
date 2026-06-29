@@ -548,6 +548,14 @@ function setStudioInfo(body = {}) {
   for (const k of STUDIO_INFO_KEYS) setState(k, String(body[k] || "").trim() || null);
 }
 
+/** 거래명세서 로고 — base64 data URI(admin_state.studio_logo). 없으면 null. */
+function getStudioLogo() {
+  return getState("studio_logo") || null;
+}
+function setStudioLogo(dataUri) {
+  setState("studio_logo", dataUri ? String(dataUri) : null);
+}
+
 /** 발행/입금완료로 전이 시 채번 보장(수동 발행분도 INV-YYYYMM-### 부여). 거래명세서에 번호 필수. */
 function ensureInvoiceNumber(inv) {
   if (!inv || inv.invoice_number) return inv;
@@ -1110,6 +1118,8 @@ module.exports = {
   getInvoiceForUser,
   getStudioInfo,
   setStudioInfo,
+  getStudioLogo,
+  setStudioLogo,
   ensureInvoiceNumber,
   invoiceStats,
   listInvoicesForProject,
