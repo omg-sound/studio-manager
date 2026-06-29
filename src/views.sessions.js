@@ -45,10 +45,14 @@ function timeOptions(current) {
  */
 function sessionFields(s, managers, rateItems = []) {
   return `
-    <div class="grid gap-2 sm:grid-cols-2">
+    <div class="grid gap-2 sm:grid-cols-3">
       <div>
         <label class="label mb-0.5 text-xs">날짜</label>
         <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" required />
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">예약 담당자</label>
+        <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select>
       </div>
       <div>
         <label class="label mb-0.5 text-xs">상태</label>
@@ -56,20 +60,20 @@ function sessionFields(s, managers, rateItems = []) {
           ${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}
         </select>
       </div>
-      <div>
-        <label class="label mb-0.5 text-xs">예약 담당자</label>
-        <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select>
-      </div>
-      <div>
-        <label class="label mb-0.5 text-xs">담당 엔지니어</label>
-        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select>
-      </div>
+    </div>
+    <div class="mt-2 grid gap-2 sm:grid-cols-2">
       <div>
         <label class="label mb-0.5 text-xs">녹음 종류</label>
         <select class="input py-1.5 text-sm" name="session_type">
           ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
         </select>
       </div>
+      <div>
+        <label class="label mb-0.5 text-xs">담당 엔지니어</label>
+        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select>
+      </div>
+    </div>
+    <div class="mt-2 grid gap-2 sm:grid-cols-3">
       <div>
         <label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(녹음 시간제 · 선택)</span></label>
         <select class="input py-1.5 text-sm" name="rate_item_id">
