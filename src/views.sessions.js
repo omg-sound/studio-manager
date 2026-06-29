@@ -150,17 +150,11 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
  * 녹음 프로젝트: '녹음 종류'(단가표 항목을 분류로 묶음) 한 필드 + session_type='녹음' 고정.
  * 그 외(믹스 등): '세션 종류'(session_type) + '녹음 종류'(단가표 항목) 두 필드. 라벨은 편집 폼과 통일.
  */
-function sessionBookingFields(s, managers, rateItems = [], isRecording = false) {
+function sessionBookingFields(s, managers, rateItems = []) {
   const engineerField = `<div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
-  const typeRateRow = isRecording
-    ? `<input type="hidden" name="session_type" value="녹음" />
-       <div class="mt-2 grid gap-2 sm:grid-cols-2">
-         <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(관리 → 단가표에서 추가)</span></label>
-          ${rateSelectGrouped(rateItems, s.rate_item_id, true)}</div>
-         ${engineerField}
-       </div>`
-    : `<div class="mt-2 grid gap-2 sm:grid-cols-3">
+  // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 종류(단가표)는 녹음 세션 시간제 산정용(선택).
+  const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
          <div><label class="label mb-0.5 text-xs">세션 종류</label>
           <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
          <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
@@ -198,7 +192,7 @@ function sessionCreateForm(project, managers, rateItems = []) {
   return `
     <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
-      ${sessionBookingFields({}, managers, rateItems, project.project_type === "recording")}
+      ${sessionBookingFields({}, managers, rateItems)}
       <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">+ 세션 추가</button>
     </form>`;
 }
@@ -274,15 +268,15 @@ function sessionControls(s, managers, rateItems = []) {
     </details>`;
 }
 
-/** 프로젝트 상세용 세션 섹션. expand=true(탭 안)면 믹스도 접지 않고 펼쳐 렌더. */
+/** 프로젝트 상세용 세션 섹션(세션형 전용). expand=true(탭 안)면 접지 않고 펼쳐 렌더. */
 function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], tracks = [], expand = false }) {
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
   const list = rows.length
     ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, tracks, projectTitle: project.title })).join("")
     : emptyState("등록된 세션이 없습니다.");
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
-  const isMixing = project && project.project_type === "mixing";
-  if (isMixing && !expand) {
+  const isTask = project && project.project_type === "task";
+  if (isTask && !expand) {
     return `
     <details class="card mt-3">
       <summary class="flex cursor-pointer list-none items-center justify-between gap-3">

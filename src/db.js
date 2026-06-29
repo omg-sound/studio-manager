@@ -256,7 +256,7 @@ function init() {
   } catch (_e) {
     /* 무시 */
   }
-  addColumn("projects", "project_type", "TEXT"); // recording | mixing (null=기존, 믹스 흐름)
+  addColumn("projects", "project_type", "TEXT"); // session | task (null=레거시). 구 recording→session, mixing→task는 아래 rename 게이트에서 1회 전환
   addColumn("projects", "services", "TEXT");
   addColumn("projects", "artist", "TEXT");
   addColumn("projects", "artist_company", "TEXT");
@@ -274,6 +274,13 @@ function init() {
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_track_tasks_session ON track_tasks(session_id) WHERE session_id IS NOT NULL;");
+  // 프로젝트 유형 키 전환(1회): 구 recording→session, mixing→task. 멱등 게이트.
+  // backfillProjectServices는 project_type IS NULL만 대상이라 본 전환과 충돌하지 않는다.
+  if (!getState("project_type_rename_v1")) {
+    d.exec("UPDATE projects SET project_type = 'session' WHERE project_type = 'recording'");
+    d.exec("UPDATE projects SET project_type = 'task' WHERE project_type = 'mixing'");
+    setState("project_type_rename_v1", "done");
+  }
   seedDefaultCatalogs();
   // 레거시 마이그레이션은 1회만. 신규 프로젝트(project_type 있음)는 services=NULL이 정상이므로,
   // 매 부팅 재실행되면 memo 추론으로 유령 곡·작업을 주입한다 → admin_state 플래그로 1회 게이트.

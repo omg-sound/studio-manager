@@ -20,7 +20,8 @@
   내부 도구라 로그인 직원은 전 프로젝트 열람. 치프가 `/settings`에서 화이트리스트(이메일+역할) 운영.
 
 ### 프로젝트
-- 유형 2종: **녹음 세션**(recording, 세션 먼저) / **믹스·작업 세션**(mixing, 곡·콘텐츠 먼저). "+ 새 프로젝트" 드롭다운.
+- 유형 2종(핵심 모티브): **세션**(`session`, 클라이언트 방문·예약·실시간 작업) / **작업**(`task`, 예약 없이 항목만). "+ 새 프로젝트" 드롭다운.
+  세션형은 **세션 일정 탭**이 기본, 작업형은 **세션 탭 없이** 곡·콘텐츠가 기본(레거시 `NULL`은 세션 탭 유지). 구 `recording→session`·`mixing→task`는 멱등 마이그레이션(`project_type_rename_v1`)으로 1회 전환.
 - 상세는 **탭**: `세션 일정 / 곡·콘텐츠 / 자료 전달 / 청구`(청구는 청구권자만). 메타 카드는 탭 위 고정, URL `?tab=`.
 - 메타: 프로젝트명·아티스트·소속사/레이블·제작사·실결제자·담당자(보기 우선, 편집은 `<details>`). 아티스트/소속사/제작사는
   기존값 기반 `<datalist>` 자동완성(브라우저 히스토리는 끔).
@@ -28,11 +29,11 @@
 
 ### 세션 일정(예약)
 - 프로젝트 하위 세션 CRUD + 사이드바 `/sessions`(다가오는/지난). 예약 담당자·담당 엔지니어 별개(담당자 마스터 select).
-- **폼 레이아웃(추가·편집 통일)**: 날짜·예약담당자·상태(3열) / 녹음 종류·담당 엔지니어(2열) / (편집) 세션 종류·시작·종료(3열).
+- **폼 레이아웃(추가·편집 통일)**: 날짜·예약담당자·상태(3열) / 세션 종류·녹음 종류·담당 엔지니어(3열) / 시작·종료. **세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능**(세션형이 녹음에 국한되지 않음).
 - **용어 통일**: `녹음 종류` = **단가표 항목**(`rate_item_id`, 스튜디오/로케이션 분류 optgroup, `rateSelectGrouped`).
   `세션 종류` = `session_type`(녹음/믹싱/마스터링/기타). 추가·편집 폼에서 동일 의미(이전 라벨 혼동 정리).
 - 예약 폼=버튼 UX: 시작 시간 30분 그리드(14:00–18:30, 예약된 슬롯 회색, **선택=테두리 강조**). 그리드 밖은 '직접입력' →
-  **10분 단위 select**(`SESSION_CUSTOM_SLOTS`; 네이티브 time picker가 step 무시해 select 사용). **녹음 종류 미선택 시 시작 시간 비활성**(필수 게이트, `data-rate-required`).
+  **10분 단위 select**(`SESSION_CUSTOM_SLOTS`; 네이티브 time picker가 step 무시해 select 사용). (이전의 '녹음 종류 미선택 시 시작 시간 비활성' 필수 게이트는 세션 종류 가변화로 **미사용** — `rateSelectGrouped`의 `required`/`data-rate-required` 인터페이스만 보존, 향후 세션 종류='녹음' 시 동적 복원 가능.)
 - 소요시간 `[1Pro][2Pro][직접입력]` → 종료는 서버가 시작+길이로 계산(1Pro=녹음 종류 기준시간). **1Pro/2Pro 선택 시 직접입력(시간) 칸 자동 채움**.
   폼 인터랙션은 `public/js/app.js`(CSP: 인라인 0).
 - **겹침 차단**: 앱 DB 세션 + (연동 시) 구글 캘린더 FreeBusy로 같은 시간 녹음/믹싱 충돌이면 409.
@@ -82,6 +83,7 @@
 - 녹음 종류=단가표 분류(스튜디오/로케이션), 곡·콘텐츠=후반작업(튠·믹스·마스터링) 분리.
 - 하우스 엔지니어↔작업 담당자 연계, 관리 페이지/프로젝트 상세 **탭** 그룹화, 청구 '청구 대기' 목록.
 - Render 실배포 완료(빌드 함정: `tailwindcss` devDep → `npm install --include=dev`).
+- **프로젝트 유형 재정의**: 녹음/믹스(recording/mixing) → **세션/작업(session/task)**. 세션=방문·예약·실시간, 작업=예약 없이 항목만(세션 탭 숨김). 세션 종류 항상 선택 가능(녹음 고정·필수 게이트 폐기).
 
 ## 스택
 
@@ -123,7 +125,7 @@
   UI상 **클라이언트**(통칭). 프로젝트의 아티스트·소속사/레이블·제작사가 저장 시 분류별로 자동 등록되고
   (`ensureClientsFromProject`), 그중 하나가 프로젝트/인보이스의 **실결제자(공급받는 자)** 역할로 선택된다(`client_id`).
   `biz_no`(사업자등록번호)·`owner_name`(대표자)·`address`(사업장 주소)는 세금계산서용 상세정보.
-- `projects(title, project_type[recording|mixing], artist?, artist_company?, production_company?,
+- `projects(title, project_type[session|task], artist?, artist_company?, production_company?,
   client_id?→clients ON DELETE SET NULL, manager_id?→project_managers ON DELETE SET NULL, services JSON, due_date?, rate, memo)` —
   `services`는 레거시 `{key,label,...}` 배열(편집 UI 제거). `status`·`kind`·`due_date`는 호환용으로만 유지.
 - `project_managers(name, email?, phone?, active, user_id?→users, created_at)` — 작업 담당자 마스터.
@@ -135,7 +137,7 @@
   `is_quick`=곡·콘텐츠 빠른추가 버튼 노출, `unit_price`=빠른추가 기본 단가. 삭제-only(강제), 치프가 `/settings` 컨텐츠 탭 CRUD.
 - `project_service_items(key UNIQUE, label, active, created_at)` — 레거시(구 services JSON 라벨 호환). **관리 UI 폐기**(작업 종류 카탈로그가 대체), 테이블만 잔존.
 - `rate_items(name, category[스튜디오 녹음|로케이션 녹음], base_minutes, base_price, extra_minutes, extra_price, active)` —
-  **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 녹음 세션 폼의 '녹음 종류'에 분류별 optgroup으로
+  **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 세션 폼의 '녹음 종류'에 분류별 optgroup으로
   묶여 표시된다. 기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
   (`base_minutes=0`이면 정액). `computeRatePrice(item, minutes)`가 산정. 관리 메뉴에서 치프가 CRUD.
 - `project_tracks(project_id→projects CASCADE, title, content_type[Music|Video_Post], created_at)` —

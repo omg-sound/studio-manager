@@ -88,11 +88,13 @@ validateConfig();
 const ROLES = ["owner", "chief", "staff"];
 const ROLE_LABELS = { owner: "대표", chief: "치프 엔지니어", staff: "스태프" };
 
-// 프로젝트 유형: 녹음 세션(일정 먼저) vs 믹스·작업 세션(곡·콘텐츠 먼저). 상세 화면 순서를 분기.
+// 프로젝트 유형 2종(핵심 모티브):
+//  session = 클라이언트가 방문해 담당자와 실시간으로 진행. 예약 + 실제 작업시간이 존재(세션 일정 탭 노출).
+//  task    = 예약 없이 항목만 존재하는 업무흐름(세션 일정 탭 숨김, 곡·콘텐츠 중심).
 const PROJECT_TYPES = [
   // label = 배지·제목용, menuLabel = '+ 새 프로젝트' 드롭다운 표기(액션형).
-  { key: "recording", label: "녹음 세션", menuLabel: "녹음 세션 작성하기", hint: "일정을 먼저 잡고 진행" },
-  { key: "mixing", label: "믹스 및 작업 세션", hint: "곡·콘텐츠 단위 수주" },
+  { key: "session", label: "세션", menuLabel: "세션 프로젝트 만들기", hint: "클라이언트 방문 · 예약 · 실시간 작업" },
+  { key: "task", label: "작업", menuLabel: "작업 프로젝트 만들기", hint: "예약 없이 항목 단위로 진행" },
 ];
 const PROJECT_TYPE_LABELS = Object.fromEntries(PROJECT_TYPES.map((t) => [t.key, t.label]));
 const PROJECT_TYPE_KEYS = PROJECT_TYPES.map((t) => t.key);
@@ -203,7 +205,7 @@ module.exports = {
   PROJECT_TYPES,
   PROJECT_TYPE_LABELS,
   PROJECT_TYPE_KEYS,
-  normalizeProjectType: (v) => normalize(v, PROJECT_TYPE_KEYS, "mixing"),
+  normalizeProjectType: (v) => normalize(v, PROJECT_TYPE_KEYS, "task"),
   PROJECT_SERVICES,
   PROJECT_SERVICE_KEYS,
   PROJECT_SERVICE_LABELS,

@@ -121,10 +121,10 @@ function trackCount(p) {
 function projectListCard(p) {
   const metaLine = [p.artist, p.client_name, p.manager_name].filter(Boolean).join(" · ") || "정보 미정";
   const n = trackCount(p);
-  const typeBadge = p.project_type === "recording"
-    ? `<span class="badge bg-warning/10 text-warning">녹음</span>`
-    : p.project_type === "mixing"
-      ? `<span class="badge bg-primary/10 text-primary">믹스·작업</span>`
+  const typeBadge = p.project_type === "session"
+    ? `<span class="badge bg-warning/10 text-warning">세션</span>`
+    : p.project_type === "task"
+      ? `<span class="badge bg-primary/10 text-primary">작업</span>`
       : "";
   const amount = projectAmount(p)
     ? `<div class="text-sm font-medium">${formatKRW(projectAmount(p))}</div>`
@@ -198,19 +198,20 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     ? projectMetaCard({ ...p, ...(formState || {}) }, err)
     : projectMetaReadonly(p);
 
-  const isRecording = p.project_type === "recording";
+  const isSession = p.project_type === "session";
+  const isTask = p.project_type === "task";
   const typeLabel = PROJECT_TYPE_LABELS[p.project_type] || "";
   const desc = [typeLabel, p.artist || p.client_name].filter(Boolean).join(" · ") || "프로젝트";
 
-  // ── 탭: 세션 일정 / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
-  const tabs = [
-    { key: "sessions", label: "세션 일정" },
-    { key: "tracks", label: "곡 · 콘텐츠" },
-    { key: "deliverables", label: "자료 전달" },
-  ];
+  // ── 탭: 세션 일정(작업형 제외) / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
+  // 작업형(task)만 예약이 없으므로 세션 일정 탭을 숨긴다. 세션형·레거시(NULL)는 노출(기존 세션 보존).
+  const tabs = [];
+  if (!isTask) tabs.push({ key: "sessions", label: "세션 일정" });
+  tabs.push({ key: "tracks", label: "곡 · 콘텐츠" });
+  tabs.push({ key: "deliverables", label: "자료 전달" });
   if (showInvoice) tabs.push({ key: "invoice", label: "청구" });
   const validKeys = tabs.map((t) => t.key);
-  const defaultTab = isRecording ? "sessions" : "tracks";
+  const defaultTab = isSession ? "sessions" : "tracks";
   const tab = validKeys.includes(req.query.tab) ? req.query.tab : defaultTab;
   const tabBar = `<div class="mb-3 mt-3 flex gap-1 overflow-x-auto border-b border-border">
       ${tabs.map((t) => `<a href="/projects/${p.id}?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
@@ -418,11 +419,11 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
 function projectForm(p = {}, err = "") {
   const e = err || p._err || "";
   const action = "/projects";
-  const type = p.project_type === "recording" ? "recording" : "mixing";
+  const type = p.project_type === "session" ? "session" : "task";
   const typeLabel = PROJECT_TYPE_LABELS[type] || "프로젝트";
-  const typeHint = type === "recording"
-    ? "일정을 먼저 잡고, 녹음이 진행되면 곡·콘텐츠를 채웁니다."
-    : "곡·콘텐츠를 등록하고 튠·믹스·마스터링 작업을 추가합니다.";
+  const typeHint = type === "session"
+    ? "클라이언트 방문·예약으로 세션을 잡고, 진행되면 곡·콘텐츠를 채웁니다."
+    : "예약 없이 곡·콘텐츠를 등록하고 튠·믹스·마스터링 작업을 추가합니다.";
   return `
     ${pageHeader({ title: `새 프로젝트 · ${typeLabel}`, desc: typeHint })}
     <form method="post" action="${action}" class="card space-y-4">
@@ -430,7 +431,7 @@ function projectForm(p = {}, err = "") {
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div>
         <label class="label">프로젝트 명</label>
-        <input class="input" name="title" value="${esc(p.title || "")}" placeholder="${type === "recording" ? "예: OOO 녹음 (가제)" : "예: OOO 1집 - 타이틀곡"}" required />
+        <input class="input" name="title" value="${esc(p.title || "")}" placeholder="${type === "session" ? "예: OOO 세션 (가제)" : "예: OOO 1집 - 타이틀곡"}" required />
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
@@ -540,9 +541,9 @@ function tracksSection({ project, tracks, isAdmin, managers = [] }) {
   const list = tracks.length
     ? tracks.map((track) => trackCard(track, { isAdmin, managers })).join("")
     : emptyState("등록된 곡·콘텐츠가 없습니다.");
-  const isRecording = project && project.project_type === "recording";
-  const hint = isRecording && isAdmin
-    ? `<p class="text-xs text-muted">녹음(세션 일정)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 한 세션에 여러 곡을 넣을 수 있고, 각 곡은 단계별로 이어집니다.</p>`
+  const isSession = project && project.project_type === "session";
+  const hint = isSession && isAdmin
+    ? `<p class="text-xs text-muted">세션(예약·실시간 작업)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 한 세션에 여러 곡을 넣을 수 있고, 각 곡은 단계별로 이어집니다.</p>`
     : "";
   return `
     <section class="card mt-3 space-y-4">
