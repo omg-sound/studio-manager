@@ -7,6 +7,7 @@ const {
   listRateItems,
   upcomingSessions,
   pastSessions,
+  sessionsForMonth,
   getProjectForUser,
   getSessionForUser,
   createSession,
@@ -18,7 +19,8 @@ const {
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, detailsChevron } = require("../views");
-const { sessionRow } = require("../views.sessions");
+const { sessionRow, monthCalendar } = require("../views.sessions");
+const { todayYmd } = require("../lib/date");
 const { asyncHandler } = require("../lib/async");
 const calendar = require("../calendar");
 
@@ -76,30 +78,39 @@ function externalConflictMessage() {
 // ── 전역 일정(다가오는 세션 + 지난 세션) ──
 router.get("/sessions", requireAuth, (req, res) => {
   const editable = canEdit(req.user);
-  const managers = editable ? listProjectManagers() : [];
-  const rateItems = editable ? listRateItems() : [];
-  const up = upcomingSessions(req.user, { limit: 50 });
-  const past = pastSessions(req.user, { limit: 20 });
+  const view = req.query.view === "calendar" ? "calendar" : "list";
+  const viewTab = (v, label) =>
+    `<a href="/sessions?view=${v}" class="rounded-md px-3 py-1 text-sm ${view === v ? "bg-primary text-primary-fg" : "text-muted hover:text-fg"}">${label}</a>`;
+  const viewToggle = `<div class="flex gap-0.5 rounded-lg border border-border p-0.5">${viewTab("list", "목록")}${viewTab("calendar", "캘린더")}</div>`;
 
-  const upList = up.length
-    ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div></div>`
-    : emptyState("다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
-
-  const pastList = past.length
-    ? `<details class="card group mt-3">
-         <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-           <h2 class="font-display text-base font-semibold">지난 세션 <span class="text-sm font-normal text-muted">${past.length}</span></h2>
-           ${detailsChevron()}
-         </summary>
-         <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div>
-       </details>`
-    : "";
+  let content;
+  if (view === "calendar") {
+    const ym = /^\d{4}-\d{2}$/.test(req.query.month || "") ? req.query.month : todayYmd().slice(0, 7);
+    content = `<div class="card">${monthCalendar(ym, sessionsForMonth(req.user, ym))}</div>`;
+  } else {
+    const managers = editable ? listProjectManagers() : [];
+    const rateItems = editable ? listRateItems() : [];
+    const up = upcomingSessions(req.user, { limit: 50 });
+    const past = pastSessions(req.user, { limit: 20 });
+    const upList = up.length
+      ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div></div>`
+      : emptyState("다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
+    const pastList = past.length
+      ? `<details class="card group mt-3">
+           <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+             <h2 class="font-display text-base font-semibold">지난 세션 <span class="text-sm font-normal text-muted">${past.length}</span></h2>
+             ${detailsChevron()}
+           </summary>
+           <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div>
+         </details>`
+      : "";
+    content = `${upList}${pastList}`;
+  }
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)" })}
-    ${upList}
-    ${pastList}`;
+    ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)", action: viewToggle })}
+    ${content}`;
   res.send(layout({ title: "일정", user: req.user, current: "/sessions", body }));
 });
 

@@ -1028,6 +1028,20 @@ function pastSessions(_user, { limit = 30 } = {}) {
     .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
 }
 
+/** 특정 월(YYYY-MM)의 세션(취소 제외) + 프로젝트명 — 캘린더 뷰용. */
+function sessionsForMonth(_user, ym) {
+  if (!/^\d{4}-\d{2}$/.test(String(ym || ""))) return [];
+  return db()
+    .prepare(
+      `SELECT s.*, p.title AS project_title FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+       WHERE s.session_date LIKE ? AND s.status <> '취소'
+       ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
+    )
+    .all(String(ym) + "-%")
+    .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
+}
+
 // ── 자료 전달(deliverables) — 프로젝트 범위 강제 ──
 
 /** 프로젝트의 자료 목록(권한 검사: 클라이언트는 자기 프로젝트만). 권한 없으면 null. */
@@ -1133,5 +1147,6 @@ module.exports = {
   deleteSession,
   upcomingSessions,
   pastSessions,
+  sessionsForMonth,
   sessionRateAmount,
 };

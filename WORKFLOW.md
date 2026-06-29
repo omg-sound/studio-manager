@@ -149,7 +149,7 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 1. **프로덕션 검증(최우선)** — Render에서 거래명세서 PDF 렌더(`@resvg/resvg-js` prebuilt 설치·동작)·알림 웹훅 발송 확인.
    환경설정에 **공급자 세금정보**(PDF용)·**알림 웹훅 URL** 입력 필요.
-2. (선택) 월 캘린더 그리드 뷰(현재 목록)·대시보드 임박 세션 카드.
+2. (선택) 대시보드 임박 세션 카드(월 캘린더 뷰는 완료 — `/sessions?view=calendar`).
 3. (선택) 구글 캘린더 역방향 동기화(캘린더 삭제→앱 반영) — 보류 중.
 4. Drive 실연동 검증.
 5. (선택) 알림 Gmail 어댑터(현재 웹훅만; `notify.js` 어댑터 슬롯).

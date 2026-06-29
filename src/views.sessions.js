@@ -259,4 +259,46 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
     </section>`;
 }
 
-module.exports = { sessionRow, sessionsSection, sessionCreateForm };
+/** 월 캘린더 그리드(YYYY-MM). 날짜별 세션을 셀에 배치하고 이전/다음 월로 이동. */
+function monthCalendar(ym, sessions) {
+  const [y, mo] = String(ym).split("-").map(Number);
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const startDow = new Date(y, mo - 1, 1).getDay(); // 0=일
+  const daysInMonth = new Date(y, mo, 0).getDate();
+  const prevYm = mo === 1 ? `${y - 1}-12` : `${y}-${pad2(mo - 1)}`;
+  const nextYm = mo === 12 ? `${y + 1}-01` : `${y}-${pad2(mo + 1)}`;
+  const today = todayYmd();
+  const byDate = {};
+  for (const s of sessions) (byDate[s.session_date] = byDate[s.session_date] || []).push(s);
+  const dows = ["일", "월", "화", "수", "목", "금", "토"];
+
+  let cells = "";
+  for (let i = 0; i < startDow; i++) cells += `<div class="min-h-[88px] rounded-md border border-border/40 bg-bg/40"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = `${y}-${pad2(mo)}-${pad2(d)}`;
+    const ds = byDate[date] || [];
+    const isToday = date === today;
+    const items = ds
+      .map((s) => {
+        const t = s.start_time ? esc(s.start_time) + " " : "";
+        return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded bg-primary/10 px-1 py-0.5 text-[11px] text-primary hover:bg-primary/20" title="${esc(s.session_type)} · ${esc(s.project_title || "")}">${t}${esc(s.session_type)}</a>`;
+      })
+      .join("");
+    cells += `<div class="min-h-[88px] rounded-md border ${isToday ? "border-primary" : "border-border/40"} p-1">
+      <div class="mb-0.5 text-xs ${isToday ? "font-semibold text-primary" : "text-muted"}">${d}</div>
+      <div class="space-y-0.5">${items}</div>
+    </div>`;
+  }
+  return `
+    <div class="mb-3 flex items-center justify-between">
+      <a href="/sessions?view=calendar&month=${prevYm}" class="btn-ghost btn-sm">‹ 이전</a>
+      <h2 class="font-display text-lg font-semibold">${y}년 ${mo}월</h2>
+      <a href="/sessions?view=calendar&month=${nextYm}" class="btn-ghost btn-sm">다음 ›</a>
+    </div>
+    <div class="grid grid-cols-7 gap-1">
+      ${dows.map((d, i) => `<div class="pb-1 text-center text-xs font-medium ${i === 0 ? "text-danger" : i === 6 ? "text-primary" : "text-muted"}">${d}</div>`).join("")}
+      ${cells}
+    </div>`;
+}
+
+module.exports = { sessionRow, sessionsSection, sessionCreateForm, monthCalendar };
