@@ -66,17 +66,15 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
   res.send(layout({ title: "관리", user: req.user, current: "/settings", body, full: true }));
 }));
 
-/** 담당자 탭: 하우스 엔지니어 + 외주 작업자. */
+/** 담당자 탭: 하우스 엔지니어 목록 + 외주 작업자 메뉴 안내. */
 function peopleTab(currentUser) {
   const users = listUsers();
   const userRows = users.length ? users.map((u) => userRow(u, currentUser)).join("") : emptyState("등록된 사용자가 없습니다.");
-  const managers = listProjectManagers({ includeInactive: true, externalOnly: true });
-  const managerRows = managers.length ? managers.map((m) => managerRow(m)).join("") : emptyState("등록된 외주 작업자가 없습니다.");
   return `
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">하우스 엔지니어 <span class="text-sm font-normal text-muted">(로그인 계정)</span></h2>
-          <p class="mt-1 text-xs text-muted">등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지. 외부 인력은 아래 '외주 작업자'에 직접 추가하세요.</p>
+          <p class="mt-1 text-xs text-muted">등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.</p>
         </div>
         <form method="post" action="/settings/users" class="space-y-2">
           <div class="grid gap-2 sm:grid-cols-2">
@@ -96,17 +94,11 @@ function peopleTab(currentUser) {
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">외주 작업자</h2>
-          <p class="mt-1 text-xs text-muted">로그인 없이 작업 담당자로만 쓰는 외부 인력. 이름·연락처·이메일로 직접 추가합니다. (하우스 엔지니어는 위에서 관리되며 여기에 표시되지 않습니다.)</p>
+          <p class="mt-1 text-xs text-muted">
+            로그인 없이 작업 담당자로만 쓰는 외부 인력은
+            <a href="/workers" class="font-medium text-primary hover:underline">외주 작업자 메뉴</a>에서 추가·삭제·정산을 관리합니다.
+          </p>
         </div>
-        <form method="post" action="/settings/managers" class="space-y-2">
-          <input class="input" name="name" placeholder="이름" required />
-          <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input" name="email" placeholder="이메일" />
-            <input class="input" name="phone" placeholder="전화번호" />
-          </div>
-          <button class="btn-primary w-full" type="submit">외주 작업자 추가</button>
-        </form>
-        <div class="space-y-2">${managerRows}</div>
       </section>`;
 }
 
@@ -276,12 +268,21 @@ function alertWebhookSection() {
     </section>`;
 }
 
+/** 파일 버퍼 매직바이트 검증(Content-Type 스푸핑 방어). */
+function checkMagicBytes(buf, mime) {
+  if (!buf || buf.length < 4) return false;
+  if (/png/.test(mime)) return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  if (/jpe?g/.test(mime)) return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  return false;
+}
+
 // ── 거래명세서 로고 업로드/삭제(base64 data URI, admin_state) ──
 router.post("/studio-logo", requireChief, logoUpload.single("logo"), (req, res) => {
   const f = req.file;
   if (f && f.buffer && f.buffer.length) {
     const mime = f.mimetype || "";
     if (!/^image\/(png|jpe?g)$/.test(mime)) return res.status(400).send("PNG 또는 JPG 이미지만 업로드할 수 있습니다.");
+    if (!checkMagicBytes(f.buffer, mime)) return res.status(400).send("PNG 또는 JPG 이미지만 업로드할 수 있습니다.");
     setStudioLogo(`data:${mime};base64,${f.buffer.toString("base64")}`);
   }
   res.redirect("/settings?tab=settings&flash=saved");

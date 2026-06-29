@@ -51,6 +51,8 @@ async function stream(backend, fileId, res) {
   await new Promise((resolve, reject) => {
     const rs = fs.createReadStream(localPath(fileId));
     rs.on("error", reject).on("end", resolve);
+    // 클라이언트 조기 종료(연결 끊김) 시 읽기 스트림을 명시적으로 닫아 FD 누수 방지.
+    res.on("close", () => rs.destroy());
     rs.pipe(res);
   });
 }

@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const express = require("express");
 const { config } = require("../config");
 const { db } = require("../db");
@@ -55,6 +56,8 @@ router.get("/logout", (req, res) => {
 router.get("/auth/google", (req, res) => {
   if (!config.googleConfigured) return res.redirect("/login?err=" + encodeURIComponent("Google OAuth 미설정"));
   const next = safeNext(req.query.next);
+  // 로그인 CSRF 방어: 랜덤 논스를 state + httpOnly 쿠키에 동시 저장 → 콜백에서 대조.
+  const nonce = crypto.randomBytes(16).toString("hex");
   const client = oauthClient();
   const url = client.generateAuthUrl({
     access_type: "offline", // refresh token 수령
@@ -66,7 +69,14 @@ router.get("/auth/google", (req, res) => {
       "https://www.googleapis.com/auth/drive.file", // 자료 전달 스토리지용 최소권한
       "https://www.googleapis.com/auth/calendar", // 세션 겹침 검사(FreeBusy) + 예약 시 일정 자동 생성/수정/삭제
     ],
-    state: Buffer.from(JSON.stringify({ next })).toString("base64url"),
+    state: Buffer.from(JSON.stringify({ next, nonce })).toString("base64url"),
+  });
+  res.cookie("_oauth_nonce", nonce, {
+    httpOnly: true,
+    secure: config.isProd,
+    sameSite: "lax",
+    maxAge: 10 * 60 * 1000, // 10분 — OAuth 라운드트립 시간
+    path: "/",
   });
   res.redirect(url);
 });
@@ -76,6 +86,20 @@ router.get("/auth/google/callback", async (req, res) => {
     if (!config.googleConfigured) return res.redirect("/login?err=" + encodeURIComponent("Google OAuth 미설정"));
     const code = req.query.code;
     if (!code) return res.redirect("/login?err=" + encodeURIComponent("인증 코드 없음"));
+
+    // ── CSRF 방어: state 논스 ↔ 쿠키 논스 대조(불일치 즉시 거부) ──
+    let stateNext = "/";
+    try {
+      const stateData = JSON.parse(Buffer.from(String(req.query.state || ""), "base64url").toString());
+      const cookieNonce = req.cookies && req.cookies["_oauth_nonce"];
+      res.clearCookie("_oauth_nonce", { path: "/" }); // 단발 검증 후 즉시 만료
+      if (!stateData.nonce || !cookieNonce || stateData.nonce !== cookieNonce) {
+        return res.redirect("/login?err=" + encodeURIComponent("인증 상태 불일치(보안 오류). 다시 로그인하세요."));
+      }
+      stateNext = safeNext(stateData.next);
+    } catch {
+      return res.redirect("/login?err=" + encodeURIComponent("인증 상태 파싱 오류. 다시 로그인하세요."));
+    }
 
     const client = oauthClient();
     const { tokens } = await client.getToken(code);
@@ -97,11 +121,7 @@ router.get("/auth/google/callback", async (req, res) => {
     if (tokens.refresh_token) saveRefreshToken(tokens.refresh_token);
 
     setSessionCookie(res, user);
-    let next = "/";
-    try {
-      next = safeNext(JSON.parse(Buffer.from(String(req.query.state || ""), "base64url").toString()).next);
-    } catch {}
-    res.redirect(next);
+    res.redirect(stateNext);
   } catch (e) {
     console.error("[oauth callback]", e);
     res.redirect("/login?err=" + encodeURIComponent("Google 로그인 실패"));

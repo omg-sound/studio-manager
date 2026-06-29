@@ -90,8 +90,11 @@ function sameOriginRequest(req) {
     return originHost === hostOf(req.get("host")) || originHost === hostOf(config.baseUrl);
   }
 
-  // 3) Origin·Sec-Fetch-Site 둘 다 없는 구형 클라이언트는 허용.
-  return true;
+  // 3) Origin·Sec-Fetch-Site 둘 다 없는 경우:
+  //    서버-투-서버 요청(Authorization 헤더 보유) 또는 /internal/ 경로(cron 백업)는 허용.
+  //    그 외는 기본 거부(CSRF 강화).
+  if (req.get("authorization") || req.path.startsWith("/internal/")) return true;
+  return false;
 }
 
 app.use((req, res, next) => {

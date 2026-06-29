@@ -130,7 +130,7 @@ function ensureSampleDeliverable() {
     `INSERT INTO deliverables (project_id,title,version,kind,storage_backend,file_id,file_name,file_size,mime_type,access_token)
      VALUES (?,?,?,?,?,?,?,?,?,?)`
   ).run(proj.id, "월광 Mix v2 (샘플)", "v2", "믹스", "local", fileId, "월광_mix_v2.txt", content.length, "text/plain", token);
-  console.log("  + 자료(샘플): 월광 Mix v2 → /d/" + token);
+  console.log("  + 자료(샘플): 월광 Mix v2");
 }
 ensureSampleDeliverable();
 
