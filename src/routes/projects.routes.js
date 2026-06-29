@@ -239,8 +239,24 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems, expand: true });
   }
 
-  const body = [flashBanner(req.query), pageHeader({ title: p.title, desc }), tabBar, tabContent].join("\n");
+  const errorModal = req.query.error === "session_invoiced" ? sessionInvoicedModal(p.id) : "";
+  const body = [flashBanner(req.query), errorModal, pageHeader({ title: p.title, desc }), tabBar, tabContent].join("\n");
   res.send(layout({ title: p.title, user: req.user, current: "/projects", body }));
+}
+
+/** 청구된 세션 수정·삭제 차단 모달(?error=session_invoiced). app.js의 '확인'(data-modal-close)으로 닫는다. */
+function sessionInvoicedModal(projectId) {
+  return `
+    <div data-modal class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div class="card w-full max-w-md">
+        <h3 class="font-display text-base font-semibold">청구된 세션</h3>
+        <p class="mt-2 text-sm text-muted">이미 청구된 세션은 수정·삭제할 수 없습니다. 인보이스를 삭제한 뒤 다시 시도하세요.</p>
+        <div class="mt-4 flex justify-end gap-2">
+          <a href="/projects/${projectId}?tab=invoice" class="btn-ghost btn-sm">청구 화면으로</a>
+          <button class="btn-primary btn-sm" type="button" data-modal-close>확인</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 /** 메타 한 줄 요약(아티스트 · 거래처 · 담당자 / 견적 · 완료일). */

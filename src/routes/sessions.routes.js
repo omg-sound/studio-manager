@@ -147,6 +147,10 @@ router.post("/sessions/:id", requireEditor, asyncHandler(async (req, res) => {
   try {
     s = updateSession(req.user, Number(req.params.id), req.body);
   } catch (e) {
+    if (e.message === "SESSION_INVOICED") {
+      const ex = getSessionForUser(req.user, Number(req.params.id));
+      return res.redirect(`/projects/${ex ? ex.project_id : ""}?tab=sessions&error=session_invoiced`);
+    }
     return sessionInputError(e, res);
   }
   if (!s) return res.status(404).send("세션을 찾을 수 없습니다.");
@@ -169,6 +173,9 @@ router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res)
   try {
     r = deleteSession(req.user, id);
   } catch (e) {
+    if (e.message === "SESSION_INVOICED") {
+      return res.redirect(`/projects/${existing ? existing.project_id : ""}?tab=sessions&error=session_invoiced`);
+    }
     return sessionInputError(e, res);
   }
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");

@@ -281,3 +281,21 @@
     });
   }, true);
 })();
+
+// 경고 모달([data-modal]): '확인'(data-modal-close)으로 닫고 URL의 error 파라미터를 제거.
+(function () {
+  "use strict";
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-modal-close]");
+    if (!btn) return;
+    var modal = btn.closest("[data-modal]");
+    if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
+    try {
+      var url = new URL(window.location.href);
+      if (url.searchParams.has("error")) {
+        url.searchParams.delete("error");
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
+    } catch (err) {}
+  });
+})();
