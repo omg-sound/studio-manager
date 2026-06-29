@@ -1,26 +1,30 @@
-// 최소 클라이언트 인터랙션: 모바일 드로어 토글.
+// 최소 클라이언트 인터랙션: 모바일 드로어 토글 + aria-expanded + 닫기 버튼.
 (function () {
   "use strict";
   var toggle = document.getElementById("navToggle");
   var sidebar = document.getElementById("sidebar");
   var backdrop = document.getElementById("backdrop");
+  var drawerClose = document.getElementById("navDrawerClose");
   if (!toggle || !sidebar || !backdrop) return;
 
   function open() {
     sidebar.classList.remove("hidden");
     sidebar.classList.add("block");
     backdrop.classList.remove("hidden");
+    toggle.setAttribute("aria-expanded", "true");
   }
   function close() {
     sidebar.classList.add("hidden");
     sidebar.classList.remove("block");
     backdrop.classList.add("hidden");
+    toggle.setAttribute("aria-expanded", "false");
   }
   toggle.addEventListener("click", function () {
     if (sidebar.classList.contains("hidden")) open();
     else close();
   });
   backdrop.addEventListener("click", close);
+  if (drawerClose) drawerClose.addEventListener("click", close);
 })();
 
 // 복사 버튼([data-copy]) + 삭제 확인([data-confirm]) + 자동 제출([data-autosubmit]).

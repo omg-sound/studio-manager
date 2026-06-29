@@ -145,7 +145,7 @@ function sidebarLinks(user, current) {
       const cls = active
         ? "bg-primary/12 text-primary"
         : "text-fg/70 hover:bg-surface hover:text-fg";
-      return `<a href="${i.href}" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${cls}">
+      return `<a href="${i.href}" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}">
         ${icon(i.key, "h-[18px] w-[18px] shrink-0")}<span>${esc(i.label)}</span></a>`;
     })
     .join("\n");
@@ -170,7 +170,8 @@ function layout({ title, user, current = "", body, full = false }) {
   <meta charset="utf-8" />
   <title>${esc(title)} · OMG Studios</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#faf9f5" />
+  <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#1e1d1b" media="(prefers-color-scheme: dark)" />
   ${FONT_LINKS}
   <link rel="stylesheet" href="/css/app.css?v=${ASSET_VERSION}" />
 </head>
@@ -180,7 +181,7 @@ function layout({ title, user, current = "", body, full = false }) {
       ? `
   <!-- 모바일 상단바 -->
   <header class="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-elevated/80 px-4 py-3 backdrop-blur sm:hidden">
-    <button id="navToggle" class="btn-ghost px-3 py-1.5" aria-label="메뉴">
+    <button id="navToggle" class="btn-ghost px-3 py-1.5" aria-label="메뉴" aria-expanded="false">
       <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     ${WORDMARK}
@@ -190,6 +191,13 @@ function layout({ title, user, current = "", body, full = false }) {
   <div class="mx-auto flex w-full max-w-content gap-8 px-4 py-6 sm:px-6">
     <!-- 사이드바(데스크탑) / 드로어(모바일) -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-64 transform border-r border-border bg-elevated p-4 transition sm:static sm:z-0 sm:block sm:w-56 sm:translate-x-0 sm:border-0 sm:bg-transparent sm:p-0">
+      <!-- 모바일 드로어 헤더: 로고 + 닫기(X) 버튼 -->
+      <div class="mb-4 flex items-center justify-between sm:hidden">
+        ${WORDMARK}
+        <button id="navDrawerClose" class="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label="닫기">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
       <div class="mb-7 hidden items-center gap-2 px-2 sm:flex">${WORDMARK}</div>
       <nav class="space-y-0.5">
         ${sidebarLinks(user, current)}
@@ -268,4 +276,53 @@ function detailsChevron() {
   return `<svg class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>`;
 }
 
-module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron };
+/**
+ * 프로젝트 유형 배지 HTML.
+ * @param {string} type "session" | "task" | 기타
+ * @returns {string} HTML — .badge-primary(세션) | .badge-neutral(작업/미정)
+ */
+function projectTypeBadge(type) {
+  if (type === "session") return `<span class="badge-primary">${esc("세션")}</span>`;
+  if (type === "task") return `<span class="badge-neutral">${esc("작업")}</span>`;
+  return `<span class="badge-neutral">${esc(type || "미정")}</span>`;
+}
+
+/**
+ * 상세 페이지 밑줄 탭 바.
+ * @param {{tabs:Array<{key:string,label:string}>, activeKey:string, hrefFn:(key:string)=>string}} opts
+ * @returns {string} HTML — `<div class="mb-6 flex gap-1 border-b border-border">...</div>`
+ */
+function tabBar({ tabs, activeKey, hrefFn }) {
+  const items = tabs
+    .map(({ key, label }) => {
+      const active = key === activeKey;
+      const cls = active
+        ? "border-b-2 border-primary font-semibold text-fg"
+        : "border-b-2 border-transparent text-muted hover:border-border hover:text-fg";
+      const ariaCurrent = active ? ' aria-current="page"' : "";
+      return `<a href="${esc(hrefFn(key))}" class="px-4 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}"${ariaCurrent}>${esc(label)}</a>`;
+    })
+    .join("");
+  return `<div class="mb-6 flex gap-1 overflow-x-auto border-b border-border">${items}</div>`;
+}
+
+/**
+ * 목록 페이지 필터 알약칩 그룹.
+ * @param {{chips:Array<{key:string,label:string}>, activeKey:string, hrefFn:(key:string)=>string}} opts
+ * @returns {string} HTML — `<div class="mb-4 flex flex-wrap gap-2">...</div>`
+ */
+function filterChips({ chips, activeKey, hrefFn }) {
+  const items = chips
+    .map(({ key, label }) => {
+      const active = key === activeKey;
+      const cls = active
+        ? "badge-primary"
+        : "badge-neutral hover:bg-primary/10 hover:text-primary transition-colors";
+      const ariaCurrent = active ? ' aria-current="true"' : "";
+      return `<a href="${esc(hrefFn(key))}" class="${cls} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"${ariaCurrent}>${esc(label)}</a>`;
+    })
+    .join("");
+  return `<div class="mb-4 flex flex-wrap gap-2">${items}</div>`;
+}
+
+module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, projectTypeBadge, tabBar, filterChips };
