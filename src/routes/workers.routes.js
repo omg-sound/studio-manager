@@ -2,16 +2,16 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireChief } = require("../auth");
+const { requireChief, requireInvoice, isChief } = require("../auth");
 const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel } = require("../data");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE } = require("../config");
 
 const router = express.Router();
-router.use(requireChief); // 외주 작업자 관리·정산은 치프 전용
+// 정산(지급)·열람 = 청구권자(대표·치프, requireInvoice). 작업자 마스터 추가/삭제 = 치프(requireChief).
 
-// ── 외주 작업자 목록 + 추가 ──
-router.get("/", (req, res) => {
+// ── 외주 작업자 목록(치프는 추가 폼도) ──
+router.get("/", requireInvoice, (req, res) => {
   const workers = listProjectManagers({ includeInactive: true, externalOnly: true });
   const list = workers.length
     ? workers
@@ -26,7 +26,7 @@ router.get("/", (req, res) => {
         </a>`
         )
         .join("")
-    : emptyState("등록된 외주 작업자가 없습니다. 아래에서 추가하세요.", { card: true });
+    : emptyState(`등록된 외주 작업자가 없습니다.${isChief(req.user) ? " 아래에서 추가하세요." : ""}`, { card: true });
 
   const addForm = `
     <form method="post" action="/workers" class="card mt-3 space-y-2">
@@ -43,11 +43,11 @@ router.get("/", (req, res) => {
     ${flashBanner(req.query)}
     ${pageHeader({ title: "외주 작업자", desc: "로그인 없이 작업 담당자로 쓰는 외부 인력. 작업 히스토리·정산 관리." })}
     ${list}
-    ${addForm}`;
+    ${isChief(req.user) ? addForm : ""}`;
   res.send(layout({ title: "외주 작업자", user: req.user, current: "/workers", body }));
 });
 
-router.post("/", (req, res) => {
+router.post("/", requireChief, (req, res) => {
   const name = String(req.body.name || "").trim();
   if (name) {
     db()
@@ -57,13 +57,13 @@ router.post("/", (req, res) => {
   res.redirect("/workers?flash=created");
 });
 
-router.post("/:id/delete", (req, res) => {
+router.post("/:id/delete", requireChief, (req, res) => {
   db().prepare("DELETE FROM project_managers WHERE id = ? AND user_id IS NULL").run(Number(req.params.id));
   res.redirect("/workers?flash=deleted");
 });
 
 // ── 외주 작업자 상세(작업 히스토리 / 정산) ──
-router.get("/:id", (req, res) => {
+router.get("/:id", requireInvoice, (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send(errorPage({ code: 404, title: "외주 작업자를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tab = req.query.tab === "payout" ? "payout" : "tasks";
@@ -129,14 +129,14 @@ router.get("/:id", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: esc(w.name), desc: "외주 작업자", action: `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` })}
+    ${pageHeader({ title: esc(w.name), desc: "외주 작업자", action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: w.name, user: req.user, current: "/workers", body }));
 });
 
 // ── 작업 지급 처리/해제(정산) ──
-router.post("/:id/payout/:taskId", (req, res) => {
+router.post("/:id/payout/:taskId", requireInvoice, (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
   // 소속 확인: engineer_id 우선(rename 내성), 폴백 (engineer_id IS NULL AND engineer_name = 이름)(레거시·미매칭분).

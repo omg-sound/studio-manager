@@ -123,7 +123,7 @@ const NAV = [
   { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "all" },
   { href: "/invoices", label: "청구", key: "invoices", access: "invoice" },
   { href: "/clients", label: "클라이언트", key: "clients", access: "chief" },
-  { href: "/workers", label: "외주 작업자", key: "workers", access: "chief" },
+  { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice" },
   { href: "/settings", label: "관리", key: "settings", access: "chief" },
 ];
 
