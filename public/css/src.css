@@ -16,10 +16,12 @@
   --color-success: 92 122 92; /* muted sage */
   --color-warning: 181 121 60; /* warm amber */
   --color-danger: 188 75 60; /* #BC4B3C warm red */
+  --color-info: 96 115 140; /* #60738C 쿨 블루그레이 — 정보/중립 강조 */
 }
 
+/* 다크 토큰. data-theme 미지정 시에만 OS를 추종(html[data-theme] 있으면 강제 모드가 이긴다). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --color-bg: 30 29 27; /* #1E1D1B warm charcoal */
     --color-surface: 38 37 34; /* #262522 */
@@ -32,7 +34,31 @@
     --color-success: 132 170 132;
     --color-warning: 209 158 96;
     --color-danger: 224 122 104;
+    --color-info: 148 163 184; /* 쿨 블루그레이 밝은 변형 */
   }
+}
+
+/* 수동 강제 다크(html[data-theme="dark"]) — media 값과 동일. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: 30 29 27;
+  --color-surface: 38 37 34;
+  --color-elevated: 45 43 39;
+  --color-border: 61 58 52;
+  --color-muted: 156 150 139;
+  --color-fg: 237 235 228;
+  --color-primary: 214 138 105;
+  --color-primary-fg: 28 26 24;
+  --color-success: 132 170 132;
+  --color-warning: 209 158 96;
+  --color-danger: 224 122 104;
+  --color-info: 148 163 184;
+}
+
+/* 수동 강제 라이트(html[data-theme="light"]) — OS가 다크여도 크림 라이트 유지(기본 정체성).
+   색 토큰은 기본 :root(라이트)를 그대로 상속한다(위 media는 [data-theme] 있으면 미적용). */
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 /* iOS 입력 자동확대 방지: 모바일에서 폼 컨트롤 16px(플레이북2 §5-1). */
@@ -85,9 +111,13 @@
   .label {
     @apply mb-1 block text-sm font-medium text-fg/90;
   }
+  /* 폼 밀도용 작은 라벨(.label과 공존, text-xs 변형). */
+  .label-sm {
+    @apply mb-1 block text-xs font-medium text-fg/80;
+  }
   .card {
     @apply rounded-xl border border-border bg-surface p-5;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
   }
   .badge {
     @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
@@ -107,5 +137,19 @@
   }
   .badge-danger {
     @apply badge bg-danger/12 text-danger;
+  }
+  .badge-info {
+    @apply badge bg-info/12 text-info;
+  }
+  /* 행/카드 클릭 어포던스(소비 레인이 클릭 가능한 행·카드에 적용). */
+  .row-link {
+    @apply transition-colors hover:bg-elevated/60;
+  }
+}
+
+@layer utilities {
+  /* 금액·시간 세로정렬용 등폭 숫자(소비 레인이 금액·시간 셀에 적용). */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }

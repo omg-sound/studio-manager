@@ -27,6 +27,26 @@
   if (drawerClose) drawerClose.addEventListener("click", close);
 })();
 
+// 테마 토글([data-theme-toggle]): 라이트↔다크 + localStorage["theme"] 저장.
+// 로드 시 저장값 복원(없으면 OS 추종 = data-theme 속성 미설정).
+// CSS 분기는 :root[data-theme="dark"] 선택자로 처리(src.css 레인).
+(function () {
+  "use strict";
+  var saved = "";
+  try { saved = localStorage.getItem("theme") || ""; } catch (e) {}
+  if (saved === "dark" || saved === "light") {
+    document.documentElement.setAttribute("data-theme", saved);
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-theme-toggle]");
+    if (!btn) return;
+    var current = document.documentElement.getAttribute("data-theme");
+    var next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("theme", next); } catch (e) {}
+  });
+})();
+
 // 복사 버튼([data-copy]) + 삭제 확인([data-confirm]) + 자동 제출([data-autosubmit]).
 (function () {
   "use strict";
@@ -67,7 +87,7 @@
   });
 })();
 
-// 세션 예약 폼: 녹음 종류 게이트 + 시작 슬롯 가용성 + 소요시간 슬라이더(30분·최대 12시간, 1Pro/2Pro/직접입력 프리셋) + 예상 종료.
+// 세션 예약 폼: 세션 종류→녹음 종류 조건부 표시 + 시작 슬롯 가용성 + 소요시간 슬라이더(30분·최대 12시간, 1Pro/2Pro/직접입력 프리셋) + 예상 종료.
 (function () {
   "use strict";
   // 추가 폼 + 각 세션 편집 폼이 모두 동일 인터랙션(그리드·슬라이더·가용성)을 갖도록 폼별로 초기화.
@@ -77,8 +97,6 @@
   var dateInput = form.querySelector("[data-session-date]");
   var grid = form.querySelector("[data-start-grid]");
   var rateSel = form.querySelector("[data-rate-select]");
-  var rateRequired = !!(rateSel && rateSel.hasAttribute("data-rate-required"));
-  var startHint = form.querySelector("[data-start-hint]");
   var customStart = form.querySelector("[data-custom-start]");
   var customStartWrap = form.querySelector("[data-custom-start-wrap]");
   var customStartToggle = form.querySelector("[data-custom-start-toggle]");
@@ -87,6 +105,8 @@
   var durLabel = form.querySelector("[data-duration-label]");
   var customInput = form.querySelector("[data-custom-hours]");
   var presets = form.querySelectorAll("[data-duration-preset]");
+  var sessionTypeSel = form.querySelector('select[name="session_type"]');
+  var showWhenRec = form.querySelectorAll('[data-show-when="rec"]');
   var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 720 : 720;
   var busy = {};
 
@@ -100,8 +120,6 @@
     var r = form.querySelector('input[name="' + name + '"]:checked');
     return r ? r.value : "";
   }
-  // 녹음 종류 필수: 선택돼야 시작 시간 입력 가능(녹음 세션만 게이트).
-  function startEnabled() { return !rateRequired || !!(rateSel && rateSel.value); }
   function currentStart() {
     if (customStart && customStart.value) return customStart.value;
     return checkedValue("start_time");
@@ -139,22 +157,18 @@
     if (durLabel) durLabel.textContent = fmtDuration(durationMinutes());
     updatePreview();
   }
-  // 시작 시간 활성/비활성: 녹음 종류 게이트 + 예약된(busy) 슬롯.
+  // 시작 시간 가용성: 예약된(busy) 슬롯만 비활성.
   function applyStartState() {
-    var ok = startEnabled();
     if (grid) Array.prototype.forEach.call(grid.querySelectorAll("input[data-slot]"), function (inp) {
-      var dis = !ok || !!busy[inp.getAttribute("data-slot")];
+      var dis = !!busy[inp.getAttribute("data-slot")];
       inp.disabled = dis;
       if (dis && inp.checked) inp.checked = false;
     });
-    if (customStartToggle) customStartToggle.disabled = !ok;
-    if (customStart) customStart.disabled = !ok;
-    if (!ok) {
-      clearGridStart();
-      if (customStart) customStart.value = "";
-      if (customStartWrap) customStartWrap.hidden = true;
-    }
-    if (startHint) startHint.textContent = ok ? "" : " · 녹음 종류를 먼저 선택하세요";
+  }
+  // 세션 종류=녹음일 때만 [data-show-when="rec"] 요소 표시(녹음 종류 select 등).
+  function syncRecFields() {
+    var isRec = sessionTypeSel && sessionTypeSel.value === "녹음";
+    Array.prototype.forEach.call(showWhenRec, function (el) { el.hidden = !isRec; });
   }
   // 1Pro/2Pro 프리셋: 단가표 기준시간(base_minutes)이 있어야 활성.
   function updateProAvailability() {
@@ -186,7 +200,8 @@
   }
 
   if (dateInput) dateInput.addEventListener("change", refreshAvailability);
-  if (rateSel) rateSel.addEventListener("change", function () { applyStartState(); updateProAvailability(); updatePreview(); });
+  if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); });
+  if (sessionTypeSel) sessionTypeSel.addEventListener("change", syncRecFields);
   // 슬라이더 드래그(30분 단위) → custom_hours 동기화.
   if (slider) slider.addEventListener("input", function () {
     var mins = parseInt(slider.value, 10) || 0;
@@ -208,7 +223,6 @@
   });
   // 그리드 '직접입력' 버튼 → 시간 입력칸 펼치고 포커스(텍스트로 HH:MM 입력).
   if (customStartToggle) customStartToggle.addEventListener("click", function () {
-    if (!startEnabled()) return;
     if (customStartWrap) customStartWrap.hidden = false;
     clearGridStart();
     if (customStart) customStart.focus();
@@ -232,6 +246,7 @@
 
   applyStartState();
   updateProAvailability();
+  syncRecFields();
   refreshDuration();
   refreshAvailability();
   }

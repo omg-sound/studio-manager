@@ -114,17 +114,25 @@ function icon(name, cls = "h-5 w-5") {
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 }
 
-// 네비게이션 단일 정의(사이드바 + 대시보드 공유).
-// access: all=전원 / invoice=치프·대표 / chief=치프 전용.
+// 네비게이션 단일 정의(사이드바 그룹 렌더 + navItemsFor 공유).
+// access: all=전원 / editor=편집자(치프·스태프) / invoice=치프·대표 / chief=치프 전용.
+// group: 사이드바 그룹 키(ops 운영 / billing 청구 / manage 관리) — navItemsFor 필터(access)와는 무관.
 const NAV = [
-  { href: "/", label: "대시보드", key: "dashboard", access: "all" },
-  { href: "/projects", label: "프로젝트", key: "projects", access: "all" },
-  { href: "/sessions", label: "일정", key: "sessions", access: "all" },
-  { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "editor" },
-  { href: "/invoices", label: "청구", key: "invoices", access: "invoice" },
-  { href: "/clients", label: "클라이언트", key: "clients", access: "chief" },
-  { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice" },
-  { href: "/settings", label: "관리", key: "settings", access: "chief" },
+  { href: "/", label: "대시보드", key: "dashboard", access: "all", group: "ops" },
+  { href: "/projects", label: "프로젝트", key: "projects", access: "all", group: "ops" },
+  { href: "/sessions", label: "일정", key: "sessions", access: "all", group: "ops" },
+  { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "editor", group: "ops" },
+  { href: "/invoices", label: "청구", key: "invoices", access: "invoice", group: "billing" },
+  { href: "/clients", label: "클라이언트", key: "clients", access: "chief", group: "manage" },
+  { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
+  { href: "/settings", label: "관리", key: "settings", access: "chief", group: "manage" },
+];
+
+// 사이드바 그룹 순서·소제목. navItemsFor 결과를 group 키로 묶어 렌더(빈 그룹은 자동 생략).
+const NAV_GROUPS = [
+  { key: "ops", label: "운영" },
+  { key: "billing", label: "청구" },
+  { key: "manage", label: "관리" },
 ];
 
 function navItemsFor(user) {
@@ -141,15 +149,25 @@ function navItemsFor(user) {
 }
 
 function sidebarLinks(user, current) {
-  return navItemsFor(user)
-    .map((i) => {
-      const active = i.href === current;
-      const cls = active
-        ? "bg-primary/12 text-primary"
-        : "text-fg/70 hover:bg-surface hover:text-fg";
-      return `<a href="${i.href}" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}">
+  const items = navItemsFor(user);
+  const renderLink = (i) => {
+    const active = i.href === current;
+    // 활성 표시 = 좌측 레일(border-l-2 border-primary). 비활성도 투명 레일로 폭을 맞춰 레이아웃 흔들림 방지.
+    const cls = active
+      ? "border-l-2 border-primary bg-primary/10 text-primary"
+      : "border-l-2 border-transparent text-fg/70 hover:bg-surface hover:text-fg";
+    return `<a href="${i.href}" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}">
         ${icon(i.key, "h-[18px] w-[18px] shrink-0")}<span>${esc(i.label)}</span></a>`;
-    })
+  };
+  return NAV_GROUPS.map((g) => {
+    const groupItems = items.filter((i) => i.group === g.key);
+    if (!groupItems.length) return ""; // 권한상 빈 그룹은 소제목까지 숨김
+    return `<div class="space-y-0.5">
+      <div class="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted">${esc(g.label)}</div>
+      ${groupItems.map(renderLink).join("\n")}
+    </div>`;
+  })
+    .filter(Boolean)
     .join("\n");
 }
 
@@ -157,7 +175,10 @@ const WORDMARK = `<span class="font-display text-[17px] font-semibold text-fg">O
 
 const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />`;
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <!-- Pretendard: Inter에 없는 한글 글리프 담당(본문 한글). CSP style-src(cdn.jsdelivr.net) 허용은 server.js에서 처리. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />`;
 
 /**
  * 전체 페이지 레이아웃.
@@ -201,11 +222,16 @@ function layout({ title, user, current = "", body, full = false }) {
         </button>
       </div>
       <div class="mb-7 hidden items-center gap-2 px-2 sm:flex">${WORDMARK}</div>
-      <nav class="space-y-0.5">
+      <nav class="space-y-6">
         ${sidebarLinks(user, current)}
       </nav>
       <div class="mt-8 hidden border-t border-border pt-4 text-xs text-muted sm:block">
         <div class="mb-2 px-2">${who}</div>
+        <!-- 테마 토글: 마크업만(아이콘+라벨). 토글 로직=app.js([data-theme-toggle]), 다크 분기=src.css. CSP-safe(인라인 onclick 없음). -->
+        <button type="button" data-theme-toggle aria-label="테마 전환" class="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 font-medium text-muted transition-colors hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+          <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/></svg>
+          <span data-theme-label>테마</span>
+        </button>
         <a href="/logout" class="px-2 text-primary hover:underline">로그아웃</a>
       </div>
     </aside>
@@ -266,11 +292,21 @@ function pageHeader({ title, desc = "", action = "" }) {
 /**
  * 빈 상태 표시(목록·섹션 공통). 정렬·여백을 한 곳에서 통일.
  * @param {string} inner 이미 빌드된 HTML(동적값은 호출부에서 esc). 보통 "···가 없습니다." + 선택적 링크.
- * @param {{card?:boolean}} opts card=true면 카드로 감싼 페이지 상단 목록용, 아니면 섹션 내부용(여백 작게).
+ * @param {{card?:boolean, icon?:string, cta?:{href:string,label?:string}}} opts
+ *   card=true면 카드로 감싼 페이지 상단 목록용, 아니면 섹션 내부용(여백 작게).
+ *   icon=ICONS 키(연한 라인아이콘을 위에 표시), cta={href,label}=아래 강조 링크(btn-primary). 둘 다 선택.
  */
-function emptyState(inner, { card = false } = {}) {
+function emptyState(inner, { card = false, icon: iconName = "", cta = null } = {}) {
   const cls = card ? "card py-12 text-center text-sm text-muted" : "py-8 text-center text-sm text-muted";
-  return `<div class="${cls}">${inner}</div>`;
+  const iconHtml =
+    iconName && ICONS[iconName]
+      ? `<div class="mb-3 flex justify-center text-muted/40">${icon(iconName, "h-10 w-10")}</div>`
+      : "";
+  const ctaHtml =
+    cta && cta.href
+      ? `<div class="mt-4 flex justify-center"><a href="${esc(cta.href)}" class="btn-primary">${esc(cta.label || "")}</a></div>`
+      : "";
+  return `<div class="${cls}">${iconHtml}${inner}${ctaHtml}</div>`;
 }
 
 /** 접기 토글 chevron — `<details class="group">` 안 summary 우측에. 펼치면 180° 회전(group-open). */
@@ -327,4 +363,32 @@ function filterChips({ chips, activeKey, hrefFn }) {
   return `<div class="mb-4 flex flex-wrap gap-2">${items}</div>`;
 }
 
-module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, projectTypeBadge, tabBar, filterChips };
+/**
+ * 목록 그룹 컨테이너: 단일 `.card` 안에 구분선(divide-y)으로 나뉜 행 묶음.
+ * `listRow`로 만든 행들을 받아 프로젝트·청구 등 목록을 통일된 카드형 리스트로 렌더한다.
+ * @param {{rows:(string[]|string)}} opts rows=이미 빌드된 행 HTML 배열 또는 문자열(보통 listRow 결과).
+ * @returns {string} HTML — `.card`(패딩 제거·모서리 클립) + `divide-y divide-border` 컨테이너.
+ */
+function listGroup({ rows }) {
+  const inner = Array.isArray(rows) ? rows.join("") : rows || "";
+  return `<div class="card overflow-hidden p-0"><div class="divide-y divide-border">${inner}</div></div>`;
+}
+
+/**
+ * 목록 행: 좌(주요 내용)·우(메타/금액) 2단 + 호버 강조. href가 있으면 링크 행, 없으면 정적 행.
+ * `listGroup`과 함께 쓴다. 동적 텍스트는 호출부에서 esc 처리한 HTML을 left/right로 넘길 것.
+ * @param {{href?:string, left:string, right?:string}} opts left/right=이미 빌드된 HTML 조각.
+ * @returns {string} HTML — `px-4 py-3` 행(링크면 `<a>`, 아니면 `<div>`).
+ */
+function listRow({ href, left, right = "" }) {
+  const inner = `<div class="flex items-center justify-between gap-4 px-4 py-3">
+      <div class="min-w-0">${left}</div>
+      ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
+    </div>`;
+  if (href) {
+    return `<a href="${esc(href)}" class="block transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${inner}</a>`;
+  }
+  return `<div class="transition-colors hover:bg-surface">${inner}</div>`;
+}
+
+module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, projectTypeBadge, tabBar, filterChips, listGroup, listRow };
