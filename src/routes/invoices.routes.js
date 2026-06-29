@@ -13,11 +13,16 @@ const {
   payStatusOf,
   isOverdue,
   deleteInvoice,
+  getStudioInfo,
+  getClient,
+  ensureInvoiceNumber,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState } = require("../views");
 const { invoiceRow, invoiceBadge } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
+const { asyncHandler } = require("../lib/async");
+const { renderInvoicePdf } = require("../invoice-pdf");
 
 const router = express.Router();
 
@@ -177,11 +182,30 @@ router.get("/:id", requireInvoice, (req, res) => {
       ${row("마감일", inv.due_date ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}` : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
     </div>
+    ${(inv.status === "발행" || inv.status === "입금완료") ? `<div class="mt-3"><a href="/invoices/${inv.id}/statement.pdf" class="btn-ghost btn-sm" target="_blank" rel="noopener">거래명세서 PDF 보기</a></div>` : ""}
     ${invoiceItemsCard(items)}
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
     ${adminControls}`;
   res.send(layout({ title: inv.title, user: req.user, current: "/invoices", body }));
 });
+
+// ── 거래명세서 PDF (발행/입금완료만, PII → 인증 필수·no-store·영속 저장 없이 즉석 스트리밍) ──
+router.get("/:id/statement.pdf", requireInvoice, asyncHandler(async (req, res) => {
+  let inv = getInvoiceForUser(req.user, Number(req.params.id));
+  if (!inv) return res.status(404).send("청구를 찾을 수 없습니다.");
+  inv = ensureInvoiceNumber(inv); // 수동 발행분도 채번 보장
+  if (inv.status !== "발행" && inv.status !== "입금완료") {
+    return res.status(400).send(errorPage({ code: 400, title: "발행된 청구만 명세서를 만들 수 있습니다", message: "먼저 청구를 '발행' 상태로 전환하세요.", user: req.user }));
+  }
+  const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
+  const items = bundle ? bundle.rows : [];
+  const client = inv.client_id ? getClient(inv.client_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
+  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), client, invoice: inv, items });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
+}));
 
 function invoiceItemsCard(items) {
   if (!items.length) return "";
@@ -261,6 +285,7 @@ router.post("/:id/pay", requireInvoice, (req, res) => {
   else if (paid > 0) status = inv.status === "미발행" ? "발행" : inv.status === "입금완료" ? "발행" : inv.status;
   else status = inv.status === "입금완료" ? "발행" : inv.status; // paid=0 완납 취소 시 발행으로
   db().prepare("UPDATE invoices SET paid_amount=?, status=? WHERE id=?").run(paid, status, inv.id);
+  ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 승격 시 채번 보장
   res.redirect(`/invoices/${inv.id}?flash=paid`);
 });
 
@@ -272,6 +297,7 @@ router.post("/:id/status", requireInvoice, (req, res) => {
   // 입금완료로 변경 시 입금액=총액 자동
   const paid = status === "입금완료" ? inv.amount : inv.paid_amount;
   db().prepare("UPDATE invoices SET status=?, paid_amount=? WHERE id=?").run(status, paid, inv.id);
+  ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 전이 시 채번 보장
   res.redirect(`/invoices/${inv.id}?flash=saved`);
 });
 

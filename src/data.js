@@ -7,7 +7,7 @@
  */
 
 const crypto = require("crypto");
-const { db } = require("./db");
+const { db, getState, setState } = require("./db");
 const { todayYmd, isValidYmd, formatYmdShort, minutesBetween } = require("./lib/date");
 const { canInvoice, isChief, canEdit } = require("./auth");
 const {
@@ -524,6 +524,26 @@ function nextInvoiceNumber(issueDate) {
     .get(prefix + "%");
   const last = row && row.invoice_number ? parseInt(row.invoice_number.slice(prefix.length), 10) : 0;
   return prefix + String((Number.isFinite(last) ? last : 0) + 1).padStart(3, "0");
+}
+
+// ── 공급자(스튜디오) 세금정보 — admin_state 평문(비밀 아님, studio_location과 동급) ──
+const STUDIO_INFO_KEYS = ["studio_biz_name", "studio_biz_no", "studio_owner_name", "studio_address", "studio_biz_type", "studio_biz_item", "studio_tel"];
+function getStudioInfo() {
+  const out = {};
+  for (const k of STUDIO_INFO_KEYS) out[k] = getState(k) || "";
+  return out;
+}
+function setStudioInfo(body = {}) {
+  for (const k of STUDIO_INFO_KEYS) setState(k, String(body[k] || "").trim() || null);
+}
+
+/** 발행/입금완료로 전이 시 채번 보장(수동 발행분도 INV-YYYYMM-### 부여). 거래명세서에 번호 필수. */
+function ensureInvoiceNumber(inv) {
+  if (!inv || inv.invoice_number) return inv;
+  if (inv.status !== "발행" && inv.status !== "입금완료") return inv;
+  const number = nextInvoiceNumber(inv.issued_date || todayYmd());
+  db().prepare("UPDATE invoices SET invoice_number=? WHERE id=?").run(number, inv.id);
+  return { ...inv, invoice_number: number };
 }
 
 function createInvoiceFromTasks(user, { projectId, taskIds, issueDate, dueDate, title } = {}) {
@@ -1097,6 +1117,9 @@ module.exports = {
   isOverdue,
   listInvoices,
   getInvoiceForUser,
+  getStudioInfo,
+  setStudioInfo,
+  ensureInvoiceNumber,
   invoiceStats,
   listInvoicesForProject,
   listSessionsForProject,

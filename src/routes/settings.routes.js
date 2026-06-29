@@ -14,6 +14,8 @@ const {
   createTaskType,
   updateTaskType,
   deleteTaskType,
+  getStudioInfo,
+  setStudioInfo,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState } = require("../views");
 const { asyncHandler } = require("../lib/async");
@@ -46,7 +48,7 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = await studioCalendarSection(); // 환경설정 — 캘린더 API는 이 탭에서만 호출
+  else tabContent = (await studioCalendarSection()) + studioInfoSection(); // 환경설정 — 캘린더 + 공급자 세금정보
 
   const body = `
     ${flashBanner(req.query)}
@@ -205,6 +207,32 @@ async function studioCalendarSection() {
   return `<section class="card space-y-4">${title}${inner}${location}</section>`;
 }
 
+/** 공급자(스튜디오) 세금정보 — 거래명세서 PDF의 '공급자'란. */
+function studioInfoSection() {
+  const s = getStudioInfo();
+  const field = (name, label, ph = "") =>
+    `<div><label class="label mb-0.5 text-xs">${esc(label)}</label><input class="input py-1.5 text-sm" name="${esc(name)}" value="${esc(s[name] || "")}" placeholder="${esc(ph)}" /></div>`;
+  return `
+    <section class="card space-y-4">
+      <div>
+        <h2 class="font-display text-lg font-semibold">공급자(스튜디오) 세금정보</h2>
+        <p class="mt-1 text-xs text-muted">발행된 청구의 <span class="text-fg">거래명세서 PDF</span> '공급자'란에 들어갑니다. (세금계산서가 아닌 참고용 문서)</p>
+      </div>
+      <form method="post" action="/settings/studio-info" class="space-y-2">
+        <div class="grid gap-2 sm:grid-cols-2">
+          ${field("studio_biz_name", "상호", "OMG 스튜디오")}
+          ${field("studio_biz_no", "사업자등록번호", "000-00-00000")}
+          ${field("studio_owner_name", "대표자")}
+          ${field("studio_tel", "연락처")}
+          ${field("studio_biz_type", "업태", "서비스")}
+          ${field("studio_biz_item", "종목", "음반녹음")}
+        </div>
+        <div><label class="label mb-0.5 text-xs">사업장 주소</label><input class="input py-1.5 text-sm" name="studio_address" value="${esc(s.studio_address || "")}" /></div>
+        <button class="btn-primary btn-sm" type="submit">공급자 정보 저장</button>
+      </form>
+    </section>`;
+}
+
 // ── 스튜디오 캘린더 선택 저장 ──
 router.post("/studio-calendar", requireChief, (req, res) => {
   calendar.setStudioCalendarId(req.body.calendar_id);
@@ -214,6 +242,12 @@ router.post("/studio-calendar", requireChief, (req, res) => {
 // ── 예약 일정 기본 장소 저장 ──
 router.post("/studio-location", requireChief, (req, res) => {
   calendar.setStudioLocation(req.body.studio_location);
+  res.redirect("/settings?tab=settings&flash=saved");
+});
+
+// ── 공급자(스튜디오) 세금정보 저장 — 거래명세서 PDF용. 평문 admin_state ──
+router.post("/studio-info", requireChief, (req, res) => {
+  setStudioInfo(req.body);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
