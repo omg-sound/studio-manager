@@ -5,11 +5,12 @@
 > 상세 설계 변천사·함정은 [`CLAUDE.md`](./CLAUDE.md) 참조.
 >
 > **현재 상태(2026-06-29)**: **프로덕션 라이브**(`omg-studios-manager.onrender.com`). MVP + 권한 3단계 +
-> 세션(예약 그리드·겹침 차단·구글 캘린더 자동 연동·**텍스트 직접입력**·**소요 슬라이더**·테두리 강조·**세션 종류 선택**) +
-> 곡·콘텐츠(후반작업) + **작업 종류 카탈로그**(DB 관리·삭제-only) + **거래명세서 PDF**(resvg + 한글 폰트 번들) +
-> **알림 채널**(웹훅·암호화·fail-safe) + 관리 항목 **삭제 기능** + **녹음 세션 직접 청구**(곡·콘텐츠/버튼 없이 청구 탭 자동 노출·세션 잠금).
+> 세션(예약 그리드·겹침 차단·구글 캘린더 자동 연동·**텍스트 직접입력**·**소요 슬라이더**·테두리 강조·**세션 종류 선택**·**일정 목록/캘린더 전환**·**청구 잠금 모달 경고**) +
+> 곡·콘텐츠(후반작업) + **작업 종류 카탈로그**(DB 관리·삭제-only) + **거래명세서 PDF**(resvg + 한글 폰트 번들·문서명 3종) +
+> **알림 채널**(웹훅·암호화·fail-safe) + 관리 항목 **삭제 기능** + **녹음 세션 직접 청구**(곡·콘텐츠/버튼 없이 청구 탭 자동 노출·세션 잠금) +
+> **클라이언트 상세**(진행 프로젝트 + 청구·결제 히스토리; 아티스트는 세금정보 숨김) + **외주 작업자 메뉴**(`/workers`: 목록·작업 히스토리·**정산 지급 추적**).
 > **용어**: 프로젝트 유형 = **세션(session)·작업(task)** / 녹음 종류 = 단가표 항목(rate_item) / 세션 종류 = session_type / 클라이언트(통칭)·실결제자(역할).
-> 미완(검증): 프로덕션에서 PDF 렌더·알림 웹훅 동작 확인, Drive 실연동. 선택: 월 캘린더 뷰·알림 Gmail 어댑터.
+> 미완(검증): 프로덕션에서 PDF 렌더·알림 웹훅 동작 확인, Drive 실연동. 선택: 알림 Gmail 어댑터·외주 작업자 관리 일원화(`/settings`↔`/workers` 중복).
 
 ---
 
@@ -71,13 +72,13 @@ DEV_LOGIN=1 npm run dev     # build:css 후 서버 (http://localhost:3000)
 | 테이블 | 역할 |
 |---|---|
 | `users` | 로그인 계정. `role[owner\|chief\|staff]`·`active`·`google_sub`. `password_hash`/`client_id`는 레거시 |
-| `clients` | **클라이언트**(통칭: 아티스트·소속사·제작사). 그중 하나가 프로젝트/청구의 **실결제자**(`client_id`). `biz_no`·`owner_name`·`address`(세금계산서) |
+| `clients` | **클라이언트**(통칭: 아티스트·소속사·제작사). 그중 하나가 프로젝트/청구의 **실결제자**(`client_id`). `biz_no`·`owner_name`·`address`(세금계산서; **아티스트는 없음**). 상세 `/clients/:id` = 진행 프로젝트 + 청구·결제 탭 |
 | `projects` | 프로젝트 메타. `client_id`=실결제자, `manager_id`=담당자 |
 | `project_tracks` | **곡·콘텐츠**. `content_type[Music\|Video_Post]` 상수·정규화는 있으나 **UI 미노출 → 현재 전부 Music** |
-| `track_tasks` | **작업**. `task_type`·`billing_type`·`unit_price`·`engineer_name`·`status`·`is_invoiced` |
+| `track_tasks` | **작업**. `task_type`·`billing_type`·`unit_price`·`engineer_name`·`status`·`is_invoiced`·`session_id`(세션 직접 청구)·`worker_paid`/`worker_paid_date`(외주 정산) |
 | `sessions` | **세션(일정)**. `session_type`·`session_date`·`start_time`/`end_time`·`booker_name`·`engineer_name`·`status`·`rate_item_id`·`gcal_event_id` |
 | `invoices` / `invoice_items` | 청구 + 라인아이템 스냅샷 |
-| `project_managers` | **담당자 마스터**. `user_id` 링크=하우스 엔지니어(로그인 자동 연계), null=외주 작업자. 세션·작업 담당 select 출처 |
+| `project_managers` | **담당자 마스터**. `user_id` 링크=하우스 엔지니어(로그인 자동 연계), null=외주 작업자. 세션·작업 담당 select 출처. 외주 작업자는 **`/workers` 메뉴**(목록·작업 히스토리·정산)에서 관리 |
 | `task_types` | **작업 종류 카탈로그**(곡·콘텐츠 후반작업). config `TASK_TYPES` 1회 시드 후 DB 단일 출처. `track_tasks.task_type`이 key 보관(FK 아님), 라벨/그룹은 data.js 캐시. 삭제-only |
 | `project_service_items` | 레거시(구 services JSON 라벨 호환). 관리 UI 폐기(작업 종류 카탈로그가 대체), 테이블만 잔존 |
 | `deliverables` | 자료 전달(Drive/로컬, 토큰 공개링크) |
@@ -98,6 +99,7 @@ src/
   data.js                데이터 헬퍼(전 직원 전체 열람, 청구는 canInvoice 분기)
   views.js               레이아웃 · 사이드바(권한별 NAV) · flashBanner · 아이콘
   views.invoices.js      청구 행/배지/섹션
+  views.sessions.js      세션 폼(추가/편집 통일 그리드+슬라이더)·세션 행 토글·월 캘린더 그리드
   views.deliverables.js  자료 행/섹션
   routes/
     auth.routes.js       /login · OAuth · /dev-login
@@ -105,8 +107,9 @@ src/
     projects.routes.js   목록(검색)·상세(곡콘텐츠·작업·자료·청구)·CRUD
     invoices.routes.js   청구 CRUD · 입금/상태
     sessions.routes.js   전역 일정(/sessions) + 세션 CRUD
-    clients.routes.js    클라이언트 CRUD + 분류 탭 (치프)
-    settings.routes.js   사용자·담당자·작업템플릿 관리 (치프)
+    clients.routes.js    클라이언트 CRUD + 분류 탭 + 상세(진행 프로젝트·청구 히스토리) (치프)
+    workers.routes.js    외주 작업자 목록·추가·삭제 + 상세(작업 히스토리·정산 지급 토글) (치프)
+    settings.routes.js   사용자·담당자·작업종류·환경설정 관리 (치프). ⚠ 외주 작업자 추가/삭제가 /workers와 중복
     deliverables.routes.js  업로드·토큰링크·다운로드
     api.routes.js        REST blueprint
     maintenance.routes.js  /internal/cron/* (BACKUP_TOKEN 게이트, 백업+연체 스캔)
@@ -149,14 +152,15 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 1. **프로덕션 검증(최우선)** — Render에서 거래명세서 PDF 렌더(`@resvg/resvg-js` prebuilt 설치·동작)·알림 웹훅 발송 확인.
    환경설정에 **공급자 세금정보**(PDF용)·**알림 웹훅 URL** 입력 필요.
-2. (선택) 대시보드 임박 세션 카드(월 캘린더 뷰는 완료 — `/sessions?view=calendar`).
-3. (선택) 구글 캘린더 역방향 동기화(캘린더 삭제→앱 반영) — 보류 중.
-4. Drive 실연동 검증.
-5. (선택) 알림 Gmail 어댑터(현재 웹훅만; `notify.js` 어댑터 슬롯).
+2. **외주 작업자 관리 일원화** — `/settings` 담당자 탭과 `/workers` 메뉴 양쪽에 외주 작업자 추가/삭제가 중복(`POST /settings/managers`). `/workers`로 통합하고 담당자 탭엔 안내만 남길지 결정(사용자 확인 대기).
+3. (선택) 대시보드 임박 세션 카드(월 캘린더 뷰는 완료 — `/sessions?view=calendar`).
+4. (선택) 구글 캘린더 역방향 동기화(캘린더 삭제→앱 반영) — 보류 중.
+5. Drive 실연동 검증.
+6. (선택) 알림 Gmail 어댑터(현재 웹훅만; `notify.js` 어댑터 슬롯).
 
-> 완료: Render 실배포·OAuth, 프로젝트 유형 재정의(세션/작업), 세션(그리드·겹침·캘린더 + 텍스트 직접입력·소요 슬라이더·테두리 강조 + 폼 레이아웃 통일 + 세션 종류 선택),
-> 녹음 종류=단가표(세션 종류와 라벨 분리), 클라이언트 자동 등록, 탭 그룹화, 청구 '청구 대기'(완료 요건 완화),
-> 작업 종류 카탈로그(삭제-only), 관리 항목 삭제, **거래명세서 PDF**, **알림 채널(웹훅)**.
+> 완료: Render 실배포·OAuth, 프로젝트 유형 재정의(세션/작업), 세션(그리드·겹침·구글 캘린더 자동 연동 + 텍스트 직접입력·소요 슬라이더·테두리 강조 + 폼 레이아웃 통일 + 세션 종류 선택 + **일정 목록/캘린더 전환** + **청구 잠금 모달**),
+> 녹음 종류=단가표(세션 종류와 라벨 분리), **녹음 세션 직접 청구**(완료 요건), 클라이언트 자동 등록 + **클라이언트 상세(프로젝트·청구 히스토리)**, **외주 작업자 메뉴(작업 히스토리·정산 지급 추적)**, 탭 그룹화,
+> 작업 종류 카탈로그(삭제-only), 관리 항목 삭제, **거래명세서 PDF(문서명 3종·로고)**, **알림 채널(웹훅)**.
 
 ---
 
@@ -172,5 +176,5 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 | 세션 종류 | `session_type` | 녹음/믹싱/마스터링/기타(세션 구분, 겹침검사 단위). '녹음 종류'와 다른 필드 |
 | 작업 종류 카탈로그 | `task_types` | 곡·콘텐츠 작업 종류(보컬튠·믹싱…), DB 관리·삭제-only |
 | 클라이언트 | `clients` | 통칭(아티스트·소속사·제작사). **실결제자**=프로젝트/청구의 결제 역할(`client_id`) |
-| 하우스 엔지니어 / 외주 작업자 | `project_managers`(`user_id` 유/무) | 작업 담당자 select 출처, 치프가 관리 |
+| 하우스 엔지니어 / 외주 작업자 | `project_managers`(`user_id` 유/무) | 작업 담당자 select 출처, 치프가 관리. 외주는 **`/workers` 메뉴**(작업 히스토리·정산 지급 추적) |
 | 대표 / 치프 / 스태프 | `owner` / `chief` / `staff` | 권한 3단계 |
