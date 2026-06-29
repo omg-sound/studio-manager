@@ -63,10 +63,8 @@ function sessionFields(s, managers, rateItems = []) {
     </div>
     <div class="mt-2 grid gap-2 sm:grid-cols-2">
       <div>
-        <label class="label mb-0.5 text-xs">녹음 종류</label>
-        <select class="input py-1.5 text-sm" name="session_type">
-          ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
-        </select>
+        <label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
+        ${rateSelectGrouped(rateItems, s.rate_item_id)}
       </div>
       <div>
         <label class="label mb-0.5 text-xs">담당 엔지니어</label>
@@ -75,10 +73,9 @@ function sessionFields(s, managers, rateItems = []) {
     </div>
     <div class="mt-2 grid gap-2 sm:grid-cols-3">
       <div>
-        <label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(녹음 시간제 · 선택)</span></label>
-        <select class="input py-1.5 text-sm" name="rate_item_id">
-          <option value="">단가 미지정</option>
-          ${rateItems.map((r) => `<option value="${r.id}" ${String(r.id) === String(s.rate_item_id || "") ? "selected" : ""}>${esc(r.name)}</option>`).join("")}
+        <label class="label mb-0.5 text-xs">세션 종류</label>
+        <select class="input py-1.5 text-sm" name="session_type">
+          ${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}
         </select>
       </div>
       <div>
@@ -91,16 +88,6 @@ function sessionFields(s, managers, rateItems = []) {
       </div>
     </div>
     <input class="input mt-2 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;
-}
-
-/** 단가 항목 select(옵션마다 data-minutes=기준시간 분 — app.js의 1Pro/2Pro 계산용). */
-function rateSelectWithMinutes(rateItems, currentId) {
-  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>
-      <option value="" data-minutes="0">단가 미지정</option>
-      ${rateItems
-        .map((r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`)
-        .join("")}
-    </select>`;
 }
 
 /**
@@ -139,8 +126,11 @@ function durationButtons() {
   return `<div class="flex flex-wrap gap-1.5" data-duration-group>${opt("pro1", "1Pro")}${opt("pro2", "2Pro")}${opt("custom", "직접입력")}</div>`;
 }
 
-/** 단가표 항목을 분류(스튜디오/로케이션 녹음)로 묶은 '녹음 종류' select. data-minutes로 1Pro 계산. */
-function rateSelectGrouped(rateItems, currentId) {
+/**
+ * '녹음 종류' select — 단가표 항목(rate_items)을 분류(스튜디오/로케이션 녹음)로 묶는다. data-minutes로 1Pro 계산.
+ * required=true면 data-rate-required(녹음 폼: 선택해야 시작 시간 입력 가능). 편집·믹스 폼은 false.
+ */
+function rateSelectGrouped(rateItems, currentId, required = false) {
   const groups = {};
   rateItems.forEach((r) => {
     const c = r.category || RECORDING_CATEGORIES[0];
@@ -149,7 +139,7 @@ function rateSelectGrouped(rateItems, currentId) {
   const cats = [...RECORDING_CATEGORIES.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !RECORDING_CATEGORIES.includes(c))];
   const opt = (r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`;
   const body = cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
-  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select data-rate-required>
+  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select ${required ? "data-rate-required" : ""}>
       <option value="" data-minutes="0">녹음 종류 미지정</option>
       ${body}
     </select>`;
@@ -167,14 +157,14 @@ function sessionBookingFields(s, managers, rateItems = [], isRecording = false) 
     ? `<input type="hidden" name="session_type" value="녹음" />
        <div class="mt-2 grid gap-2 sm:grid-cols-2">
          <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(관리 → 단가표에서 추가)</span></label>
-          ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
+          ${rateSelectGrouped(rateItems, s.rate_item_id, true)}</div>
          ${engineerField}
        </div>`
     : `<div class="mt-2 grid gap-2 sm:grid-cols-3">
-         <div><label class="label mb-0.5 text-xs">종류</label>
+         <div><label class="label mb-0.5 text-xs">세션 종류</label>
           <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-         <div><label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(1Pro 기준)</span></label>
-          ${rateSelectWithMinutes(rateItems, s.rate_item_id)}</div>
+         <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
+          ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
          ${engineerField}
        </div>`;
   return `
