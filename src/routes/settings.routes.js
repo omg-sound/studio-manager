@@ -21,6 +21,7 @@ const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState } = require(
 const { asyncHandler } = require("../lib/async");
 const drive = require("../drive");
 const calendar = require("../calendar");
+const alerts = require("../notify");
 
 const router = express.Router();
 
@@ -48,7 +49,7 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = (await studioCalendarSection()) + studioInfoSection(); // 환경설정 — 캘린더 + 공급자 세금정보
+  else tabContent = (await studioCalendarSection()) + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 공급자 + 알림
 
   const body = `
     ${flashBanner(req.query)}
@@ -233,6 +234,28 @@ function studioInfoSection() {
     </section>`;
 }
 
+/** 알림 채널(웹훅) — 연체·청구 발행·자료 공유 팀 알림. URL은 암호화 저장. */
+function alertWebhookSection() {
+  const url = alerts.getConfiguredWebhook();
+  const envNote = alerts.envWebhookActive()
+    ? `<p class="mt-1 text-xs text-warning">환경변수 ALERT_WEBHOOK가 설정되어 우선 적용됩니다(아래 입력값은 무시).</p>`
+    : "";
+  const canTest = url || alerts.envWebhookActive();
+  return `
+    <section class="card space-y-4">
+      <div>
+        <h2 class="font-display text-lg font-semibold">알림 (웹훅)</h2>
+        <p class="mt-1 text-xs text-muted">연체·청구 발행·자료 공유 시 Slack/Discord 등으로 팀 알림을 보냅니다. Incoming Webhook URL을 넣으세요(비우면 알림 끔). 저장 시 암호화됩니다.</p>
+        ${envNote}
+      </div>
+      <form method="post" action="/settings/alert-webhook" class="flex gap-2">
+        <input class="input py-1.5 text-sm" name="webhook_url" value="${esc(url)}" placeholder="https://hooks.slack.com/services/..." />
+        <button class="btn-primary shrink-0 btn-sm" type="submit">저장</button>
+      </form>
+      ${canTest ? `<form method="post" action="/settings/alert-webhook/test"><button class="btn-ghost btn-sm" type="submit">테스트 알림 보내기</button></form>` : ""}
+    </section>`;
+}
+
 // ── 스튜디오 캘린더 선택 저장 ──
 router.post("/studio-calendar", requireChief, (req, res) => {
   calendar.setStudioCalendarId(req.body.calendar_id);
@@ -250,6 +273,17 @@ router.post("/studio-info", requireChief, (req, res) => {
   setStudioInfo(req.body);
   res.redirect("/settings?tab=settings&flash=saved");
 });
+
+// ── 알림 웹훅 설정/테스트 ──
+router.post("/alert-webhook", requireChief, (req, res) => {
+  alerts.setWebhookUrl(req.body.webhook_url); // 암호화 저장(또는 비우면 해제)
+  res.redirect("/settings?tab=settings&flash=saved");
+});
+
+router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) => {
+  await alerts.notify({ type: "test", title: "[테스트] OMG Studios 알림", text: "알림 채널이 정상 연결되었습니다." });
+  res.redirect("/settings?tab=settings&flash=tested");
+}));
 
 // ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
 router.post("/users", requireChief, (req, res) => {

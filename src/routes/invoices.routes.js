@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireInvoice, canInvoice } = require("../auth");
-const { INVOICE_STATUSES, normalizeInvoiceStatus } = require("../config");
+const { config, INVOICE_STATUSES, normalizeInvoiceStatus } = require("../config");
 const {
   clientOptions,
   listInvoices,
@@ -23,8 +23,22 @@ const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
 const { asyncHandler } = require("../lib/async");
 const { renderInvoicePdf } = require("../invoice-pdf");
+const { notifyAsync } = require("../notify");
 
 const router = express.Router();
+
+/** 인보이스 발행 알림(신규 '발행' 전이 시). fail-safe·비차단. */
+function notifyInvoiceIssued(user, id) {
+  const inv = getInvoiceForUser(user, id);
+  if (!inv) return;
+  notifyAsync({
+    type: "invoice_issued",
+    title: `[청구 발행] ${inv.invoice_number || inv.title}`,
+    text: `${formatKRW(inv.amount)} · ${inv.client_name || "실결제자 미지정"}`,
+    fields: [{ label: "프로젝트", value: inv.project_title || "-" }],
+    url: config.baseUrl ? `${config.baseUrl}/invoices/${inv.id}` : undefined,
+  });
+}
 
 function projectOptions() {
   return db().prepare("SELECT id, title, client_id FROM projects ORDER BY created_at DESC").all();
@@ -286,6 +300,7 @@ router.post("/:id/pay", requireInvoice, (req, res) => {
   else status = inv.status === "입금완료" ? "발행" : inv.status; // paid=0 완납 취소 시 발행으로
   db().prepare("UPDATE invoices SET paid_amount=?, status=? WHERE id=?").run(paid, status, inv.id);
   ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 승격 시 채번 보장
+  if (status === "발행" && inv.status !== "발행") notifyInvoiceIssued(req.user, inv.id);
   res.redirect(`/invoices/${inv.id}?flash=paid`);
 });
 
@@ -298,6 +313,7 @@ router.post("/:id/status", requireInvoice, (req, res) => {
   const paid = status === "입금완료" ? inv.amount : inv.paid_amount;
   db().prepare("UPDATE invoices SET status=?, paid_amount=? WHERE id=?").run(status, paid, inv.id);
   ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 전이 시 채번 보장
+  if (status === "발행" && inv.status !== "발행") notifyInvoiceIssued(req.user, inv.id);
   res.redirect(`/invoices/${inv.id}?flash=saved`);
 });
 

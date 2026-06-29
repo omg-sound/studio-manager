@@ -6,6 +6,7 @@ const { db } = require("../db");
 const { config } = require("../config");
 const { todayYmd } = require("./date");
 const { listInvoices, balanceOf } = require("../data");
+const { notifyAsync } = require("../notify");
 
 // 백업 디렉터리: DB와 같은 (영속) 디스크. 프로덕션 /var/data/backups, 로컬 ./data/backups.
 function backupDir() {
@@ -91,6 +92,18 @@ function runDailyMaintenance(opts = {}) {
     overdue = overdueSummary();
   } catch (e) {
     overdueError = e && e.message ? e.message : String(e);
+  }
+  // 연체가 있으면 팀 알림(fail-safe·비차단). 미설정이면 조용히 skip.
+  if (overdue && overdue.count > 0) {
+    notifyAsync({
+      type: "overdue",
+      title: `[연체] 미수 인보이스 ${overdue.count}건`,
+      text: `미수금 합계 ${overdue.totalDue.toLocaleString("ko-KR")}원`,
+      fields: overdue.items.slice(0, 5).map((i) => ({
+        label: i.invoice_number || i.title,
+        value: `${i.balance.toLocaleString("ko-KR")}원${i.client_name ? " · " + i.client_name : ""} (마감 ${i.due_date})`,
+      })),
+    });
   }
   return { ok: !backupError, ranAt, backup, backupError, overdue, overdueError };
 }

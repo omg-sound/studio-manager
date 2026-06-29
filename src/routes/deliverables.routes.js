@@ -7,6 +7,7 @@ const express = require("express");
 const multer = require("multer");
 
 const { config, DELIVERABLE_KINDS, normalizeDeliverableKind } = require("../config");
+const { notifyAsync } = require("../notify");
 const { db } = require("../db");
 const { requireAuth, requireEditor, canEdit } = require("../auth");
 const {
@@ -156,10 +157,18 @@ router.get("/deliverables/:id/raw", requireAuth, asyncHandler(async (req, res) =
 router.post("/deliverables/:id/token", requireEditor, (req, res) => {
   const dv = db().prepare("SELECT * FROM deliverables WHERE id = ?").get(Number(req.params.id));
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
+  const isNew = !dv.access_token;
   const token = dv.access_token || newToken();
   db()
     .prepare("UPDATE deliverables SET access_token=?, expires_at=?, revoked=0 WHERE id=?")
     .run(token, cleanYmd(req.body.expires_at), dv.id);
+  // 팀 알림(공개 토큰은 외부 채널에 노출하지 않고 내부 프로젝트 페이지로 링크). fail-safe·비차단.
+  notifyAsync({
+    type: "deliverable_shared",
+    title: `[자료 공유] ${dv.title}${dv.version ? " " + dv.version : ""}`,
+    text: isNew ? "공유 링크 발급" : "공유 링크 갱신",
+    url: config.baseUrl ? `${config.baseUrl}/projects/${dv.project_id}?tab=deliverables` : undefined,
+  });
   res.redirect(`/projects/${dv.project_id}?tab=deliverables&flash=saved`);
 });
 

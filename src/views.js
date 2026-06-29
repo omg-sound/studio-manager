@@ -219,6 +219,7 @@ const FLASH_MESSAGES = {
   deleted: "삭제되었습니다.",
   paid: "입금이 반영되었습니다.",
   billed: "세션에서 청구 작업을 생성했습니다.",
+  tested: "테스트 알림을 보냈습니다 — 채널을 확인하세요.",
 };
 function flashBanner(query) {
   const msg = query && FLASH_MESSAGES[query.flash];
