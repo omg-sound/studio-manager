@@ -5,6 +5,26 @@
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
+const { listRooms } = require("./data");
+
+/**
+ * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
+ * projects.routes.js 등 rooms를 넘기지 않는 호출부에서도 룸 select가 채워지도록 한다(순환참조 없음: data는 views.sessions를 require하지 않음).
+ */
+function resolveRooms(rooms) {
+  return Array.isArray(rooms) ? rooms : listRooms();
+}
+
+/** 룸 select. 현재값 선택. 룸이 1개뿐이고 현재값 없으면 그 룸 자동선택(단일룸 UX). 항상 '미지정' 옵션 제공. */
+function roomSelect(rooms, currentId) {
+  const cur = currentId == null || currentId === "" ? "" : String(currentId);
+  const auto = rooms.length === 1 && cur === "" ? String(rooms[0].id) : cur;
+  const opts = [`<option value="" ${auto === "" ? "selected" : ""}>룸 미지정</option>`];
+  for (const r of rooms) {
+    opts.push(`<option value="${r.id}" ${String(r.id) === auto ? "selected" : ""}>${esc(r.name)}</option>`);
+  }
+  return `<select class="input py-1.5 text-sm" name="room_id">${opts.join("")}</select>`;
+}
 
 /** 담당자 마스터 선택지. 현재값이 목록에 없으면 보존용으로 추가. 예약 담당자·담당 엔지니어 공용. */
 function managerOptions(managers, current, placeholder = "담당자 미지정") {
@@ -114,14 +134,18 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
  * 녹음 프로젝트: '녹음 종류'(단가표 항목을 분류로 묶음) 한 필드 + session_type='녹음' 고정.
  * 그 외(믹스 등): '세션 종류'(session_type) + '녹음 종류'(단가표 항목) 두 필드. 라벨은 편집 폼과 통일.
  */
-function sessionBookingFields(s, managers, rateItems = []) {
+function sessionBookingFields(s, managers, rateItems = [], rooms) {
   const initMins = s && s.start_time && s.end_time ? minutesBetween(s.start_time, s.end_time) : 0;
+  const roomList = resolveRooms(rooms);
   const engineerField = `<div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
   // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 종류(단가표)는 녹음 세션 시간제 산정용(선택).
-  const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
+  // 룸 = 스튜디오 공간(같은 룸끼리만 시간 겹침 검사). 2x2 그리드로 세션종류/룸 · 녹음종류/엔지니어 배치.
+  const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-2">
          <div><label class="label mb-0.5 text-xs">세션 종류</label>
           <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
+         <div><label class="label mb-0.5 text-xs">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
+          ${roomSelect(roomList, s.room_id)}</div>
          <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
           ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
          ${engineerField}
@@ -149,17 +173,17 @@ function sessionBookingFields(s, managers, rateItems = []) {
 }
 
 /** 프로젝트 상세용 세션 추가 폼(버튼형 예약 UX). */
-function sessionCreateForm(project, managers, rateItems = []) {
+function sessionCreateForm(project, managers, rateItems = [], rooms) {
   return `
     <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
-      ${sessionBookingFields({}, managers, rateItems)}
+      ${sessionBookingFields({}, managers, rateItems, rooms)}
       <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">+ 세션 추가</button>
     </form>`;
 }
 
 /** 세션 한 행. showProject=true면 프로젝트명 링크 표시(전역 일정). tracks 전달 시 청구 작업 생성 폼 노출. */
-function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showProject = false, projectTitle = "" } = {}) {
+function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, showProject = false, projectTitle = "" } = {}) {
   const typeBadge = `<span class="badge bg-bg text-muted">${esc(s.session_type)}</span>`;
   const statusBadge = `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
@@ -213,7 +237,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
       </summary>
       <div class="border-t border-border p-3">
         <form method="post" action="/sessions/${s.id}" data-session-form>
-          ${sessionBookingFields(s, managers, rateItems)}
+          ${sessionBookingFields(s, managers, rateItems, rooms)}
           <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">세션 저장</button>
         </form>
         <div class="mt-2 flex gap-2">
@@ -230,10 +254,11 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
 }
 
 /** 프로젝트 상세용 세션 섹션(세션형 전용). expand=true(탭 안)면 접지 않고 펼쳐 렌더. */
-function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], expand = false }) {
+function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], rooms, expand = false }) {
+  const roomList = resolveRooms(rooms); // 룸 1회 조회 후 폼·행에 전달(호출부가 안 넘겨도 채워짐)
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
   const list = rows.length
-    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, projectTitle: project.title })).join("")
+    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms: roomList, projectTitle: project.title })).join("")
     : emptyState("등록된 세션이 없습니다.");
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
   const isTask = project && project.project_type === "task";
@@ -244,7 +269,7 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
         <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
       </summary>
       <div class="mt-3 space-y-3 border-t border-border pt-3">
-        ${isAdmin ? sessionCreateForm(project, managers, rateItems) : ""}
+        ${isAdmin ? sessionCreateForm(project, managers, rateItems, roomList) : ""}
         <div class="space-y-2">${list}</div>
       </div>
     </details>`;
@@ -254,7 +279,7 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
       <div class="flex items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
       </div>
-      ${isAdmin ? sessionCreateForm(project, managers, rateItems) : ""}
+      ${isAdmin ? sessionCreateForm(project, managers, rateItems, roomList) : ""}
       <div class="space-y-2">${list}</div>
     </section>`;
 }

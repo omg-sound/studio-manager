@@ -155,6 +155,42 @@ function listProjectManagers({ includeInactive = false, externalOnly = false } =
     .all();
 }
 
+// ── 룸(스튜디오 공간) — 룸별 겹침 검사. 치프가 /settings에서 CRUD ──
+
+/** 활성(또는 전체) 룸 목록. 정렬: sort_order → 이름. */
+function listRooms({ includeInactive = false } = {}) {
+  return db()
+    .prepare(
+      `SELECT * FROM rooms
+       ${includeInactive ? "" : "WHERE active = 1"}
+       ORDER BY sort_order ASC, name COLLATE NOCASE`
+    )
+    .all();
+}
+
+function createRoom(input = {}) {
+  const name = String(input.name || "").trim();
+  if (!name) throw new Error("ROOM_NAME_REQUIRED");
+  const sort = Number.isFinite(Number(input.sort_order)) ? Number(input.sort_order) : 0;
+  const info = db().prepare("INSERT INTO rooms (name, sort_order, active) VALUES (?, ?, 1)").run(name, sort);
+  return db().prepare("SELECT * FROM rooms WHERE id = ?").get(info.lastInsertRowid);
+}
+
+/** 룸 삭제(하드). FK가 없으므로 참조 세션의 room_id를 먼저 NULL로(SET NULL 의미) 정리한 뒤 행 삭제. */
+function deleteRoom(id) {
+  const rid = Number(id);
+  const d = db();
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    d.prepare("UPDATE sessions SET room_id = NULL WHERE room_id = ?").run(rid);
+    d.prepare("DELETE FROM rooms WHERE id = ?").run(rid);
+    d.exec("COMMIT;");
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
+}
+
 // ── 단가표(과금 항목) ──
 
 /** 시간(소수, "3.5") → 분. 빈 값/0 이하면 0. */
@@ -955,23 +991,31 @@ function sessionFields(input) {
     engineer_name: String(input.engineer_name || "").trim() || null,
     status: normalizeSessionStatus(input.status),
     rate_item_id: rateItemId,
+    room_id: Number(input.room_id) || null, // 룸(빈 값/0이면 NULL=미지정)
     memo: String(input.memo || "").trim() || null,
   };
 }
 
 /**
- * 해당 날짜에 이미 예약된(녹음/믹싱, 취소 제외) 30분 시작 슬롯 목록 — 가용성 표시용.
- * slots = 후보 'HH:MM' 배열. 스튜디오 전체. excludeId로 수정 중 세션 제외.
+ * 해당 날짜에 이미 예약된(녹음/믹싱, 취소 제외) 30분 시작 슬롯 목록 — 가용성 표시용(정보성 그리드).
+ * slots = 후보 'HH:MM' 배열. excludeId로 수정 중 세션 제외.
+ * room 미지정(undefined)이면 전 룸 합산(기존 동작), 지정 시 같은 룸만(IFNULL=0=레거시/미지정 가상룸).
  */
-function busySessionSlots(date, slots, { excludeId = null } = {}) {
+function busySessionSlots(date, slots, { excludeId = null, room } = {}) {
   if (!isValidYmd(date) || !Array.isArray(slots) || !slots.length) return [];
+  const params = { date, excludeId: excludeId == null ? -1 : excludeId };
+  let roomClause = "";
+  if (room !== undefined) {
+    roomClause = "AND IFNULL(room_id, 0) = @room";
+    params.room = Number(room) || 0;
+  }
   const rows = db()
     .prepare(
       `SELECT start_time, end_time FROM sessions
-       WHERE session_date = ? AND status <> '취소' AND session_type IN ('녹음','믹싱')
-         AND start_time IS NOT NULL AND end_time IS NOT NULL AND id <> ?`
+       WHERE session_date = @date AND status <> '취소' AND session_type IN ('녹음','믹싱')
+         AND start_time IS NOT NULL AND end_time IS NOT NULL AND id <> @excludeId ${roomClause}`
     )
-    .all(date, excludeId == null ? -1 : excludeId);
+    .all(params);
   const ranges = rows
     .map((r) => {
       const s = timeToMin(r.start_time);
@@ -1005,25 +1049,29 @@ function timeToMin(hhmm) {
 }
 
 /**
- * 같은 날 시간대가 겹치는 다른 녹음/믹싱 세션(스튜디오 전체, 취소 제외)을 찾는다.
+ * 같은 날 + **같은 룸**에서 시간대가 겹치는 다른 녹음/믹싱 세션(취소 제외)을 찾는다.
  * 시간(시작·종료)이 둘 다 있어야 검사한다(미정이면 null). 반열린구간[start,end) 겹침 + 야간(자정 넘김) 처리.
+ * room 비교는 IFNULL(room_id,0) — 레거시/미지정(NULL)끼리는 같은 가상룸으로 충돌, 다른 룸이면 병렬 허용.
  */
-function findSessionConflict({ date, start, end, excludeId = null }) {
+function findSessionConflict({ date, start, end, excludeId = null, room = null }) {
   const s = timeToMin(start);
   let e = timeToMin(end);
   if (!isValidYmd(date) || s == null || e == null) return null;
   if (e <= s) e += 1440; // end<=start면 야간(자정 넘김)
+  const roomKey = Number(room) || 0;
   const rows = db()
     .prepare(
-      `SELECT s.*, p.title AS project_title FROM sessions s
+      `SELECT s.*, p.title AS project_title, rm.name AS room_name FROM sessions s
        JOIN projects p ON p.id = s.project_id
+       LEFT JOIN rooms rm ON rm.id = s.room_id
        WHERE s.session_date = ? AND s.status <> '취소'
          AND s.session_type IN ('녹음','믹싱')
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+         AND IFNULL(s.room_id, 0) = ?
          AND s.id <> ?
        ORDER BY s.start_time`
     )
-    .all(date, excludeId == null ? -1 : excludeId);
+    .all(date, roomKey, excludeId == null ? -1 : excludeId);
   for (const r of rows) {
     const bs = timeToMin(r.start_time);
     let be = timeToMin(r.end_time);
@@ -1035,7 +1083,7 @@ function findSessionConflict({ date, start, end, excludeId = null }) {
 }
 
 function assertNoSessionConflict(f, excludeId) {
-  const conflict = findSessionConflict({ date: f.session_date, start: f.start_time, end: f.end_time, excludeId });
+  const conflict = findSessionConflict({ date: f.session_date, start: f.start_time, end: f.end_time, excludeId, room: f.room_id });
   if (conflict) {
     const err = new Error("SESSION_TIME_CONFLICT");
     err.conflict = conflict;
@@ -1050,8 +1098,8 @@ function createSession(user, projectId, input = {}) {
   assertNoSessionConflict(f, null);
   const info = db()
     .prepare(
-      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, memo)
-       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @memo)`
+      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, memo)
+       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @memo)`
     )
     .run({ project_id: project.id, ...f });
   return db().prepare("SELECT * FROM sessions WHERE id = ?").get(info.lastInsertRowid);
@@ -1067,7 +1115,7 @@ function updateSession(user, sessionId, input = {}) {
     .prepare(
       `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
        end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
-       rate_item_id=@rate_item_id, memo=@memo WHERE id=@id`
+       rate_item_id=@rate_item_id, room_id=@room_id, memo=@memo WHERE id=@id`
     )
     .run({ id: s.id, ...f });
   return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
@@ -1185,6 +1233,9 @@ module.exports = {
   clientOptions,
   ensureClientsFromProject,
   listProjectManagers,
+  listRooms,
+  createRoom,
+  deleteRoom,
   listRateItems,
   createRateItem,
   updateRateItem,

@@ -5,6 +5,7 @@ const { requireAuth, requireEditor, canEdit } = require("../auth");
 const {
   listProjectManagers,
   listRateItems,
+  listRooms,
   upcomingSessions,
   pastSessions,
   sessionsForMonth,
@@ -54,23 +55,14 @@ async function syncSessionEvent(user, session) {
   if (newId && newId !== session.gcal_event_id) setSessionEventId(session.id, newId);
 }
 
-/** 세션 시간 겹침 안내 페이지(409, 앱 내부 세션끼리). */
+/** 세션 시간 겹침 안내 페이지(409, 앱 내부 세션끼리 · 같은 룸). */
 function sessionConflictMessage(c) {
   const when = [c.session_date, [c.start_time, c.end_time].filter(Boolean).join("–")].filter(Boolean).join(" ");
+  const room = c.room_name || "룸 미지정";
   return errorPage({
     code: 409,
     title: "세션 시간이 겹칩니다",
-    message: `이미 같은 시간대에 ${c.session_type} 세션이 있습니다 — ${c.project_title} (${when}). 다른 시간으로 예약하세요.`,
-    user: null,
-  });
-}
-
-/** 외부(구글) 캘린더 일정과 겹칠 때 안내 페이지(409). */
-function externalConflictMessage() {
-  return errorPage({
-    code: 409,
-    title: "구글 캘린더 일정과 겹칩니다",
-    message: "선택한 시간에 스튜디오 캘린더에 이미 잡힌 일정이 있습니다. 다른 시간으로 예약하세요.",
+    message: `같은 룸(${room})에 이미 같은 시간대 ${c.session_type} 세션이 있습니다 — ${c.project_title} (${when}). 다른 시간이나 다른 룸으로 예약하세요.`,
     user: null,
   });
 }
@@ -90,10 +82,11 @@ router.get("/sessions", requireAuth, (req, res) => {
   } else {
     const managers = editable ? listProjectManagers() : [];
     const rateItems = editable ? listRateItems() : [];
+    const rooms = editable ? listRooms() : [];
     const up = upcomingSessions(req.user, { limit: 50 });
     const past = pastSessions(req.user, { limit: 20 });
     const upList = up.length
-      ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div></div>`
+      ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div></div>`
       : emptyState("다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
     const pastList = past.length
       ? `<details class="card group mt-3">
@@ -101,7 +94,7 @@ router.get("/sessions", requireAuth, (req, res) => {
              <h2 class="font-display text-base font-semibold">지난 세션 <span class="text-sm font-normal text-muted">${past.length}</span></h2>
              ${detailsChevron()}
            </summary>
-           <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, showProject: true })).join("")}</div>
+           <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div>
          </details>`
       : "";
     content = `${upList}${pastList}`;
@@ -142,12 +135,9 @@ router.post("/sessions", requireEditor, asyncHandler(async (req, res) => {
     return sessionInputError(e, res);
   }
   if (!s) return res.status(404).send("프로젝트를 찾을 수 없습니다.");
-  // 외부(구글) 캘린더 겹침 — 해석된 시작/종료 기준. 겹치면 방금 만든 세션 롤백(fail-open: 미연동 시 통과).
-  const ext = await calendar.findExternalConflict({ date: s.session_date, start: s.start_time, end: s.end_time });
-  if (ext) {
-    deleteSession(req.user, s.id);
-    return res.status(409).send(externalConflictMessage());
-  }
+  // 다중 룸 도입: 단일 스튜디오 캘린더는 룸을 구분하지 못해 다른 룸 일정으로 오탐 차단이 생긴다.
+  // → 구글 FreeBusy 하드 차단은 비활성화하고, 룸별 겹침(앱 DB, createSession 내부 검사)을 정식 차단으로 삼는다.
+  //   구글 캘린더 일정 자동 생성/수정/삭제 동기화는 그대로 유지.
   await syncSessionEvent(req.user, s); // 구글 캘린더에 일정 자동 생성
   res.redirect(`/projects/${s.project_id}?tab=sessions&flash=added`);
 }));

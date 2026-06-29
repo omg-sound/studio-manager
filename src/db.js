@@ -143,6 +143,16 @@ function init() {
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 스튜디오 룸(공간). 룸별 시간 겹침 검사용(다른 룸이면 같은 시간 병렬 예약 허용).
+    -- sessions.room_id가 이 행을 가리키지만 FK는 걸지 않는다(SQLite ALTER 한계 — 앱 레벨 정합, 삭제 시 코드가 NULL 처리).
+    CREATE TABLE IF NOT EXISTS rooms (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      active     INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- 스튜디오 세션(일정). 프로젝트 하위 녹음/믹싱/마스터링 예약. 청구 시간 산정의 기반.
     CREATE TABLE IF NOT EXISTS sessions (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -223,6 +233,7 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_track_tasks_invoice ON track_tasks(invoice_id, is_invoiced);
     CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(session_date);
+    CREATE INDEX IF NOT EXISTS idx_rooms_active ON rooms(active, sort_order, name);
     CREATE INDEX IF NOT EXISTS idx_deliverables_project ON deliverables(project_id);
     CREATE INDEX IF NOT EXISTS idx_deliverables_token ON deliverables(access_token);
     CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id);
@@ -269,6 +280,9 @@ function init() {
   addColumn("project_managers", "user_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL"); // 하우스 엔지니어(로그인 사용자)와 링크. null=외주 작업자
   addColumn("sessions", "booker_name", "TEXT"); // 예약 담당자(담당자 마스터에서 선택, 담당 엔지니어와 별개)
   addColumn("sessions", "gcal_event_id", "TEXT"); // 예약 시 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적)
+  addColumn("sessions", "room_id", "INTEGER"); // 룸(스튜디오 공간). FK 없음(ALTER 한계) — 룸별 겹침 검사, 룸 삭제 시 코드가 NULL 처리(SET NULL 의미)
+  // room_id 컬럼은 위 addColumn으로 보장되므로 의존 인덱스는 여기서 생성(big exec 블록보다 뒤).
+  d.exec("CREATE INDEX IF NOT EXISTS idx_sessions_room ON sessions(room_id);");
   addColumn("track_tasks", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 세션에서 생성된 청구 작업 추적(레거시 전환분)
   addColumn("track_tasks", "worker_paid", "INTEGER NOT NULL DEFAULT 0"); // 외주 작업자 지급(정산) 여부
   addColumn("track_tasks", "worker_paid_date", "TEXT"); // 지급 처리일(YYYY-MM-DD)
@@ -286,6 +300,12 @@ function init() {
     setState("project_type_rename_v1", "done");
   }
   seedDefaultCatalogs();
+  // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.
+  if (!getState("rooms_seed_v1")) {
+    const hasRoom = d.prepare("SELECT id FROM rooms LIMIT 1").get();
+    if (!hasRoom) d.prepare("INSERT INTO rooms (name, sort_order, active) VALUES (?, 0, 1)").run("메인 룸");
+    setState("rooms_seed_v1", "done");
+  }
   // 레거시 마이그레이션은 1회만. 신규 프로젝트(project_type 있음)는 services=NULL이 정상이므로,
   // 매 부팅 재실행되면 memo 추론으로 유령 곡·작업을 주입한다 → admin_state 플래그로 1회 게이트.
   if (!getState("legacy_backfill_v1")) {

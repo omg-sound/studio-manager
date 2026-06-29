@@ -6,6 +6,9 @@ const { requireChief, syncUserToManager, findUserById } = require("../auth");
 const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, TASK_GROUPS, TASK_GROUP_LABELS, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
 const {
   listProjectManagers,
+  listRooms,
+  createRoom,
+  deleteRoom,
   listRateItems,
   createRateItem,
   updateRateItem,
@@ -55,7 +58,7 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = (await studioCalendarSection()) + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 공급자 + 알림
+  else tabContent = (await studioCalendarSection()) + roomsSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 룸 + 공급자 + 알림
 
   const body = `
     ${flashBanner(req.query)}
@@ -204,6 +207,37 @@ async function studioCalendarSection() {
       </form>
     </div>`;
   return `<section class="card space-y-4">${title}${inner}${location}</section>`;
+}
+
+/** 룸(스튜디오 공간) 관리 — 추가·삭제(단가표와 동일한 삭제-only 톤). 룸별 시간 겹침 검사의 기준. */
+function roomsSection() {
+  const rooms = listRooms({ includeInactive: true });
+  const rows = rooms.length ? rooms.map((r) => roomRow(r)).join("") : emptyState("등록된 룸이 없습니다.");
+  return `
+    <section class="card space-y-4">
+      <div>
+        <h2 class="font-display text-lg font-semibold">룸 (스튜디오 공간)</h2>
+        <p class="mt-1 text-xs text-muted">세션 예약 시 룸을 지정하면 <span class="text-fg">같은 룸끼리만 시간 겹침을 검사</span>합니다(다른 룸은 같은 시간 병렬 예약 허용). 룸을 삭제하면 그 룸으로 잡힌 세션은 '룸 미지정'으로 바뀝니다.</p>
+      </div>
+      <form method="post" action="/settings/rooms" class="flex gap-2">
+        <input class="input py-1.5 text-sm" name="name" placeholder="룸 이름 (예: A룸)" required />
+        <button class="btn-primary shrink-0 btn-sm" type="submit">룸 추가</button>
+      </form>
+      <div class="space-y-2">${rows}</div>
+    </section>`;
+}
+
+/** 룸 행(삭제-only). */
+function roomRow(r) {
+  return `
+    <div class="rounded-lg border border-border bg-bg p-3">
+      <div class="flex items-center justify-between gap-3">
+        <div class="font-medium">${esc(r.name)}</div>
+        <form method="post" action="/settings/rooms/${r.id}/delete" data-confirm="'${esc(r.name)}' 룸을 삭제할까요? 이 룸으로 예약된 세션은 '룸 미지정'으로 바뀝니다.">
+          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
+        </form>
+      </div>
+    </div>`;
 }
 
 /** 공급자(스튜디오) 세금정보 — 거래명세서 PDF의 '공급자'란. */
@@ -385,6 +419,21 @@ router.post("/rate-items/:id", requireChief, (req, res) => {
 router.post("/rate-items/:id/delete", requireChief, (req, res) => {
   deleteRateItem(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
+});
+
+// ── 룸(스튜디오 공간) 관리(추가·삭제) ──
+router.post("/rooms", requireChief, (req, res) => {
+  try {
+    createRoom(req.body);
+  } catch (e) {
+    if (e.message !== "ROOM_NAME_REQUIRED") throw e;
+  }
+  res.redirect("/settings?tab=settings&flash=saved");
+});
+
+router.post("/rooms/:id/delete", requireChief, (req, res) => {
+  deleteRoom(Number(req.params.id)); // 참조 세션 room_id → NULL 후 행 삭제(data.deleteRoom)
+  res.redirect("/settings?tab=settings&flash=deleted");
 });
 
 router.post("/managers", requireChief, (req, res) => {
