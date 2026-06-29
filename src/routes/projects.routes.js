@@ -617,21 +617,34 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
   const label = taskTypeLabel(task.task_type);
   const status = TASK_STATUS_LABELS[task.status] || task.status;
   const statusCls = TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted";
-  const billed = task.is_invoiced ? `<span class="badge bg-success/10 text-success">청구됨</span>` : "";
+  const amount = task.total_price ? `<span class="text-sm font-semibold">${formatKRW(task.total_price)}</span>` : "";
+  const title = `<span class="min-w-0 truncate text-sm"><span class="font-medium">${esc(label)}</span>${task.engineer_name ? `<span class="text-xs text-muted"> · ${esc(task.engineer_name)}</span>` : ""}</span>`;
+  const statusBadge = `<span class="badge ${statusCls}">${esc(status)}</span>`;
+
+  // 비관리자/청구된 작업: 편집 불가 → 단순 행(접기 없음).
+  if (!isAdmin || task.is_invoiced) {
+    const billed = task.is_invoiced ? `<span class="badge bg-success/10 text-success">청구됨</span>` : "";
+    return `
+      <div id="task-${task.id}" class="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5">
+        ${title}
+        <span class="flex shrink-0 items-center gap-1.5">${amount}${statusBadge}${billed}</span>
+      </div>`;
+  }
+  // 편집 가능: 헤더 전체가 접기 토글. 오른쪽 끝에 접기 버튼(chevron), 그 앞에 상태 배지.
   return `
-    <div id="task-${task.id}" class="rounded-lg border border-border bg-surface p-2.5">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="min-w-0 text-sm">
-          <span class="font-medium">${esc(label)}</span>${task.engineer_name ? `<span class="text-xs text-muted"> · ${esc(task.engineer_name)}</span>` : ""}
-        </div>
-        <div class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-          <span class="badge ${statusCls}">${esc(status)}</span>
-          ${billed}
-          ${task.total_price ? `<span class="text-sm font-semibold">${formatKRW(task.total_price)}</span>` : ""}
-        </div>
+    <details id="task-${task.id}" class="group rounded-lg border border-border bg-surface"${open ? " open" : ""}>
+      <summary class="flex cursor-pointer list-none items-center justify-between gap-2 p-2.5">
+        ${title}
+        <span class="flex shrink-0 items-center gap-2">
+          ${amount}
+          ${statusBadge}
+          <svg class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        </span>
+      </summary>
+      <div class="border-t border-border p-2.5">
+        ${taskEditForm(task, managers)}
       </div>
-      ${isAdmin && !task.is_invoiced ? taskEditMenu(task, managers, open) : ""}
-    </div>`;
+    </details>`;
 }
 
 /** 작업 엔지니어 선택지(담당자 마스터). 현재값이 목록에 없으면 보존용 옵션으로 추가. */
@@ -657,35 +670,32 @@ function taskTypeOptions(current) {
   return out.join("");
 }
 
-function taskEditMenu(task, managers = [], open = false) {
+function taskEditForm(task, managers = []) {
   return `
-    <details class="mt-2 border-t border-border pt-2"${open ? " open" : ""}>
-      <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
-      <form method="post" action="/projects/tasks/${task.id}" class="mt-2 grid gap-2 sm:grid-cols-2">
-        <div>
-          <label class="label mb-0.5 text-xs">작업 종류</label>
-          <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
-        </div>
-        <div>
-          <label class="label mb-0.5 text-xs">금액 <span class="font-normal text-muted">(원)</span></label>
-          <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="0" value="${esc(String(task.unit_price || ""))}" />
-        </div>
-        <div>
-          <label class="label mb-0.5 text-xs">담당자</label>
-          <select class="input py-1.5 text-sm" name="engineer_name">${engineerSelect(managers, task.engineer_name || "")}</select>
-        </div>
-        <div>
-          <label class="label mb-0.5 text-xs">상태</label>
-          <select class="input py-1.5 text-sm" name="status">
-            ${TASK_STATUSES.map((status) => `<option value="${esc(status)}" ${status === task.status ? "selected" : ""}>${esc(TASK_STATUS_LABELS[status] || status)}</option>`).join("")}
-          </select>
-        </div>
-        <button class="btn-primary btn-xs sm:col-span-2" type="submit">작업 저장</button>
-      </form>
-      <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
-        <button class="btn-ghost btn-xs text-danger" type="submit">작업 삭제</button>
-      </form>
-    </details>`;
+    <form method="post" action="/projects/tasks/${task.id}" class="grid gap-2 sm:grid-cols-2">
+      <div>
+        <label class="label mb-0.5 text-xs">작업 종류</label>
+        <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">금액 <span class="font-normal text-muted">(원)</span></label>
+        <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="0" value="${esc(String(task.unit_price || ""))}" />
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">담당자</label>
+        <select class="input py-1.5 text-sm" name="engineer_name">${engineerSelect(managers, task.engineer_name || "")}</select>
+      </div>
+      <div>
+        <label class="label mb-0.5 text-xs">상태</label>
+        <select class="input py-1.5 text-sm" name="status">
+          ${TASK_STATUSES.map((status) => `<option value="${esc(status)}" ${status === task.status ? "selected" : ""}>${esc(TASK_STATUS_LABELS[status] || status)}</option>`).join("")}
+        </select>
+      </div>
+      <button class="btn-primary btn-xs sm:col-span-2" type="submit">작업 저장</button>
+    </form>
+    <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
+      <button class="btn-ghost btn-xs text-danger" type="submit">작업 삭제</button>
+    </form>`;
 }
 
 /** 다음 단계 빠른 추가 — is_quick 작업 종류 버튼(기본 단가 주입), +기타는 전체 활성 종류 그룹. 추가하면 편집이 펼쳐져 금액을 입력한다. */
