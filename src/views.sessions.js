@@ -79,12 +79,18 @@ function sessionFields(s, managers, rateItems = []) {
     </div>
     <div class="mt-2 grid gap-2 sm:grid-cols-2">
       <div>
-        <label class="label mb-0.5 text-xs">시작</label>
-        <select class="input py-1.5 text-sm" name="start_time">${timeOptions(s.start_time)}</select>
+        <label class="label mb-0.5 text-xs">시작 <span class="font-normal text-muted">(또는 직접입력)</span></label>
+        <div class="flex gap-1.5">
+          <select class="input py-1.5 text-sm" name="start_time">${timeOptions(s.start_time)}</select>
+          <input class="input w-24 py-1.5 text-sm" type="text" name="start_time_custom" placeholder="HH:MM" inputmode="numeric" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" />
+        </div>
       </div>
       <div>
-        <label class="label mb-0.5 text-xs">종료</label>
-        <select class="input py-1.5 text-sm" name="end_time">${timeOptions(s.end_time)}</select>
+        <label class="label mb-0.5 text-xs">종료 <span class="font-normal text-muted">(또는 직접입력)</span></label>
+        <div class="flex gap-1.5">
+          <select class="input py-1.5 text-sm" name="end_time">${timeOptions(s.end_time)}</select>
+          <input class="input w-24 py-1.5 text-sm" type="text" name="end_time_custom" placeholder="HH:MM" inputmode="numeric" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" />
+        </div>
       </div>
     </div>
     <input class="input mt-2 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;

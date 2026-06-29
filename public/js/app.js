@@ -252,3 +252,29 @@
     }, 400);
   }, 2500);
 })();
+
+// 금액 입력 천단위 콤마: 표시용 콤마 + 제출 시 순수 숫자 복원(서버는 정수 '원'). 표시 텍스트는 formatKRW가 담당.
+(function () {
+  "use strict";
+  var MONEY = /^(unit_price|base_price|extra_price|amount|paid_amount)$/;
+  function fmt(v) {
+    var d = String(v == null ? "" : v).replace(/[^\d]/g, "");
+    return d ? Number(d).toLocaleString("en-US") : "";
+  }
+  function isMoney(el) {
+    return el && el.tagName === "INPUT" && el.type !== "hidden" && MONEY.test(el.name || "");
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("input"), function (el) {
+    if (isMoney(el) && el.value) el.value = fmt(el.value);
+  });
+  document.addEventListener("input", function (e) {
+    if (isMoney(e.target)) e.target.value = fmt(e.target.value);
+  });
+  // 제출 직전 콤마 제거(capture 단계에서 먼저 정리; 서버 parseWon도 방어하지만 amount 등 안전).
+  document.addEventListener("submit", function (e) {
+    if (!e.target || !e.target.querySelectorAll) return;
+    Array.prototype.forEach.call(e.target.querySelectorAll("input"), function (el) {
+      if (isMoney(el)) el.value = String(el.value).replace(/[^\d]/g, "");
+    });
+  }, true);
+})();

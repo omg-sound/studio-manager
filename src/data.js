@@ -830,7 +830,7 @@ function addMinutesToHHMM(hhmm, mins) {
  */
 function resolveEndTime(input, start, rateItemId) {
   const mode = String(input.duration_mode || "");
-  if (!start || !["pro1", "pro2", "custom"].includes(mode)) return cleanTime(input.end_time);
+  if (!start || !["pro1", "pro2", "custom"].includes(mode)) return cleanTime(input.end_time_custom) || cleanTime(input.end_time);
   if (mode === "custom") {
     const hours = parseFloat(input.custom_hours);
     return hours > 0 ? addMinutesToHHMM(start, Math.round(hours * 60)) : cleanTime(input.end_time);
