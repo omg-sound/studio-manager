@@ -57,13 +57,14 @@
 
 ### 클라이언트
 - 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록.
+  **상세**(`GET /clients/:id`): 탭 = 진행 프로젝트(이름 매칭 또는 실결제자) / 청구·결제(실결제자 인보이스 전체 + 합계·입금·미수).
   세금계산서 정보(`biz_no`·`owner_name`·`address`; **아티스트(개인)는 없음** — 폼에서 숨김·서버에서 null 강제). **실결제자**=클라이언트가 특정 프로젝트/인보이스에서 갖는 결제 역할(`client_id`).
 
 ### 자료 전달
 - 업로드(multer 디스크) → Drive/로컬 폴백 → 인증 다운로드(프록시) + 공개 만료 토큰 링크 `/d/:token`(다운로드 카운트·철회·만료).
 
 ### 관리(/settings) — 3탭
-- **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계)·외주 작업자(로그인 없이 직접 추가). 편집=추가/삭제(토글 폐기).
+- **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계). **외주 작업자는 별도 메뉴 `/workers`**(치프): 목록·추가·삭제 + 상세 탭(작업 히스토리=`engineer_name` 매칭, 정산=작업 금액 집계·지급 처리/취소 `track_tasks.worker_paid`). 편집=추가/삭제(토글 폐기).
 - **컨텐츠**: 단가표(녹음 종류)·**작업 종류 카탈로그**(곡·콘텐츠 후반작업 종류 + 기본단가·과금·분류·빠른추가). 모두 삭제-only.
 - **환경설정**: 스튜디오 캘린더(겹침 검사·자동 연동 대상)·예약 일정 기본 장소·**공급자(스튜디오) 세금정보 + 로고**(거래명세서 PDF용; 로고는 PNG/JPG 업로드→base64).
 
@@ -146,7 +147,7 @@
   프로젝트 하위 곡·콘텐츠. `content_type` 상수·정규화(`config.js`)는 있으나 **현재 UI 미노출 → 전부 Music**, 영상 구분은 향후 확장용.
 - `track_tasks(track_id→project_tracks CASCADE, task_type, billing_type[Time_Charge|Fixed_Per_Track],
   quantity, unit_price, total_price, engineer_name?, status[Pending|In_Progress|Completed],
-  is_invoiced, invoice_id?, session_id?→sessions SET NULL)` — 실제 청구 가능한 모듈형 작업 단위.
+  is_invoiced, invoice_id?, session_id?→sessions SET NULL, worker_paid, worker_paid_date?)` — 실제 청구 가능한 모듈형 작업 단위. `worker_paid`=외주 작업자 정산(지급) 여부(`/workers` 정산 탭).
   `session_id`는 녹음 세션에서 자동 생성된 작업 추적(부분 유니크: 세션당 1건).
 - `deliverables(project_id→projects ON DELETE CASCADE, title, version, kind, storage_backend[drive|local],
   file_id, file_name, file_size, mime_type, access_token?, expires_at?, download_count, revoked, note)`

@@ -96,6 +96,32 @@ function listInvoicesForClientEntity(client) {
     )
     .all({ id: client.id });
 }
+
+/** 외주 작업자 단건(project_managers 중 로그인 사용자와 미연결). */
+function getWorker(id) {
+  return db().prepare("SELECT * FROM project_managers WHERE id = ? AND user_id IS NULL").get(id) || null;
+}
+
+/** 외주 작업자가 담당한 작업(track_tasks, engineer_name 매칭) + 프로젝트/트랙 — 작업 히스토리·정산. */
+function listTasksForWorker(worker) {
+  if (!worker) return [];
+  return db()
+    .prepare(
+      `SELECT t.*, tr.title AS track_title, p.id AS project_id, p.title AS project_title
+       FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       JOIN projects p ON p.id = tr.project_id
+       WHERE t.engineer_name = ?
+       ORDER BY t.created_at DESC, t.id DESC`
+    )
+    .all(worker.name);
+}
+
+/** 외주 작업자 작업의 지급 처리/해제(정산). 작업자 소속 확인 후 호출. */
+function setTaskPayout(taskId, paid) {
+  const p = paid ? 1 : 0;
+  db().prepare("UPDATE track_tasks SET worker_paid = ?, worker_paid_date = ? WHERE id = ?").run(p, p ? todayYmd() : null, Number(taskId));
+}
 function clientOptions() {
   return db().prepare("SELECT id, name FROM clients ORDER BY name COLLATE NOCASE").all();
 }
@@ -1113,6 +1139,9 @@ module.exports = {
   getClient,
   listProjectsForClient,
   listInvoicesForClientEntity,
+  getWorker,
+  listTasksForWorker,
+  setTaskPayout,
   clientOptions,
   ensureClientsFromProject,
   listProjectManagers,

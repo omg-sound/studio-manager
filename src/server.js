@@ -18,6 +18,7 @@ const deliverableRoutes = require("./routes/deliverables.routes");
 const invoiceRoutes = require("./routes/invoices.routes");
 const sessionRoutes = require("./routes/sessions.routes");
 const clientRoutes = require("./routes/clients.routes");
+const workerRoutes = require("./routes/workers.routes");
 const settingsRoutes = require("./routes/settings.routes");
 const apiRoutes = require("./routes/api.routes");
 const maintenanceRoutes = require("./routes/maintenance.routes");
@@ -123,6 +124,7 @@ app.use("/", deliverableRoutes); // /deliverables, /projects/:pid/deliverables, 
 app.use("/invoices", invoiceRoutes); // requireInvoice (치프/대표)
 app.use("/", sessionRoutes); // /sessions (일정) + 세션 CRUD
 app.use("/clients", clientRoutes); // requireChief
+app.use("/workers", workerRoutes); // requireChief (외주 작업자 + 정산)
 app.use("/settings", settingsRoutes); // requireAdmin
 
 // 정적 자산(css/js)만 — 보호 대상 HTML은 여기 없음

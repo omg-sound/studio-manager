@@ -270,6 +270,8 @@ function init() {
   addColumn("sessions", "booker_name", "TEXT"); // 예약 담당자(담당자 마스터에서 선택, 담당 엔지니어와 별개)
   addColumn("sessions", "gcal_event_id", "TEXT"); // 예약 시 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적)
   addColumn("track_tasks", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 세션에서 생성된 청구 작업 추적(레거시 전환분)
+  addColumn("track_tasks", "worker_paid", "INTEGER NOT NULL DEFAULT 0"); // 외주 작업자 지급(정산) 여부
+  addColumn("track_tasks", "worker_paid_date", "TEXT"); // 지급 처리일(YYYY-MM-DD)
   addColumn("invoice_items", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 녹음 세션 직접 청구 라인(곡·콘텐츠 안 거침). 청구 여부 = 이 컬럼 역참조
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
