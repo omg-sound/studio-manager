@@ -53,16 +53,19 @@ function formatYmdShort(s) {
   return `${m}월 ${d}일`;
 }
 
+/** 'HH:MM' → 자정 기준 분(유효하지 않으면 null). 시간 유틸 단일 출처. */
+function timeToMin(hhmm) {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
 /** 'HH:MM' 두 값 사이 분. end<start면 자정 넘김(+24h, 야간 세션). 동일 시각은 0분. 유효하지 않으면 0. */
 function minutesBetween(start, end) {
-  const re = /^([01]\d|2[0-3]):([0-5]\d)$/;
-  const a = re.exec(String(start || ""));
-  const b = re.exec(String(end || ""));
-  if (!a || !b) return 0;
-  const s = Number(a[1]) * 60 + Number(a[2]);
-  let e = Number(b[1]) * 60 + Number(b[2]);
+  const s = timeToMin(start);
+  let e = timeToMin(end);
+  if (s == null || e == null) return 0;
   if (e < s) e += 24 * 60; // end<start만 자정 넘김. e===s(동일 시각)는 0분 → 과금 안 됨
   return e - s;
 }
 
-module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, minutesBetween };
+module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, timeToMin, minutesBetween };

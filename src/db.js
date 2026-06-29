@@ -225,7 +225,6 @@ function init() {
 
     CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
     CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
-    CREATE INDEX IF NOT EXISTS idx_project_service_items_active ON project_service_items(active, label);
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
     CREATE INDEX IF NOT EXISTS idx_task_types_active ON task_types(active, sort_order, label);
     CREATE INDEX IF NOT EXISTS idx_project_tracks_project ON project_tracks(project_id);
@@ -362,17 +361,7 @@ function init() {
 
 function seedDefaultCatalogs() {
   const d = db();
-  const services = [
-    ["recording", "녹음"],
-    ["vocal_tune", "보컬튠"],
-    ["mixing", "믹싱"],
-    ["mastering", "마스터링"],
-  ];
-  const upsertService = d.prepare(
-    `INSERT INTO project_service_items (key, label, active) VALUES (?, ?, 1)
-     ON CONFLICT(key) DO UPDATE SET label = excluded.label`
-  );
-  for (const [key, label] of services) upsertService.run(key, label);
+  // project_service_items는 레거시(구 services JSON 라벨 호환) — 읽는 코드 없음(라벨은 config 상수). 시드 폐기, 테이블만 잔존.
 
   // 작업 종류 카탈로그 1회 시드(이후 치프의 편집·삭제가 영구히 유지되도록 플래그 게이트). ON CONFLICT으로 멱등.
   if (!getState("task_types_seed_v1")) {

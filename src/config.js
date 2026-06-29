@@ -130,9 +130,6 @@ const TASK_TYPES = [
   { key: "Audio_Dub_Mixing", label: "더빙 믹싱", group: "Video_Audio", billing: "Fixed_Per_Track", price: 0, quick: false },
   { key: "SFX_Foley", label: "SFX/Foley", group: "Video_Audio", billing: "Fixed_Per_Track", price: 0, quick: false },
 ];
-const TASK_TYPE_KEYS = TASK_TYPES.map((t) => t.key);
-// 레거시 폴백용(런타임 라벨 해석은 data.js 캐시가 담당). 시드 라벨 맵.
-const TASK_TYPE_LABELS = Object.fromEntries(TASK_TYPES.map((t) => [t.key, t.label]));
 // 작업 종류 분류(그룹) — 구조적 상수(요약·빠른버튼 그룹핑). 카탈로그 행이 이를 참조.
 const TASK_GROUPS = ["Recording", "Post_Production", "Mix_Master", "Video_Audio"];
 const TASK_GROUP_LABELS = { Recording: "녹음", Post_Production: "후반 작업", Mix_Master: "믹스·마스터", Video_Audio: "영상 오디오" };
@@ -192,11 +189,6 @@ function normalize(value, allowed, fallback) {
 const PROJECT_SERVICE_KEYS = PROJECT_SERVICES.map((s) => s.key);
 const PROJECT_SERVICE_LABELS = Object.fromEntries(PROJECT_SERVICES.map((s) => [s.key, s.label]));
 
-function normalizeProjectServices(value) {
-  const raw = Array.isArray(value) ? value : value == null || value === "" ? [] : [value];
-  return [...new Set(raw.map((v) => String(v || "").trim()).filter((v) => PROJECT_SERVICE_KEYS.includes(v)))];
-}
-
 module.exports = {
   config,
   ROLES,
@@ -218,8 +210,6 @@ module.exports = {
   TRACK_CONTENT_TYPES,
   TRACK_CONTENT_TYPE_LABELS,
   TASK_TYPES,
-  TASK_TYPE_KEYS,
-  TASK_TYPE_LABELS,
   TASK_GROUPS,
   TASK_GROUP_LABELS,
   BILLING_TYPES,
@@ -232,16 +222,15 @@ module.exports = {
   SESSION_STATUS_BADGE,
   SESSION_TIME_SLOTS,
   SESSION_START_SLOTS,
+  timeSlots,
   RECORDING_CATEGORIES,
   normalizeRecordingCategory: (v) => normalize(v, RECORDING_CATEGORIES),
   normalizeSessionType: (v) => normalize(v, SESSION_TYPES),
   normalizeSessionStatus: (v) => normalize(v, SESSION_STATUSES),
-  normalizeProjectServices,
   normalizeClientKind: (v) => normalize(v, CLIENT_KINDS),
   normalizeDeliverableKind: (v) => normalize(v, DELIVERABLE_KINDS),
   normalizeInvoiceStatus: (v) => normalize(v, INVOICE_STATUSES),
   normalizeTrackContentType: (v) => normalize(v, TRACK_CONTENT_TYPES),
-  normalizeTaskType: (v) => normalize(v, TASK_TYPE_KEYS),
   normalizeTaskGroup: (v) => normalize(v, TASK_GROUPS),
   normalizeBillingType: (v) => normalize(v, BILLING_TYPES),
   normalizeTaskStatus: (v) => normalize(v, TASK_STATUSES),

@@ -8,7 +8,8 @@
 
 const crypto = require("crypto");
 const { db, getState, setState } = require("./db");
-const { todayYmd, isValidYmd, formatYmdShort, minutesBetween } = require("./lib/date");
+const { todayYmd, isValidYmd, formatYmdShort, timeToMin, minutesBetween } = require("./lib/date");
+const { parseMoney } = require("./lib/forms");
 const { canInvoice, isChief, canEdit } = require("./auth");
 const {
   normalizeTrackContentType,
@@ -19,6 +20,8 @@ const {
   normalizeRecordingCategory,
   normalizeClientKind,
   normalizeTaskGroup,
+  timeSlots,
+  SESSION_START_SLOTS,
 } = require("./config");
 
 /** 'HH:MM' 검증(아니면 null). */
@@ -47,10 +50,8 @@ function isOverdue(inv) {
   return inv.status === "발행" && !!inv.due_date && todayYmd() > inv.due_date && balanceOf(inv) > 0;
 }
 
-function parseWon(value) {
-  const n = parseInt(String(value == null ? "" : value).replace(/[^\d-]/g, ""), 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
+// 금액 파싱은 lib/forms.parseMoney로 단일화(중복 구현 제거). 내부 호출명은 parseWon 유지.
+const parseWon = parseMoney;
 
 // ── 거래처(실결제자) ──
 function listClients({ kind } = {}) {
@@ -245,10 +246,6 @@ function updateRateItem(id, input = {}) {
   return db().prepare("SELECT * FROM rate_items WHERE id = ?").get(id);
 }
 
-function setRateItemActive(id, active) {
-  db().prepare("UPDATE rate_items SET active=? WHERE id=?").run(active ? 1 : 0, id);
-}
-
 function deleteRateItem(id) {
   db().prepare("DELETE FROM rate_items WHERE id = ?").run(id);
 }
@@ -387,18 +384,11 @@ function sessionAmountsByProject(projectIds) {
   return sums;
 }
 
-function listProjects(_user, { service, clientId, q } = {}) {
+// 라우트는 filters 객체(service/clientId/q)를 넘기지만 목록 UI는 검색(q)만 사용 → q만 처리(나머지 인자는 무시).
+function listProjects(_user, { q } = {}) {
   const where = [];
   const params = {};
 
-  if (clientId) {
-    where.push("p.client_id = @clientId");
-    params.clientId = Number(clientId);
-  }
-  if (service) {
-    where.push("p.services LIKE @service");
-    params.service = `%"${service}"%`;
-  }
   if (q) {
     where.push("(p.title LIKE @q OR p.artist LIKE @q)");
     params.q = `%${q}%`;
@@ -637,6 +627,7 @@ function listUnbilledTasksForProject(user, projectId) {
        JOIN project_tracks tr ON tr.id = t.track_id
        WHERE tr.project_id = ?
          AND t.is_invoiced = 0
+         AND t.total_price > 0
        ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
     )
     .all(project.id);
@@ -706,6 +697,31 @@ function getStudioLogo() {
 }
 function setStudioLogo(dataUri) {
   setState("studio_logo", dataUri ? String(dataUri) : null);
+}
+
+// ── 스튜디오 운영시간(예약 그리드 범위) — admin_state 평문. 환경설정에서 조정(UI는 다른 레인) ──
+const DEFAULT_STUDIO_HOURS = { start: "14:00", end: "18:30" }; // 기존 SESSION_START_SLOTS와 동일 기본값
+
+/** 예약 그리드 시작/종료 시각('HH:MM'). 미설정/무효면 기본값. */
+function getStudioHours() {
+  return {
+    start: cleanTime(getState("studio_hours_start")) || DEFAULT_STUDIO_HOURS.start,
+    end: cleanTime(getState("studio_hours_end")) || DEFAULT_STUDIO_HOURS.end,
+  };
+}
+
+/** 운영시간 저장(형식 검증만; 무효값은 null로 → 기본값 폴백). */
+function setStudioHours(start, end) {
+  setState("studio_hours_start", cleanTime(start) || null);
+  setState("studio_hours_end", cleanTime(end) || null);
+}
+
+/** 운영시간 기반 30분 시작 슬롯 배열(예약 그리드). 무효/역전 범위면 기본 그리드(SESSION_START_SLOTS). */
+function studioStartSlots() {
+  const { start, end } = getStudioHours();
+  const sm = timeToMin(start), em = timeToMin(end);
+  if (sm == null || em == null || em < sm) return [...SESSION_START_SLOTS];
+  return timeSlots(sm, em);
 }
 
 /** 발행/입금완료로 전이 시 채번 보장(수동 발행분도 INV-YYYYMM-### 부여). 거래명세서에 번호 필수. */
@@ -984,21 +1000,18 @@ function addMinutesToHHMM(hhmm, mins) {
 }
 
 /**
- * 종료시간 결정: 소요시간 모드(duration_mode)가 있으면 시작+길이로 계산, 없으면 입력된 end_time 사용.
- *  - pro1/pro2: 단가표 항목 기준시간(base_minutes)×1 또는 ×2. 단가 미선택/기준 0이면 SESSION_PRO_NEEDS_RATE.
- *  - custom: custom_hours(시간, 소수 가능)만큼.
+ * 종료시간 결정: 소요시간(custom_hours)이 있으면 시작+길이로 계산, 없으면 입력된 end_time 사용.
+ * 폼은 항상 duration_mode=custom + custom_hours를 전송한다(슬라이더/프리셋이 custom_hours를 채움).
+ * custom_hours는 12시간(720분) 상한으로 클램프 — addMinutesToHHMM의 %1440 감김으로 종료시각이 왜곡되지 않게.
  */
-function resolveEndTime(input, start, rateItemId) {
-  const mode = String(input.duration_mode || "");
-  if (!start || !["pro1", "pro2", "custom"].includes(mode)) return cleanTime(input.end_time_custom) || cleanTime(input.end_time);
-  if (mode === "custom") {
-    const hours = parseFloat(input.custom_hours);
-    return hours > 0 ? addMinutesToHHMM(start, Math.round(hours * 60)) : cleanTime(input.end_time);
+function resolveEndTime(input, start) {
+  if (!start || String(input.duration_mode || "") !== "custom") {
+    return cleanTime(input.end_time_custom) || cleanTime(input.end_time);
   }
-  const item = rateItemId ? db().prepare("SELECT base_minutes FROM rate_items WHERE id = ?").get(rateItemId) : null;
-  const base = item && item.base_minutes > 0 ? item.base_minutes : 0;
-  if (base <= 0) throw new Error("SESSION_PRO_NEEDS_RATE");
-  return addMinutesToHHMM(start, mode === "pro2" ? base * 2 : base);
+  const hours = parseFloat(input.custom_hours);
+  if (!(hours > 0)) return cleanTime(input.end_time);
+  const mins = Math.min(Math.round(hours * 60), 720); // 상한 12시간
+  return addMinutesToHHMM(start, mins);
 }
 
 function sessionFields(input) {
@@ -1011,7 +1024,7 @@ function sessionFields(input) {
     session_type: normalizeSessionType(input.session_type),
     session_date: date,
     start_time: start,
-    end_time: resolveEndTime(input, start, rateItemId),
+    end_time: resolveEndTime(input, start),
     booker_name: String(input.booker_name || "").trim() || null,
     engineer_name: String(input.engineer_name || "").trim() || null,
     status: normalizeSessionStatus(input.status),
@@ -1065,12 +1078,6 @@ function sessionRateAmount(session) {
   const item = db().prepare("SELECT * FROM rate_items WHERE id = ?").get(session.rate_item_id);
   if (!item) return null;
   return { item, minutes, amount: computeRatePrice(item, minutes) };
-}
-
-/** 'HH:MM' → 자정 기준 분(유효하지 않으면 null). */
-function timeToMin(hhmm) {
-  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm || ""));
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
 /**
@@ -1264,7 +1271,6 @@ module.exports = {
   listRateItems,
   createRateItem,
   updateRateItem,
-  setRateItemActive,
   deleteRateItem,
   computeRatePrice,
   listTaskTypes,
@@ -1307,6 +1313,9 @@ module.exports = {
   setStudioInfo,
   getStudioLogo,
   setStudioLogo,
+  getStudioHours,
+  setStudioHours,
+  studioStartSlots,
   ensureInvoiceNumber,
   invoiceStats,
   listInvoicesForProject,

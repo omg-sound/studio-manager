@@ -46,11 +46,6 @@ function calendarClient() {
   return google.calendar({ version: "v3", auth });
 }
 
-/** 캘린더 충돌 검사 활성 여부(토큰 + 스튜디오 캘린더 지정). */
-function isCalendarLinked() {
-  return Boolean(calendarClient() && getStudioCalendarId());
-}
-
 /** 치프의 캘린더 목록(스튜디오 캘린더 선택용). 실패 시 []. */
 async function listCalendars() {
   const cal = calendarClient();
@@ -75,37 +70,6 @@ function rfc3339Kst(date, time, addDay = 0) {
     d = dt.toISOString().slice(0, 10);
   }
   return `${d}T${time}:00+09:00`;
-}
-
-/** FreeBusy 응답에서 해당 캘린더의 busy 블록 → 충돌 객체(있으면) 또는 null. */
-function conflictFromFreebusy(data, calId) {
-  const entry = (data && data.calendars && data.calendars[calId]) || {};
-  const busy = Array.isArray(entry.busy) ? entry.busy : [];
-  return busy.length > 0 ? { source: "google_calendar", calendarId: calId, busy } : null;
-}
-
-/**
- * 스튜디오 캘린더에서 [date start, end) 구간이 바쁜지 검사. 겹치면 충돌 객체, 아니면 null.
- * end<=start면 야간(종료를 익일로). 미연동/시간없음/오류는 fail-open(null) — 예약을 막지 않음.
- */
-async function findExternalConflict({ date, start, end } = {}) {
-  const cal = calendarClient();
-  const calId = getStudioCalendarId();
-  if (!cal || !calId || !RE_DATE.test(date) || !RE_TIME.test(start) || !RE_TIME.test(end)) return null;
-  const overnight = end <= start; // 'HH:MM' 문자열 비교(고정 폭) — 종료가 시작 이하면 자정 넘김
-  try {
-    const { data } = await cal.freebusy.query({
-      requestBody: {
-        timeMin: rfc3339Kst(date, start),
-        timeMax: rfc3339Kst(date, end, overnight ? 1 : 0),
-        timeZone: "Asia/Seoul",
-        items: [{ id: calId }],
-      },
-    });
-    return conflictFromFreebusy(data, calId);
-  } catch (_e) {
-    return null; // fail-open: 검사 불가 시 예약 허용(차단으로 인한 업무 마비 방지)
-  }
 }
 
 /**
@@ -211,11 +175,8 @@ module.exports = {
   getStudioLocation,
   setStudioLocation,
   calendarClient,
-  isCalendarLinked,
   listCalendars,
   rfc3339Kst,
-  conflictFromFreebusy,
-  findExternalConflict,
   busySlotsForDate,
   eventBody,
   createEvent,
