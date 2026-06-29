@@ -182,7 +182,7 @@ router.post("/sessions/:id/bill", requireEditor, (req, res) => {
     res.redirect(`/projects/${r.project_id}?tab=invoice&flash=billed`);
   } catch (e) {
     const map = {
-      SESSION_NOT_COMPLETED: "완료된 세션만 청구 작업으로 만들 수 있습니다.",
+      SESSION_NOT_COMPLETED: "취소된 세션은 청구 작업으로 만들 수 없습니다.",
       SESSION_NOT_BILLABLE: "녹음 세션에 단가 항목과 진행시간(시작·종료)이 있어야 청구 작업을 만들 수 있습니다.",
       SESSION_ALREADY_BILLED: "이미 이 세션으로 청구 작업을 생성했습니다.",
       TRACK_NOT_FOUND: "곡·콘텐츠를 찾을 수 없습니다.",

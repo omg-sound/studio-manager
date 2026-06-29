@@ -110,7 +110,7 @@ function startSlotGrid(current) {
     (t) => `
       <label class="cursor-pointer">
         <input type="radio" name="start_time" value="${t}" class="peer sr-only" data-slot="${t}" ${t === current ? "checked" : ""} />
-        <span class="block rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
+        <span class="block rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
       </label>`
   ).join("");
   // 그리드 맨 뒤에 '직접입력' 버튼 — 클릭하면 아래 시간 입력칸을 펼친다(app.js).
@@ -127,7 +127,7 @@ function durationButtons() {
   const opt = (val, label) => `
       <label class="cursor-pointer">
         <input type="radio" name="duration_mode" value="${val}" class="peer sr-only" data-duration="${val}" />
-        <span class="block rounded-md border border-border px-3 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary peer-checked:text-white peer-disabled:cursor-not-allowed peer-disabled:text-muted/40">${label}</span>
+        <span class="block rounded-md border border-border px-3 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:text-muted/40">${label}</span>
       </label>`;
   return `<div class="flex flex-wrap gap-1.5" data-duration-group>${opt("pro1", "1Pro")}${opt("pro2", "2Pro")}${opt("custom", "직접입력")}</div>`;
 }
@@ -154,26 +154,32 @@ function rateSelectGrouped(rateItems, currentId) {
  * 그 외(믹스 등): 기존 종류(session_type) + 단가 항목 두 필드.
  */
 function sessionBookingFields(s, managers, rateItems = [], isRecording = false) {
+  const engineerField = `<div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
+        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
   const typeRateRow = isRecording
     ? `<input type="hidden" name="session_type" value="녹음" />
-       <div class="sm:col-span-2"><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(관리 → 단가표에서 추가)</span></label>
-        ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>`
-    : `<div><label class="label mb-0.5 text-xs">종류</label>
-        <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-       <div><label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(1Pro 기준)</span></label>
-        ${rateSelectWithMinutes(rateItems, s.rate_item_id)}</div>`;
+       <div class="mt-2 grid gap-2 sm:grid-cols-2">
+         <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(관리 → 단가표에서 추가)</span></label>
+          ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
+         ${engineerField}
+       </div>`
+    : `<div class="mt-2 grid gap-2 sm:grid-cols-3">
+         <div><label class="label mb-0.5 text-xs">종류</label>
+          <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
+         <div><label class="label mb-0.5 text-xs">단가 항목 <span class="font-normal text-muted">(1Pro 기준)</span></label>
+          ${rateSelectWithMinutes(rateItems, s.rate_item_id)}</div>
+         ${engineerField}
+       </div>`;
   return `
-    <div class="grid gap-2 sm:grid-cols-2">
+    <div class="grid gap-2 sm:grid-cols-3">
       <div><label class="label mb-0.5 text-xs">날짜</label>
         <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date required /></div>
-      <div><label class="label mb-0.5 text-xs">상태</label>
-        <select class="input py-1.5 text-sm" name="status">${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}</select></div>
       <div><label class="label mb-0.5 text-xs">예약 담당자</label>
         <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select></div>
-      <div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
-        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>
-      ${typeRateRow}
+      <div><label class="label mb-0.5 text-xs">상태</label>
+        <select class="input py-1.5 text-sm" name="status">${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}</select></div>
     </div>
+    ${typeRateRow}
     <div class="mt-3">
       <label class="label mb-1 text-xs">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span></label>
       ${startSlotGrid(s.start_time || "")}
@@ -196,7 +202,7 @@ function sessionCreateForm(project, managers, rateItems = []) {
     <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
       ${sessionBookingFields({}, managers, rateItems, project.project_type === "recording")}
-      <button class="btn-primary mt-3 btn-sm" type="submit">세션 추가</button>
+      <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">+ 세션 추가</button>
     </form>`;
 }
 
@@ -218,7 +224,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
     ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${s.billed_task_id ? ' · <span class="text-muted">작업 생성됨</span>' : ""}</div>`
     : "";
   const controls = isAdmin ? sessionControls(s, managers, rateItems) : "";
-  const billForm = (isAdmin && Array.isArray(tracks) && s.billing && s.status === "완료" && !s.billed_task_id)
+  const billForm = (isAdmin && Array.isArray(tracks) && s.billing && s.status !== "취소" && !s.billed_task_id)
     ? `<form method="post" action="/sessions/${s.id}/bill" class="mt-2 flex flex-wrap items-end gap-2 border-t border-border pt-2">
          <div>
            <label class="label mb-0.5 text-xs">곡·콘텐츠</label>

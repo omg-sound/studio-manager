@@ -75,7 +75,7 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
   const inner = `
         ${pendingSessionsHtml ? `<div class="mb-3">${pendingSessionsHtml}</div>` : ""}
         ${unbilledForm ? `<div class="mb-3">${unbilledForm}</div>` : ""}
-        ${addBtn ? `<div class="mb-2 flex justify-end">${addBtn}</div>` : ""}
+        ${collapsed && addBtn ? `<div class="mb-2 flex justify-end">${addBtn}</div>` : ""}
         ${summary}
         ${list}`;
   if (collapsed) {

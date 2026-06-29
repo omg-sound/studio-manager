@@ -499,7 +499,6 @@ function listUnbilledTasksForProject(user, projectId) {
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        WHERE tr.project_id = ?
-         AND t.status = 'Completed'
          AND t.is_invoiced = 0
        ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
     )
@@ -560,7 +559,6 @@ function createInvoiceFromTasks(user, { projectId, taskIds, issueDate, dueDate, 
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        WHERE tr.project_id = ?
-         AND t.status = 'Completed'
          AND t.is_invoiced = 0
          AND t.id IN (${placeholders})
        ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
@@ -986,7 +984,7 @@ function createTaskFromSession(user, sessionId, { trackId, newTrackTitle, taskTy
   if (!s) return null;
   const project = getProjectForUser(user, s.project_id);
   if (!project || !canEdit(user)) return null;
-  if (s.status !== "완료") throw new Error("SESSION_NOT_COMPLETED");
+  if (s.status === "취소") throw new Error("SESSION_NOT_COMPLETED");
   const calc = sessionRateAmount(s);
   if (!calc) throw new Error("SESSION_NOT_BILLABLE");
   const existing = db().prepare("SELECT id FROM track_tasks WHERE session_id = ?").get(s.id);

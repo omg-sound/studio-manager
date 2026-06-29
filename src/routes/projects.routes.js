@@ -719,9 +719,9 @@ function taskQuickAdd(track) {
     </div>`;
 }
 
-/** 청구 대기 — 완료된 녹음 세션(예상 청구액, 아직 청구 작업으로 전환 안 됨)을 청구 탭에 노출 + '청구 확정' 버튼. */
+/** 청구 대기 — 녹음 세션(예상 청구액, 아직 청구 작업으로 전환 안 됨, 취소 제외)을 청구 탭에 노출 + '청구 확정' 버튼. */
 function pendingSessionsForm(sessions) {
-  const rows = (sessions || []).filter((s) => s.status === "완료" && s.billing && !s.billed_task_id);
+  const rows = (sessions || []).filter((s) => s.status !== "취소" && s.billing && !s.billed_task_id);
   if (!rows.length) return "";
   const items = rows
     .map((s) => `
@@ -741,14 +741,14 @@ function pendingSessionsForm(sessions) {
     .join("");
   return `
     <div class="rounded-lg border border-border bg-surface p-3">
-      <div class="mb-2 text-sm font-medium">청구 대기 · 완료된 녹음 세션 <span class="text-xs font-normal text-muted">(확정하면 청구 작업으로 전환됩니다)</span></div>
+      <div class="mb-2 text-sm font-medium">청구 대기 · 녹음 세션 <span class="text-xs font-normal text-muted">(확정하면 청구 작업으로 전환됩니다)</span></div>
       <div class="space-y-2">${items}</div>
     </div>`;
 }
 
 function unbilledInvoiceForm(project, rows) {
   if (!rows.length) {
-    return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-center text-sm text-muted">완료된 미청구 작업이 없습니다.</div>`;
+    return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-center text-sm text-muted">미청구 작업이 없습니다.</div>`;
   }
   const subtotal = rows.reduce((sum, task) => sum + (task.total_price || 0), 0);
   const tax = Math.round(subtotal * 0.1);
