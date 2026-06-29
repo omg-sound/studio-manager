@@ -13,27 +13,47 @@ const router = express.Router();
 // 모든 클라이언트 라우트는 치프 전용
 router.use(requireChief);
 
-// ── 목록(탭 = 분류 필터) ──
+// ── 목록(탭 = 분류 필터 + 이름 검색) ──
 router.get("/", (req, res) => {
   const TAB_KINDS = ["아티스트", "소속사/레이블", "제작사"]; // "기타"는 전체에만 포함
   const activeKind = TAB_KINDS.includes(req.query.kind) ? req.query.kind : "";
+  const q = String(req.query.q || "").trim();
   const rows = listClients(activeKind ? { kind: activeKind } : {});
   const counts = clientKindCounts();
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
+  // 라우트 레벨 이름 필터(data.js 수정 없이)
+  const ql = q.toLowerCase();
+  const displayed = q ? rows.filter((c) => c.name.toLowerCase().includes(ql)) : rows;
+
   const kindChips = filterChips({
     chips: [{ key: "", label: `전체목록 ${total}` }, ...TAB_KINDS.map((k) => ({ key: k, label: `${k} ${counts[k] || 0}` }))],
     activeKey: activeKind,
-    hrefFn: (key) => (key ? "/clients?kind=" + encodeURIComponent(key) : "/clients"),
+    hrefFn: (key) => {
+      const base = key ? "/clients?kind=" + encodeURIComponent(key) : "/clients";
+      return q ? base + "&q=" + encodeURIComponent(q) : base;
+    },
   });
-  const list = rows.length
-    ? rows
+
+  const searchBar = `
+    <form method="get" action="/clients" class="mb-4 flex gap-2">
+      ${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 검색" />
+      <button class="btn-primary shrink-0" type="submit">검색</button>
+    </form>`;
+
+  const resultNote = q
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${displayed.length}건 · <a href="/clients${activeKind ? "?kind=" + encodeURIComponent(activeKind) : ""}" class="text-primary hover:underline">전체 보기</a></div>`
+    : "";
+
+  const list = displayed.length
+    ? displayed
         .map((c) => {
           const taxLine = [c.biz_no ? "사업자 " + esc(c.biz_no) : "", c.owner_name ? "대표 " + esc(c.owner_name) : ""].filter(Boolean).join(" · ");
           return `
-      <div class="card mb-3">
+      <div class="card mb-3 row-link">
         <div class="flex items-start justify-between gap-3">
-          <a href="/clients/${c.id}" class="min-w-0 hover:opacity-80">
+          <a href="/clients/${c.id}" class="min-w-0">
             <div class="flex items-center gap-2">
               <span class="badge-neutral">${esc(c.kind)}</span>
               <span class="font-semibold">${esc(c.name)}</span>
@@ -48,12 +68,20 @@ router.get("/", (req, res) => {
       </div>`;
         })
         .join("")
-    : emptyState(activeKind ? esc(activeKind) + " 분류의 클라이언트가 없습니다." : "클라이언트가 없습니다.", { card: true });
+    : q
+      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
+      : emptyState(activeKind ? esc(activeKind) + " 분류의 클라이언트가 없습니다." : "클라이언트가 없습니다.", {
+          card: true,
+          icon: "clients",
+          cta: { href: "/clients/new", label: "+ 새 클라이언트" },
+        });
 
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "클라이언트", desc: "아티스트 · 소속사/레이블 · 제작사 (프로젝트에서 자동 등록). 실결제자가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
+    ${searchBar}
     ${kindChips}
+    ${resultNote}
     ${list}`;
   res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body }));
 });
@@ -143,9 +171,9 @@ router.get("/:id", (req, res) => {
       const paid = invoices.reduce((s, i) => s + (i.paid_amount || 0), 0);
       const due = total - paid;
       content = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
-          <span>청구 합계 <b class="text-fg">${formatKRW(total)}</b></span>
-          <span>입금 <b class="text-success">${formatKRW(paid)}</b></span>
-          <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"}">${formatKRW(due)}</b></span>
+          <span>청구 합계 <b class="text-fg tabular">${formatKRW(total)}</b></span>
+          <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
+          <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
         </div>
         <div class="space-y-2">${invoices.map((i) => invoiceRow(i, { compact: true })).join("")}</div>`;
     } else {

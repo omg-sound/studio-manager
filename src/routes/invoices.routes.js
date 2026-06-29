@@ -18,7 +18,7 @@ const {
   getClient,
   ensureInvoiceNumber,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup } = require("../views");
 const { invoiceRow, invoiceBadge } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
@@ -117,14 +117,14 @@ router.get("/", requireInvoice, (req, res) => {
     : "";
 
   const list = rows.length
-    ? `<div class="card">${rows.map((i) => invoiceRow(i)).join("")}</div>`
+    ? listGroup({ rows: rows.map((i) => invoiceRow(i)).join("") })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
 
   const action = admin ? `<a href="/invoices/new" class="btn-primary">+ 새 청구</a>` : "";
   const dueNote = totalDue > 0
-    ? `<div class="card mb-4 flex items-center justify-between"><span class="text-sm text-muted">미수금 합계</span><span class="text-lg font-bold text-danger">${formatKRW(totalDue)}</span></div>`
+    ? `<div class="card mb-4 flex items-center justify-between"><span class="text-sm text-muted">미수금 합계</span><span class="tabular text-lg font-bold text-danger">${formatKRW(totalDue)}</span></div>`
     : "";
 
   const body = `
@@ -201,7 +201,7 @@ router.get("/:id", requireInvoice, (req, res) => {
       </form>
       <form method="post" action="/invoices/${inv.id}/pay" class="flex items-end gap-2">
         <div class="flex-1">
-          <label class="label mb-0.5 text-xs">입금액(누적, 원)</label>
+          <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
           <input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
         </div>
         <button class="btn-ghost">입금 반영</button>
@@ -398,6 +398,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
     ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구" })}
     <form method="post" action="${action}" class="card space-y-4">
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
+      ${!isEdit ? `<p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>` : ""}
       <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
       <div><label class="label">프로젝트</label>${projSelect}</div>
       <div><label class="label">실결제자(프로젝트 선택 시 자동)</label>${clientSelect}</div>

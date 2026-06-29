@@ -2,10 +2,10 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
-const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
-const { listRooms } = require("./data");
+const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
+const { listRooms, studioStartSlots } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -51,17 +51,18 @@ function timeLabel(s) {
  * 그리드 밖 시간은 아래 '직접입력'(start_time_custom)으로 — 서버에서 직접입력이 있으면 우선한다.
  */
 function startSlotGrid(current) {
-  const inGrid = SESSION_START_SLOTS.includes(current);
+  const slots = studioStartSlots(); // 환경설정 운영시간 기반 30분 슬롯(정적 SESSION_START_SLOTS 대체)
+  const inGrid = slots.includes(current);
   const showCustom = !inGrid && !!current; // 편집 시 그리드 밖 값이면 직접입력 칸 펼침
-  const cells = SESSION_START_SLOTS.map(
+  const cells = slots.map(
     (t) => `
       <label class="cursor-pointer">
         <input type="radio" name="start_time" value="${t}" class="peer sr-only" data-slot="${t}" ${t === current ? "checked" : ""} />
-        <span class="block rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
+        <span class="flex min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
       </label>`
   ).join("");
   // 그리드 맨 뒤에 '직접입력' 버튼 — 클릭하면 아래 시간 입력칸을 펼친다(app.js).
-  const customBtn = `<button type="button" class="rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed" data-custom-start-toggle>직접입력</button>`;
+  const customBtn = `<button type="button" class="flex min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed" data-custom-start-toggle>직접입력</button>`;
   return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customBtn}</div>
     <div class="mt-1.5 flex items-center gap-1.5" data-custom-start-wrap ${showCustom ? "" : "hidden"}>
       <span class="text-xs text-muted">직접입력</span>
@@ -75,18 +76,7 @@ function startSlotGrid(current) {
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
 // 소요 시간 = 슬라이더(30분 단위·0~12시간)가 주 입력. 아래 1Pro/2Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
 // 전송값은 custom_hours + duration_mode=custom(hidden) → 서버 resolveEndTime이 그대로 산정(슬라이더 자체는 미전송 UI).
-function timeToMin(hhmm) {
-  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm || ""));
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-}
-/** 시작·종료(HH:MM) 사이 분. 야간(자정 넘김) 처리. 유효하지 않으면 0. */
-function minutesBetween(start, end) {
-  const a = timeToMin(start), b = timeToMin(end);
-  if (a == null || b == null) return 0;
-  let d = b - a;
-  if (d < 0) d += 1440;
-  return d;
-}
+// minutesBetween은 ../lib/date 공용 유틸을 사용한다(중복 정의 제거).
 function durationButtons(initMinutes = 0) {
   const m = Number(initMinutes) > 0 ? Math.round(Number(initMinutes)) : 0;
   const hours = m > 0 ? (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(1)) : "";
@@ -124,7 +114,7 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
   const opt = (r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`;
   const body = cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
   return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select ${required ? "data-rate-required" : ""}>
-      <option value="" data-minutes="0">녹음 종류 미지정</option>
+      <option value="" data-minutes="0">녹음 단가 항목 미지정</option>
       ${body}
     </select>`;
 }
@@ -137,36 +127,36 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
 function sessionBookingFields(s, managers, rateItems = [], rooms) {
   const initMins = s && s.start_time && s.end_time ? minutesBetween(s.start_time, s.end_time) : 0;
   const roomList = resolveRooms(rooms);
-  const engineerField = `<div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
+  const engineerField = `<div><label class="label-sm">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
-  // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 종류(단가표)는 녹음 세션 시간제 산정용(선택).
-  // 룸 = 스튜디오 공간(같은 룸끼리만 시간 겹침 검사). 2x2 그리드로 세션종류/룸 · 녹음종류/엔지니어 배치.
+  // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 단가 항목은 세션 종류=녹음일 때만 노출(app.js data-show-when="rec").
+  // 룸 = 스튜디오 공간(같은 룸끼리만 시간 겹침 검사). 2x2 그리드로 세션종류/룸 · 녹음단가/엔지니어 배치.
   const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-2">
-         <div><label class="label mb-0.5 text-xs">세션 종류</label>
+         <div><label class="label-sm">세션 종류</label>
           <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-         <div><label class="label mb-0.5 text-xs">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
+         <div><label class="label-sm">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
           ${roomSelect(roomList, s.room_id)}</div>
-         <div><label class="label mb-0.5 text-xs">녹음 종류 <span class="font-normal text-muted">(녹음 시간제 단가)</span></label>
+         <div data-show-when="rec"><label class="label-sm">녹음 단가 항목 <span class="font-normal text-muted">(시간제 단가)</span></label>
           ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
          ${engineerField}
        </div>
-       <p class="mt-1 text-xs text-muted">청구하려면 <b>세션 종류=녹음</b> + <b>녹음 종류(단가표)</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)</p>`;
+       <p class="mt-1 text-xs text-muted">청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)</p>`;
   return `
     <div class="grid gap-2 sm:grid-cols-3">
-      <div><label class="label mb-0.5 text-xs">날짜</label>
+      <div><label class="label-sm">날짜</label>
         <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date required /></div>
-      <div><label class="label mb-0.5 text-xs">예약 담당자</label>
+      <div><label class="label-sm">예약 담당자</label>
         <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select></div>
-      <div><label class="label mb-0.5 text-xs">상태</label>
+      <div><label class="label-sm">상태</label>
         <select class="input py-1.5 text-sm" name="status">${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}</select></div>
     </div>
     ${typeRateRow}
     <div class="mt-3">
-      <label class="label mb-1 text-xs">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span><span class="font-normal text-warning" data-start-hint></span></label>
+      <label class="label-sm">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span></label>
       ${startSlotGrid(s.start_time || "")}
     </div>
     <div class="mt-3">
-      <label class="label mb-1 text-xs">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 종류 기준시간)</span></label>
+      <label class="label-sm">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 단가 항목 기준시간)</span></label>
       ${durationButtons(initMins)}
       <div class="mt-1.5 text-xs text-success" data-end-preview></div>
     </div>
@@ -186,7 +176,10 @@ function sessionCreateForm(project, managers, rateItems = [], rooms) {
 /** 세션 한 행. showProject=true면 프로젝트명 링크 표시(전역 일정). tracks 전달 시 청구 작업 생성 폼 노출. */
 function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, showProject = false, projectTitle = "" } = {}) {
   const typeBadge = `<span class="badge bg-bg text-muted">${esc(s.session_type)}</span>`;
-  const statusBadge = `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
+  // 상태 배지: 예정은 쿨톤 badge-info, 그 외(완료/취소)는 config 매핑 색.
+  const statusBadge = s.status === "예정"
+    ? `<span class="badge-info">${esc(s.status)}</span>`
+    : `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
   const people = [
     s.booker_name ? `예약 ${esc(s.booker_name)}` : "",
@@ -206,22 +199,28 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
         ? ' · <span class="text-success">청구 가능</span>'
         : ' · <span class="text-muted">완료 시 청구</span>';
   const billLine = s.billing
-    ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${billStatus}</div>`
+    ? `<div class="mt-0.5 text-xs text-success tabular">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${billStatus}</div>`
     : "";
+  // 청구 결핍 사유: 완료된 녹음 세션이 단가항목/시간이 없어 산정 불가하면 침묵하지 않고 사유를 옅게 안내(미청구·미전환 한정).
+  const billReason = !s.billing && s.session_type === "녹음" && s.status === "완료" && !s.invoiced && !s.billed_task_id
+    ? (!s.rate_item_id ? "청구하려면 녹음 단가 항목을 선택하세요" : "청구하려면 시작·소요 시간을 입력하세요")
+    : "";
+  const reasonLine = billReason ? `<div class="mt-0.5 text-xs text-muted/70">${esc(billReason)}</div>` : "";
   const header = `
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             ${typeBadge}
-            <span class="font-medium">${esc(formatYmdShort(s.session_date))}</span>
-            <span class="text-xs text-muted">${timeLabel(s)}${dday}</span>
+            <span class="font-medium tabular">${esc(formatYmdShort(s.session_date))}</span>
+            <span class="text-xs text-muted tabular">${timeLabel(s)}${dday}</span>
           </div>
           <div class="mt-0.5 text-xs text-muted">${sub}</div>
           ${billLine}
+          ${reasonLine}
         </div>`;
   // 비관리자: 단순 행(접기 없음).
   if (!isAdmin) {
     return `
-      <div class="rounded-lg border border-border bg-surface p-3">
+      <div class="row-link rounded-lg border border-border bg-surface p-3">
         <div class="flex items-start justify-between gap-2">
           ${header}
           <div class="flex shrink-0 items-center gap-1">${statusBadge}</div>
@@ -229,12 +228,20 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
       </div>`;
   }
   // 편집 가능: 행 헤더 전체가 접기 토글. 오른쪽 끝 접기 버튼(chevron), 그 앞에 상태 배지.
+  // 예정 세션은 펼치지 않고 1클릭 '완료' 토글(POST /sessions/:id/status)을 상태 배지 옆에 노출.
+  // (summary 안 button은 자기 활성화만 일어나 details 토글을 유발하지 않으며, POST→리다이렉트라 전이 상태도 무관.)
   const toggleTo = s.status === "완료" ? "예정" : "완료";
+  const quickComplete = s.status === "예정"
+    ? `<form method="post" action="/sessions/${s.id}/status">
+            <input type="hidden" name="status" value="완료" />
+            <button class="btn-ghost btn-xs text-success" type="submit">완료</button>
+          </form>`
+    : "";
   return `
-    <details class="group rounded-lg border border-border bg-surface">
-      <summary class="flex cursor-pointer list-none items-start justify-between gap-2 p-3">
+    <details class="group overflow-hidden rounded-lg border border-border bg-surface">
+      <summary class="row-link flex cursor-pointer list-none items-start justify-between gap-2 p-3">
         ${header}
-        <span class="flex shrink-0 items-center gap-2">${statusBadge}${detailsChevron()}</span>
+        <span class="flex shrink-0 items-center gap-2">${quickComplete}${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
         <form method="post" action="/sessions/${s.id}" data-session-form>

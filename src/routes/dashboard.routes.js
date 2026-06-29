@@ -23,9 +23,9 @@ router.get("/", requireAuth, (req, res) => {
   const weekSessions = allSessions.filter((ss) => ss.session_date >= today && ss.session_date <= weekEnd);
 
   const statCard = (label, value, sub = "") => `
-    <div class="card">
+    <div class="card border-l-2 [border-left-color:rgb(var(--color-primary))]">
       <div class="text-sm text-muted">${esc(label)}</div>
-      <div class="mt-1 text-2xl font-bold">${esc(String(value))}</div>
+      <div class="mt-1 font-display text-2xl font-bold tabular">${esc(String(value))}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 
@@ -33,14 +33,14 @@ router.get("/", requireAuth, (req, res) => {
     ? s.upcoming
         .map(
           (p) => `
-      <a href="/projects/${p.id}" class="flex items-center justify-between gap-3 border-b border-border py-3 last:border-0">
+      <a href="/projects/${p.id}" class="row-link flex items-center justify-between gap-3 border-b border-border py-3 last:border-0">
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(p.title)}</div>
           <div class="mt-1 flex flex-wrap gap-1">${serviceBadges(p)}</div>
           <div class="text-xs text-muted">${esc(p.client_name || "실결제자 미지정")}</div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
-          <span class="text-xs text-muted">${esc(ddayLabel(p.due_date))}</span>
+          <span class="text-xs tabular text-muted">${esc(ddayLabel(p.due_date))}</span>
         </div>
       </a>`
         )
@@ -48,9 +48,9 @@ router.get("/", requireAuth, (req, res) => {
     : emptyState("임박한 마감이 없습니다.");
 
   const moneyCard = (label, amount, danger = false, sub = "") => `
-    <div class="card">
+    <div class="card border-l-2 ${danger ? "[border-left-color:rgb(var(--color-danger))]" : "[border-left-color:rgb(var(--color-success))]"}">
       <div class="text-sm text-muted">${esc(label)}</div>
-      <div class="mt-1 text-2xl font-bold ${danger && amount > 0 ? "text-danger" : ""}">${formatKRW(amount)}</div>
+      <div class="mt-1 font-display text-2xl font-bold tabular ${danger && amount > 0 ? "text-danger" : ""}">${formatKRW(amount)}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 
@@ -78,19 +78,19 @@ router.get("/", requireAuth, (req, res) => {
     ? weekSessions
         .map(
           (ss) => `
-      <a href="/projects/${ss.project_id}?tab=sessions" class="flex items-center justify-between gap-3 border-b border-border py-2.5 last:border-0">
+      <a href="/projects/${ss.project_id}?tab=sessions" class="row-link flex items-center justify-between gap-3 border-b border-border py-2.5 last:border-0">
         <div class="min-w-0">
           <div class="truncate text-sm font-medium">${esc(ss.project_title)}</div>
           <div class="text-xs text-muted">${esc(ss.session_type)}${ss.engineer_name ? " · " + esc(ss.engineer_name) : ""}</div>
         </div>
         <div class="shrink-0 text-right">
-          <div class="text-xs font-medium">${esc(formatYmdShort(ss.session_date))}${ss.start_time ? " " + esc(ss.start_time) : ""}</div>
+          <div class="text-xs font-medium tabular">${esc(formatYmdShort(ss.session_date))}${ss.start_time ? " " + esc(ss.start_time) : ""}</div>
           <div class="text-xs text-muted">${ss.session_date === today ? "오늘" : ""}</div>
         </div>
       </a>`
         )
         .join("")
-    : emptyState("이번 주 예정된 세션이 없습니다.");
+    : emptyState("이번 주 예정된 세션이 없습니다.", { icon: "sessions" });
 
   const body = `
     ${pageHeader({

@@ -39,7 +39,7 @@ const {
   deleteTask,
   createInvoiceFromTasks,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, projectTypeBadge } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, projectTypeBadge, listGroup, listRow } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -76,29 +76,25 @@ function toArray(value) {
 router.get("/", requireAuth, (req, res) => {
   const user = req.user;
   const canCreate = canEdit(user); // 대표(열람전용)는 새 프로젝트 버튼 숨김
-  const filters = {
-    service: String(req.query.service || "").trim(),
-    clientId: req.query.clientId || "",
-    q: (req.query.q || "").toString().trim(),
-  };
-  const rows = listProjects(user, filters);
+  const q = (req.query.q || "").toString().trim();
+  const rows = listProjects(user, { q });
 
-  const searched = Boolean(filters.q);
+  const searched = Boolean(q);
   const list = rows.length
-    ? rows.map((p) => projectListCard(p)).join("")
+    ? listGroup({ rows: rows.map(projectListRow) })
     : searched
-      ? emptyState(`"${esc(filters.q)}" 검색 결과가 없습니다.`, { card: true })
+      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState(`프로젝트가 없습니다.${canCreate ? ' <a href="/projects/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
 
   const action = canCreate ? newProjectMenu() : "";
 
   const searchBar = `
     <form method="get" action="/projects" class="mb-4 flex gap-2">
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(filters.q)}" placeholder="프로젝트 · 아티스트 검색" />
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 아티스트 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
   const resultNote = searched
-    ? `<div class="mb-3 text-sm text-muted">"${esc(filters.q)}" 결과 ${rows.length}건 · <a href="/projects" class="text-primary hover:underline">전체 보기</a></div>`
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/projects" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
   const body = `
@@ -131,27 +127,20 @@ function trackCount(p) {
   return String(p.track_titles).split("||").map((s) => s.trim()).filter(Boolean).length;
 }
 
-/** 목록 카드: 상세와 같은 한 줄 요약 방식(메타 한 줄 + 항목 개수 / 견적·완료일). */
-function projectListCard(p) {
+/** 목록 행(listGroup 안 listRow): 제목+유형배지 / 메타(아티스트·클라이언트) / 곡수 — 우측 금액·D-day(tabular). */
+function projectListRow(p) {
   const metaLine = [p.artist, p.client_name, p.manager_name].filter(Boolean).join(" · ") || "정보 미정";
   const n = trackCount(p);
   const typeBadge = p.project_type ? projectTypeBadge(p.project_type) : "";
+  const left = `
+    <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(p.title)}</span>${typeBadge}</div>
+    <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
+    <div class="mt-0.5 text-xs text-muted">${n ? `곡·콘텐츠 ${n}` : "곡·콘텐츠 미정"}</div>`;
   const amount = projectAmount(p)
-    ? `<div class="text-sm font-medium">${formatKRW(projectAmount(p))}</div>`
+    ? `<div class="text-sm font-medium tabular">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
-  const dueLine = p.due_date ? `<div class="mt-0.5 text-xs text-muted">${esc(ddayLabel(p.due_date))}</div>` : "";
-  return `
-    <a href="/projects/${p.id}" class="card mb-3 flex items-center justify-between gap-4">
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(p.title)}</span>${typeBadge}</div>
-        <div class="mt-0.5 truncate text-sm text-muted">${esc(metaLine)}</div>
-        <div class="mt-0.5 text-xs text-muted">${n ? `곡·콘텐츠 ${n}` : "곡·콘텐츠 미정"}</div>
-      </div>
-      <div class="shrink-0 text-right">
-        ${amount}
-        ${dueLine}
-      </div>
-    </a>`;
+  const dueLine = p.due_date ? `<div class="mt-0.5 text-xs text-muted tabular">${esc(ddayLabel(p.due_date))}</div>` : "";
+  return listRow({ href: `/projects/${p.id}`, left, right: `${amount}${dueLine}` });
 }
 
 // ── 새 프로젝트 폼(관리자) ──
@@ -469,7 +458,7 @@ function projectForm(p = {}, err = "") {
     : "예약 없이 곡·콘텐츠를 등록하고 튠·믹스·마스터링 작업을 추가합니다.";
   return `
     ${pageHeader({ title: `새 프로젝트 · ${typeLabel}`, desc: typeHint })}
-    <form method="post" action="${action}" class="card space-y-4">
+    <form method="post" action="${action}" class="card space-y-3">
       <input type="hidden" name="project_type" value="${esc(type)}" />
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div>
@@ -491,10 +480,7 @@ function projectForm(p = {}, err = "") {
           <label class="label">제작사</label>
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
-        <div>
-          <label class="label">실결제자(공급받는 자)</label>
-          ${clientSelect(p.client_id)}
-        </div>
+        ${payerField(p)}
       </div>
       <div>
         <label class="label">담당자</label>
@@ -518,7 +504,7 @@ function projectForm(p = {}, err = "") {
 
 function projectEditForm(p = {}, err = "") {
   return `
-    <form method="post" action="/projects/${p.id}" class="space-y-4">
+    <form method="post" action="/projects/${p.id}" class="space-y-3">
       ${err ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(err)}</p>` : ""}
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
@@ -539,10 +525,7 @@ function projectEditForm(p = {}, err = "") {
           <label class="label">제작사</label>
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
-        <div>
-          <label class="label">실결제자(공급받는 자)</label>
-          ${clientSelect(p.client_id)}
-        </div>
+        ${payerField(p)}
       </div>
       <div>
         <label class="label">담당자</label>
@@ -586,6 +569,36 @@ function clientSelect(selectedId) {
       <option value="">실결제자 미지정</option>
       ${opts.map((c) => `<option value="${c.id}" ${Number(selectedId) === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}
     </select>`;
+}
+
+/** 실결제자 표시 라벨: "분류 이름"(예: "제작사 OOO"). 없으면 null. (kind는 프로젝트 조인에 없어 직접 조회) */
+function payerLabel(clientId) {
+  const c = db().prepare("SELECT name, kind FROM clients WHERE id = ?").get(Number(clientId));
+  return c ? `${c.kind} ${c.name}` : null;
+}
+
+/**
+ * 실결제자 필드: 자동 선택 결과(또는 자동 규칙)를 텍스트로 보이고, 토글로만 드롭다운을 펼친다.
+ * 신규는 방금 친 이름이 목록에 없어도 저장 시 resolveAutoClientId(제작사>소속사>아티스트)가 자동 연결하므로,
+ * 드롭다운을 강제하지 않고 규칙만 안내한다. CSP-safe: 닫힌 <details> 안 <select>도 그대로 폼 제출(JS 불필요).
+ */
+function payerField(p) {
+  const sel = p.client_id ? Number(p.client_id) : null;
+  const current = sel ? payerLabel(sel) : null;
+  const auto = resolveAutoClientId(p);
+  const isAuto = current && auto && Number(auto) === sel;
+  const head = current
+    ? `<div class="text-sm"><span class="font-medium">${esc(current)}</span>${isAuto ? ` <span class="text-xs text-muted">(자동 선택)</span>` : ""}</div>`
+    : `<div class="text-sm text-muted">저장 시 제작사 › 소속사 › 아티스트 순으로 자동 선택됩니다.</div>`;
+  return `
+    <div>
+      <label class="label">실결제자</label>
+      ${head}
+      <details class="mt-1">
+        <summary class="cursor-pointer list-none text-xs text-primary hover:underline">${current ? "직접 변경" : "직접 지정"}</summary>
+        <div class="mt-1.5">${clientSelect(sel)}</div>
+      </details>
+    </div>`;
 }
 
 function managerSelect(selectedId) {
@@ -770,7 +783,7 @@ function taskEditForm(task, managers = []) {
     </form>`;
 }
 
-/** 다음 단계 빠른 추가 — is_quick 작업 종류 버튼(기본 단가 주입), +기타는 전체 활성 종류 그룹. 추가하면 편집이 펼쳐져 금액을 입력한다. */
+/** 다음 단계 빠른 추가 — is_quick 종류 버튼(기본 단가 주입), +기타는 전체 활성 종류 그룹 + 금액 인라인 입력(0원 강제 방지). 추가하면 편집이 펼쳐져 조정할 수 있다. */
 function taskQuickAdd(track) {
   const types = activeTaskTypes();
   const quickTypes = types.filter((t) => t.is_quick);
@@ -791,6 +804,7 @@ function taskQuickAdd(track) {
       <summary class="cursor-pointer list-none rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary">+ 기타</summary>
       <form method="post" action="/projects/tracks/${track.id}/tasks" class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
         <select class="input py-1.5 text-sm" name="task_type">${grouped}</select>
+        <input class="input w-28 py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="금액(원)" />
         <input type="hidden" name="status" value="Pending" />
         <button class="btn-primary btn-xs" type="submit">추가</button>
       </form>
@@ -824,9 +838,8 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           <input class="mt-1" type="checkbox" name="task_id" value="${task.id}" ${done ? "checked" : ""} />
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</span>
-            <span class="block text-xs text-muted">${esc(formatQuantity(task.quantity))} x ${formatKRW(task.unit_price)}</span>
           </span>
-          <span class="text-sm font-semibold">${formatKRW(task.total_price)}</span>
+          <span class="text-sm font-semibold tabular">${formatKRW(task.total_price)}</span>
         </label>`;
     })
     .join("");
@@ -843,7 +856,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <span class="block text-sm font-medium">녹음 세션 ${esc(formatYmdShort(s.session_date))} · ${esc(s.billing.item.name)}</span>
             <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}</span>
           </span>
-          <span class="text-sm font-semibold">${formatKRW(s.billing.amount)}</span>
+          <span class="text-sm font-semibold tabular">${formatKRW(s.billing.amount)}</span>
         </label>`;
     })
     .join("");
@@ -873,11 +886,6 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성</button>
       </div>
     </form>`;
-}
-
-function formatQuantity(value) {
-  const n = Number(value || 0);
-  return Number.isInteger(n) ? String(n) : String(n).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 module.exports = router;

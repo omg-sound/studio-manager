@@ -83,13 +83,25 @@ router.get("/sessions", requireAuth, (req, res) => {
     const managers = editable ? listProjectManagers() : [];
     const rateItems = editable ? listRateItems() : [];
     const rooms = editable ? listRooms() : [];
-    const up = upcomingSessions(req.user, { limit: 50 });
-    const past = pastSessions(req.user, { limit: 20 });
+    // 이름/프로젝트 검색(?q=): 조회된 목록을 프로젝트명·예약자·엔지니어·종류·메모로 필터(인메모리, 대소문자 무시).
+    const q = String(req.query.q || "").trim();
+    const ql = q.toLowerCase();
+    const matchesQ = (s) =>
+      !ql ||
+      [s.project_title, s.booker_name, s.engineer_name, s.session_type, s.memo]
+        .filter(Boolean).join(" ").toLowerCase().includes(ql);
+    const up = upcomingSessions(req.user, { limit: 50 }).filter(matchesQ);
+    const past = pastSessions(req.user, { limit: 20 }).filter(matchesQ);
+    const searchBox = `
+      <form method="get" action="/sessions" class="mb-3">
+        <input type="hidden" name="view" value="list" />
+        <input class="input" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 예약 담당자 · 엔지니어 검색" />
+      </form>`;
     const upList = up.length
       ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div></div>`
-      : emptyState("다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
+      : emptyState(q ? "검색 결과가 없습니다." : "다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
     const pastList = past.length
-      ? `<details class="card group mt-3">
+      ? `<details class="card group mt-3" ${q ? "open" : ""}>
            <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
              <h2 class="font-display text-base font-semibold">지난 세션 <span class="text-sm font-normal text-muted">${past.length}</span></h2>
              ${detailsChevron()}
@@ -97,7 +109,7 @@ router.get("/sessions", requireAuth, (req, res) => {
            <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div>
          </details>`
       : "";
-    content = `${upList}${pastList}`;
+    content = `${searchBox}${upList}${pastList}`;
   }
 
   const body = `
@@ -120,7 +132,6 @@ router.get("/sessions/availability", requireEditor, asyncHandler(async (req, res
 
 function sessionInputError(e, res) {
   if (e.message === "SESSION_DATE_REQUIRED") return res.status(400).send("세션 날짜를 입력하세요.");
-  if (e.message === "SESSION_PRO_NEEDS_RATE") return res.status(400).send("1Pro·2Pro는 단가 항목을 먼저 선택하세요(기준시간 필요). 또는 '직접입력'을 쓰세요.");
   if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
   if (e.message === "SESSION_INVOICED") return res.status(400).send("이미 청구된 세션은 수정·삭제할 수 없습니다. 인보이스를 삭제한 뒤 시도하세요.");
   throw e;

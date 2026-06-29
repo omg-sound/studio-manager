@@ -21,6 +21,8 @@ const {
   setStudioInfo,
   getStudioLogo,
   setStudioLogo,
+  getStudioHours,
+  setStudioHours,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron } = require("../views");
 const { asyncHandler } = require("../lib/async");
@@ -58,7 +60,7 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = (await studioCalendarSection()) + roomsSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 룸 + 공급자 + 알림
+  else tabContent = (await studioCalendarSection()) + roomsSection() + studioHoursSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 룸 + 운영시간 + 공급자 + 알림
 
   const body = `
     ${flashBanner(req.query)}
@@ -240,6 +242,29 @@ function roomRow(r) {
     </div>`;
 }
 
+/** 운영시간(예약 그리드 시간 범위) — admin_state 기반. setStudioHours로 저장. */
+function studioHoursSection() {
+  const { start, end } = getStudioHours();
+  return `
+    <section class="card space-y-4">
+      <div>
+        <h2 class="font-display text-lg font-semibold">운영시간 <span class="text-sm font-normal text-muted">(예약 시작 그리드 범위)</span></h2>
+        <p class="mt-1 text-xs text-muted">세션 예약 폼의 '시작 시간 그리드'에 표시되는 시간 범위입니다(30분 단위). 그리드 바깥 시각은 '직접입력'으로 예약할 수 있습니다.</p>
+      </div>
+      <form method="post" action="/settings/studio-hours" class="flex flex-wrap items-end gap-2">
+        <div>
+          <label class="label-sm">그리드 시작</label>
+          <input class="input py-1.5 text-sm" name="hours_start" value="${esc(start)}" placeholder="14:00" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required />
+        </div>
+        <div>
+          <label class="label-sm">그리드 종료</label>
+          <input class="input py-1.5 text-sm" name="hours_end" value="${esc(end)}" placeholder="18:30" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required />
+        </div>
+        <button class="btn-primary btn-sm shrink-0" type="submit">저장</button>
+      </form>
+    </section>`;
+}
+
 /** 공급자(스튜디오) 세금정보 — 거래명세서 PDF의 '공급자'란. */
 function studioInfoSection() {
   const s = getStudioInfo();
@@ -335,6 +360,12 @@ router.post("/studio-calendar", requireChief, (req, res) => {
 // ── 예약 일정 기본 장소 저장 ──
 router.post("/studio-location", requireChief, (req, res) => {
   calendar.setStudioLocation(req.body.studio_location);
+  res.redirect("/settings?tab=settings&flash=saved");
+});
+
+// ── 운영시간(예약 그리드 범위) 저장 ──
+router.post("/studio-hours", requireChief, (req, res) => {
+  setStudioHours(req.body.hours_start, req.body.hours_end);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
