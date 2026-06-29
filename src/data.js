@@ -491,7 +491,7 @@ function listUnbilledTasksForProject(user, projectId) {
   return { project, rows };
 }
 
-/** 청구 가능 녹음 세션(녹음+단가+시간, 취소 제외) 중 아직 청구/전환 안 된 것 — 세션 직접 청구 후보. */
+/** 청구 가능 녹음 세션(**완료**·녹음+단가+시간) 중 아직 청구/전환 안 된 것 — 세션 직접 청구 후보(완료 처리해야 노출). */
 function listBillableSessionsForProject(user, projectId) {
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
@@ -499,7 +499,7 @@ function listBillableSessionsForProject(user, projectId) {
     .prepare(
       `SELECT s.* FROM sessions s
        WHERE s.project_id = ?
-         AND s.status <> '취소'
+         AND s.status = '완료'
          AND s.session_type = '녹음'
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
@@ -597,7 +597,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, issueDat
       .prepare(
         `SELECT s.* FROM sessions s
          WHERE s.project_id = ?
-           AND s.status <> '취소' AND s.session_type = '녹음'
+           AND s.status = '완료' AND s.session_type = '녹음'
            AND s.rate_item_id IS NOT NULL AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
            AND s.id IN (${placeholders})
            AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)

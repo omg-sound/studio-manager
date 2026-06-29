@@ -49,7 +49,7 @@
 - 인보이스 생성/수정/입금(부분→발행 유지·전액→입금완료)·상태 전이(미발행→발행→입금완료)·연체 파생.
   채번 `INV-YYYYMM-###`, VAT=공급가 10%, 돈=정수(원).
 - 청구 탭 **청구 생성 폼**: 미청구 작업 + **청구 가능 녹음 세션**(녹음+단가+시간, 취소 제외)을 함께 체크박스로 노출 → 선택해 청구서로.
-  **녹음 세션은 곡·콘텐츠/버튼 없이 직접 청구**: 세션 생성 즉시 예상 청구액이 청구 탭에 자동 반영, 선택 시 `invoice_items.session_id` 스냅샷으로 청구(곡·콘텐츠 안 거침). 청구되면 세션 수정·삭제 잠금(`SESSION_INVOICED`), 인보이스 삭제 시 자동 미청구 복원. 관련: `listBillableSessionsForProject`·`unbilledInvoiceForm`·`createInvoiceFromTasks`(task+session 혼합)·`isSessionInvoiced`.
+  **녹음 세션은 곡·콘텐츠/버튼 없이 직접 청구**: **완료 처리한** 녹음 세션의 예상 청구액이 청구 탭에 자동 노출(예정은 '완료 시 청구' 힌트만), 선택 시 `invoice_items.session_id` 스냅샷으로 청구(곡·콘텐츠 안 거침). 청구되면 세션 수정·삭제 잠금(`SESSION_INVOICED`), 인보이스 삭제 시 자동 미청구 복원. 관련: `listBillableSessionsForProject`·`unbilledInvoiceForm`·`createInvoiceFromTasks`(task+session 혼합)·`isSessionInvoiced`.
 - 대시보드: 미수금·이번 달 발행·연체(치프/대표만).
 - **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
   레이아웃: 좌측 **제목**(거래명세서/내역서/견적서 — 발행 시 `?type=`로 선택, `DOC_TYPES`) + 공급자 헤더·**로고**(우측), 청구처 박스, **품목|금액** 표(수량·단가 생략 — 곡/세션 단위 고정), 소계/VAT/합계, **납부하실금액** 강조(견적서는 '견적 금액'·전용 푸터).

@@ -175,7 +175,11 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
   // 녹음 세션은 청구 탭에서 직접 청구된다(곡·콘텐츠/버튼 없음). 여기선 예상액·청구상태만 표시.
   const billStatus = s.invoiced
     ? ' · <span class="text-muted">청구됨</span>'
-    : s.billed_task_id ? ' · <span class="text-muted">작업 생성됨</span>' : "";
+    : s.billed_task_id
+      ? ' · <span class="text-muted">작업 생성됨</span>'
+      : s.status === "완료"
+        ? ' · <span class="text-success">청구 가능</span>'
+        : ' · <span class="text-muted">완료 시 청구</span>';
   const billLine = s.billing
     ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${billStatus}</div>`
     : "";
