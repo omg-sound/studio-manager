@@ -141,9 +141,9 @@ const BILLING_TYPE_LABELS = {
 const SESSION_TYPES = ["녹음", "믹싱", "마스터링", "기타"];
 const SESSION_STATUSES = ["예정", "완료", "취소"];
 // 세션 시간 슬롯(30분 단위). 범위별 생성기.
-function timeSlots(startMin, endMin) {
+function timeSlots(startMin, endMin, step = 30) {
   const out = [];
-  for (let m = startMin; m <= endMin; m += 30) {
+  for (let m = startMin; m <= endMin; m += step) {
     out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
   }
   return out;
@@ -152,6 +152,8 @@ function timeSlots(startMin, endMin) {
 const SESSION_TIME_SLOTS = timeSlots(12 * 60, 23 * 60 + 30);
 // 예약 그리드 기본 노출(14:00~18:30) — 그 외 시간은 '직접입력' 버튼으로.
 const SESSION_START_SLOTS = timeSlots(14 * 60, 18 * 60 + 30);
+// 직접입력 시작 시간 — 10분 단위(운영시간 12:00~23:50). 네이티브 time picker가 step을 무시해 select로 제공.
+const SESSION_CUSTOM_SLOTS = timeSlots(12 * 60, 23 * 60 + 50, 10);
 const SESSION_STATUS_BADGE = {
   예정: "bg-primary/10 text-primary",
   완료: "bg-success/10 text-success",
@@ -226,6 +228,7 @@ module.exports = {
   SESSION_STATUS_BADGE,
   SESSION_TIME_SLOTS,
   SESSION_START_SLOTS,
+  SESSION_CUSTOM_SLOTS,
   RECORDING_CATEGORIES,
   normalizeRecordingCategory: (v) => normalize(v, RECORDING_CATEGORIES),
   normalizeSessionType: (v) => normalize(v, SESSION_TYPES),

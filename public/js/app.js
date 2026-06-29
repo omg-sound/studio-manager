@@ -198,7 +198,7 @@
     updatePreview();
   });
   // 직접입력 시작 ↔ 그리드 시작은 상호 배타: 직접입력하면 그리드 선택 해제(서버도 직접입력 우선).
-  if (customStart) customStart.addEventListener("input", function () { if (customStart.value) clearGridStart(); updatePreview(); });
+  if (customStart) customStart.addEventListener("change", function () { if (customStart.value) clearGridStart(); updatePreview(); });
   form.addEventListener("change", function (e) {
     if (!e.target) return;
     if (e.target.name === "start_time") {

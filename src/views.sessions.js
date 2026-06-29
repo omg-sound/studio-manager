@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, SESSION_TIME_SLOTS, SESSION_START_SLOTS, SESSION_CUSTOM_SLOTS, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -114,11 +114,14 @@ function startSlotGrid(current) {
       </label>`
   ).join("");
   // 그리드 맨 뒤에 '직접입력' 버튼 — 클릭하면 아래 시간 입력칸을 펼친다(app.js).
-  const customBtn = `<button type="button" class="rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated" data-custom-start-toggle>직접입력</button>`;
+  const customBtn = `<button type="button" class="rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed" data-custom-start-toggle>직접입력</button>`;
   return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customBtn}</div>
     <div class="mt-1.5 flex items-center gap-1.5" data-custom-start-wrap ${showCustom ? "" : "hidden"}>
       <span class="text-xs text-muted">직접입력</span>
-      <input class="input w-28 py-1.5 text-sm" type="time" name="start_time_custom" value="${showCustom ? esc(current) : ""}" step="600" data-custom-start />
+      <select class="input w-32 py-1.5 text-sm" name="start_time_custom" data-custom-start>
+        <option value="">시간 선택</option>
+        ${SESSION_CUSTOM_SLOTS.map((t) => `<option value="${t}" ${showCustom && t === current ? "selected" : ""}>${t}</option>`).join("")}
+      </select>
     </div>`;
 }
 
