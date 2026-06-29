@@ -47,18 +47,9 @@ function isOverdue(inv) {
   return inv.status === "발행" && !!inv.due_date && todayYmd() > inv.due_date && balanceOf(inv) > 0;
 }
 
-function parseQuantity(value) {
-  const n = Number(String(value == null ? "" : value).replace(",", "."));
-  return Number.isFinite(n) && n > 0 ? n : 1;
-}
-
 function parseWon(value) {
   const n = parseInt(String(value == null ? "" : value).replace(/[^\d-]/g, ""), 10);
   return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function taskTotal(quantity, unitPrice) {
-  return Math.round(parseQuantity(quantity) * parseWon(unitPrice));
 }
 
 // ── 거래처(실결제자) ──
@@ -429,23 +420,20 @@ function updateTask(user, taskId, input = {}) {
   const task = getTaskForUser(user, taskId);
   if (!task) return null;
   if (task.is_invoiced) throw new Error("TASK_LOCKED");
-  const quantity = parseQuantity(input.quantity);
+  // 후반작업은 전부 트랙/콘텐츠 고정(곡 1건당) — billing_type='Fixed_Per_Track'·quantity=1 고정, 금액(unit_price)만 직접 입력.
   const unitPrice = parseWon(input.unit_price);
   db()
     .prepare(
       `UPDATE track_tasks SET
-         task_type = @task_type, billing_type = @billing_type, quantity = @quantity,
-         unit_price = @unit_price, total_price = @total_price, engineer_name = @engineer_name,
+         task_type = @task_type, billing_type = 'Fixed_Per_Track', quantity = 1,
+         unit_price = @unit_price, total_price = @unit_price, engineer_name = @engineer_name,
          status = @status
        WHERE id = @id`
     )
     .run({
       id: task.id,
       task_type: normalizeTaskTypeDb(input.task_type),
-      billing_type: normalizeBillingType(input.billing_type),
-      quantity,
       unit_price: unitPrice,
-      total_price: taskTotal(quantity, unitPrice),
       engineer_name: String(input.engineer_name || "").trim() || null,
       status: normalizeTaskStatus(input.status),
     });
@@ -468,22 +456,19 @@ function deleteTask(user, taskId) {
 function createTask(user, trackId, input = {}) {
   const track = getTrackForUser(user, trackId);
   if (!track) return null;
-  const quantity = parseQuantity(input.quantity);
+  // 후반작업은 전부 트랙/콘텐츠 고정 — billing_type·quantity 고정, 금액(unit_price=total_price)만 직접 입력.
   const unitPrice = parseWon(input.unit_price);
   const taskType = normalizeTaskTypeDb(input.task_type);
   const info = db()
     .prepare(
       `INSERT INTO track_tasks
        (track_id, task_type, billing_type, quantity, unit_price, total_price, engineer_name, status, is_invoiced)
-       VALUES (@track_id, @task_type, @billing_type, @quantity, @unit_price, @total_price, @engineer_name, @status, 0)`
+       VALUES (@track_id, @task_type, 'Fixed_Per_Track', 1, @unit_price, @unit_price, @engineer_name, @status, 0)`
     )
     .run({
       track_id: track.id,
       task_type: taskType,
-      billing_type: normalizeBillingType(input.billing_type),
-      quantity,
       unit_price: unitPrice,
-      total_price: taskTotal(quantity, unitPrice),
       engineer_name: String(input.engineer_name || "").trim() || null,
       status: normalizeTaskStatus(input.status),
     });

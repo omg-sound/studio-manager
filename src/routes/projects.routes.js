@@ -5,8 +5,6 @@ const { db } = require("../db");
 const { requireAuth, requireEditor, requireChief, requireInvoice, canEdit, canInvoice } = require("../auth");
 const {
   TASK_GROUP_LABELS,
-  BILLING_TYPES,
-  BILLING_TYPE_LABELS,
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
@@ -221,7 +219,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   let tabContent = "";
   if (tab === "tracks") {
     const trackBundle = listTracksForProject(req.user, p.id);
-    tabContent = tracksSection({ project: p, tracks: trackBundle ? trackBundle.tracks : [], isAdmin: editable, managers });
+    tabContent = tracksSection({ project: p, tracks: trackBundle ? trackBundle.tracks : [], isAdmin: editable, managers, expandTaskId: Number(req.query.expand) || null });
   } else if (tab === "deliverables") {
     const deliv = listDeliverablesForProject(req.user, p.id);
     tabContent = deliverablesSection({ project: p, rows: deliv ? deliv.rows : [], isAdmin: editable, baseUrl: config.baseUrl, collapsed: false });
@@ -373,7 +371,7 @@ router.post("/tracks/:trackId/tasks", requireEditor, (req, res) => {
   const task = createTask(req.user, Number(req.params.trackId), req.body);
   if (!task) return res.status(404).send("곡·콘텐츠를 찾을 수 없습니다.");
   const track = db().prepare("SELECT project_id FROM project_tracks WHERE id = ?").get(task.track_id);
-  res.redirect(track ? `/projects/${track.project_id}?tab=tracks&flash=added` : "/projects");
+  res.redirect(track ? `/projects/${track.project_id}?tab=tracks&flash=added&expand=${task.id}#task-${task.id}` : "/projects");
 });
 
 router.post("/tasks/:taskId", requireEditor, (req, res) => {
@@ -538,9 +536,9 @@ function managerSelect(selectedId) {
     </select>`;
 }
 
-function tracksSection({ project, tracks, isAdmin, managers = [] }) {
+function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId = null }) {
   const list = tracks.length
-    ? tracks.map((track) => trackCard(track, { isAdmin, managers })).join("")
+    ? tracks.map((track) => trackCard(track, { isAdmin, managers, expandTaskId })).join("")
     : emptyState("등록된 곡·콘텐츠가 없습니다.");
   const isSession = project && project.project_type === "session";
   const hint = isSession && isAdmin
@@ -567,9 +565,9 @@ function trackCreateForm(project) {
     </form>`;
 }
 
-function trackCard(track, { isAdmin, managers = [] }) {
+function trackCard(track, { isAdmin, managers = [], expandTaskId = null }) {
   const tasks = track.tasks && track.tasks.length
-    ? track.tasks.map((task) => taskRow(task, { isAdmin, managers })).join("")
+    ? track.tasks.map((task) => taskRow(task, { isAdmin, managers, open: task.id === expandTaskId })).join("")
     : emptyState("아직 등록된 작업이 없습니다. 아래에서 진행 단계를 추가하세요.");
   const hasInvoiced = (track.tasks || []).some((t) => t.is_invoiced);
   return `
@@ -615,13 +613,13 @@ function trackEditMenu(track, hasInvoiced) {
     </details>`;
 }
 
-function taskRow(task, { isAdmin, managers = [] } = {}) {
+function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
   const label = taskTypeLabel(task.task_type);
   const status = TASK_STATUS_LABELS[task.status] || task.status;
   const statusCls = TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted";
   const billed = task.is_invoiced ? `<span class="badge bg-success/10 text-success">청구됨</span>` : "";
   return `
-    <div class="rounded-lg border border-border bg-surface p-2.5">
+    <div id="task-${task.id}" class="rounded-lg border border-border bg-surface p-2.5">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="min-w-0 text-sm">
           <span class="font-medium">${esc(label)}</span>${task.engineer_name ? `<span class="text-xs text-muted"> · ${esc(task.engineer_name)}</span>` : ""}
@@ -632,7 +630,7 @@ function taskRow(task, { isAdmin, managers = [] } = {}) {
           ${task.total_price ? `<span class="text-sm font-semibold">${formatKRW(task.total_price)}</span>` : ""}
         </div>
       </div>
-      ${isAdmin && !task.is_invoiced ? taskEditMenu(task, managers) : ""}
+      ${isAdmin && !task.is_invoiced ? taskEditMenu(task, managers, open) : ""}
     </div>`;
 }
 
@@ -659,24 +657,29 @@ function taskTypeOptions(current) {
   return out.join("");
 }
 
-function taskEditMenu(task, managers = []) {
-  const sel = (val, cur) => (val === cur ? "selected" : "");
+function taskEditMenu(task, managers = [], open = false) {
   return `
-    <details class="mt-2 border-t border-border pt-2">
+    <details class="mt-2 border-t border-border pt-2"${open ? " open" : ""}>
       <summary class="cursor-pointer list-none text-xs text-muted hover:text-fg">편집 / 삭제</summary>
       <form method="post" action="/projects/tasks/${task.id}" class="mt-2 grid gap-2 sm:grid-cols-2">
-        <select class="input py-1.5 text-sm" name="task_type">
-          ${taskTypeOptions(task.task_type)}
-        </select>
-        <select class="input py-1.5 text-sm" name="billing_type">
-          ${BILLING_TYPES.map((type) => `<option value="${esc(type)}" ${sel(type, task.billing_type)}>${esc(BILLING_TYPE_LABELS[type] || type)}</option>`).join("")}
-        </select>
-        <input class="input py-1.5 text-sm" name="quantity" inputmode="decimal" value="${esc(formatQuantity(task.quantity))}" />
-        <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" value="${esc(String(task.unit_price || ""))}" />
-        <select class="input py-1.5 text-sm" name="engineer_name">${engineerSelect(managers, task.engineer_name || "")}</select>
-        <select class="input py-1.5 text-sm" name="status">
-          ${TASK_STATUSES.map((status) => `<option value="${esc(status)}" ${sel(status, task.status)}>${esc(TASK_STATUS_LABELS[status] || status)}</option>`).join("")}
-        </select>
+        <div>
+          <label class="label mb-0.5 text-xs">작업 종류</label>
+          <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
+        </div>
+        <div>
+          <label class="label mb-0.5 text-xs">금액 <span class="font-normal text-muted">(원)</span></label>
+          <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="0" value="${esc(String(task.unit_price || ""))}" />
+        </div>
+        <div>
+          <label class="label mb-0.5 text-xs">담당자</label>
+          <select class="input py-1.5 text-sm" name="engineer_name">${engineerSelect(managers, task.engineer_name || "")}</select>
+        </div>
+        <div>
+          <label class="label mb-0.5 text-xs">상태</label>
+          <select class="input py-1.5 text-sm" name="status">
+            ${TASK_STATUSES.map((status) => `<option value="${esc(status)}" ${status === task.status ? "selected" : ""}>${esc(TASK_STATUS_LABELS[status] || status)}</option>`).join("")}
+          </select>
+        </div>
         <button class="btn-primary btn-xs sm:col-span-2" type="submit">작업 저장</button>
       </form>
       <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
@@ -685,16 +688,14 @@ function taskEditMenu(task, managers = []) {
     </details>`;
 }
 
-/** 다음 단계 빠른 추가 — is_quick 작업 종류 버튼(기본 단가·과금 주입), +기타는 전체 활성 종류 그룹. 세부는 행의 '편집'에서. */
+/** 다음 단계 빠른 추가 — is_quick 작업 종류 버튼(기본 단가 주입), +기타는 전체 활성 종류 그룹. 추가하면 편집이 펼쳐져 금액을 입력한다. */
 function taskQuickAdd(track) {
   const types = activeTaskTypes();
   const quickTypes = types.filter((t) => t.is_quick);
   const quick = (t) => `
     <form method="post" action="/projects/tracks/${track.id}/tasks">
       <input type="hidden" name="task_type" value="${esc(t.key)}" />
-      <input type="hidden" name="billing_type" value="${esc(t.billing_type)}" />
       <input type="hidden" name="unit_price" value="${t.unit_price || 0}" />
-      <input type="hidden" name="quantity" value="1" />
       <input type="hidden" name="status" value="Pending" />
       <button class="rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary" type="submit">${esc(t.label)}</button>
     </form>`;
@@ -708,8 +709,6 @@ function taskQuickAdd(track) {
       <summary class="cursor-pointer list-none rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary">+ 기타</summary>
       <form method="post" action="/projects/tracks/${track.id}/tasks" class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
         <select class="input py-1.5 text-sm" name="task_type">${grouped}</select>
-        <select class="input py-1.5 text-sm" name="billing_type">${BILLING_TYPES.map((type) => `<option value="${esc(type)}">${esc(BILLING_TYPE_LABELS[type] || type)}</option>`).join("")}</select>
-        <input type="hidden" name="quantity" value="1" />
         <input type="hidden" name="status" value="Pending" />
         <button class="btn-primary btn-xs" type="submit">추가</button>
       </form>
