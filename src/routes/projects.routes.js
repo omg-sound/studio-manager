@@ -270,27 +270,17 @@ function projectMetaReadonly(p) {
     </div>`;
 }
 
-/** 관리자 메타 카드: 요약 한 줄 + 펼치면 편집 폼(<details>). 오류 시 자동 펼침. */
+/** 관리자 메타 카드(프로젝트 탭): 편집 폼을 항상 펼쳐서 표시(접기 없음 — 한 프로젝트만 보이므로). */
 function projectMetaCard(p, err = "") {
-  const { left, amount, dueLine } = projectMetaLine(p);
   return `
-    <details class="card group"${err ? " open" : ""}>
-      <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-        <div class="min-w-0 text-sm text-muted">${left}</div>
-        <div class="flex shrink-0 items-center gap-3">
-          <div class="text-right">${amount}${dueLine}</div>
-          ${detailsChevron()}
-        </div>
-      </summary>
-      <div class="mt-3 border-t border-border pt-3">
-        ${projectEditForm(p, err)}
-        <div class="mt-4 border-t border-border pt-4">
-          <form method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?">
-            <button class="btn-ghost btn-xs text-danger" type="submit">프로젝트 삭제</button>
-          </form>
-        </div>
+    <div class="card">
+      ${projectEditForm(p, err)}
+      <div class="mt-4 border-t border-border pt-4">
+        <form method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?">
+          <button class="btn-ghost btn-xs text-danger" type="submit">프로젝트 삭제</button>
+        </form>
       </div>
-    </details>`;
+    </div>`;
 }
 
 function projectAmount(project) {
@@ -474,21 +464,21 @@ function projectEditForm(p = {}, err = "") {
   return `
     <form method="post" action="/projects/${p.id}" class="space-y-4">
       ${err ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(err)}</p>` : ""}
-      <div>
-        <label class="label">프로젝트 명</label>
-        <input class="input" name="title" value="${esc(p.title || "")}" required />
-      </div>
       <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label">프로젝트 명</label>
+          <input class="input" name="title" value="${esc(p.title || "")}" required />
+        </div>
         <div>
           <label class="label">아티스트</label>
           <input class="input" name="artist" value="${esc(p.artist || "")}" list="dl-artists" autocomplete="off" />
         </div>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-3">
         <div>
           <label class="label">소속사/레이블</label>
           <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" list="dl-companies" autocomplete="off" />
         </div>
-      </div>
-      <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">제작사</label>
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
