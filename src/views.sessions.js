@@ -117,13 +117,27 @@ function startSlotGrid(current) {
 }
 
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
+// 소요 시간 = 슬라이더(30분 단위·0~12시간)가 주 입력. 아래 1Pro/2Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
+// 전송값은 custom_hours + duration_mode=custom(hidden) → 서버 resolveEndTime이 그대로 산정(슬라이더 자체는 미전송 UI).
 function durationButtons() {
-  const opt = (val, label) => `
-      <label class="cursor-pointer">
-        <input type="radio" name="duration_mode" value="${val}" class="peer sr-only" data-duration="${val}" />
-        <span class="block rounded-md border border-border px-3 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:text-muted/40">${label}</span>
-      </label>`;
-  return `<div class="flex flex-wrap gap-1.5" data-duration-group>${opt("pro1", "1Pro")}${opt("pro2", "2Pro")}${opt("custom", "직접입력")}</div>`;
+  const presetBtn = (val, label) =>
+    `<button type="button" class="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="${val}">${label}</button>`;
+  return `
+    <div data-duration-group>
+      <input type="range" min="0" max="720" step="30" value="0" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
+      <div class="mt-1 flex items-center justify-between text-xs">
+        <span class="font-medium text-primary" data-duration-label>설정 안 함</span>
+        <span class="text-muted">0 ~ 12시간 · 30분 단위</span>
+      </div>
+      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+        ${presetBtn("pro1", "1Pro")}${presetBtn("pro2", "2Pro")}
+        <span class="ml-auto flex items-center gap-1.5">
+          <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" data-custom-hours />
+          <span class="text-xs text-muted">시간</span>
+        </span>
+      </div>
+      <input type="hidden" name="duration_mode" value="custom" />
+    </div>`;
 }
 
 /**
@@ -178,10 +192,6 @@ function sessionBookingFields(s, managers, rateItems = []) {
     <div class="mt-3">
       <label class="label mb-1 text-xs">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 종류 기준시간)</span></label>
       ${durationButtons()}
-      <div class="mt-1.5 flex items-center gap-1.5" data-custom-wrap hidden>
-        <input class="input w-24 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="3.5" data-custom-hours />
-        <span class="text-xs text-muted">시간</span>
-      </div>
       <div class="mt-1.5 text-xs text-success" data-end-preview></div>
     </div>
     <input class="input mt-3 py-1.5 text-sm" name="memo" placeholder="메모(선택)" value="${esc(s.memo || "")}" />`;
