@@ -148,7 +148,7 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
 /**
  * 예약(생성)용 폼 필드 — 시작 버튼 그리드 + 소요시간 버튼. 종료는 서버가 계산.
  * 녹음 프로젝트: '녹음 종류'(단가표 항목을 분류로 묶음) 한 필드 + session_type='녹음' 고정.
- * 그 외(믹스 등): 기존 종류(session_type) + 단가 항목 두 필드.
+ * 그 외(믹스 등): '세션 종류'(session_type) + '녹음 종류'(단가표 항목) 두 필드. 라벨은 편집 폼과 통일.
  */
 function sessionBookingFields(s, managers, rateItems = [], isRecording = false) {
   const engineerField = `<div><label class="label mb-0.5 text-xs">담당 엔지니어</label>
