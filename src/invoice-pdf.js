@@ -34,6 +34,12 @@ function won(n) {
   return "₩" + commas(n);
 }
 
+/** SVG 텍스트는 자동 줄바꿈이 없으므로 과도하게 긴 값은 말줄임해 컬럼 밖 오버플로를 막는다. */
+function truncate(s, n) {
+  const str = String(s == null ? "" : s);
+  return str.length > n ? str.slice(0, n - 1) + "…" : str;
+}
+
 /** public/fonts 의 ttf/otf 목록(배포 번들). 없으면 빈 배열 → 시스템 폰트 폴백. */
 function bundledFontFiles() {
   try {
@@ -68,7 +74,7 @@ function partyBox(x, y, w, title, rows) {
   let ry = y + headH + 26;
   for (const [label, value] of rows) {
     out += text(x + pad, ry, label, { size: 18, color: "#7c776c" });
-    out += text(x + pad + 130, ry, value || "—", { size: 18, weight: 500 });
+    out += text(x + pad + 130, ry, truncate(value || "—", 28), { size: 18, weight: 500 });
     ry += rowH;
   }
   return out;
@@ -146,7 +152,7 @@ function buildSvg({ studio, client, invoice, items }) {
     if (it) {
       const label = it.description || [it.track_title, it.task_type].filter(Boolean).join(" - ") || "작업";
       const qty = it.quantity == null ? "" : String(it.quantity).replace(/\.0+$/, "");
-      svg += text(c0 + 18, ry + 28, label, { size: 18 });
+      svg += text(c0 + 18, ry + 28, truncate(label, 38), { size: 18 });
       svg += text(c1 + 70, ry + 28, qty, { size: 18, anchor: "end" });
       svg += text(c2 + 155, ry + 28, commas(it.unit_price), { size: 18, anchor: "end" });
       svg += text(tableRight - 18, ry + 28, commas(it.amount), { size: 18, anchor: "end" });
