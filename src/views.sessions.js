@@ -118,7 +118,7 @@ function startSlotGrid(current) {
   return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customBtn}</div>
     <div class="mt-1.5 flex items-center gap-1.5" data-custom-start-wrap ${showCustom ? "" : "hidden"}>
       <span class="text-xs text-muted">직접입력</span>
-      <input class="input w-28 py-1.5 text-sm" type="time" name="start_time_custom" value="${showCustom ? esc(current) : ""}" step="1800" data-custom-start />
+      <input class="input w-28 py-1.5 text-sm" type="time" name="start_time_custom" value="${showCustom ? esc(current) : ""}" step="600" data-custom-start />
     </div>`;
 }
 
@@ -142,7 +142,7 @@ function rateSelectGrouped(rateItems, currentId) {
   const cats = [...RECORDING_CATEGORIES.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !RECORDING_CATEGORIES.includes(c))];
   const opt = (r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`;
   const body = cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
-  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>
+  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select data-rate-required>
       <option value="" data-minutes="0">녹음 종류 미지정</option>
       ${body}
     </select>`;
@@ -181,7 +181,7 @@ function sessionBookingFields(s, managers, rateItems = [], isRecording = false) 
     </div>
     ${typeRateRow}
     <div class="mt-3">
-      <label class="label mb-1 text-xs">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span></label>
+      <label class="label mb-1 text-xs">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span><span class="font-normal text-warning" data-start-hint></span></label>
       ${startSlotGrid(s.start_time || "")}
     </div>
     <div class="mt-3">

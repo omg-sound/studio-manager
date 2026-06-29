@@ -63,7 +63,7 @@
   });
 })();
 
-// 세션 예약 폼: 시작 슬롯 가용성(예약된 슬롯 비활성) + 소요시간 → 예상 종료 미리보기.
+// 세션 예약 폼: 녹음 종류 게이트 + 시작 슬롯 가용성 + 소요시간(1Pro/2Pro→직접입력 채움) + 예상 종료.
 (function () {
   "use strict";
   var form = document.querySelector("[data-session-form]");
@@ -71,6 +71,8 @@
   var dateInput = form.querySelector("[data-session-date]");
   var grid = form.querySelector("[data-start-grid]");
   var rateSel = form.querySelector("[data-rate-select]");
+  var rateRequired = !!(rateSel && rateSel.hasAttribute("data-rate-required"));
+  var startHint = form.querySelector("[data-start-hint]");
   var customWrap = form.querySelector("[data-custom-wrap]");
   var customInput = form.querySelector("[data-custom-hours]");
   var customStart = form.querySelector("[data-custom-start]");
@@ -78,6 +80,7 @@
   var customStartToggle = form.querySelector("[data-custom-start-toggle]");
   var preview = form.querySelector("[data-end-preview]");
   var durationRadios = form.querySelectorAll("[data-duration]");
+  var busy = {};
 
   function pad(n) { return (n < 10 ? "0" : "") + n; }
   function baseMinutes() {
@@ -89,7 +92,8 @@
     var r = form.querySelector('input[name="' + name + '"]:checked');
     return r ? r.value : "";
   }
-  // 시작 = 직접입력이 있으면 우선, 없으면 그리드에서 고른 값(서버 로직과 동일).
+  // 녹음 종류 필수: 선택돼야 시작 시간 입력 가능(녹음 세션만 게이트).
+  function startEnabled() { return !rateRequired || !!(rateSel && rateSel.value); }
   function currentStart() {
     if (customStart && customStart.value) return customStart.value;
     return checkedValue("start_time");
@@ -105,12 +109,30 @@
     if (t < 0) t += 1440;
     return pad(Math.floor(t / 60)) + ":" + pad(t % 60);
   }
+  function fmtHours(h) { return h % 1 === 0 ? String(h) : h.toFixed(1); }
   function durationMinutes() {
     var mode = checkedValue("duration_mode");
     if (mode === "pro1") return baseMinutes();
     if (mode === "pro2") return baseMinutes() * 2;
     if (mode === "custom") { var h = parseFloat(customInput && customInput.value); return h > 0 ? Math.round(h * 60) : 0; }
     return 0;
+  }
+  // 시작 시간 활성/비활성: 녹음 종류 게이트 + 예약된(busy) 슬롯.
+  function applyStartState() {
+    var ok = startEnabled();
+    if (grid) Array.prototype.forEach.call(grid.querySelectorAll("input[data-slot]"), function (inp) {
+      var dis = !ok || !!busy[inp.getAttribute("data-slot")];
+      inp.disabled = dis;
+      if (dis && inp.checked) inp.checked = false;
+    });
+    if (customStartToggle) customStartToggle.disabled = !ok;
+    if (customStart) customStart.disabled = !ok;
+    if (!ok) {
+      clearGridStart();
+      if (customStart) customStart.value = "";
+      if (customStartWrap) customStartWrap.hidden = true;
+    }
+    if (startHint) startHint.textContent = ok ? "" : " · 녹음 종류를 먼저 선택하세요";
   }
   function updateProAvailability() {
     var base = baseMinutes();
@@ -121,19 +143,26 @@
       }
     });
   }
+  // 소요시간 표시: 소요시간을 고르면 직접입력 칸을 보이게, 1Pro/2Pro면 시간 자동 채움(확인·수정 가능).
+  function syncDuration() {
+    var mode = checkedValue("duration_mode");
+    if (customWrap) customWrap.hidden = !mode;
+    if ((mode === "pro1" || mode === "pro2") && customInput) {
+      var mins = mode === "pro2" ? baseMinutes() * 2 : baseMinutes();
+      customInput.value = mins > 0 ? fmtHours(mins / 60) : "";
+    }
+  }
   function updatePreview() {
-    if (customWrap) customWrap.hidden = checkedValue("duration_mode") !== "custom";
     if (!preview) return;
     var mode = checkedValue("duration_mode");
     var start = currentStart();
     if ((mode === "pro1" || mode === "pro2") && baseMinutes() <= 0) {
-      preview.textContent = "1Pro·2Pro는 단가 항목을 먼저 고르세요.";
+      preview.textContent = "1Pro·2Pro는 녹음 종류를 먼저 고르세요.";
       return;
     }
     var mins = durationMinutes();
     if (start && mins > 0) {
-      var h = mins / 60;
-      preview.textContent = "예상 종료: " + addMin(start, mins) + " (" + (h % 1 === 0 ? h : h.toFixed(1)) + "시간)";
+      preview.textContent = "예상 종료: " + addMin(start, mins) + " (" + fmtHours(mins / 60) + "시간)";
     } else {
       preview.textContent = "";
     }
@@ -144,26 +173,28 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data || !data.busy) return;
-        var busy = {};
+        busy = {};
         data.busy.forEach(function (s) { busy[s] = true; });
-        Array.prototype.forEach.call(grid.querySelectorAll("input[data-slot]"), function (inp) {
-          var b = !!busy[inp.getAttribute("data-slot")];
-          inp.disabled = b;
-          if (b && inp.checked) inp.checked = false;
-        });
+        applyStartState();
         updatePreview();
       })
       .catch(function () {});
   }
 
   if (dateInput) dateInput.addEventListener("change", refreshAvailability);
-  if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); });
-  if (customInput) customInput.addEventListener("input", updatePreview);
-  // '직접입력' 버튼 → 시간 입력칸 펼치고 그리드 선택 해제.
+  if (rateSel) rateSel.addEventListener("change", function () { applyStartState(); updateProAvailability(); syncDuration(); updatePreview(); });
+  // 직접입력(소요시간) 수동 편집 → custom 모드로 전환(편집값이 적용되게).
+  if (customInput) customInput.addEventListener("input", function () {
+    var c = form.querySelector('input[name="duration_mode"][value="custom"]');
+    if (c && !c.checked) c.checked = true;
+    updatePreview();
+  });
+  // 그리드 '직접입력' 버튼 → 시간 입력칸 펼치고 네이티브 시간 선택기 바로 열기.
   if (customStartToggle) customStartToggle.addEventListener("click", function () {
+    if (!startEnabled()) return;
     if (customStartWrap) customStartWrap.hidden = false;
     clearGridStart();
-    if (customStart) customStart.focus();
+    if (customStart) { customStart.focus(); try { customStart.showPicker(); } catch (e) {} }
     updatePreview();
   });
   // 직접입력 시작 ↔ 그리드 시작은 상호 배타: 직접입력하면 그리드 선택 해제(서버도 직접입력 우선).
@@ -174,10 +205,12 @@
       if (customStart) customStart.value = "";
       if (customStartWrap) customStartWrap.hidden = true; // 그리드 고르면 직접입력 칸 닫기
       updatePreview();
-    } else if (e.target.name === "duration_mode") updatePreview();
+    } else if (e.target.name === "duration_mode") { syncDuration(); updatePreview(); }
   });
 
+  applyStartState();
   updateProAvailability();
+  syncDuration();
   updatePreview();
   refreshAvailability();
 })();
