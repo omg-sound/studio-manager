@@ -14,7 +14,6 @@ const {
   setSessionStatus,
   setSessionEventId,
   deleteSession,
-  createTaskFromSession,
   busySessionSlots,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
@@ -119,6 +118,7 @@ function sessionInputError(e, res) {
   if (e.message === "SESSION_DATE_REQUIRED") return res.status(400).send("세션 날짜를 입력하세요.");
   if (e.message === "SESSION_PRO_NEEDS_RATE") return res.status(400).send("1Pro·2Pro는 단가 항목을 먼저 선택하세요(기준시간 필요). 또는 '직접입력'을 쓰세요.");
   if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
+  if (e.message === "SESSION_INVOICED") return res.status(400).send("이미 청구된 세션은 수정·삭제할 수 없습니다. 인보이스를 삭제한 뒤 시도하세요.");
   throw e;
 }
 
@@ -165,31 +165,15 @@ router.post("/sessions/:id/status", requireEditor, (req, res) => {
 router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = getSessionForUser(req.user, id); // 일정 삭제용 gcal_event_id 확보
-  const r = deleteSession(req.user, id);
+  let r;
+  try {
+    r = deleteSession(req.user, id);
+  } catch (e) {
+    return sessionInputError(e, res);
+  }
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
   if (existing && existing.gcal_event_id) await calendar.deleteEvent(existing.gcal_event_id);
   res.redirect(`/projects/${r.project_id}?tab=sessions&flash=deleted`);
 }));
-
-// ── 세션 → 청구 작업 생성(녹음 시간제) ──
-router.post("/sessions/:id/bill", requireEditor, (req, res) => {
-  try {
-    const r = createTaskFromSession(req.user, Number(req.params.id), {
-      trackId: req.body.track_id,
-      newTrackTitle: req.body.new_track_title,
-    });
-    if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
-    res.redirect(`/projects/${r.project_id}?tab=invoice&flash=billed`);
-  } catch (e) {
-    const map = {
-      SESSION_NOT_COMPLETED: "취소된 세션은 청구 작업으로 만들 수 없습니다.",
-      SESSION_NOT_BILLABLE: "녹음 세션에 단가 항목과 진행시간(시작·종료)이 있어야 청구 작업을 만들 수 있습니다.",
-      SESSION_ALREADY_BILLED: "이미 이 세션으로 청구 작업을 생성했습니다.",
-      TRACK_NOT_FOUND: "곡·콘텐츠를 찾을 수 없습니다.",
-    };
-    if (map[e.message]) return res.status(400).send(map[e.message]);
-    throw e;
-  }
-});
 
 module.exports = router;

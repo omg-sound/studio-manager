@@ -31,6 +31,7 @@ const {
   listInvoicesForProject,
   listTracksForProject,
   listUnbilledTasksForProject,
+  listBillableSessionsForProject,
   listSessionsForProject,
   createTrack,
   updateTrack,
@@ -228,15 +229,14 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     const inv = listInvoicesForProject(req.user, p.id);
     const unbilled = listUnbilledTasksForProject(req.user, p.id);
     const unbilledRows = unbilled ? unbilled.rows : [];
-    const unbilledForm = unbilledRows.length ? unbilledInvoiceForm(p, unbilledRows) : "";
-    const sessionBundle = listSessionsForProject(req.user, p.id);
-    const pendingSessionsHtml = pendingSessionsForm(sessionBundle ? sessionBundle.rows : []);
-    tabContent = invoicesSection({ project: p, rows: inv ? inv.rows : [], isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length, pendingSessionsHtml });
+    const billable = listBillableSessionsForProject(req.user, p.id);
+    const sessionRows = billable ? billable.rows : [];
+    const unbilledForm = (unbilledRows.length || sessionRows.length) ? unbilledInvoiceForm(p, unbilledRows, sessionRows) : "";
+    tabContent = invoicesSection({ project: p, rows: inv ? inv.rows : [], isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length + sessionRows.length });
   } else {
     const rateItems = editable ? listRateItems() : [];
-    const trackBundle = listTracksForProject(req.user, p.id);
     const sessionBundle2 = listSessionsForProject(req.user, p.id);
-    tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems, tracks: trackBundle ? trackBundle.tracks : [], expand: true });
+    tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems, expand: true });
   }
 
   const body = [flashBanner(req.query), pageHeader({ title: p.title, desc }), meta, tabBar, tabContent].join("\n");
@@ -403,6 +403,7 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
     const inv = createInvoiceFromTasks(req.user, {
       projectId: Number(req.params.id),
       taskIds: toArray(req.body.task_id),
+      sessionIds: toArray(req.body.session_id),
       title: req.body.title,
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
@@ -410,7 +411,7 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
     if (!inv) return res.status(404).send("청구할 프로젝트를 찾을 수 없습니다.");
     res.redirect(`/invoices/${inv.id}?flash=created`);
   } catch (e) {
-    const message = e.message === "TASK_IDS_REQUIRED" ? "청구할 작업을 선택하세요." : "청구 가능한 작업만 선택할 수 있습니다.";
+    const message = e.message === "TASK_IDS_REQUIRED" ? "청구할 작업·세션을 선택하세요." : "청구 가능한 작업·세션만 선택할 수 있습니다.";
     return res.status(400).send(message);
   }
 });
@@ -720,40 +721,16 @@ function taskQuickAdd(track) {
     </div>`;
 }
 
-/** 청구 대기 — 녹음 세션(예상 청구액, 아직 청구 작업으로 전환 안 됨, 취소 제외)을 청구 탭에 노출 + '청구 확정' 버튼. */
-function pendingSessionsForm(sessions) {
-  const rows = (sessions || []).filter((s) => s.status !== "취소" && s.billing && !s.billed_task_id);
-  if (!rows.length) return "";
-  const items = rows
-    .map((s) => `
-      <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-bg p-2.5">
-        <div class="min-w-0 text-sm">
-          <span class="badge bg-bg text-muted">${esc(s.session_type)}</span>
-          <span class="font-medium">${esc(formatYmdShort(s.session_date))}</span>
-          <span class="text-xs text-muted">${esc([s.start_time, s.end_time].filter(Boolean).join("–"))} · ${esc(s.billing.item.name)}</span>
-        </div>
-        <div class="flex shrink-0 items-center gap-2">
-          <span class="text-sm font-semibold text-success">${formatKRW(s.billing.amount)}</span>
-          <form method="post" action="/sessions/${s.id}/bill">
-            <button class="btn-primary btn-xs" type="submit">청구 확정</button>
-          </form>
-        </div>
-      </div>`)
-    .join("");
-  return `
-    <div class="rounded-lg border border-border bg-surface p-3">
-      <div class="mb-2 text-sm font-medium">청구 대기 · 녹음 세션 <span class="text-xs font-normal text-muted">(확정하면 청구 작업으로 전환됩니다)</span></div>
-      <div class="space-y-2">${items}</div>
-    </div>`;
-}
-
-function unbilledInvoiceForm(project, rows) {
-  if (!rows.length) {
-    return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-center text-sm text-muted">미청구 작업이 없습니다.</div>`;
+function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
+  const tasks = taskRows || [];
+  if (!tasks.length && !sessionRows.length) {
+    return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-center text-sm text-muted">청구할 작업·세션이 없습니다.</div>`;
   }
-  const subtotal = rows.reduce((sum, task) => sum + (task.total_price || 0), 0);
+  const subtotal =
+    tasks.reduce((sum, task) => sum + (task.total_price || 0), 0) +
+    sessionRows.reduce((sum, s) => sum + (s.billing ? s.billing.amount : 0), 0);
   const tax = Math.round(subtotal * 0.1);
-  const list = rows
+  const taskList = tasks
     .map((task) => {
       const label = taskTypeLabel(task.task_type);
       return `
@@ -767,17 +744,34 @@ function unbilledInvoiceForm(project, rows) {
         </label>`;
     })
     .join("");
+  // 녹음 세션 직접 청구 후보(곡·콘텐츠/버튼 없이 자동 노출). 체크하면 인보이스 라인으로 들어간다.
+  const sessionList = sessionRows
+    .map((s) => {
+      const mins = s.billing.minutes;
+      const dur = `${Math.floor(mins / 60)}시간${mins % 60 ? " " + (mins % 60) + "분" : ""}`;
+      const time = [s.start_time, s.end_time].filter(Boolean).join("–");
+      return `
+        <label class="flex items-start gap-2 border-b border-border py-2 last:border-0">
+          <input class="mt-1" type="checkbox" name="session_id" value="${s.id}" checked />
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium">녹음 세션 ${esc(formatYmdShort(s.session_date))} · ${esc(s.billing.item.name)}</span>
+            <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}</span>
+          </span>
+          <span class="text-sm font-semibold">${formatKRW(s.billing.amount)}</span>
+        </label>`;
+    })
+    .join("");
   return `
     <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3">
       <div class="mb-2 flex items-center justify-between gap-3">
-        <h3 class="text-sm font-semibold">미청구 작업 청구 생성</h3>
+        <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 녹음 세션)</span></h3>
         <div class="text-right text-xs text-muted">공급가 ${formatKRW(subtotal)} · VAT ${formatKRW(tax)}</div>
       </div>
-      <div class="rounded-lg border border-border bg-surface px-3">${list}</div>
+      <div class="rounded-lg border border-border bg-surface px-3">${taskList}${sessionList}</div>
       <div class="mt-3 space-y-2">
         <div>
           <label class="label mb-1 text-xs">청구 제목</label>
-          <input class="input py-1.5 text-sm" name="title" value="${esc(project.title)} 작업 청구" />
+          <input class="input py-1.5 text-sm" name="title" value="${esc(project.title)} 청구" />
         </div>
         <div class="grid gap-2 sm:grid-cols-2">
           <div>
@@ -789,7 +783,7 @@ function unbilledInvoiceForm(project, rows) {
             <input class="input py-1.5 text-sm" type="date" name="due_date" />
           </div>
         </div>
-        <button class="btn-primary w-full btn-sm" type="submit">선택 작업으로 청구 생성</button>
+        <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성</button>
       </div>
     </form>`;
 }

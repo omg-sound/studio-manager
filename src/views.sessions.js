@@ -208,7 +208,7 @@ function sessionCreateForm(project, managers, rateItems = []) {
 }
 
 /** 세션 한 행. showProject=true면 프로젝트명 링크 표시(전역 일정). tracks 전달 시 청구 작업 생성 폼 노출. */
-function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showProject = false, tracks = null, projectTitle = "" } = {}) {
+function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showProject = false, projectTitle = "" } = {}) {
   const typeBadge = `<span class="badge bg-bg text-muted">${esc(s.session_type)}</span>`;
   const statusBadge = `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
@@ -221,23 +221,14 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
     people,
     s.memo ? esc(s.memo) : "",
   ].filter(Boolean).join(" · ");
+  // 녹음 세션은 청구 탭에서 직접 청구된다(곡·콘텐츠/버튼 없음). 여기선 예상액·청구상태만 표시.
+  const billStatus = s.invoiced
+    ? ' · <span class="text-muted">청구됨</span>'
+    : s.billed_task_id ? ' · <span class="text-muted">작업 생성됨</span>' : "";
   const billLine = s.billing
-    ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${s.billed_task_id ? ' · <span class="text-muted">작업 생성됨</span>' : ""}</div>`
+    ? `<div class="mt-0.5 text-xs text-success">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${billStatus}</div>`
     : "";
   const controls = isAdmin ? sessionControls(s, managers, rateItems) : "";
-  const billForm = (isAdmin && Array.isArray(tracks) && s.billing && s.status !== "취소" && !s.billed_task_id)
-    ? `<form method="post" action="/sessions/${s.id}/bill" class="mt-2 flex flex-wrap items-end gap-2 border-t border-border pt-2">
-         <div>
-           <label class="label mb-0.5 text-xs">곡·콘텐츠</label>
-           <select class="input py-1.5 text-sm" name="track_id">
-             ${tracks.map((t) => `<option value="${t.id}">${esc(t.title)}</option>`).join("")}
-             <option value="">(새로 만들기)</option>
-           </select>
-         </div>
-         <input class="input py-1.5 text-sm" name="new_track_title" placeholder="새 곡·콘텐츠명(선택)" />
-         <button class="btn-primary btn-sm" type="submit">이 세션으로 청구 작업 생성 (${formatKRW(s.billing.amount)})</button>
-       </form>`
-    : "";
   return `
     <div class="rounded-lg border border-border bg-surface p-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -253,7 +244,6 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], showPro
         <div class="flex shrink-0 items-center gap-1">${statusBadge}</div>
       </div>
       ${controls}
-      ${billForm}
     </div>`;
 }
 
@@ -279,10 +269,10 @@ function sessionControls(s, managers, rateItems = []) {
 }
 
 /** 프로젝트 상세용 세션 섹션(세션형 전용). expand=true(탭 안)면 접지 않고 펼쳐 렌더. */
-function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], tracks = [], expand = false }) {
+function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], expand = false }) {
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
   const list = rows.length
-    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, tracks, projectTitle: project.title })).join("")
+    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, projectTitle: project.title })).join("")
     : emptyState("등록된 세션이 없습니다.");
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
   const isTask = project && project.project_type === "task";

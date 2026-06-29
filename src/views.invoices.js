@@ -54,10 +54,10 @@ function invoiceRow(inv, { compact = false } = {}) {
 
 /**
  * 프로젝트 상세용 청구 섹션. collapsed=true면 접이식(닫힌 상태에 미수금 노출).
- * unbilledForm: 완료·미청구 작업 청구 생성 폼 HTML(있으면 펼친 내용 맨 위에 표시).
- * unbilledCount: 미청구 작업 수(>0이면 섹션 자동 펼침 + 헤더 배지).
+ * unbilledForm: 미청구 작업 + 청구 가능 녹음 세션 청구 생성 폼 HTML(있으면 펼친 내용 맨 위에 표시).
+ * unbilledCount: 미청구 작업·세션 수(>0이면 섹션 자동 펼침 + 헤더 배지).
  */
-function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledForm = "", unbilledCount = 0, pendingSessionsHtml = "" }) {
+function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledForm = "", unbilledCount = 0 }) {
   const list = rows.length
     ? rows.map((i) => invoiceRow(i, { compact: true })).join("")
     : emptyState("청구 내역이 없습니다.");
@@ -73,7 +73,6 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
        </div>`
     : "";
   const inner = `
-        ${pendingSessionsHtml ? `<div class="mb-3">${pendingSessionsHtml}</div>` : ""}
         ${unbilledForm ? `<div class="mb-3">${unbilledForm}</div>` : ""}
         ${collapsed && addBtn ? `<div class="mb-2 flex justify-end">${addBtn}</div>` : ""}
         ${summary}

@@ -506,6 +506,33 @@ function listUnbilledTasksForProject(user, projectId) {
   return { project, rows };
 }
 
+/** 청구 가능 녹음 세션(녹음+단가+시간, 취소 제외) 중 아직 청구/전환 안 된 것 — 세션 직접 청구 후보. */
+function listBillableSessionsForProject(user, projectId) {
+  const project = getProjectForUser(user, projectId);
+  if (!project) return null;
+  const rows = db()
+    .prepare(
+      `SELECT s.* FROM sessions s
+       WHERE s.project_id = ?
+         AND s.status <> '취소'
+         AND s.session_type = '녹음'
+         AND s.rate_item_id IS NOT NULL
+         AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
+         AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)
+       ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
+    )
+    .all(project.id)
+    .map((row) => ({ ...row, billing: sessionRateAmount(row) }))
+    .filter((row) => row.billing && row.billing.amount > 0);
+  return { project, rows };
+}
+
+/** 세션이 인보이스에 직접 청구되었는지(invoice_items 역참조). 세션 수정·삭제 잠금 판별. */
+function isSessionInvoiced(sessionId) {
+  return !!db().prepare("SELECT 1 FROM invoice_items WHERE session_id = ? LIMIT 1").get(sessionId);
+}
+
 function listInvoiceItemsForInvoice(user, invoiceId) {
   const inv = getInvoiceForUser(user, invoiceId);
   if (!inv) return null;
@@ -545,33 +572,59 @@ function ensureInvoiceNumber(inv) {
   return { ...inv, invoice_number: number };
 }
 
-function createInvoiceFromTasks(user, { projectId, taskIds, issueDate, dueDate, title } = {}) {
+function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, issueDate, dueDate, title } = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project || !canInvoice(user)) return null;
-  const selected = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
-  if (!selected.length) throw new Error("TASK_IDS_REQUIRED");
+  const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
+  const selectedSessions = Array.isArray(sessionIds) ? sessionIds.map(Number).filter(Boolean) : [];
+  if (!selectedTasks.length && !selectedSessions.length) throw new Error("TASK_IDS_REQUIRED");
 
-  const placeholders = selected.map(() => "?").join(",");
-  const params = [project.id, ...selected];
-  const tasks = db()
-    .prepare(
-      `SELECT t.*, tr.title AS track_title, tr.content_type, tr.project_id
-       FROM track_tasks t
-       JOIN project_tracks tr ON tr.id = t.track_id
-       WHERE tr.project_id = ?
-         AND t.is_invoiced = 0
-         AND t.id IN (${placeholders})
-       ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
-    )
-    .all(...params);
-  if (tasks.length !== selected.length) throw new Error("TASK_NOT_BILLABLE");
+  let tasks = [];
+  if (selectedTasks.length) {
+    const placeholders = selectedTasks.map(() => "?").join(",");
+    tasks = db()
+      .prepare(
+        `SELECT t.*, tr.title AS track_title, tr.content_type, tr.project_id
+         FROM track_tasks t
+         JOIN project_tracks tr ON tr.id = t.track_id
+         WHERE tr.project_id = ?
+           AND t.is_invoiced = 0
+           AND t.id IN (${placeholders})
+         ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
+      )
+      .all(project.id, ...selectedTasks);
+    if (tasks.length !== selectedTasks.length) throw new Error("TASK_NOT_BILLABLE");
+  }
+
+  // 녹음 세션 직접 청구분: 청구 가능(녹음+단가+시간)·미청구·미전환만 허용. 금액은 단가표로 재산정(스냅샷).
+  let billSessions = [];
+  if (selectedSessions.length) {
+    const placeholders = selectedSessions.map(() => "?").join(",");
+    const rawSessions = db()
+      .prepare(
+        `SELECT s.* FROM sessions s
+         WHERE s.project_id = ?
+           AND s.status <> '취소' AND s.session_type = '녹음'
+           AND s.rate_item_id IS NOT NULL AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+           AND s.id IN (${placeholders})
+           AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
+           AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)`
+      )
+      .all(project.id, ...selectedSessions);
+    billSessions = rawSessions
+      .map((s) => ({ session: s, calc: sessionRateAmount(s) }))
+      .filter((x) => x.calc && x.calc.amount > 0);
+    if (billSessions.length !== selectedSessions.length) throw new Error("TASK_NOT_BILLABLE");
+  }
 
   const d = db();
-  const subtotal = tasks.reduce((sum, task) => sum + (task.total_price || 0), 0);
+  const subtotal =
+    tasks.reduce((sum, task) => sum + (task.total_price || 0), 0) +
+    billSessions.reduce((sum, x) => sum + x.calc.amount, 0);
   const tax = Math.round(subtotal * 0.1);
   const total = subtotal + tax;
   const issued = issueDate || todayYmd();
-  const invoiceTitle = String(title || "").trim() || `${project.title} 작업 청구`;
+  const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
   const invoiceNumber = nextInvoiceNumber(issued);
 
   d.exec("BEGIN IMMEDIATE;");
@@ -596,24 +649,25 @@ function createInvoiceFromTasks(user, { projectId, taskIds, issueDate, dueDate, 
     const invoiceId = info.lastInsertRowid;
     const insertItem = d.prepare(
       `INSERT INTO invoice_items
-       (invoice_id, task_id, track_title, task_type, description, quantity, unit_price, amount)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ? WHERE id = ?");
     for (const task of tasks) {
       const taskLabel = taskTypeLabel(task.task_type);
       const description = `${task.track_title} - ${taskLabel}`;
       insertItem.run(
-        invoiceId,
-        task.id,
-        task.track_title,
-        task.task_type,
-        description,
-        task.quantity,
-        task.unit_price,
-        task.total_price
+        invoiceId, task.id, null,
+        task.track_title, task.task_type, description,
+        task.quantity, task.unit_price, task.total_price
       );
       markTask.run(invoiceId, task.id);
+    }
+    // 녹음 세션 직접 청구 라인: 곡·콘텐츠 없이 invoice_items에 스냅샷(session_id로 잠김). quantity=1·unit_price=amount.
+    for (const { session, calc } of billSessions) {
+      const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
+      const description = `녹음 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`;
+      insertItem.run(invoiceId, null, session.id, null, null, description, 1, calc.amount, calc.amount);
     }
     d.exec("COMMIT;");
     return getInvoiceForUser(user, invoiceId);
@@ -765,6 +819,7 @@ function listSessionsForProject(user, projectId) {
       ...row,
       billing: sessionRateAmount(row),
       billed_task_id: db().prepare("SELECT id FROM track_tasks WHERE session_id = ?").get(row.id)?.id || null,
+      invoiced: isSessionInvoiced(row.id),
     })),
   };
 }
@@ -921,6 +976,7 @@ function createSession(user, projectId, input = {}) {
 function updateSession(user, sessionId, input = {}) {
   const s = getSessionForUser(user, sessionId);
   if (!s) return null;
+  if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED");
   const f = sessionFields(input);
   assertNoSessionConflict(f, s.id);
   db()
@@ -948,6 +1004,7 @@ function setSessionStatus(user, sessionId, status) {
 function deleteSession(user, sessionId) {
   const s = getSessionForUser(user, sessionId);
   if (!s) return null;
+  if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED");
   db().prepare("DELETE FROM sessions WHERE id = ?").run(s.id);
   return { project_id: s.project_id };
 }
@@ -976,57 +1033,6 @@ function pastSessions(_user, { limit = 30 } = {}) {
     )
     .all(todayYmd(), limit)
     .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
-}
-
-/** 녹음 세션 → 시간제 작업 생성. 진행시간을 단가표로 산정해 track_task(Time_Charge, Completed)로. */
-function createTaskFromSession(user, sessionId, { trackId, newTrackTitle, taskType } = {}) {
-  const s = getSessionForUser(user, sessionId);
-  if (!s) return null;
-  const project = getProjectForUser(user, s.project_id);
-  if (!project || !canEdit(user)) return null;
-  if (s.status === "취소") throw new Error("SESSION_NOT_COMPLETED");
-  const calc = sessionRateAmount(s);
-  if (!calc) throw new Error("SESSION_NOT_BILLABLE");
-  const existing = db().prepare("SELECT id FROM track_tasks WHERE session_id = ?").get(s.id);
-  if (existing) throw new Error("SESSION_ALREADY_BILLED");
-
-  // 기존 곡·콘텐츠 선택 여부 판별: 값이 있으면 정수 검증(IDOR·오타 방어), 비었으면 새 트랙 생성.
-  const hasTrackSel = trackId != null && String(trackId).trim() !== "";
-  if (hasTrackSel) {
-    const tid = Number(trackId);
-    if (!Number.isInteger(tid) || tid <= 0) throw new Error("TRACK_NOT_FOUND");
-  }
-  const amount = calc.amount;
-
-  const d = db();
-  d.exec("BEGIN IMMEDIATE;");
-  try {
-    let track;
-    if (hasTrackSel) {
-      track = d.prepare("SELECT * FROM project_tracks WHERE id = ? AND project_id = ?").get(Number(trackId), project.id);
-      if (!track) throw new Error("TRACK_NOT_FOUND");
-    } else {
-      const title = String(newTrackTitle || "").trim() || `${s.session_type} ${formatYmdShort(s.session_date)}`;
-      const tinfo = d
-        .prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, ?, 'Music')")
-        .run(project.id, title);
-      track = d.prepare("SELECT * FROM project_tracks WHERE id = ?").get(tinfo.lastInsertRowid);
-    }
-    // 작업 종류: 폼에서 선택한 값(악기/ADR 녹음 등) 우선, 없으면 보컬 녹음 기본.
-    const resolvedTaskType = normalizeTaskTypeDb(taskType || "Vocal_Recording");
-    const info = d
-      .prepare(
-        `INSERT INTO track_tasks
-         (track_id, task_type, billing_type, quantity, unit_price, total_price, engineer_name, status, is_invoiced, session_id)
-         VALUES (?, ?, 'Time_Charge', 1, ?, ?, ?, 'Completed', 0, ?)`
-      )
-      .run(track.id, resolvedTaskType, amount, amount, s.engineer_name || null, s.id);
-    d.exec("COMMIT;");
-    return { project_id: project.id, task_id: info.lastInsertRowid };
-  } catch (e) {
-    d.exec("ROLLBACK;");
-    throw e;
-  }
 }
 
 // ── 자료 전달(deliverables) — 프로젝트 범위 강제 ──
@@ -1102,6 +1108,8 @@ module.exports = {
   updateTask,
   deleteTask,
   listUnbilledTasksForProject,
+  listBillableSessionsForProject,
+  isSessionInvoiced,
   listInvoiceItemsForInvoice,
   createInvoiceFromTasks,
   deleteInvoice,
@@ -1131,5 +1139,4 @@ module.exports = {
   upcomingSessions,
   pastSessions,
   sessionRateAmount,
-  createTaskFromSession,
 };

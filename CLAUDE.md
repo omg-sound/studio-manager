@@ -48,8 +48,8 @@
 ### 청구
 - 인보이스 생성/수정/입금(부분→발행 유지·전액→입금완료)·상태 전이(미발행→발행→입금완료)·연체 파생.
   채번 `INV-YYYYMM-###`, VAT=공급가 10%, 돈=정수(원).
-- 청구 탭 **'청구 대기'**: 녹음 세션(취소 제외, 예상 청구액, `청구 확정`→track_task 전환)·미청구 작업을 모아 청구서로.
-  **완료 안 해도 추가 즉시 노출**(사용자 결정으로 '완료' 요건 완화 — pendingSessionsForm·billForm·listUnbilledTasksForProject·createInvoiceFromTasks·createTaskFromSession은 취소만 차단).
+- 청구 탭 **청구 생성 폼**: 미청구 작업 + **청구 가능 녹음 세션**(녹음+단가+시간, 취소 제외)을 함께 체크박스로 노출 → 선택해 청구서로.
+  **녹음 세션은 곡·콘텐츠/버튼 없이 직접 청구**: 세션 생성 즉시 예상 청구액이 청구 탭에 자동 반영, 선택 시 `invoice_items.session_id` 스냅샷으로 청구(곡·콘텐츠 안 거침). 청구되면 세션 수정·삭제 잠금(`SESSION_INVOICED`), 인보이스 삭제 시 자동 미청구 복원. 관련: `listBillableSessionsForProject`·`unbilledInvoiceForm`·`createInvoiceFromTasks`(task+session 혼합)·`isSessionInvoiced`.
 - 대시보드: 미수금·이번 달 발행·연체(치프/대표만).
 - **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
   공급자=스튜디오 세금정보(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
@@ -84,6 +84,7 @@
 - 하우스 엔지니어↔작업 담당자 연계, 관리 페이지/프로젝트 상세 **탭** 그룹화, 청구 '청구 대기' 목록.
 - Render 실배포 완료(빌드 함정: `tailwindcss` devDep → `npm install --include=dev`).
 - **프로젝트 유형 재정의**: 녹음/믹스(recording/mixing) → **세션/작업(session/task)**. 세션=방문·예약·실시간, 작업=예약 없이 항목만(세션 탭 숨김). 세션 종류 항상 선택 가능(녹음 고정·필수 게이트 폐기).
+- **녹음 세션 직접 청구**: 곡·콘텐츠/버튼 없이 세션이 곧 청구 라인(`invoice_items.session_id`). 생성 즉시 청구 탭 자동 노출·선택 청구·세션 잠금(`createTaskFromSession`/`청구 확정`/`/sessions/:id/bill` 폐기). 소요시간 입력은 슬라이더(30분·최대 12h, 1Pro/2Pro/직접입력 프리셋).
 
 ## 스택
 
@@ -151,7 +152,7 @@
 - `invoices(project_id?→projects SET NULL, client_id?→clients SET NULL, title, amount, paid_amount,
   invoice_number?, tax_amount, status[미발행|발행|입금완료], issued_date?, due_date?, memo)` —
   돈=정수(원), 연체·부분납은 코드 파생. `amount`는 VAT 포함 총액.
-- `invoice_items(invoice_id→invoices CASCADE, task_id?→track_tasks SET NULL, track_title, task_type,
+- `invoice_items(invoice_id→invoices CASCADE, task_id?→track_tasks SET NULL, session_id?→sessions SET NULL, track_title, task_type,
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,
   start_time?, end_time? "HH:MM", booker_name?, engineer_name?, status[예정|완료|취소], memo,
