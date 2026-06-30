@@ -329,6 +329,14 @@ function init() {
   addColumn("track_tasks", "worker_rate", "INTEGER NOT NULL DEFAULT 0"); // 외주 지급단가(원). 정산 합계 기준(고객청구 total_price와 별개, 미입력=0)
   addColumn("track_tasks", "engineer_id", "INTEGER"); // 담당 엔지니어(project_managers 참조 의미·FK 없음). rename 내성 정산 매칭 키
   addColumn("invoice_items", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 녹음 세션 직접 청구 라인(곡·콘텐츠 안 거침). 청구 여부 = 이 컬럼 역참조
+  // contacts 확장 필드 — Google People API 동기화 대비
+  addColumn("contacts", "family_name", "TEXT");   // 성
+  addColumn("contacts", "given_name",  "TEXT");   // 이름
+  addColumn("contacts", "honorific",   "TEXT");   // 호칭(예: 님, 씨, 대표님)
+  addColumn("contacts", "nickname",    "TEXT");   // 별명
+  addColumn("contacts", "company",     "TEXT");   // 소속 회사명(직접 입력, contact_affiliations 이력과 별개)
+  addColumn("contacts", "job_title",   "TEXT");   // 직책
+  addColumn("contacts", "department",  "TEXT");   // 부서
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.

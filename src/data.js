@@ -175,18 +175,43 @@ function getContact(id) {
   return db().prepare("SELECT * FROM contacts WHERE id = ?").get(Number(id)) || null;
 }
 
-function createContact({ name, phone, email, memo } = {}) {
-  const n = String(name || "").trim();
-  if (!n) throw new Error("CONTACT_NAME_REQUIRED");
-  return db().prepare("INSERT INTO contacts (name, phone, email, memo) VALUES (?, ?, ?, ?)")
-    .run(n, blankToNull(phone), blankToNull(email), blankToNull(memo)).lastInsertRowid;
+/** 표시명(name) 자동 생성: honorific+family_name+given_name 조합, 없으면 nickname, 모두 없으면 예외. */
+function resolveContactName({ name, honorific, family_name, given_name, nickname } = {}) {
+  const explicit = String(name || "").trim();
+  if (explicit) return explicit;
+  const parts = [honorific, family_name, given_name].map((s) => String(s || "").trim()).filter(Boolean);
+  if (parts.length) return parts.join(" ");
+  const nick = String(nickname || "").trim();
+  if (nick) return nick;
+  throw new Error("CONTACT_NAME_REQUIRED");
 }
 
-function updateContact(id, { name, phone, email, memo } = {}) {
-  const n = String(name || "").trim();
-  if (!n) throw new Error("CONTACT_NAME_REQUIRED");
-  db().prepare("UPDATE contacts SET name = ?, phone = ?, email = ?, memo = ? WHERE id = ?")
-    .run(n, blankToNull(phone), blankToNull(email), blankToNull(memo), Number(id));
+function createContact({ name, phone, email, memo, family_name, given_name, honorific, nickname, company, job_title, department } = {}) {
+  const n = resolveContactName({ name, honorific, family_name, given_name, nickname });
+  return db().prepare(
+    `INSERT INTO contacts (name, phone, email, memo, family_name, given_name, honorific, nickname, company, job_title, department)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    n,
+    blankToNull(phone), blankToNull(email), blankToNull(memo),
+    blankToNull(family_name), blankToNull(given_name), blankToNull(honorific),
+    blankToNull(nickname), blankToNull(company), blankToNull(job_title), blankToNull(department)
+  ).lastInsertRowid;
+}
+
+function updateContact(id, { name, phone, email, memo, family_name, given_name, honorific, nickname, company, job_title, department } = {}) {
+  const n = resolveContactName({ name, honorific, family_name, given_name, nickname });
+  db().prepare(
+    `UPDATE contacts SET name = ?, phone = ?, email = ?, memo = ?,
+     family_name = ?, given_name = ?, honorific = ?, nickname = ?,
+     company = ?, job_title = ?, department = ? WHERE id = ?`
+  ).run(
+    n,
+    blankToNull(phone), blankToNull(email), blankToNull(memo),
+    blankToNull(family_name), blankToNull(given_name), blankToNull(honorific),
+    blankToNull(nickname), blankToNull(company), blankToNull(job_title), blankToNull(department),
+    Number(id)
+  );
 }
 
 function deleteContact(id) {

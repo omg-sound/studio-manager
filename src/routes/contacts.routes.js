@@ -70,7 +70,11 @@ router.get("/new", (req, res) => {
 router.post("/", (req, res) => {
   const b = req.body;
   try {
-    const id = createContact({ name: b.name, phone: b.phone, email: b.email, memo: b.memo });
+    const id = createContact({
+      name: b.name, phone: b.phone, email: b.email, memo: b.memo,
+      family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
+      nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
+    });
     // 생성 폼에서 현재 소속(회사/직함)을 같이 받았으면 첫 소속으로 등록.
     if (b.client_id || (b.title && String(b.title).trim())) {
       addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
@@ -94,7 +98,11 @@ router.post("/:id", (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
   try {
-    updateContact(id, { name: b.name, phone: b.phone, email: b.email, memo: b.memo });
+    updateContact(id, {
+      name: b.name, phone: b.phone, email: b.email, memo: b.memo,
+      family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
+      nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
+    });
     res.redirect(`/contacts/${id}?flash=saved`);
   } catch (_e) {
     res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
@@ -142,9 +150,14 @@ router.get("/:id", (req, res) => {
   const sessions = listSessionsForContact(c.id);
   const clients = listClients({});
 
+  const nameDetail = [c.honorific, c.family_name, c.given_name].filter(Boolean).join(" ");
   const infoCard = `
     <div class="card mb-6 space-y-2">
-      <div class="text-sm"><span class="text-muted">전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
+      ${nameDetail && nameDetail !== c.name ? `<div class="text-sm"><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : ""}
+      ${c.nickname ? `<div class="text-sm"><span class="text-muted">별명</span> ${esc(c.nickname)}</div>` : ""}
+      ${c.company ? `<div class="text-sm"><span class="text-muted">회사</span> ${esc(c.company)}</div>` : ""}
+      ${c.job_title ? `<div class="text-sm"><span class="text-muted">직책</span> ${esc(c.job_title)}${c.department ? " · " + esc(c.department) : ""}</div>` : c.department ? `<div class="text-sm"><span class="text-muted">부서</span> ${esc(c.department)}</div>` : ""}
+      <div class="text-sm"><span class="text-muted">휴대전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
       <div class="text-sm"><span class="text-muted">이메일</span> ${c.email ? esc(c.email) : `<span class="text-muted">없음</span>`}</div>
       ${c.memo ? `<div class="text-sm"><span class="text-muted">메모</span> ${esc(c.memo)}</div>` : ""}
       <div class="flex gap-2 pt-1">
@@ -257,9 +270,25 @@ function contactForm(c = {}, isEdit = false, clients = []) {
     ${pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
     <form method="post" action="${action}" class="card space-y-4">
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
-      <div><label class="label">이름</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
+      <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
+        <div class="text-sm font-medium">이름 <span class="font-normal text-muted">— 성·이름 입력 시 표시명 자동 생성. 직접 입력도 가능</span></div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
+          <div><label class="label">성</label><input class="input" name="family_name" value="${esc(c.family_name || "")}" placeholder="예: 김" /></div>
+          <div><label class="label">이름</label><input class="input" name="given_name" value="${esc(c.given_name || "")}" placeholder="예: 지훈" /></div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div><label class="label">표시명 <span class="font-normal text-muted">(자동 생성, 수동 입력 가능)</span></label><input class="input" name="name" value="${esc(c.name || "")}" placeholder="성·이름 입력 시 자동 채움" /></div>
+          <div><label class="label">별명</label><input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 준, 해피" /></div>
+        </div>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div><label class="label">회사</label><input class="input" name="company" value="${esc(c.company || "")}" placeholder="소속 회사명" /></div>
+        <div><label class="label">직책</label><input class="input" name="job_title" value="${esc(c.job_title || "")}" placeholder="예: 대표 · 팀장" /></div>
+        <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
+      </div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" /></div>
+        <div><label class="label">휴대전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" placeholder="010-0000-0000" /></div>
         <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>
       </div>
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
