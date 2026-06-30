@@ -63,22 +63,3 @@ services:
           property: hostport # 같은 private network의 web 내부 host:port
       - key: BACKUP_TOKEN
         sync: false # web의 BACKUP_TOKEN과 반드시 동일한 값
-
-  # ── Google→앱 연락처 역방향 동기화 cron(30분마다) ──
-  - type: cron
-    name: omg-studios-contacts-sync
-    runtime: node
-    plan: starter
-    region: singapore
-    # 매 30분(UTC). Google People syncToken 증분 폴링.
-    schedule: "*/30 * * * *"
-    buildCommand: npm install --omit=dev --omit=optional
-    startCommand: node src/jobs/contacts-sync-trigger.js
-    envVars:
-      - key: WEB_HOSTPORT
-        fromService:
-          name: omg-studios-manager
-          type: web
-          property: hostport
-      - key: BACKUP_TOKEN
-        sync: false # web의 BACKUP_TOKEN과 반드시 동일한 값

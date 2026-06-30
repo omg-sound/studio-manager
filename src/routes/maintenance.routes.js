@@ -8,7 +8,6 @@ const crypto = require("crypto");
 const express = require("express");
 const { config } = require("../config");
 const { runDailyMaintenance, overdueSummary } = require("../lib/maintenance");
-const people = require("../people");
 
 const router = express.Router();
 
@@ -53,13 +52,6 @@ router.post("/internal/cron/daily", tokenGate, (req, res) => {
 // 연체만 조회(부수효과 없음, 모니터링/디버그용).
 router.get("/internal/cron/overdue", tokenGate, (req, res) => {
   res.json(overdueSummary());
-});
-
-// Google→앱 연락처 역방향 동기화(syncToken 증분). Render cron 또는 수동 트리거.
-router.post("/internal/cron/contacts-sync", tokenGate, async (req, res) => {
-  const r = await people.syncFromGoogle();
-  console.log("[cron] contacts-sync", JSON.stringify(r));
-  res.json(r);
 });
 
 module.exports = router;
