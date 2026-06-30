@@ -219,6 +219,12 @@ function deleteContact(id) {
   db().prepare("DELETE FROM contacts WHERE id = ?").run(Number(id));
 }
 
+/** Google People API resourceName·etag 저장(생성/수정 성공 후 호출). */
+function setContactGoogleRef(id, resourceName, etag) {
+  db().prepare("UPDATE contacts SET google_resource_name = ?, google_etag = ? WHERE id = ?")
+    .run(resourceName || null, etag || null, Number(id));
+}
+
 /** 현재 소속(ended_on IS NULL, 가장 최근 1건) — 회사명·분류 조인. 무소속이면 client_* NULL. */
 function currentAffiliation(contactId) {
   return db().prepare(
@@ -1563,6 +1569,7 @@ module.exports = {
   createContact,
   updateContact,
   deleteContact,
+  setContactGoogleRef,
   currentAffiliation,
   listAffiliations,
   addAffiliation,

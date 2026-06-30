@@ -337,6 +337,8 @@ function init() {
   addColumn("contacts", "company",     "TEXT");   // 소속 회사명(직접 입력, contact_affiliations 이력과 별개)
   addColumn("contacts", "job_title",   "TEXT");   // 직책
   addColumn("contacts", "department",  "TEXT");   // 부서
+  addColumn("contacts", "google_resource_name", "TEXT"); // Google People API resourceName (예: "people/c123")
+  addColumn("contacts", "google_etag",          "TEXT"); // Google People API etag(충돌 방지)
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.

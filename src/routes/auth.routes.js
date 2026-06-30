@@ -68,6 +68,7 @@ router.get("/auth/google", (req, res) => {
       "profile",
       "https://www.googleapis.com/auth/drive.file", // 자료 전달 스토리지용 최소권한
       "https://www.googleapis.com/auth/calendar", // 세션 겹침 검사(FreeBusy) + 예약 시 일정 자동 생성/수정/삭제
+      "https://www.googleapis.com/auth/contacts", // Google People API — 연락처 앱→Google push
     ],
     state: Buffer.from(JSON.stringify({ next, nonce })).toString("base64url"),
   });

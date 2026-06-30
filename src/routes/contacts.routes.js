@@ -8,6 +8,7 @@ const {
   createContact,
   updateContact,
   deleteContact,
+  setContactGoogleRef,
   currentAffiliation,
   listAffiliations,
   addAffiliation,
@@ -17,6 +18,7 @@ const {
   listSessionsForContact,
   listClients,
 } = require("../data");
+const people = require("../people");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge } = require("../views");
 
 const router = express.Router();
@@ -67,7 +69,7 @@ router.get("/new", (req, res) => {
   res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}, false, listClients({})) }));
 });
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const b = req.body;
   try {
     const id = createContact({
@@ -79,6 +81,12 @@ router.post("/", (req, res) => {
     if (b.client_id || (b.title && String(b.title).trim())) {
       addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
     }
+    // Google People push — fail-safe: 실패해도 앱 정상.
+    try {
+      const contact = getContact(id);
+      const ref = await people.createPerson(contact);
+      if (ref) setContactGoogleRef(id, ref.resourceName, ref.etag);
+    } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=created`);
   } catch (_e) {
     res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({})) }));
@@ -92,7 +100,7 @@ router.get("/:id/edit", (req, res) => {
   res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(c, true) }));
 });
 
-router.post("/:id", (req, res) => {
+router.post("/:id", async (req, res) => {
   const id = Number(req.params.id);
   const c = getContact(id);
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
@@ -103,6 +111,17 @@ router.post("/:id", (req, res) => {
       family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
       nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
     });
+    // Google People push — fail-safe: 실패해도 앱 정상.
+    try {
+      const updated = getContact(id);
+      if (updated.google_resource_name) {
+        const ref = await people.updatePerson(updated.google_resource_name, updated.google_etag, updated);
+        if (ref) setContactGoogleRef(id, updated.google_resource_name, ref.etag);
+      } else {
+        const ref = await people.createPerson(updated);
+        if (ref) setContactGoogleRef(id, ref.resourceName, ref.etag);
+      }
+    } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=saved`);
   } catch (_e) {
     res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
@@ -110,8 +129,16 @@ router.post("/:id", (req, res) => {
 });
 
 // ── 삭제(하드: affiliations CASCADE, projects.contact_id SET NULL) ──
-router.post("/:id/delete", (req, res) => {
-  deleteContact(Number(req.params.id));
+router.post("/:id/delete", async (req, res) => {
+  const id = Number(req.params.id);
+  // DB 삭제 전 resourceName 확보 — 삭제 후에는 조회 불가.
+  const contact = getContact(id);
+  const resourceName = contact && contact.google_resource_name;
+  deleteContact(id);
+  // DB 삭제 후 People 삭제 — fail-safe: 실패해도 앱 정상.
+  if (resourceName) {
+    try { await people.deletePerson(resourceName); } catch (_e) {}
+  }
   res.redirect("/contacts?flash=deleted");
 });
 
