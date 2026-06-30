@@ -896,7 +896,22 @@ function ensureInvoiceNumber(inv) {
   return { ...inv, invoice_number: number };
 }
 
-function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title } = {}) {
+/**
+ * 공급가·할인 기반 청구 금액 계산 헬퍼.
+ * discount: 0 ~ supply 로 clamp(음수→0, 공급가 초과→공급가).
+ * 반환: { discount(clamp됨), taxable, tax, total }
+ * 돈=정수(원). VAT = round(taxable * 0.1).
+ */
+function invoiceAmountsFromSupply(supply, discount) {
+  const raw = Math.round(Number(discount) || 0);
+  const d = Math.min(Math.max(0, raw), supply);
+  const taxable = supply - d;
+  const tax = Math.round(taxable * 0.1);
+  const total = taxable + tax;
+  return { discount: d, taxable, tax, total };
+}
+
+function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount } = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project || !canInvoice(user)) return null;
   const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
@@ -945,8 +960,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
   const subtotal =
     tasks.reduce((sum, task) => sum + (task.total_price || 0), 0) +
     billSessions.reduce((sum, x) => sum + x.calc.amount, 0);
-  const tax = Math.round(subtotal * 0.1);
-  const total = subtotal + tax;
+  const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0);
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
   const invoiceNumber = nextInvoiceNumber(issued);
@@ -956,8 +970,8 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
     const info = d
       .prepare(
         `INSERT INTO invoices
-         (project_id, client_id, title, invoice_number, amount, tax_amount, paid_amount, status, issued_date, due_date, memo)
-         VALUES (@project_id, @client_id, @title, @invoice_number, @amount, @tax_amount, 0, '발행', @issued_date, @due_date, @memo)`
+         (project_id, client_id, title, invoice_number, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
+         VALUES (@project_id, @client_id, @title, @invoice_number, @amount, @tax_amount, @discount_amount, 0, '발행', @issued_date, @due_date, @memo)`
       )
       .run({
         project_id: project.id,
@@ -966,6 +980,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
         invoice_number: invoiceNumber,
         amount: total,
         tax_amount: tax,
+        discount_amount: discountAmt,
         issued_date: issued,
         due_date: dueDate || null,
         memo: "완료된 미청구 작업에서 자동 생성",
@@ -1618,6 +1633,7 @@ module.exports = {
   listBillableSessionsForProject,
   isSessionInvoiced,
   listInvoiceItemsForInvoice,
+  invoiceAmountsFromSupply,
   createInvoiceFromTasks,
   deleteInvoice,
   dashboardStats,

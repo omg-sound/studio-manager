@@ -146,10 +146,11 @@ router.post("/", requireInvoice, (req, res) => {
   // 입금완료로 만들면 입금액=총액 자동
   const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
 
+  const discount = parseMoney(b.discount_amount);
   const info = db()
     .prepare(
-      `INSERT INTO invoices (project_id, client_id, title, amount, tax_amount, paid_amount, status, issued_date, due_date, memo)
-       VALUES (@project_id,@client_id,@title,@amount,@tax,@paid,@status,@issued_date,@due_date,@memo)`
+      `INSERT INTO invoices (project_id, client_id, title, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
+       VALUES (@project_id,@client_id,@title,@amount,@tax,@discount,@paid,@status,@issued_date,@due_date,@memo)`
     )
     .run({
       project_id: refs.projectId,
@@ -157,6 +158,7 @@ router.post("/", requireInvoice, (req, res) => {
       title,
       amount,
       tax: Math.round(amount - amount / 1.1), // VAT 포함 총액에서 부가세 역산(공급가=amount/1.1)
+      discount,
       paid,
       status,
       issued_date: cleanYmd(b.issued_date),
@@ -212,6 +214,7 @@ router.get("/:id", requireInvoice, (req, res) => {
     <div class="card">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
       ${row("총액", formatKRW(inv.amount))}
+      ${inv.discount_amount ? row("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
       ${inv.tax_amount ? row("VAT", formatKRW(inv.tax_amount)) : ""}
       ${row("입금액", formatKRW(inv.paid_amount))}
       ${row("미수금", `<span class="${bal > 0 ? "text-danger font-semibold" : ""}">${formatKRW(bal)}</span>`)}
@@ -301,10 +304,11 @@ router.post("/:id", requireInvoice, (req, res) => {
   if (amount <= 0) return res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm({ ...b, id, _err: "청구 금액을 입력하세요." }, true) }));
   const status = normalizeInvoiceStatus(b.status);
   const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
+  const discount = parseMoney(b.discount_amount);
   db()
     .prepare(
       `UPDATE invoices SET project_id=@project_id, client_id=@client_id, title=@title, amount=@amount, tax_amount=@tax,
-       paid_amount=@paid, status=@status, issued_date=@issued_date, due_date=@due_date, memo=@memo WHERE id=@id`
+       discount_amount=@discount, paid_amount=@paid, status=@status, issued_date=@issued_date, due_date=@due_date, memo=@memo WHERE id=@id`
     )
     .run({
       id,
@@ -313,6 +317,7 @@ router.post("/:id", requireInvoice, (req, res) => {
       title,
       amount,
       tax: Math.round(amount - amount / 1.1), // VAT 포함 총액에서 부가세 역산
+      discount,
       paid,
       status,
       issued_date: cleanYmd(b.issued_date),
@@ -401,7 +406,10 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
       <div><label class="label">프로젝트</label>${projSelect}</div>
       <div><label class="label">청구처(프로젝트 선택 시 자동)</label>${clientSelect}</div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">총액(원)</label><input class="input" name="amount" inputmode="numeric" value="${inv.amount ? esc(String(inv.amount)) : ""}" placeholder="0" /></div>
+        <div><label class="label">총액(원) <span class="font-normal text-muted text-xs">VAT 포함</span></label><input class="input" name="amount" inputmode="numeric" value="${inv.amount ? esc(String(inv.amount)) : ""}" placeholder="0" /></div>
+        <div><label class="label">할인(원) <span class="font-normal text-muted text-xs">선택 — 표시용</span></label><input class="input" name="discount_amount" inputmode="numeric" value="${inv.discount_amount ? esc(String(inv.discount_amount)) : ""}" placeholder="0" /></div>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">

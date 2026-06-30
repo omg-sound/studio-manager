@@ -75,9 +75,16 @@ function buildSvg({ studio, client, invoice, items, logo, docType }) {
     ? "본 견적서는 참고용이며, 실제 청구 시 금액이 변동될 수 있습니다."
     : `본 ${title}는 참고용이며, 세금계산서는 별도(국세청 홈택스)로 발행됩니다.`;
 
-  const supply = Math.max(0, (invoice.amount || 0) - (invoice.tax_amount || 0));
+  // discount_amount > 0이면: 소계(=라인 합산 공급가) → 할인 → 과세표준 → VAT → 합계.
+  // discount_amount = 0이면: 기존 소계/VAT/합계 3줄 레이아웃 유지.
+  const discountAmt = Math.max(0, invoice.discount_amount || 0);
   const tax = invoice.tax_amount || 0;
   const grand = invoice.amount || 0;
+  // 소계(공급가): discount 있으면 라인 합산, 없으면 역산(amount-tax)과 동일. 라인이 없는 수동 인보이스는 역산 기준.
+  const lineTotal = items.reduce((s, it) => s + (it.amount || 0), 0);
+  const supply = discountAmt > 0 && lineTotal > 0
+    ? lineTotal                                     // 할인 있음: 라인 합산(과세표준 = lineTotal - discountAmt)
+    : Math.max(0, (invoice.amount || 0) - tax);     // 할인 없음: 역산(기존 동작 유지)
 
   const MAX_ROWS = 22;
   const shown = items.slice(0, MAX_ROWS);
@@ -139,18 +146,28 @@ function buildSvg({ studio, client, invoice, items, logo, docType }) {
     ry += lineRowH;
   }
 
-  // 소계 / VAT / 합계(우측)
+  // 소계 / [할인] / [과세표준] / VAT / 합계(우측)
   const sumLabelX = right - 360;
   let sy = ry + 56;
-  const sumRow = (label, value, bold) => {
-    let r = text(sumLabelX, sy, label, { size: 18, color: bold ? "#1f1d1b" : "#6b6b6b", weight: bold ? 700 : 400 });
-    r += text(right - 18, sy, value, { size: 19, weight: bold ? 700 : 500, anchor: "end" });
+  const sumRow = (label, value, bold, color) => {
+    const c = color || (bold ? "#1f1d1b" : "#6b6b6b");
+    let r = text(sumLabelX, sy, label, { size: 18, color: c, weight: bold ? 700 : 400 });
+    r += text(right - 18, sy, value, { size: 19, weight: bold ? 700 : 500, anchor: "end", color: c });
     sy += 44;
     return r;
   };
-  svg += sumRow("소계", won(supply));
-  svg += sumRow("VAT (10%)", won(tax));
-  svg += sumRow("합계", won(grand));
+  if (discountAmt > 0) {
+    const taxable = supply - discountAmt;
+    svg += sumRow("소계(공급가)", won(supply));
+    svg += sumRow("할인", "- " + won(discountAmt), false, "#16a34a");
+    svg += sumRow("과세표준", won(taxable));
+    svg += sumRow("VAT (10%)", won(tax));
+    svg += sumRow("합계", won(grand));
+  } else {
+    svg += sumRow("소계", won(supply));
+    svg += sumRow("VAT (10%)", won(tax));
+    svg += sumRow("합계", won(grand));
+  }
 
   // 납부하실금액(강조)
   sy += 24;

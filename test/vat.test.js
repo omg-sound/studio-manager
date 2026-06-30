@@ -9,7 +9,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 const { db, init } = require("../src/db");
-const { createInvoiceFromTasks } = require("../src/data");
+const { createInvoiceFromTasks, invoiceAmountsFromSupply } = require("../src/data");
 
 init();
 
@@ -88,4 +88,47 @@ test("순수 공식 round(amount - amount/1.1): 대표 케이스", () => {
   assert.strictEqual(vat(0), 0);
   assert.strictEqual(vat(11_000), 1_000);
   assert.strictEqual(vat(550_000), 50_000);
+});
+
+// ── invoiceAmountsFromSupply 할인 헬퍼 ──
+test("할인 헬퍼: 공급가 1,000,000 · 할인 100,000 → taxable 900,000 · tax 90,000 · total 990,000", () => {
+  const r = invoiceAmountsFromSupply(1_000_000, 100_000);
+  assert.strictEqual(r.discount, 100_000);
+  assert.strictEqual(r.taxable, 900_000);
+  assert.strictEqual(r.tax, 90_000);
+  assert.strictEqual(r.total, 990_000);
+});
+
+test("할인 헬퍼: 정률 10% — 공급가 1,000,000 · 할인 100,000 동일 결과", () => {
+  const discount = Math.round(1_000_000 * 10 / 100);
+  const r = invoiceAmountsFromSupply(1_000_000, discount);
+  assert.strictEqual(r.discount, 100_000);
+  assert.strictEqual(r.taxable, 900_000);
+  assert.strictEqual(r.tax, 90_000);
+  assert.strictEqual(r.total, 990_000);
+});
+
+test("할인 헬퍼 clamp: 할인 > 공급가 → 공급가로 제한(taxable=0·tax=0·total=0)", () => {
+  const r = invoiceAmountsFromSupply(500_000, 999_999);
+  assert.strictEqual(r.discount, 500_000, "할인은 공급가로 clamp");
+  assert.strictEqual(r.taxable, 0);
+  assert.strictEqual(r.tax, 0);
+  assert.strictEqual(r.total, 0);
+});
+
+test("할인 헬퍼 clamp: 음수 할인 → 0(clamp)", () => {
+  const r = invoiceAmountsFromSupply(500_000, -100_000);
+  assert.strictEqual(r.discount, 0);
+  assert.strictEqual(r.taxable, 500_000);
+  assert.strictEqual(r.tax, 50_000);
+  assert.strictEqual(r.total, 550_000);
+});
+
+test("할인 포함 createInvoiceFromTasks: 공급가 1,000,000 · 할인 100,000 → amount=990,000 · tax=90,000 · discount_amount=100,000", () => {
+  const { projectId, taskId } = seedTask(1_000_000);
+  const inv = createInvoiceFromTasks(CHIEF, { projectId, taskIds: [taskId], issueDate: "2026-06-15", discount: 100_000 });
+  assert.ok(inv, "인보이스가 생성되어야 한다");
+  assert.strictEqual(inv.discount_amount, 100_000, "discount_amount 저장");
+  assert.strictEqual(inv.tax_amount, 90_000, "VAT = 900,000 * 0.1");
+  assert.strictEqual(inv.amount, 990_000, "총액 = 900,000 + 90,000");
 });

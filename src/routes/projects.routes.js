@@ -44,6 +44,7 @@ const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
 const { isValidYmd, formatYmdShort, todayYmd } = require("../lib/date");
+const { parseMoney } = require("../lib/forms");
 const { notifyInvoiceIssued } = require("../notify");
 
 const router = express.Router();
@@ -435,6 +436,7 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
       title: req.body.title,
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
+      discount: parseMoney(req.body.discount_amount),
     });
     if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     // createInvoiceFromTasks는 즉시 '발행' 상태로 생성 → 발행 알림 발송(notify는 fail-safe·비차단, 청구 흐름 비차단).
@@ -825,7 +827,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(TASK_STATUS_LABELS[task.status] || task.status)}</span>`;
       return `
         <label class="flex items-start gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}">
-          <input class="mt-1" type="checkbox" name="task_id" value="${task.id}" ${done ? "checked" : ""} />
+          <input class="mt-1" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${task.total_price || 0}" ${done ? "checked" : ""} />
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</span>
           </span>
@@ -841,7 +843,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const time = [s.start_time, s.end_time].filter(Boolean).join("–");
       return `
         <label class="flex items-start gap-2 border-b border-border py-2 last:border-0">
-          <input class="mt-1" type="checkbox" name="session_id" value="${s.id}" checked />
+          <input class="mt-1" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" checked />
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-medium">녹음 세션 ${esc(formatYmdShort(s.session_date))} · ${esc(s.billing.item.name)}</span>
             <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}</span>
@@ -850,11 +852,12 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         </label>`;
     })
     .join("");
+  const total = subtotal + tax;
   return `
-    <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3">
+    <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3" data-discount-form data-supply="${subtotal}">
       <div class="mb-2 flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 녹음 세션)</span></h3>
-        <div class="text-right text-xs text-muted">공급가 ${formatKRW(subtotal)} · VAT ${formatKRW(tax)}</div>
+        <div class="text-right text-xs text-muted" data-discount-preview>공급가 ${formatKRW(subtotal)} · VAT ${formatKRW(tax)} · <strong>총 ${formatKRW(total)}</strong></div>
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
@@ -866,6 +869,19 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <div>
           <label class="label mb-1 text-xs">청구 제목</label>
           <input class="input py-1.5 text-sm" name="title" value="${esc(project.title)} 청구" />
+        </div>
+        <div>
+          <label class="label mb-1 text-xs">할인 <span class="font-normal text-muted">(선택 — 체크한 항목 공급가 기준)</span></label>
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <input class="input py-1.5 text-sm pr-8" inputmode="numeric" name="discount_amount" value="0" placeholder="0" data-discount-amount />
+              <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+            </div>
+            <div class="relative w-24">
+              <input class="input py-1.5 text-sm pr-6" inputmode="decimal" placeholder="0" data-discount-pct />
+              <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">%</span>
+            </div>
+          </div>
         </div>
         <div class="grid gap-2 sm:grid-cols-2">
           <div>

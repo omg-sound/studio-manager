@@ -336,6 +336,72 @@
   });
 })();
 
+// 할인 폼([data-discount-form]): 정률(%) → 정액(원) 자동변환 + 공급가/할인/과세표준/VAT/총액 미리보기 갱신.
+// 공급가는 체크된 항목(input[data-line-amount])의 합으로 동적 계산(항목 체크 변경 시 갱신). 체크박스가 없으면 data-supply 폴백.
+(function () {
+  "use strict";
+  var form = document.querySelector("[data-discount-form]");
+  if (!form) return;
+  var amtInput = form.querySelector("[data-discount-amount]");
+  var pctInput = form.querySelector("[data-discount-pct]");
+  var preview = form.querySelector("[data-discount-preview]");
+  if (!amtInput || !pctInput || !preview) return;
+  var boxes = form.querySelectorAll('input[type="checkbox"][data-line-amount]');
+
+  function supply() {
+    if (!boxes.length) return parseInt(form.getAttribute("data-supply") || "0", 10) || 0;
+    var s = 0;
+    Array.prototype.forEach.call(boxes, function (cb) {
+      if (cb.checked) s += parseInt(cb.getAttribute("data-line-amount") || "0", 10) || 0;
+    });
+    return s;
+  }
+  function won(n) {
+    return "₩" + String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+  function clamp(n) { return Math.min(Math.max(0, Math.round(n)), supply()); }
+
+  function updatePreview() {
+    var sup = supply();
+    var discount = clamp(parseInt(String(amtInput.value).replace(/[^\d]/g, "") || "0", 10));
+    var taxable = sup - discount;
+    var tax = Math.round(taxable * 0.1);
+    if (discount > 0) {
+      preview.innerHTML =
+        "공급가 " + won(sup) +
+        " &middot; 할인 <strong>-" + won(discount) + "</strong>" +
+        " &middot; 과세표준 " + won(taxable) +
+        " &middot; VAT " + won(tax) +
+        " &middot; <strong>총 " + won(taxable + tax) + "</strong>";
+    } else {
+      preview.innerHTML =
+        "공급가 " + won(sup) +
+        " &middot; VAT " + won(Math.round(sup * 0.1)) +
+        " &middot; <strong>총 " + won(sup + Math.round(sup * 0.1)) + "</strong>";
+    }
+  }
+  function applyPct() {
+    var pct = parseFloat(pctInput.value) || 0;
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    amtInput.value = clamp(Math.round(supply() * pct / 100));
+    updatePreview();
+  }
+
+  amtInput.addEventListener("input", function () {
+    pctInput.value = ""; // 정액 바뀌면 정률 초기화
+    updatePreview();
+  });
+  pctInput.addEventListener("input", applyPct);
+  Array.prototype.forEach.call(boxes, function (cb) {
+    cb.addEventListener("change", function () {
+      // 항목 선택이 바뀌면 공급가 변동 → 정률이면 재계산, 아니면 미리보기만 갱신(정액은 clamp).
+      if (parseFloat(pctInput.value) > 0) applyPct(); else updatePreview();
+    });
+  });
+  updatePreview();
+})();
+
 // 클라이언트 폼: 아티스트(개인)는 사업자등록번호·대표자·주소가 없으므로 분류=아티스트면 세금정보 숨김.
 (function () {
   "use strict";
