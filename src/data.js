@@ -193,13 +193,16 @@ const formatPhone = (v) => {
   return raw; // 그 외(지역번호 다양)는 입력 보존
 };
 
-function listContacts({ q } = {}) {
+// staff: true=녹음실 스태프(user_id 연결, owner 포함)만, false=외부/고객측(user_id 없음)만, undefined=전체.
+function listContacts({ q, staff } = {}) {
+  const where = [];
+  const args = [];
   const term = String(q || "").trim();
-  if (term) {
-    const like = `%${term}%`;
-    return db().prepare("SELECT * FROM contacts WHERE name LIKE ? OR phone LIKE ? ORDER BY name COLLATE NOCASE").all(like, like);
-  }
-  return db().prepare("SELECT * FROM contacts ORDER BY name COLLATE NOCASE").all();
+  if (term) { where.push("(name LIKE ? OR phone LIKE ?)"); args.push(`%${term}%`, `%${term}%`); }
+  if (staff === true) where.push("user_id IS NOT NULL");
+  else if (staff === false) where.push("user_id IS NULL");
+  const sql = "SELECT * FROM contacts" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY name COLLATE NOCASE";
+  return db().prepare(sql).all(...args);
 }
 
 function getContact(id) {
@@ -372,8 +375,14 @@ function classifyContact(contactId, aff) {
   if (m) {
     badges.push(m.user_id != null ? { label: "녹음실 스태프", cls: "badge-info" } : { label: "외주 작업자", cls: "badge-neutral" });
   } else {
-    const a = aff !== undefined ? aff : currentAffiliation(id);
-    if (a && a.client_id) badges.push({ label: "고객측 담당자", cls: "badge-success" });
+    // 담당자 없음: owner 등 로그인 계정에 직접 연결된 연락처(contacts.user_id)면 역할 배지.
+    const u = db().prepare("SELECT u.role FROM contacts c JOIN users u ON u.id = c.user_id WHERE c.id = ?").get(id);
+    if (u) {
+      badges.push({ label: u.role === "owner" ? "대표" : "녹음실 스태프", cls: "badge-info" });
+    } else {
+      const a = aff !== undefined ? aff : currentAffiliation(id);
+      if (a && a.client_id) badges.push({ label: "고객측 담당자", cls: "badge-success" });
+    }
   }
   const director = db().prepare("SELECT 1 FROM sessions WHERE director_contact_id = ? LIMIT 1").get(id);
   if (director) badges.push({ label: "디렉터", cls: "badge-warning" });
@@ -409,6 +418,39 @@ function ensureContactForManager(managerId) {
     d.exec("ROLLBACK;");
     throw e;
   }
+}
+
+/**
+ * 로그인 계정(녹음실 스태프, owner 포함)을 연락처에 연결·생성. 멱등.
+ *  - 이미 contacts.user_id로 연결된 행이 있으면 그 행(이메일 비었을 때만 보강).
+ *  - 하우스(chief/staff): 담당자(project_managers) 연락처가 있으면 그 행에 user_id 링크(중복 방지).
+ *  - 담당자 연락처가 없는 계정(owner): 새 연락처 생성 후 user_id 연결.
+ */
+function ensureContactForUser(user) {
+  if (!user || !user.id || !user.active) return null;
+  const name = String(user.name || "").trim();
+  if (!name) return null;
+  const d = db();
+  let contactId;
+  const existing = d.prepare("SELECT id FROM contacts WHERE user_id = ?").get(user.id);
+  if (existing) {
+    contactId = existing.id;
+    if (user.email) d.prepare("UPDATE contacts SET email = COALESCE(NULLIF(email, ''), ?) WHERE id = ?").run(user.email, contactId);
+  } else {
+    const mc = d.prepare("SELECT contact_id FROM project_managers WHERE user_id = ? AND contact_id IS NOT NULL").get(user.id);
+    if (mc && mc.contact_id) {
+      contactId = mc.contact_id; // 하우스: 기존 담당자 연락처 재사용(중복 방지)
+      d.prepare("UPDATE contacts SET user_id = ? WHERE id = ?").run(user.id, contactId);
+    } else {
+      const { family, given } = splitKoreanName(name);
+      contactId = createContact({ name, family_name: family, given_name: given, email: user.email });
+      d.prepare("UPDATE contacts SET user_id = ? WHERE id = ?").run(user.id, contactId);
+    }
+  }
+  // 하우스 담당자가 있는데 아직 연락처 미연결이면 같은 연락처로 연결(로그인 시 새 담당자 생성분 중복 방지).
+  const mgr = d.prepare("SELECT id, contact_id FROM project_managers WHERE user_id = ?").get(user.id);
+  if (mgr && !mgr.contact_id) d.prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?").run(contactId, mgr.id);
+  return contactId;
 }
 
 /**
@@ -1767,6 +1809,7 @@ module.exports = {
   getManagerByContactId,
   classifyContact,
   ensureContactForManager,
+  ensureContactForUser,
   syncContactToManager,
   syncManagerToContact,
   listRooms,

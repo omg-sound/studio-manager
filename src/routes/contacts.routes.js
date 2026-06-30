@@ -22,7 +22,7 @@ const {
   syncContactToManager,
 } = require("../data");
 const people = require("../people");
-const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge, tabBar } = require("../views");
 
 const router = express.Router();
 
@@ -46,16 +46,27 @@ router.post("/sync", async (req, res) => {
 // ── 목록(이름·현재소속·전화 + ?q= 검색) ──
 router.get("/", (req, res) => {
   const q = String(req.query.q || "").trim();
-  const rows = listContacts(q ? { q } : {});
+  const tab = req.query.tab === "staff" ? "staff" : "external"; // 녹음실 스태프(로그인 계정) 탭 / 외부·고객측 연락처 탭
+  const rows = listContacts({ q: q || undefined, staff: tab === "staff" });
+
+  const tabs = tabBar({
+    tabs: [
+      { key: "external", label: "외부 연락처" },
+      { key: "staff", label: "녹음실 스태프" },
+    ],
+    activeKey: tab,
+    hrefFn: (k) => `/contacts?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+  });
 
   const searchBar = `
     <form method="get" action="/contacts" class="mb-4 flex gap-2">
+      <input type="hidden" name="tab" value="${esc(tab)}" />
       <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 · 전화 검색" aria-label="연락처 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
 
   const resultNote = q
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts" class="text-primary hover:underline">전체 보기</a></div>`
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts?tab=${tab}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
   const list = rows.length
@@ -71,7 +82,9 @@ router.get("/", (req, res) => {
       })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
-      : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
+      : tab === "staff"
+        ? emptyState("녹음실 스태프 연락처가 없습니다. 관리 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
+        : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
 
   const syncBtn = `
     <form method="post" action="/contacts/sync" class="inline">
@@ -81,6 +94,7 @@ router.get("/", (req, res) => {
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "연락처", desc: "레이블/제작사 직원 · 프리 매니저 · 아티스트 지인 등 사람 마스터(소속 이력 포함).", action: `<div class="flex gap-2 items-center">${syncBtn}<a href="/contacts/new" class="btn-primary">+ 새 연락처</a></div>` })}
+    ${tabs}
     ${searchBar}
     ${resultNote}
     ${list}`;

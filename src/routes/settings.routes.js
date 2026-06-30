@@ -27,6 +27,7 @@ const {
   setDefaultBooker,
   syncManagerToContact,
   ensureContactForManager,
+  ensureContactForUser,
   formatPhone,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron } = require("../views");
@@ -413,10 +414,11 @@ router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) =
   res.redirect("/settings?tab=settings&flash=tested");
 }));
 
-// 하우스 엔지니어(user_id 연결) → 활성 담당자 행에 연동 연락처 보장(+성·이름 자동 분리). owner·비활성은 제외.
+// 로그인 계정(owner 포함) → 연락처 보장(+하우스 담당자 연결은 ensureContactForUser가 자체 처리). 담당자 있으면 성·이름 보강.
 function ensureContactForHouseUser(userId) {
+  ensureContactForUser(findUserById(userId)); // user_id 연결 연락처 생성/보장 + 담당자 연락처 연결(중복 방지)
   const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ? AND active = 1").get(userId);
-  if (mgr) ensureContactForManager(mgr.id);
+  if (mgr) ensureContactForManager(mgr.id); // 성·이름 자동 분리 보강
 }
 
 // ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
@@ -460,6 +462,7 @@ router.post("/users/:id/role", requireChief, (req, res) => {
   }
   db().prepare("UPDATE users SET role = ? WHERE id = ?").run(role, id);
   syncUserToManager(findUserById(id)); // 역할 변경(owner↔치프/스태프) 시 작업 담당자 활성/이름 즉시 동기화
+  ensureContactForHouseUser(id); // owner↔하우스 전환 시 연락처 연결 유지(담당자 없어도 owner 연락처 보존)
   res.redirect("/settings?tab=people&flash=saved");
 });
 

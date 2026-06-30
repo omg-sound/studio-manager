@@ -343,6 +343,7 @@ function init() {
   addColumn("contacts", "department",  "TEXT");   // 부서
   addColumn("contacts", "google_resource_name", "TEXT"); // Google People API resourceName (예: "people/c123")
   addColumn("contacts", "google_etag",          "TEXT"); // Google People API etag(충돌 방지)
+  addColumn("contacts", "user_id", "INTEGER"); // 녹음실 스태프(로그인 계정)와 연결. FK 없음(ALTER 한계). null=외부/고객측 연락처. owner 포함 전 직원이 연락처에 노출
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.
@@ -420,6 +421,25 @@ function init() {
       updMgr.run(info.lastInsertRowid, m.id);
     }
     setState("manager_contacts_backfill_v1", "done");
+  }
+
+  // 전 로그인 계정(owner 포함)을 연락처에 1회 연결: 하우스(chief/staff)는 기존 담당자 연락처에 user_id 링크,
+  // 담당자 연락처가 없는 계정(owner)은 새 연락처 생성. 멱등(contacts.user_id 이미 있으면 건너뜀).
+  if (!getState("user_contacts_backfill_v1")) {
+    const users = d.prepare("SELECT id, name, email FROM users WHERE active = 1").all();
+    const findByUser = d.prepare("SELECT id FROM contacts WHERE user_id = ?");
+    const mgrContact = d.prepare("SELECT contact_id FROM project_managers WHERE user_id = ? AND contact_id IS NOT NULL");
+    const linkContact = d.prepare("UPDATE contacts SET user_id = ? WHERE id = ?");
+    const insUserContact = d.prepare("INSERT INTO contacts (name, family_name, given_name, email, user_id) VALUES (?, ?, ?, ?, ?)");
+    for (const u of users) {
+      if (!u.name || !String(u.name).trim()) continue;
+      if (findByUser.get(u.id)) continue;
+      const mc = mgrContact.get(u.id);
+      if (mc && mc.contact_id) { linkContact.run(u.id, mc.contact_id); continue; }
+      const { family, given } = splitKoreanName(u.name);
+      insUserContact.run(u.name, family || null, given || null, u.email || null, u.id);
+    }
+    setState("user_contacts_backfill_v1", "done");
   }
 
   // 기존 연락처 중 성·이름이 둘 다 비어있는 행을 표시명(name)으로 1회 백필(splitKoreanName).
