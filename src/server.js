@@ -20,6 +20,7 @@ const sessionRoutes = require("./routes/sessions.routes");
 const clientRoutes = require("./routes/clients.routes");
 const contactRoutes = require("./routes/contacts.routes");
 const workerRoutes = require("./routes/workers.routes");
+const revenueRoutes = require("./routes/revenue.routes");
 const settingsRoutes = require("./routes/settings.routes");
 const maintenanceRoutes = require("./routes/maintenance.routes");
 
@@ -128,6 +129,7 @@ app.use("/", sessionRoutes); // /sessions (일정) + 세션 CRUD
 app.use("/clients", clientRoutes); // requireChief
 app.use("/contacts", contactRoutes); // requireEditor (클라이언트 측 담당자 마스터 + 소속 이력)
 app.use("/workers", workerRoutes); // requireChief (외주 작업자 + 정산)
+app.use("/revenue", revenueRoutes); // requireInvoice (담당 엔지니어별 매출, 대표·치프)
 app.use("/settings", settingsRoutes); // requireChief
 
 // 정적 자산(css/js)만 — 보호 대상 HTML은 여기 없음
