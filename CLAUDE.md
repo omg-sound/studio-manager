@@ -37,7 +37,7 @@
 - 소요시간 **슬라이더**(30분 단위·최대 12시간) + 아래 `[1Pro][2Pro][직접입력]` 프리셋(슬라이더와 양방향 동기화). 종료는 서버가 시작+길이로 계산(`custom_hours`+`duration_mode=custom`, 1Pro=녹음 종류 기준시간).
   폼 인터랙션은 `public/js/app.js`(CSP: 인라인 0).
 - **다중 룸**: `rooms` 테이블 + `sessions.room_id`. 세션 폼에 룸 select. 겹침 검사를 `IFNULL(room_id,0)`으로 룸별 판정 — **같은 룸만 충돌, 다른 룸은 동시간 병렬 허용**(레거시 NULL끼리는 가상 룸 0으로 처리). 룸 CRUD는 `/settings` 환경설정 탭(`POST /settings/rooms`, `/:id/delete`). 기본 '메인 룸' 1회 시드.
-- **겹침 차단**: **앱 DB 룸별 겹침이 정식 차단**(409). 구글 FreeBusy 하드차단은 **비활성화** — 단일 캘린더로는 룸 구분이 불가하므로(캘린더 일정 자동 생성/수정/삭제 동기화는 유지).
+- **겹침 차단**: **앱 DB 룸별 겹침이 정식 차단**(409) — **모든 세션 종류(녹음·믹싱·마스터링·기타)가 룸을 점유**(같은 룸·같은 시간 더블부킹 방지, `findSessionConflict`/`busySessionSlots` session_type 무관). 구글 FreeBusy 하드차단은 **비활성화** — 단일 캘린더로는 룸 구분 불가(캘린더 일정 자동 생성/수정/삭제 동기화는 유지).
 - **구글 캘린더 자동 연동**: 예약 시 스튜디오 캘린더에 일정 자동 생성/수정/삭제(제목=제작사·아티스트, 장소=기본 장소,
   `gcal_event_id` 추적). 미연동/오류는 fail-safe(예약은 정상). 세션 '취소' 시에도 캘린더 일정 삭제 동기화. 역방향(캘린더→앱) 동기화는 미구현(보류).
 - **예정 세션 1클릭 완료**: 세션 목록/상세에서 '예정' 상태 행에 완료 버튼 인라인 제공(별도 편집 폼 없이). **`/sessions` 목록 검색**(`?q=`) 지원. 청구 결핍 사유(미완료·단가 미선택·시간 없음)는 청구 생성 폼에 인라인 표시.
@@ -118,6 +118,7 @@
 - **UI 마무리**: 대시보드 지표 금액카드 넘침 수정(`text-lg`+좁은 화면 2열), 세션·곡콘텐츠 탭 목록↑·추가폼↓, 실결제자 필드 별도 행, 상세→목록 back 링크(`pageHeader.back`).
 - **청구처 결정을 청구 시점으로**: 프로젝트 메타에서 실결제자(청구처) 입력 제거 → 청구 생성 폼에서 선택(미선택 시 자동파생 폴백, `createInvoiceFromTasks` clientId 인자). `resolveInvoiceRefs` 덮어쓰기 버그 수정(폼 선택 우선), 발행/입금완료 청구처 변경 409 잠금, 즉시발행 안내. 용어 통일 '실결제자→청구처'·'담당자(내부)→담당 엔지니어'·'클라이언트 담당자→고객 담당자'.
 - **전방위 점검 개선(ultrawork)**: 🔴**세션 편집 시 시작/종료 유실** 수정(가용성 조회에 자기 세션 미제외 → `exclude`/`room` 전송[app.js]·편집폼 `data-session-id`·`busySessionSlots` 룸별 일치). **청구 탭(주 경로) 발행 알림 누락** → `notify.js` 공용 함수 통지. **클라이언트 삭제 가드**(발행 청구처면 409). 입금완료→발행 강등 시 `paid_amount` 리셋, 세션 `room_id` 활성 룸 검증. **죽은코드 제거**(미사용 `api.routes` 삭제·settings managers·`payerField`). UX: 미발행 견적서 PDF 버튼·세션 검색바 통일·테마 토글 현재모드 표시·클라이언트 목록 `listGroup`·입금폼 라벨('입력액으로 갱신'/'완납 처리')·빈상태 아이콘·캘린더 칩 상태색·검색 aria-label·세션 에러 `errorPage` 통일. `notifyInvoiceIssued` 일원화.
+- **/audit 진단 후속**: 수동 인보이스 `tax_amount` 미산정(거래명세서 VAT ₩0) → amount에서 역산 저장(`round(amount-amount/1.1)`). 세션 겹침을 **전 세션 종류로 확장**(마스터링·기타도 룸 점유, session_type IN 절 제거). from-tasks 청구 에러 흡수 해제(알 수 없는 오류는 전역 핸들러로 throw). server.js 스테일 주석·시작시간 `pattern` 2자리 통일. **금전 핵심 단위 테스트 도입**(node:test 24개: 채번·VAT·세션겹침·권한, 의존성 0·격리 임시 DB).
 
 ## 스택
 
@@ -131,6 +132,7 @@
 | 보안 | helmet(CSP, 인라인 스크립트 0) + express-rate-limit + 토큰 AES-256-GCM 암호화 |
 | 프론트 | 서버 렌더 HTML(`src/views.js`) + 클래식 폼 POST + 최소 JS(`public/js/app.js`), Tailwind CLI 빌드; **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용); 크림·클레이 디자인 톤; 수동 라이트/다크 테마(`html[data-theme]`+localStorage) |
 | 배포 | Render Blueprint(`render.yaml`) + Disk — **라이브** |
+| 테스트 | Node 내장 `node:test`(의존성 0) — 금전 핵심 24개(채번·VAT·세션겹침·권한), `npm test`(격리 임시 DB 자가정리) |
 
 ## 아키텍처 핵심
 
@@ -281,7 +283,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 9. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 도메인별 모듈화 검토.
 10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: **전방위 점검(ultrawork)** — 세션 시간유실·청구 발행알림 누락·클라이언트 삭제가드 버그수정 + 죽은코드 제거(`api.routes`·`payerField`·settings managers) + UX(미발행 견적서 PDF·세션 검색바·테마 토글·클라이언트 `listGroup`·입금폼 라벨·캘린더 칩·aria) + `notifyInvoiceIssued` 일원화. **청구처 결정을 청구 시점으로 이동**(메타 제거·청구폼 선택·발행후 409 잠금·`resolveInvoiceRefs` 버그수정), **용어 통일**(실결제자→청구처·담당 엔지니어·고객 담당자), **프로젝트 유형 구분 폐기**, **연락처(담당자) 도메인**(소속이력·이직), 문서 현행화.
+> **완료(이번 세션)**: **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합·server 주석/패턴 + **금전 핵심 테스트 24개** node:test) + **개선점 진단 프롬프트**(`docs/IMPROVEMENT_AUDIT_PROMPT.md`·`/audit` 커맨드), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드 버그수정·죽은코드 제거·UX·`notifyInvoiceIssued` 일원화), **청구처 청구시점 이동**·**용어 통일**(실결제자→청구처·담당 엔지니어·고객 담당자)·**프로젝트 유형 구분 폐기**·**연락처(담당자) 도메인**, 문서 현행화.
 > **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
