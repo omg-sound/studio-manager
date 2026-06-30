@@ -42,7 +42,6 @@ const {
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, listGroup, listRow } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
-const { invoiceForm } = require("./invoices.routes"); // 프로젝트 청구 탭 펼침 안 인라인 수정 폼 재사용
 const { sessionsSection } = require("../views.sessions");
 const { isValidYmd, formatYmdShort, todayYmd } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
@@ -233,12 +232,11 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     tabContent = deliverablesSection({ project: p, rows: deliv ? deliv.rows : [], isAdmin: editable, baseUrl: config.baseUrl, collapsed: false });
   } else if (tab === "invoice" && showInvoice) {
     const inv = listInvoicesForProject(req.user, p.id);
-    // 각 인보이스에 청구 항목 + 인라인 수정 폼(editForm)을 붙여 청구 탭에서 펼쳐보고 그 자리에서 수정까지. 프로젝트당 인보이스 소수라 N+1 무해.
+    // 각 인보이스에 청구 항목을 붙여 청구 탭에서 펼쳐본다(입금·상태·삭제·PDF). 수정은 없음(발행=확정, 변경은 삭제 후 재발행). 프로젝트당 인보이스 소수라 N+1 무해.
     const invoiceRows = inv
       ? inv.rows.map((r) => ({
           ...r,
           items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [],
-          editForm: showInvoice ? invoiceForm(r, true, "", `/projects/${p.id}?tab=invoice&open=${r.id}`, true) : "",
         }))
       : [];
     const unbilled = listUnbilledTasksForProject(req.user, p.id);

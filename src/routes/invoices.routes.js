@@ -151,13 +151,13 @@ router.get("/new", requireBilling, (req, res) => {
   const projectId = req.query.projectId ? Number(req.query.projectId) : null;
   const prefill = projectId ? { project_id: projectId } : {};
   const ret = projectId ? `/projects/${projectId}?tab=invoice` : ""; // 프로젝트에서 왔으면 그 청구 탭으로 복귀
-  res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm(prefill, false, "", ret) }));
+  res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm(prefill, "", ret) }));
 });
 
 router.post("/", requireBilling, (req, res) => {
   const b = req.body;
   const ret = safePath(b.return) || ""; // 프로젝트 청구 탭에서 온 복귀 경로(있으면 생성 후 그쪽으로 + 사이드바 프로젝트 유지)
-  const reErr = (msg) => res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm({ ...b, _err: msg }, false, "", ret) }));
+  const reErr = (msg) => res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm({ ...b, _err: msg }, "", ret) }));
   const title = String(b.title || "").trim();
   if (!title) return reErr("제목을 입력하세요.");
   const refs = resolveInvoiceRefs(b);
@@ -224,9 +224,9 @@ router.get("/:id", requireBilling, (req, res) => {
         <button class="btn-ghost">입력액으로 갱신</button>
         <button class="btn-primary" name="full" value="1">완납 처리</button>
       </form>
-      <div class="flex gap-2 pt-1">
-        <a href="/invoices/${inv.id}/edit" class="btn-ghost">수정</a>
-        <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요?"><button class="btn-ghost text-danger">삭제</button></form>
+      <div class="flex items-center gap-2 pt-1">
+        <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다."><button class="btn-ghost text-danger">삭제</button></form>
+        <span class="text-xs text-muted">수정이 필요하면 삭제 후 다시 발행하세요.</span>
       </div>
     </div>`
     : "";
@@ -301,55 +301,7 @@ function invoiceItemsCard(items) {
     </div>`;
 }
 
-// ── 수정(관리자) ──
-router.get("/:id/edit", requireBilling, (req, res) => {
-  const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
-  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const ret = safePath(req.query.return) || ""; // 프로젝트 청구 탭에서 진입 시 복귀 경로(사이드바도 프로젝트 유지)
-  res.send(layout({ title: "청구 수정", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm(inv, true, "", ret) }));
-});
-
-router.post("/:id", requireBilling, (req, res) => {
-  const id = Number(req.params.id);
-  const inv = db().prepare("SELECT id, status, client_id FROM invoices WHERE id = ?").get(id);
-  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const b = req.body;
-  const ret = safePath(b.return) || ""; // 프로젝트 청구 탭에서 진입 시 복귀 경로 유지(에러 재표시·저장 후 모두 프로젝트로)
-  const reErr = (msg) => res.send(layout({ title: "청구 수정", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm({ ...b, id }, true, msg, ret) }));
-  const title = String(b.title || "").trim();
-  if (!title) return reErr("제목을 입력하세요.");
-  const refs = resolveInvoiceRefs(b);
-  if (refs.error) return reErr(refs.error);
-  // 발행 후 청구처 잠금: 발행/입금완료 인보이스는 청구처(client_id) 변경을 차단(매출 추적 정합). 미발행은 자유 변경.
-  if ((inv.status === "발행" || inv.status === "입금완료") && (refs.clientId || null) !== (inv.client_id || null)) {
-    return res.status(409).send(errorPage({ code: 409, title: "청구처를 변경할 수 없습니다", message: "발행된 청구의 청구처는 변경할 수 없습니다. 매출 추적 정합을 위해 미발행 상태에서만 변경하세요.", user: req.user }));
-  }
-  const amount = parseMoney(b.amount);
-  if (amount <= 0) return reErr("청구 금액을 입력하세요.");
-  const status = normalizeInvoiceStatus(b.status);
-  const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
-  const discount = parseMoney(b.discount_amount);
-  db()
-    .prepare(
-      `UPDATE invoices SET project_id=@project_id, client_id=@client_id, title=@title, amount=@amount, tax_amount=@tax,
-       discount_amount=@discount, paid_amount=@paid, status=@status, issued_date=@issued_date, due_date=@due_date, memo=@memo WHERE id=@id`
-    )
-    .run({
-      id,
-      project_id: refs.projectId,
-      client_id: refs.clientId,
-      title,
-      amount,
-      tax: b.vat_included != null ? Math.round(amount - amount / 1.1) : 0, // 부가세 포함 체크 시 역산, 현금(미포함)이면 0
-      discount,
-      paid,
-      status,
-      issued_date: cleanYmd(b.issued_date),
-      due_date: cleanYmd(b.due_date),
-      memo: String(b.memo || "").trim() || null,
-    });
-  res.redirect(returnTo(req, `/invoices/${id}`, "saved"));
-});
+// ── 수정 라우트 없음: 발행=확정 원칙. 발행된 청구의 내용 변경은 삭제(POST /:id/delete) 후 다시 발행한다. ──
 
 // ── 입금 처리(관리자) ──
 router.post("/:id/pay", requireBilling, (req, res) => {
@@ -406,12 +358,10 @@ router.post("/:id/delete", requireBilling, (req, res) => {
   res.redirect(returnTo(req, "/invoices", "deleted"));
 });
 
-// ── 폼 ──
-// embed=true → 프로젝트 청구 탭 펼침 안 '인라인 수정 폼'(pageHeader·카드 없음, datalist id 폼별 유니크,
-// 입금액·상태는 펼침의 빠른 폼이 담당하므로 현재값을 hidden으로만 전송 — 누락 시 0/빈값 덮어쓰기 방지).
-function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed = false) {
+// ── 수동 청구 생성 폼(금액 직접 입력 경로) ── 수정 폼은 폐기(발행=확정, 변경은 삭제 후 재발행).
+function invoiceForm(inv = {}, err = "", returnPath = "") {
   const e = err || inv._err || "";
-  const action = isEdit ? `/invoices/${inv.id}` : "/invoices";
+  const action = "/invoices";
   const clients = clientOptions();
   const projects = projectOptions();
   const projSelect = `
@@ -420,10 +370,9 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed 
       ${projects.map((p) => `<option value="${p.id}" ${Number(inv.project_id) === p.id ? "selected" : ""}>${esc(p.title)}</option>`).join("")}
     </select>`;
   // 청구처 콤보(클라이언트 + 담당자) — from-tasks와 동일 UX. 담당자 선택 시 payer_contact_id → ensureClientFromContact로 개인 청구처 변환.
-  // 인라인(embed)은 한 페이지에 폼이 여러 개라 datalist id를 인보이스별로 유니크하게(app.js는 input의 list 속성으로 datalist를 찾음).
   const contactOpts = contactOptions();
   const selClient = inv.client_id ? clients.find((c) => c.id === Number(inv.client_id)) : null;
-  const dlId = embed ? `dl-inv-clients-${inv.id || "new"}` : "dl-inv-clients";
+  const dlId = "dl-inv-clients";
   const clientSelect = `
     <div data-client-combo>
       <input type="hidden" name="client_id" value="${selClient ? selClient.id : ""}" data-client-id />
@@ -438,13 +387,8 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed 
     </div>`;
   const retHidden = returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : "";
   const errBox = e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : "";
-  // 입금액·상태: 풀폼은 편집 필드, 인라인(embed)은 빠른 폼이 담당 → 현재값 hidden만(폼 제출 시 0/빈값으로 덮어쓰기 방지).
-  const payField = embed
-    ? `<input type="hidden" name="paid_amount" value="${inv.paid_amount || 0}" />`
-    : `<div class="grid gap-3 sm:grid-cols-2"><div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div></div>`;
-  const statusField = embed
-    ? `<input type="hidden" name="status" value="${esc(inv.status || INVOICE_STATUSES[0])}" />`
-    : `<div><label class="label">상태</label><select name="status" class="input">${INVOICE_STATUSES.map((s) => `<option ${s === (inv.status || INVOICE_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></div>`;
+  const payField = `<div class="grid gap-3 sm:grid-cols-2"><div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div></div>`;
+  const statusField = `<div><label class="label">상태</label><select name="status" class="input">${INVOICE_STATUSES.map((s) => `<option ${s === (inv.status || INVOICE_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></div>`;
   const fields = `
       <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
       <div><label class="label">프로젝트</label>${projSelect}</div>
@@ -454,7 +398,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed 
         <div><label class="label">할인(원) <span class="font-normal text-muted text-xs">선택 — 표시용</span></label><input class="input" name="discount_amount" inputmode="numeric" value="${inv.discount_amount ? esc(String(inv.discount_amount)) : ""}" placeholder="0" /></div>
       </div>
       <label class="flex items-center gap-1.5 text-sm">
-        <input type="checkbox" name="vat_included" value="1" ${isEdit && inv.amount > 0 && (inv.tax_amount || 0) === 0 ? "" : "checked"} /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 총액에서 VAT를 빼고 현금 거래로(VAT 0)</span>
+        <input type="checkbox" name="vat_included" value="1" checked /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 총액에서 VAT를 빼고 현금 거래로(VAT 0)</span>
       </label>
       ${payField}
       <div class="grid gap-3 sm:grid-cols-2">
@@ -463,27 +407,17 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed 
       </div>
       ${statusField}
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(inv.memo || "")}</textarea></div>`;
-  if (embed) {
-    // 펼침 안 인라인 수정 폼: pageHeader·카드 없이 폼만(배경은 펼침 카드). 저장/취소 모두 returnPath(프로젝트 청구 탭)로.
-    return `
-    <form method="post" action="${action}" class="space-y-3" data-vat-amount-form>
-      ${retHidden}${errBox}${fields}
-      <div class="flex gap-2"><button class="btn-primary btn-sm" type="submit">저장</button>
-        <a href="${returnPath || `/invoices/${inv.id}`}" class="btn-ghost btn-sm">취소</a></div>
-    </form>`;
-  }
   return `
-    ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
+    ${pageHeader({ title: "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
     <form method="post" action="${action}" class="card space-y-4" data-vat-amount-form>
       ${retHidden}${errBox}
-      ${!isEdit ? `<p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>` : ""}
+      <p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>
       ${fields}
       <div class="flex gap-2">
-        <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
-        <a href="${returnPath || (isEdit ? `/invoices/${inv.id}` : "/invoices")}" class="btn-ghost">취소</a>
+        <button class="btn-primary" type="submit">추가</button>
+        <a href="${returnPath || "/invoices"}" class="btn-ghost">취소</a>
       </div>
     </form>`;
 }
 
 module.exports = router;
-module.exports.invoiceForm = invoiceForm; // 프로젝트 청구 탭 인라인 수정 폼 재사용(projects.routes)
