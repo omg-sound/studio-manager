@@ -157,6 +157,110 @@ function listProjectManagers({ includeInactive = false, externalOnly = false } =
     .all();
 }
 
+// ── 연락처(클라이언트 측 담당자) + 소속 이력(이직 히스토리) ──
+// 회사(clients)와 별개 '사람' 마스터. 소속은 contact_affiliations 타임라인(ended_on NULL=현재 소속).
+
+const blankToNull = (v) => { const s = String(v == null ? "" : v).trim(); return s || null; };
+
+function listContacts({ q } = {}) {
+  const term = String(q || "").trim();
+  if (term) {
+    const like = `%${term}%`;
+    return db().prepare("SELECT * FROM contacts WHERE name LIKE ? OR phone LIKE ? ORDER BY name COLLATE NOCASE").all(like, like);
+  }
+  return db().prepare("SELECT * FROM contacts ORDER BY name COLLATE NOCASE").all();
+}
+
+function getContact(id) {
+  return db().prepare("SELECT * FROM contacts WHERE id = ?").get(Number(id)) || null;
+}
+
+function createContact({ name, phone, email, memo } = {}) {
+  const n = String(name || "").trim();
+  if (!n) throw new Error("CONTACT_NAME_REQUIRED");
+  return db().prepare("INSERT INTO contacts (name, phone, email, memo) VALUES (?, ?, ?, ?)")
+    .run(n, blankToNull(phone), blankToNull(email), blankToNull(memo)).lastInsertRowid;
+}
+
+function updateContact(id, { name, phone, email, memo } = {}) {
+  const n = String(name || "").trim();
+  if (!n) throw new Error("CONTACT_NAME_REQUIRED");
+  db().prepare("UPDATE contacts SET name = ?, phone = ?, email = ?, memo = ? WHERE id = ?")
+    .run(n, blankToNull(phone), blankToNull(email), blankToNull(memo), Number(id));
+}
+
+function deleteContact(id) {
+  // 하드 삭제: affiliations는 CASCADE, projects.contact_id는 SET NULL([[delete-only-management]]).
+  db().prepare("DELETE FROM contacts WHERE id = ?").run(Number(id));
+}
+
+/** 현재 소속(ended_on IS NULL, 가장 최근 1건) — 회사명·분류 조인. 무소속이면 client_* NULL. */
+function currentAffiliation(contactId) {
+  return db().prepare(
+    `SELECT a.*, c.name AS client_name, c.kind AS client_kind
+       FROM contact_affiliations a LEFT JOIN clients c ON c.id = a.client_id
+      WHERE a.contact_id = ? AND a.ended_on IS NULL
+      ORDER BY a.started_on DESC, a.id DESC LIMIT 1`
+  ).get(Number(contactId)) || null;
+}
+
+/** 소속 이력 타임라인(현재 먼저, 그다음 시작일 최근순). */
+function listAffiliations(contactId) {
+  return db().prepare(
+    `SELECT a.*, c.name AS client_name, c.kind AS client_kind
+       FROM contact_affiliations a LEFT JOIN clients c ON c.id = a.client_id
+      WHERE a.contact_id = ?
+      ORDER BY (a.ended_on IS NULL) DESC, COALESCE(a.started_on, '') DESC, a.id DESC`
+  ).all(Number(contactId));
+}
+
+/** 소속 추가. closeCurrent=true(기본)면 기존 현재 소속을 시작일(또는 오늘)로 종료 후 새 소속 INSERT — 이직 처리. */
+function addAffiliation(contactId, { client_id, title, started_on, memo, closeCurrent = true } = {}) {
+  const cid = Number(contactId);
+  const start = blankToNull(started_on);
+  if (closeCurrent) {
+    db().prepare("UPDATE contact_affiliations SET ended_on = ? WHERE contact_id = ? AND ended_on IS NULL")
+      .run(start || todayYmd(), cid);
+  }
+  return db().prepare(
+    "INSERT INTO contact_affiliations (contact_id, client_id, title, started_on, memo) VALUES (?, ?, ?, ?, ?)"
+  ).run(cid, client_id ? Number(client_id) : null, blankToNull(title), start, blankToNull(memo)).lastInsertRowid;
+}
+
+function endAffiliation(affId, endedOn) {
+  db().prepare("UPDATE contact_affiliations SET ended_on = ? WHERE id = ?").run(blankToNull(endedOn) || todayYmd(), Number(affId));
+}
+
+function deleteAffiliation(affId) {
+  db().prepare("DELETE FROM contact_affiliations WHERE id = ?").run(Number(affId));
+}
+
+/** 콤보용: 연락처 + 현재 소속 회사명(라벨 병기). */
+function contactOptions() {
+  return db().prepare(
+    `SELECT ct.id, ct.name, ct.phone,
+            (SELECT c.name FROM contact_affiliations a LEFT JOIN clients c ON c.id = a.client_id
+              WHERE a.contact_id = ct.id AND a.ended_on IS NULL
+              ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS current_client
+       FROM contacts ct ORDER BY ct.name COLLATE NOCASE`
+  ).all();
+}
+
+/** 회사(client)의 현재 소속 연락처 — 클라이언트 상세용. */
+function listContactsForClient(clientId) {
+  return db().prepare(
+    `SELECT ct.*, a.title AS aff_title FROM contact_affiliations a
+       JOIN contacts ct ON ct.id = a.contact_id
+      WHERE a.client_id = ? AND a.ended_on IS NULL
+      ORDER BY ct.name COLLATE NOCASE`
+  ).all(Number(clientId));
+}
+
+/** 연락처가 클라이언트 담당으로 연결된 프로젝트(연락처 상세용). */
+function listProjectsForContact(contactId) {
+  return db().prepare("SELECT * FROM projects WHERE contact_id = ? ORDER BY created_at DESC, id DESC").all(Number(contactId));
+}
+
 // ── 룸(스튜디오 공간) — 룸별 겹침 검사. 치프가 /settings에서 CRUD ──
 
 /** 활성(또는 전체) 룸 목록. 정렬: sort_order → 이름. */
@@ -419,9 +523,10 @@ function listProjects(_user, { q } = {}) {
 function getProjectForUser(user, id) {
   const row = db()
     .prepare(
-      `SELECT p.*, c.name AS client_name, m.name AS manager_name, tr_sum.track_titles, task_sum.task_total FROM projects p
+      `SELECT p.*, c.name AS client_name, m.name AS manager_name, ct.name AS contact_name, ct.phone AS contact_phone, tr_sum.track_titles, task_sum.task_total FROM projects p
        LEFT JOIN clients c ON c.id = p.client_id
        LEFT JOIN project_managers m ON m.id = p.manager_id
+       LEFT JOIN contacts ct ON ct.id = p.contact_id
        LEFT JOIN (
          SELECT project_id, GROUP_CONCAT(title, '||') AS track_titles
          FROM project_tracks
@@ -1265,6 +1370,19 @@ module.exports = {
   clientOptions,
   ensureClientsFromProject,
   listProjectManagers,
+  listContacts,
+  getContact,
+  createContact,
+  updateContact,
+  deleteContact,
+  currentAffiliation,
+  listAffiliations,
+  addAffiliation,
+  endAffiliation,
+  deleteAffiliation,
+  contactOptions,
+  listContactsForClient,
+  listProjectsForContact,
   listRooms,
   createRoom,
   deleteRoom,

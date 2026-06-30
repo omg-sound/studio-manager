@@ -1,0 +1,236 @@
+"use strict";
+
+const express = require("express");
+const { requireEditor } = require("../auth");
+const {
+  listContacts,
+  getContact,
+  createContact,
+  updateContact,
+  deleteContact,
+  currentAffiliation,
+  listAffiliations,
+  addAffiliation,
+  endAffiliation,
+  deleteAffiliation,
+  listProjectsForContact,
+  listClients,
+} = require("../data");
+const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge } = require("../views");
+
+const router = express.Router();
+
+// 연락처(클라이언트 측 담당자) 라우트는 편집자(치프·스태프) 전용 — 대표 차단
+router.use(requireEditor);
+
+// ── 목록(이름·현재소속·전화 + ?q= 검색) ──
+router.get("/", (req, res) => {
+  const q = String(req.query.q || "").trim();
+  const rows = listContacts(q ? { q } : {});
+
+  const searchBar = `
+    <form method="get" action="/contacts" class="mb-4 flex gap-2">
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 · 전화 검색" />
+      <button class="btn-primary shrink-0" type="submit">검색</button>
+    </form>`;
+
+  const resultNote = q
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts" class="text-primary hover:underline">전체 보기</a></div>`
+    : "";
+
+  const list = rows.length
+    ? listGroup({
+        rows: rows.map((c) => {
+          const cur = currentAffiliation(c.id);
+          const affBadge = cur ? `<span class="badge badge-neutral">${esc(cur.client_name || "무소속")}${cur.title ? " · " + esc(cur.title) : ""}</span>` : "";
+          const left = `<div class="flex items-center gap-2"><span class="font-semibold">${esc(c.name)}</span>${affBadge}</div>`;
+          const right = c.phone ? `<span class="text-sm text-muted">${esc(c.phone)}</span>` : "";
+          return listRow({ href: `/contacts/${c.id}`, left, right });
+        }),
+      })
+    : q
+      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
+      : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
+
+  const body = `
+    ${flashBanner(req.query)}
+    ${pageHeader({ title: "연락처", desc: "레이블/제작사 직원 · 프리 매니저 · 아티스트 지인 등 사람 마스터(소속 이력 포함).", action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
+    ${searchBar}
+    ${resultNote}
+    ${list}`;
+  res.send(layout({ title: "연락처", user: req.user, current: "/contacts", body }));
+});
+
+// ── 새 연락처 ──
+router.get("/new", (req, res) => {
+  res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}) }));
+});
+
+router.post("/", (req, res) => {
+  const b = req.body;
+  try {
+    const id = createContact({ name: b.name, phone: b.phone, email: b.email, memo: b.memo });
+    res.redirect(`/contacts/${id}?flash=created`);
+  } catch (_e) {
+    res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }) }));
+  }
+});
+
+// ── 수정 ──
+router.get("/:id/edit", (req, res) => {
+  const c = getContact(Number(req.params.id));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(c, true) }));
+});
+
+router.post("/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const c = getContact(id);
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const b = req.body;
+  try {
+    updateContact(id, { name: b.name, phone: b.phone, email: b.email, memo: b.memo });
+    res.redirect(`/contacts/${id}?flash=saved`);
+  } catch (_e) {
+    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
+  }
+});
+
+// ── 삭제(하드: affiliations CASCADE, projects.contact_id SET NULL) ──
+router.post("/:id/delete", (req, res) => {
+  deleteContact(Number(req.params.id));
+  res.redirect("/contacts?flash=deleted");
+});
+
+// ── 소속 이력: 추가/이직 · 종료 · 삭제 ──
+router.post("/:id/affiliations", (req, res) => {
+  const id = Number(req.params.id);
+  if (!getContact(id)) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const b = req.body;
+  addAffiliation(id, {
+    client_id: b.client_id || null,
+    title: b.title,
+    started_on: b.started_on,
+    memo: b.memo,
+    closeCurrent: b.closeCurrent === "1",
+  });
+  res.redirect(`/contacts/${id}?flash=added`);
+});
+
+router.post("/:id/affiliations/:aid/end", (req, res) => {
+  endAffiliation(Number(req.params.aid));
+  res.redirect(`/contacts/${Number(req.params.id)}?flash=saved`);
+});
+
+router.post("/:id/affiliations/:aid/delete", (req, res) => {
+  deleteAffiliation(Number(req.params.aid));
+  res.redirect(`/contacts/${Number(req.params.id)}?flash=deleted`);
+});
+
+// ── 상세(연락처 정보 + 소속 이력 타임라인 + 추가/이직 폼 + 연결 프로젝트) ──
+// 주의: GET /:id 는 GET /new·GET /:id/edit 보다 뒤에 등록해 경로 충돌을 피한다.
+router.get("/:id", (req, res) => {
+  const c = getContact(Number(req.params.id));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const affs = listAffiliations(c.id);
+  const projects = listProjectsForContact(c.id);
+  const clients = listClients({});
+
+  const infoCard = `
+    <div class="card mb-6 space-y-2">
+      <div class="text-sm"><span class="text-muted">전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
+      <div class="text-sm"><span class="text-muted">이메일</span> ${c.email ? esc(c.email) : `<span class="text-muted">없음</span>`}</div>
+      ${c.memo ? `<div class="text-sm"><span class="text-muted">메모</span> ${esc(c.memo)}</div>` : ""}
+      <div class="flex gap-2 pt-1">
+        <a href="/contacts/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>
+        <form method="post" action="/contacts/${c.id}/delete" data-confirm="${esc(c.name)} 연락처를 삭제할까요? 소속 이력도 함께 삭제됩니다.">
+          <button class="btn-ghost btn-sm text-danger" type="submit">삭제</button>
+        </form>
+      </div>
+    </div>`;
+
+  const timeline = affs.length
+    ? `<div class="space-y-2">${affs
+        .map((a) => {
+          const isCurrent = !a.ended_on;
+          const badge = isCurrent ? `<span class="badge badge-success">현재</span>` : `<span class="badge badge-neutral">종료</span>`;
+          const company = a.client_name || "무소속";
+          const period = `${a.started_on ? esc(a.started_on) : "?"} ~ ${a.ended_on ? esc(a.ended_on) : "현재"}`;
+          return `<div class="card flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">${badge}<span class="font-semibold">${esc(company)}</span>${a.title ? `<span class="text-sm text-muted">${esc(a.title)}</span>` : ""}</div>
+              <div class="mt-0.5 text-xs text-muted">${period}</div>
+              ${a.memo ? `<div class="mt-1 text-sm">${esc(a.memo)}</div>` : ""}
+            </div>
+            <div class="flex shrink-0 gap-1">
+              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end"><button class="btn-ghost btn-xs" type="submit">종료</button></form>` : ""}
+              <form method="post" action="/contacts/${c.id}/affiliations/${a.id}/delete" data-confirm="이 소속 이력을 삭제할까요?"><button class="btn-ghost btn-xs text-danger" type="submit">삭제</button></form>
+            </div>
+          </div>`;
+        })
+        .join("")}</div>`
+    : emptyState("소속 이력이 없습니다.", { card: true });
+
+  const affForm = `
+    <form method="post" action="/contacts/${c.id}/affiliations" class="card mt-3 space-y-3">
+      <div class="font-semibold">소속 추가 / 이직</div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label">소속 회사</label>
+          <select name="client_id" class="input">
+            <option value="">무소속</option>
+            ${clients.map((cl) => `<option value="${cl.id}">${esc(cl.name)}${cl.kind ? " (" + esc(cl.kind) + ")" : ""}</option>`).join("")}
+          </select>
+        </div>
+        <div><label class="label">직함</label><input class="input" name="title" placeholder="예: A&amp;R · 매니저" /></div>
+      </div>
+      <div><label class="label">시작일</label><input class="input" type="date" name="started_on" /></div>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="closeCurrent" value="1" checked /> 기존 현재 소속 종료(이직)</label>
+      <button class="btn-primary" type="submit">소속 추가</button>
+    </form>`;
+
+  const projectList = projects.length
+    ? listGroup({
+        rows: projects.map((p) => {
+          const meta = [p.artist, p.artist_company, p.production_company].filter(Boolean).join(" · ");
+          const left = `<div class="flex items-center gap-2"><span class="font-semibold">${esc(p.title)}</span>${projectTypeBadge(p.project_type)}</div>${meta ? `<div class="mt-0.5 text-xs text-muted">${esc(meta)}</div>` : ""}`;
+          return listRow({ href: `/projects/${p.id}`, left, right: `<span class="text-xs text-muted">열기 ›</span>` });
+        }),
+      })
+    : emptyState("연결된 프로젝트가 없습니다.", { card: true });
+
+  const body = `
+    ${flashBanner(req.query)}
+    ${pageHeader({ title: c.name, desc: "연락처(클라이언트 측 담당자)", back: { href: "/contacts", label: "연락처" } })}
+    ${infoCard}
+    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
+    ${timeline}
+    ${affForm}
+    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">연결 프로젝트</h2>
+    ${projectList}`;
+  res.send(layout({ title: c.name, user: req.user, current: "/contacts", body }));
+});
+
+// ── 폼(추가/수정 공용) ──
+function contactForm(c = {}, isEdit = false) {
+  const e = c._err || "";
+  const action = isEdit ? `/contacts/${c.id}` : "/contacts";
+  const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
+  return `
+    ${pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 메모", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
+    <form method="post" action="${action}" class="card space-y-4">
+      ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
+      <div><label class="label">이름</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div><label class="label">전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" /></div>
+        <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>
+      </div>
+      <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
+      <div class="flex gap-2">
+        <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
+        <a href="${cancelHref}" class="btn-ghost">취소</a>
+      </div>
+    </form>`;
+}
+
+module.exports = router;

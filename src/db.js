@@ -223,6 +223,28 @@ function init() {
       value TEXT
     );
 
+    -- 연락처(클라이언트 측 사람): 레이블/제작사 직원·프리 매니저·지인 등. 회사(clients)와 별개 마스터.
+    CREATE TABLE IF NOT EXISTS contacts (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      phone      TEXT,
+      email      TEXT,
+      memo       TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- 소속 이력(이직 히스토리): 한 연락처의 회사 소속 타임라인. client_id NULL = 무소속(프리/지인). ended_on NULL = 현재 소속.
+    CREATE TABLE IF NOT EXISTS contact_affiliations (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+      client_id  INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+      title      TEXT,
+      started_on TEXT,
+      ended_on   TEXT,
+      memo       TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
     CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
@@ -240,6 +262,8 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
     CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id);
     CREATE INDEX IF NOT EXISTS idx_invoice_items_task ON invoice_items(task_id);
+    CREATE INDEX IF NOT EXISTS idx_contact_affiliations_contact ON contact_affiliations(contact_id, ended_on);
+    CREATE INDEX IF NOT EXISTS idx_contact_affiliations_client ON contact_affiliations(client_id, ended_on);
   `);
 
   addColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
@@ -272,6 +296,7 @@ function init() {
   addColumn("projects", "artist_company", "TEXT");
   addColumn("projects", "production_company", "TEXT");
   addColumn("projects", "manager_id", "INTEGER REFERENCES project_managers(id) ON DELETE SET NULL");
+  addColumn("projects", "contact_id", "INTEGER REFERENCES contacts(id) ON DELETE SET NULL"); // 클라이언트 측 담당 연락처
   addColumn("invoices", "invoice_number", "TEXT");
   addColumn("invoices", "tax_amount", "INTEGER NOT NULL DEFAULT 0");
   addColumn("rate_items", "category", "TEXT NOT NULL DEFAULT '스튜디오 녹음'"); // 단가표(녹음 종류) 분류: 스튜디오 녹음 | 로케이션 녹음

@@ -330,14 +330,15 @@
   sync();
 })();
 
-// 실결제자 콤보박스: <input list> 검색값 ↔ hidden client_id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정(아니면 미지정=저장 시 자동매칭).
+// 검색형 콤보박스(실결제자·클라이언트 담당자): <input list> 검색값 ↔ hidden id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정(아니면 미지정).
+// [data-client-combo](client_id)·[data-contact-combo](contact_id) 둘 다 같은 로직으로 처리(셀렉터 OR).
 (function () {
   "use strict";
-  var combos = document.querySelectorAll("[data-client-combo]");
+  var combos = document.querySelectorAll("[data-client-combo], [data-contact-combo]");
   if (!combos.length) return;
   Array.prototype.forEach.call(combos, function (wrap) {
-    var search = wrap.querySelector("[data-client-search]");
-    var hidden = wrap.querySelector("[data-client-id]");
+    var search = wrap.querySelector("[data-client-search], [data-contact-search]");
+    var hidden = wrap.querySelector("[data-client-id], [data-contact-id]");
     var listEl = search ? document.getElementById(search.getAttribute("list")) : null;
     if (!search || !hidden || !listEl) return;
     function sync() {

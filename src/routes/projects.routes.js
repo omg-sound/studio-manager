@@ -17,6 +17,7 @@ const {
   getProjectForUser,
   deleteProject,
   clientOptions,
+  contactOptions,
   ensureClientsFromProject,
   listProjectManagers,
   listRateItems,
@@ -116,7 +117,7 @@ function trackCount(p) {
 
 /** 목록 행(listGroup 안 listRow): 제목 / 메타(아티스트·클라이언트) / 곡수 — 우측 금액·D-day(tabular). */
 function projectListRow(p) {
-  const metaLine = [p.artist, p.client_name, p.manager_name].filter(Boolean).join(" · ") || "정보 미정";
+  const metaLine = [p.artist, p.client_name, p.manager_name, contactMetaPart(p)].filter(Boolean).join(" · ") || "정보 미정";
   const n = trackCount(p);
   const left = `
     <div class="truncate font-semibold">${esc(p.title)}</div>
@@ -142,8 +143,8 @@ router.post("/", requireEditor, (req, res) => {
   if (!title) return res.send(layout({ title: "새 프로젝트", user: req.user, current: "/projects", body: projectForm({ ...b, project_type: type, _err: "프로젝트 명을 입력하세요." }) }));
   const info = db()
     .prepare(
-      `INSERT INTO projects (title, project_type, artist, artist_company, production_company, client_id, manager_id, due_date, memo)
-       VALUES (@title, @project_type, @artist, @artist_company, @production_company, @client_id, @manager_id, @due_date, @memo)`
+      `INSERT INTO projects (title, project_type, artist, artist_company, production_company, client_id, manager_id, contact_id, due_date, memo)
+       VALUES (@title, @project_type, @artist, @artist_company, @production_company, @client_id, @manager_id, @contact_id, @due_date, @memo)`
     )
     .run({
       title,
@@ -153,6 +154,7 @@ router.post("/", requireEditor, (req, res) => {
       production_company: String(b.production_company || "").trim() || null,
       client_id: b.client_id ? Number(b.client_id) : null,
       manager_id: b.manager_id ? Number(b.manager_id) : null,
+      contact_id: b.contact_id ? Number(b.contact_id) : null,
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
@@ -255,9 +257,15 @@ function sessionInvoicedModal(projectId) {
     </div>`;
 }
 
+/** 메타 라인용 클라이언트 담당자 표기: "이름 (전화)" 또는 "이름", 없으면 null(filter(Boolean)로 제외). */
+function contactMetaPart(p) {
+  if (!p.contact_name) return null;
+  return p.contact_phone ? `${p.contact_name} (${p.contact_phone})` : p.contact_name;
+}
+
 /** 메타 한 줄 요약(아티스트 · 거래처 · 담당자 / 견적 · 완료일). */
 function projectMetaLine(p) {
-  const left = [p.artist, p.client_name, p.manager_name].filter(Boolean).join(" · ") || "정보 미정";
+  const left = [p.artist, p.client_name, p.manager_name, contactMetaPart(p)].filter(Boolean).join(" · ") || "정보 미정";
   const amount = projectAmount(p)
     ? `<div class="text-sm font-semibold">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
@@ -324,7 +332,7 @@ router.post("/:id", requireEditor, (req, res) => {
     .prepare(
       `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
        production_company=@production_company, client_id=@client_id, manager_id=@manager_id,
-       due_date=@due_date, memo=@memo WHERE id=@id`
+       contact_id=@contact_id, due_date=@due_date, memo=@memo WHERE id=@id`
     )
     .run({
       id,
@@ -334,6 +342,7 @@ router.post("/:id", requireEditor, (req, res) => {
       production_company: String(b.production_company || "").trim() || null,
       client_id: b.client_id ? Number(b.client_id) : null,
       manager_id: b.manager_id ? Number(b.manager_id) : null,
+      contact_id: b.contact_id ? Number(b.contact_id) : null,
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
@@ -462,6 +471,10 @@ function projectForm(p = {}, err = "") {
         ${managerSelect(p.manager_id)}
       </div>
       <div>
+        <label class="label">클라이언트 담당자</label>
+        ${contactCombo(p.contact_id)}
+      </div>
+      <div>
         <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
         <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
       </div>
@@ -507,6 +520,10 @@ function projectEditForm(p = {}, err = "") {
         ${managerSelect(p.manager_id)}
       </div>
       <div>
+        <label class="label">클라이언트 담당자</label>
+        ${contactCombo(p.contact_id)}
+      </div>
+      <div>
         <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
         <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
       </div>
@@ -550,6 +567,31 @@ function clientCombo(selectedId) {
         ${opts.map((c) => `<option value="${esc(clientComboLabel(c))}" data-id="${c.id}"></option>`).join("")}
       </datalist>
       <p class="mt-1 text-xs text-muted">이름 일부만 입력해도 좁혀집니다. 비워 두면 저장 시 자동 연결.</p>
+    </div>`;
+}
+
+/** 클라이언트 담당자 콤보 라벨: "이름 · 소속"(소속으로 동명 구분). 소속 없으면 이름만. */
+function contactComboLabel(o) {
+  return o.current_client ? `${o.name} · ${o.current_client}` : o.name;
+}
+
+/**
+ * 클라이언트 담당자(연락처) 검색형 콤보박스: clientCombo와 동일 패턴.
+ * <input list>+<datalist>로 이름 일부만 입력해 필터, 선택값은 hidden contact_id로 app.js([data-contact-combo])가 동기화.
+ * 내부 담당자(managerSelect)와 별개 필드. 비워 두면 미연결. CSP-safe: datalist/hidden은 정적, 값 동기화는 외부 app.js.
+ */
+function contactCombo(selectedId) {
+  const opts = contactOptions();
+  const sel = selectedId ? opts.find((o) => o.id === Number(selectedId)) : null;
+  return `
+    <div data-contact-combo>
+      <input type="hidden" name="contact_id" value="${sel ? sel.id : ""}" data-contact-id />
+      <input class="input" type="text" list="dl-contacts" data-contact-search autocomplete="off"
+        placeholder="이름 일부 입력 후 선택…" value="${sel ? esc(contactComboLabel(sel)) : ""}" aria-label="클라이언트 담당자 검색" />
+      <datalist id="dl-contacts">
+        ${opts.map((o) => `<option value="${esc(contactComboLabel(o))}" data-id="${o.id}"></option>`).join("")}
+      </datalist>
+      <p class="mt-1 text-xs text-muted">이름 일부만 입력해도 좁혀집니다. 비워 두면 미연결.</p>
     </div>`;
 }
 

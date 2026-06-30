@@ -123,6 +123,7 @@ const NAV = [
   { href: "/sessions", label: "일정", key: "sessions", access: "all", group: "ops" },
   { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "editor", group: "ops" },
   { href: "/invoices", label: "청구", key: "invoices", access: "invoice", group: "billing" },
+  { href: "/contacts", label: "연락처", key: "contacts", access: "editor", group: "manage" },
   { href: "/clients", label: "클라이언트", key: "clients", access: "chief", group: "manage" },
   { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
   { href: "/settings", label: "관리", key: "settings", access: "chief", group: "manage" },

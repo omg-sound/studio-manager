@@ -4,8 +4,8 @@ const express = require("express");
 const { db } = require("../db");
 const { requireChief } = require("../auth");
 const { CLIENT_KINDS, normalizeClientKind } = require("../config");
-const { listClients, clientKindCounts, getClient, listProjectsForClient, listInvoicesForClientEntity } = require("../data");
-const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge } = require("../views");
+const { listClients, clientKindCounts, getClient, listProjectsForClient, listInvoicesForClientEntity, listContactsForClient } = require("../data");
+const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -158,6 +158,7 @@ router.get("/:id", (req, res) => {
   const tab = req.query.tab === "invoices" ? "invoices" : "projects";
   const projects = listProjectsForClient(c);
   const invoices = listInvoicesForClientEntity(c);
+  const contacts = listContactsForClient(c.id);
   const tabBarHtml = tabBar({
     tabs: [{ key: "projects", label: `프로젝트 ${projects.length}` }, { key: "invoices", label: `청구·결제 ${invoices.length}` }],
     activeKey: tab,
@@ -185,9 +186,25 @@ router.get("/:id", (req, res) => {
       : emptyState("연결된 프로젝트가 없습니다.", { card: true });
   }
 
+  const contactsSection = contacts.length
+    ? listGroup({
+        rows: contacts.map((ct) =>
+          listRow({
+            href: `/contacts/${ct.id}`,
+            left: `<span class="font-medium">${esc(ct.name)}</span>${ct.aff_title ? `<span class="ml-1.5 text-xs text-muted">${esc(ct.aff_title)}</span>` : ""}`,
+            right: ct.phone ? `<span class="text-sm text-muted">${esc(ct.phone)}</span>` : "",
+          })
+        ),
+      })
+    : `<p class="text-sm text-muted">등록된 담당자 연락처가 없습니다.</p>`;
+
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: c.name, desc: c.kind, back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
+    <div class="mb-4">
+      <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
+      ${contactsSection}
+    </div>
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
