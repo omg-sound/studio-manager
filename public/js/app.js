@@ -423,14 +423,16 @@
     var hidden = wrap.querySelector("[data-client-id], [data-contact-id]");
     var listEl = search ? document.getElementById(search.getAttribute("list")) : null;
     var info = wrap.querySelector("[data-contact-info]"); // 고객측 담당자 콤보에만 있음(전화·이메일·소속 표시)
+    var payerContact = wrap.querySelector("[data-payer-contact-id]"); // 청구처 콤보에만(담당자를 청구처로 선택 시 contact_id)
     if (!search || !hidden || !listEl) return;
     function sync() {
       var v = search.value.trim();
-      var id = "", matched = null;
+      var id = "", contactId = "", matched = null;
       for (var i = 0; i < listEl.options.length; i++) {
-        if (listEl.options[i].value === v) { matched = listEl.options[i]; id = matched.getAttribute("data-id") || ""; break; }
+        if (listEl.options[i].value === v) { matched = listEl.options[i]; id = matched.getAttribute("data-id") || ""; contactId = matched.getAttribute("data-contact-id") || ""; break; }
       }
       hidden.value = id;
+      if (payerContact) payerContact.value = contactId;
       if (info) {
         while (info.firstChild) info.removeChild(info.firstChild); // CSP-safe: innerHTML 대신 노드 생성
         if (matched) {

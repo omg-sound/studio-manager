@@ -144,6 +144,16 @@ function ensureClientsFromProject(p = {}) {
   ensureClient(p.production_company, "제작사");
 }
 
+/** 연락처(담당자)를 청구처로 쓸 때: 같은 이름 '기타' 클라이언트 재사용 또는 생성 후 client_id 반환(개인 청구처). */
+function ensureClientFromContact(contactId) {
+  const c = db().prepare("SELECT id, name, phone, email FROM contacts WHERE id = ?").get(Number(contactId));
+  if (!c || !String(c.name || "").trim()) return null;
+  const existing = db().prepare("SELECT id FROM clients WHERE name = ? AND kind = '기타'").get(c.name);
+  if (existing) return existing.id;
+  const info = db().prepare("INSERT INTO clients (name, kind, phone, email) VALUES (?, '기타', ?, ?)").run(c.name, c.phone || null, c.email || null);
+  return info.lastInsertRowid;
+}
+
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
   const where = [];
   if (!includeInactive) where.push("active = 1");
@@ -1697,6 +1707,7 @@ module.exports = {
   setTaskPayout,
   clientOptions,
   ensureClientsFromProject,
+  ensureClientFromContact,
   listProjectManagers,
   listContacts,
   getContact,

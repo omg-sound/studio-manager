@@ -18,6 +18,7 @@ const {
   deleteProject,
   clientOptions,
   contactOptions,
+  ensureClientFromContact,
   ensureClientsFromProject,
   listProjectManagers,
   listRateItems,
@@ -436,7 +437,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
       projectId: Number(req.params.id),
       taskIds: toArray(req.body.task_id),
       sessionIds: toArray(req.body.session_id),
-      clientId: req.body.client_id ? Number(req.body.client_id) : null,
+      clientId: req.body.client_id ? Number(req.body.client_id) : (req.body.payer_contact_id ? ensureClientFromContact(Number(req.body.payer_contact_id)) : null), // 담당자 선택 시 개인 청구처로 변환
       title: req.body.title,
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
@@ -563,16 +564,19 @@ function clientComboLabel(c) {
  */
 function clientCombo(selectedId) {
   const opts = clientOptions();
+  const contactOpts = contactOptions(); // 담당자(연락처)도 청구처로 선택 가능
   const sel = selectedId ? opts.find((c) => c.id === Number(selectedId)) : null;
   return `
     <div data-client-combo>
       <input type="hidden" name="client_id" value="${sel ? sel.id : ""}" data-client-id />
+      <input type="hidden" name="payer_contact_id" value="" data-payer-contact-id />
       <input class="input" type="text" list="dl-payer-clients" data-client-search autocomplete="off"
-        placeholder="이름 일부 입력 후 목록에서 선택…" value="${sel ? esc(clientComboLabel(sel)) : ""}" aria-label="청구처 검색" />
+        placeholder="클라이언트·담당자 이름 일부 입력 후 선택…" value="${sel ? esc(clientComboLabel(sel)) : ""}" aria-label="청구처 검색" />
       <datalist id="dl-payer-clients">
         ${opts.map((c) => `<option value="${esc(clientComboLabel(c))}" data-id="${c.id}"></option>`).join("")}
+        ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자" data-contact-id="${o.id}"></option>`).join("")}
       </datalist>
-      <p class="mt-1 text-xs text-muted">이름 일부만 입력해도 좁혀집니다. 비워 두면 저장 시 자동 연결.</p>
+      <p class="mt-1 text-xs text-muted">클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.</p>
     </div>`;
 }
 
