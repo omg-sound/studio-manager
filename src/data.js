@@ -937,7 +937,7 @@ function listBillableSessionsForProject(user, projectId) {
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
          AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)
-       ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
+       ORDER BY s.created_at ASC, s.id ASC`
     )
     .all(project.id)
     .map((row) => ({ ...row, billing: sessionRateAmount(row) }))
@@ -1045,7 +1045,7 @@ function invoiceAmountsFromSupply(supply, discount, vatIncluded = true) {
   return { discount: d, taxable, tax, total };
 }
 
-function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true, taskAmounts = {} } = {}) {
+function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true, taskAmounts = {}, sessionAmounts = {} } = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project || !canBill(user)) return null;
   const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
@@ -1095,12 +1095,19 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
       .map((s) => ({ session: s, calc: sessionRateAmount(s) }))
       .filter((x) => x.calc && x.calc.amount > 0);
     if (billSessions.length !== selectedSessions.length) throw new Error("TASK_NOT_BILLABLE");
+    // 금액 확정: 청구 폼에서 입력/조정한 세션 금액으로 덮어쓴다(작업과 동일 — 미입력 시 단가표 산정액). 0원은 청구 불가.
+    billSessions = billSessions.map((x) => {
+      const raw = sessionAmounts[x.session.id] != null ? sessionAmounts[x.session.id] : sessionAmounts[String(x.session.id)];
+      const amount = raw != null && String(raw).trim() !== "" ? parseWon(raw) : x.calc.amount;
+      return { ...x, amount };
+    });
+    if (billSessions.some((x) => !(x.amount > 0))) throw new Error("TASK_AMOUNT_REQUIRED");
   }
 
   const d = db();
   const subtotal =
     tasks.reduce((sum, task) => sum + (task.total_price || 0), 0) +
-    billSessions.reduce((sum, x) => sum + x.calc.amount, 0);
+    billSessions.reduce((sum, x) => sum + x.amount, 0);
   const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0, vatIncluded);
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
@@ -1146,10 +1153,10 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
       markTask.run(invoiceId, task.unit_price, task.total_price, task.id); // 청구 시 확정 금액을 작업에도 반영(매출·스냅샷 일치)
     }
     // 녹음 세션 직접 청구 라인: 곡·콘텐츠 없이 invoice_items에 스냅샷(session_id로 잠김). quantity=1·unit_price=amount.
-    for (const { session, calc } of billSessions) {
+    for (const { session, calc, amount } of billSessions) {
       const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
       const description = `녹음 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`;
-      insertItem.run(invoiceId, null, session.id, null, null, description, 1, calc.amount, calc.amount);
+      insertItem.run(invoiceId, null, session.id, null, null, description, 1, amount, amount); // 금액은 폼 입력값(미입력 시 단가표 산정액)
     }
     d.exec("COMMIT;");
     return getInvoiceForUser(user, invoiceId);
@@ -1273,7 +1280,7 @@ function listSessionsForProject(user, projectId) {
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
   const rows = db()
-    .prepare("SELECT * FROM sessions WHERE project_id = ? ORDER BY session_date ASC, start_time ASC, id ASC")
+    .prepare("SELECT * FROM sessions WHERE project_id = ? ORDER BY created_at ASC, id ASC")
     .all(projectId);
   return {
     project,

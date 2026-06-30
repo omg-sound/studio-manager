@@ -437,11 +437,12 @@ router.post("/tasks/:taskId/delete", requireEditor, (req, res) => {
   }
 });
 
-/** req.body의 task_amount_<id> 필드를 {taskId: 금액} 맵으로 추출(청구 폼에서 작업별로 입력/조정한 금액). */
-function extractTaskAmounts(body) {
+/** req.body에서 `${prefix}_<id>` 금액 필드를 {id: 금액} 맵으로 추출(청구 폼에서 작업·세션별로 입력/조정한 금액). */
+function extractAmountMap(body, prefix) {
   const out = {};
+  const re = new RegExp(`^${prefix}_(\\d+)$`);
   for (const k of Object.keys(body || {})) {
-    const m = /^task_amount_(\d+)$/.exec(k);
+    const m = re.exec(k);
     if (m) out[m[1]] = body[k];
   }
   return out;
@@ -459,7 +460,8 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
       dueDate: cleanYmd(req.body.due_date),
       discount: parseMoney(req.body.discount_amount),
       vatIncluded: req.body.vat_included != null, // 부가세 포함 체크박스(기본 체크) — 해제 시 미전송 → false(현금 거래)
-      taskAmounts: extractTaskAmounts(req.body), // 금액은 청구 시점 확정 — 작업별 입력/조정 금액
+      taskAmounts: extractAmountMap(req.body, "task_amount"), // 금액은 청구 시점 확정 — 작업별 입력/조정 금액
+      sessionAmounts: extractAmountMap(req.body, "session_amount"), // 녹음 세션도 작업처럼 금액 수정 가능
     });
     if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     // createInvoiceFromTasks는 즉시 '발행' 상태로 생성 → 발행 알림 발송(notify는 fail-safe·비차단, 청구 흐름 비차단).
@@ -467,7 +469,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
     // 청구 메뉴로 이탈하지 않고 프로젝트 청구 탭으로 복귀 + 방금 만든 인보이스를 펼친 채(open) 노출.
     res.redirect(`/projects/${req.params.id}?tab=invoice&open=${inv.id}&flash=created`);
   } catch (e) {
-    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다.", TASK_AMOUNT_REQUIRED: "청구할 작업의 금액을 입력하세요(0원은 청구할 수 없습니다)." };
+    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다.", TASK_AMOUNT_REQUIRED: "청구할 작업·세션의 금액을 입력하세요(0원은 청구할 수 없습니다)." };
     if (!known[e.message]) throw e; // 알 수 없는 오류(DB 등)는 전역 핸들러(500+로깅)로 — 검증 실패로 위장 방지
     return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message: known[e.message], user: req.user }));
   }
@@ -862,15 +864,19 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const mins = s.billing.minutes;
       const dur = `${Math.floor(mins / 60)}시간${mins % 60 ? " " + (mins % 60) + "분" : ""}`;
       const time = [s.start_time, s.end_time].filter(Boolean).join("–");
+      const label = `녹음 세션 ${formatYmdShort(s.session_date)} · ${s.billing.item.name}`;
       return `
-        <label class="flex items-start gap-2 border-b border-border py-2 last:border-0" data-line-row>
-          <input class="mt-1" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" checked />
-          <span class="min-w-0 flex-1">
-            <span class="block text-sm font-medium">녹음 세션 ${esc(formatYmdShort(s.session_date))} · ${esc(s.billing.item.name)}</span>
+        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0" data-line-row>
+          <input class="shrink-0" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" checked id="session-cb-${s.id}" />
+          <label for="session-cb-${s.id}" class="min-w-0 flex-1 cursor-pointer">
+            <span class="block text-sm font-medium">${esc(label)}</span>
             <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}</span>
-          </span>
-          <span class="text-sm font-semibold tabular">${formatKRW(s.billing.amount)}</span>
-        </label>`;
+          </label>
+          <div class="relative w-28 shrink-0">
+            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="session_amount_${s.id}" value="${s.billing.amount || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
+            <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+          </div>
+        </div>`;
     })
     .join("");
   const total = subtotal + tax;
@@ -880,16 +886,17 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 녹음 세션)</span></h3>
       </div>
       <div class="mb-2">
+        <label class="label mb-1 text-xs">청구 제목</label>
+        <input class="input py-1.5 text-sm" name="title" value="${esc(project.title)} 청구" />
+      </div>
+      <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
         ${clientCombo(project.client_id)}
       </div>
+      <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${taskList}${sessionList}</div>
       ${hasPending ? `<p class="mt-1.5 text-xs text-muted">미완료(대기·진행중) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.</p>` : ""}
       <div class="mt-3 space-y-2">
-        <div>
-          <label class="label mb-1 text-xs">청구 제목</label>
-          <input class="input py-1.5 text-sm" name="title" value="${esc(project.title)} 청구" />
-        </div>
         <div>
           <label class="label mb-1 text-xs">할인 <span class="font-normal text-muted">(선택 — 체크한 항목 공급가 기준)</span></label>
           <div class="flex gap-2">
