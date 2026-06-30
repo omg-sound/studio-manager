@@ -167,7 +167,8 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 7. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 향후 도메인별 분리 검토.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 배지·진입점 단일화·클라이언트 검색·대시보드 강화).
+> **완료(이번 세션)**: **전방위 점검(ultrawork)** — 세션 시간유실·발행알림 누락·클라이언트 삭제가드 버그수정, 죽은코드 제거(api.routes·payerField·settings managers), UX 일관성(미발행 견적서 PDF·세션 검색바·테마 토글 현재모드·클라이언트 listGroup·입금폼 라벨·캘린더 칩 상태색), notify 일원화. **청구처 청구시점 이동·용어 통일(청구처/담당 엔지니어/고객 담당자)·프로젝트 유형 폐기·연락처(담당자) 도메인**.
+> **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12), 백엔드 정리(resolveEndTime·0원 가드·죽은코드·parseMoney/timeToMin·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·청구 진입점·클라이언트 검색·대시보드).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 세션 UX(그리드·슬라이더·캘린더 뷰·청구잠금), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
 

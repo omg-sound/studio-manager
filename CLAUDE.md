@@ -55,7 +55,7 @@
 - 청구 탭 **청구 생성 폼**: **청구처 선택**(`clientCombo`, 기본값=프로젝트 자동파생값, 미선택 시 폴백 — 청구처 결정 지점) + **완료** 작업 + **청구 가능 녹음 세션**(녹음+단가+시간, 취소 제외)을 함께 체크박스로 노출 → 선택해 청구서로. **생성 즉시 발행**(폼에 안내); 발행/입금완료 인보이스의 **청구처 변경은 409 잠금**(미발행만 변경, `resolveInvoiceRefs`는 폼 선택 우선·미제공 시에만 프로젝트 폴백).
   미완료 작업은 흐리게·체크 해제(세션 완료 강제와 동일 규칙). 청구 목록 **검색**(`?q=` 제목·채번·클라이언트).
   **녹음 세션은 곡·콘텐츠/버튼 없이 직접 청구**: **완료 처리한** 녹음 세션의 예상 청구액이 청구 탭에 자동 노출(예정은 '완료 시 청구' 힌트만), 선택 시 `invoice_items.session_id` 스냅샷으로 청구(곡·콘텐츠 안 거침). 청구되면 세션 수정·삭제 잠금(`SESSION_INVOICED`), 인보이스 삭제 시 자동 미청구 복원. 관련: `listBillableSessionsForProject`·`unbilledInvoiceForm`·`createInvoiceFromTasks`(task+session 혼합)·`isSessionInvoiced`.
-- **견적서 발행 허용**: 미발행 상태 인보이스도 `?type=estimate`(견적서) PDF 발행 가능. 발행알림은 미발행→발행/입금완료 **첫 전이에만** 발송(입금완료 직행 누락 수정).
+- **견적서 발행 허용**: 미발행 상태 인보이스도 견적서 PDF 발행 가능 — **미발행 상세에 '견적서' PDF 버튼 노출**(발행/입금완료는 거래명세서·내역서·견적서 전체). 발행알림은 미발행→발행/입금완료 **첫 전이에만** 발송. **청구 탭 from-tasks 주 경로 포함** 모든 발행이 `notify.js` 공용 `notifyInvoiceIssued(inv)`로 통지(수동·자동 경로 일원화).
 - 프로젝트 삭제 시 청구된 작업·세션이 있으면 거부(`PROJECT_HAS_INVOICED`).
 - 대시보드: 미수금·이번 달 발행·연체(치프/대표만) + **오늘·이번 주 세션 카드**(`upcomingSessions`).
 - **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
@@ -117,6 +117,7 @@
 - **실결제자 검색형 콤보**: 평면 select → `clientCombo`(`<input list>`+`<datalist>`, hidden id를 app.js가 동기화·분류 병기) — 클라이언트 다수 대비. `[data-client-combo]`/`[data-contact-combo]` 공용 IIFE.
 - **UI 마무리**: 대시보드 지표 금액카드 넘침 수정(`text-lg`+좁은 화면 2열), 세션·곡콘텐츠 탭 목록↑·추가폼↓, 실결제자 필드 별도 행, 상세→목록 back 링크(`pageHeader.back`).
 - **청구처 결정을 청구 시점으로**: 프로젝트 메타에서 실결제자(청구처) 입력 제거 → 청구 생성 폼에서 선택(미선택 시 자동파생 폴백, `createInvoiceFromTasks` clientId 인자). `resolveInvoiceRefs` 덮어쓰기 버그 수정(폼 선택 우선), 발행/입금완료 청구처 변경 409 잠금, 즉시발행 안내. 용어 통일 '실결제자→청구처'·'담당자(내부)→담당 엔지니어'·'클라이언트 담당자→고객 담당자'.
+- **전방위 점검 개선(ultrawork)**: 🔴**세션 편집 시 시작/종료 유실** 수정(가용성 조회에 자기 세션 미제외 → `exclude`/`room` 전송[app.js]·편집폼 `data-session-id`·`busySessionSlots` 룸별 일치). **청구 탭(주 경로) 발행 알림 누락** → `notify.js` 공용 함수 통지. **클라이언트 삭제 가드**(발행 청구처면 409). 입금완료→발행 강등 시 `paid_amount` 리셋, 세션 `room_id` 활성 룸 검증. **죽은코드 제거**(미사용 `api.routes` 삭제·settings managers·`payerField`). UX: 미발행 견적서 PDF 버튼·세션 검색바 통일·테마 토글 현재모드 표시·클라이언트 목록 `listGroup`·입금폼 라벨('입력액으로 갱신'/'완납 처리')·빈상태 아이콘·캘린더 칩 상태색·검색 aria-label·세션 에러 `errorPage` 통일. `notifyInvoiceIssued` 일원화.
 
 ## 스택
 
@@ -280,7 +281,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 9. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 도메인별 모듈화 검토.
 10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: **청구처 결정을 청구 시점으로 이동**(메타에서 제거·청구폼 선택·발행후 409 잠금·`resolveInvoiceRefs` 버그수정·즉시발행 안내), **용어 통일**(실결제자→청구처·담당 엔지니어·고객 담당자), **프로젝트 유형 구분 폐기**(`project_type` 레거시), **연락처(담당자) 도메인**(`contacts`+`contact_affiliations` 소속이력·이직, `/contacts` 메뉴·명함아이콘·생성시 소속입력·프로젝트 고객담당자·클라이언트 직원목록), 실결제자 검색 콤보(`clientCombo`), 문서 현행화.
+> **완료(이번 세션)**: **전방위 점검(ultrawork)** — 세션 시간유실·청구 발행알림 누락·클라이언트 삭제가드 버그수정 + 죽은코드 제거(`api.routes`·`payerField`·settings managers) + UX(미발행 견적서 PDF·세션 검색바·테마 토글·클라이언트 `listGroup`·입금폼 라벨·캘린더 칩·aria) + `notifyInvoiceIssued` 일원화. **청구처 결정을 청구 시점으로 이동**(메타 제거·청구폼 선택·발행후 409 잠금·`resolveInvoiceRefs` 버그수정), **용어 통일**(실결제자→청구처·담당 엔지니어·고객 담당자), **프로젝트 유형 구분 폐기**, **연락처(담당자) 도메인**(소속이력·이직), 문서 현행화.
 > **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
