@@ -26,6 +26,20 @@ const router = express.Router();
 // 연락처(클라이언트 측 담당자) 라우트는 편집자(치프·스태프) 전용 — 대표 차단
 router.use(requireEditor);
 
+// ── Google 연락처 역방향 동기화(수동 트리거) ──
+router.post("/sync", async (req, res) => {
+  const r = await people.syncFromGoogle();
+  let flash;
+  if (r.skipped) {
+    flash = "미연동(Google 계정 연결 후 재시도)";
+  } else if (r.error) {
+    flash = `동기화 오류: ${r.error}`;
+  } else {
+    flash = `동기화 완료 — 생성 ${r.created} · 수정 ${r.updated} · 삭제 ${r.deleted}`;
+  }
+  res.redirect(`/contacts?flash=${encodeURIComponent(flash)}`);
+});
+
 // ── 목록(이름·현재소속·전화 + ?q= 검색) ──
 router.get("/", (req, res) => {
   const q = String(req.query.q || "").trim();
@@ -55,9 +69,14 @@ router.get("/", (req, res) => {
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
 
+  const syncBtn = `
+    <form method="post" action="/contacts/sync" class="inline">
+      <button class="btn-ghost btn-sm" type="submit">Google 동기화</button>
+    </form>`;
+
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "연락처", desc: "레이블/제작사 직원 · 프리 매니저 · 아티스트 지인 등 사람 마스터(소속 이력 포함).", action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
+    ${pageHeader({ title: "연락처", desc: "레이블/제작사 직원 · 프리 매니저 · 아티스트 지인 등 사람 마스터(소속 이력 포함).", action: `<div class="flex gap-2 items-center">${syncBtn}<a href="/contacts/new" class="btn-primary">+ 새 연락처</a></div>` })}
     ${searchBar}
     ${resultNote}
     ${list}`;

@@ -225,6 +225,12 @@ function setContactGoogleRef(id, resourceName, etag) {
     .run(resourceName || null, etag || null, Number(id));
 }
 
+/** google_resource_name으로 연락처 조회(역방향 동기화용). */
+function getContactByResourceName(resourceName) {
+  if (!resourceName) return null;
+  return db().prepare("SELECT * FROM contacts WHERE google_resource_name = ?").get(resourceName) || null;
+}
+
 /** 현재 소속(ended_on IS NULL, 가장 최근 1건) — 회사명·분류 조인. 무소속이면 client_* NULL. */
 function currentAffiliation(contactId) {
   return db().prepare(
@@ -1570,6 +1576,7 @@ module.exports = {
   updateContact,
   deleteContact,
   setContactGoogleRef,
+  getContactByResourceName,
   currentAffiliation,
   listAffiliations,
   addAffiliation,
