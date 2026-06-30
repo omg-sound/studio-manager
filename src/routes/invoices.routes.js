@@ -6,6 +6,8 @@ const { requireBilling, canBill } = require("../auth");
 const { INVOICE_STATUSES, normalizeInvoiceStatus, normalizeDocType, DOC_TYPES } = require("../config");
 const {
   clientOptions,
+  contactOptions,
+  ensureClientFromContact,
   listInvoices,
   getInvoiceForUser,
   listInvoiceItemsForInvoice,
@@ -35,6 +37,7 @@ function projectOptions() {
 function resolveInvoiceRefs(body) {
   const projectId = body.project_id ? Number(body.project_id) : null;
   let clientId = body.client_id ? Number(body.client_id) : null;
+  if (!clientId && body.payer_contact_id) clientId = ensureClientFromContact(Number(body.payer_contact_id)); // 담당자 선택 시 개인 청구처로 변환
 
   if (projectId) {
     const p = db().prepare("SELECT id, client_id FROM projects WHERE id = ?").get(projectId);
@@ -392,11 +395,21 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
       <option value="">프로젝트 미지정</option>
       ${projects.map((p) => `<option value="${p.id}" ${Number(inv.project_id) === p.id ? "selected" : ""}>${esc(p.title)}</option>`).join("")}
     </select>`;
+  // 청구처 콤보(클라이언트 + 담당자) — from-tasks와 동일 UX. 담당자 선택 시 payer_contact_id → ensureClientFromContact로 개인 청구처 변환.
+  const contactOpts = contactOptions();
+  const selClient = inv.client_id ? clients.find((c) => c.id === Number(inv.client_id)) : null;
   const clientSelect = `
-    <select name="client_id" class="input">
-      <option value="">청구처 자동(프로젝트 기준) / 미지정</option>
-      ${clients.map((c) => `<option value="${c.id}" ${Number(inv.client_id) === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}
-    </select>`;
+    <div data-client-combo>
+      <input type="hidden" name="client_id" value="${selClient ? selClient.id : ""}" data-client-id />
+      <input type="hidden" name="payer_contact_id" value="" data-payer-contact-id />
+      <input class="input" type="text" list="dl-inv-clients" data-client-search autocomplete="off"
+        placeholder="클라이언트·담당자 이름 일부 입력 후 선택…" value="${selClient ? esc(selClient.name + (selClient.kind ? " · " + selClient.kind : "")) : ""}" aria-label="청구처 검색" />
+      <datalist id="dl-inv-clients">
+        ${clients.map((c) => `<option value="${esc(c.name + (c.kind ? " · " + c.kind : ""))}" data-id="${c.id}"></option>`).join("")}
+        ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자${o.current_client ? " · " + esc(o.current_client) : o.phone ? " · " + esc(o.phone) : " #" + o.id}" data-contact-id="${o.id}"></option>`).join("")}
+      </datalist>
+      <p class="mt-1 text-xs text-muted">클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.</p>
+    </div>`;
   return `
     ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구" })}
     <form method="post" action="${action}" class="card space-y-4">
