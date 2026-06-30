@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireInvoice, canInvoice } = require("../auth");
+const { requireBilling, canBill } = require("../auth");
 const { INVOICE_STATUSES, normalizeInvoiceStatus, normalizeDocType, DOC_TYPES } = require("../config");
 const {
   clientOptions,
@@ -51,9 +51,9 @@ function resolveInvoiceRefs(body) {
 }
 
 // ── 목록(URL = 필터) ──
-router.get("/", requireInvoice, (req, res) => {
+router.get("/", requireBilling, (req, res) => {
   const user = req.user;
-  const admin = canInvoice(user);
+  const admin = canBill(user);
   const f = req.query.f || ""; // '', 미발행, 발행, 연체, 입금완료
   const q = (req.query.q || "").toString().trim();
   let rows;
@@ -126,12 +126,12 @@ router.get("/", requireInvoice, (req, res) => {
 });
 
 // ── 새 청구(관리자) ──
-router.get("/new", requireInvoice, (req, res) => {
+router.get("/new", requireBilling, (req, res) => {
   const prefill = req.query.projectId ? { project_id: Number(req.query.projectId) } : {};
   res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm(prefill) }));
 });
 
-router.post("/", requireInvoice, (req, res) => {
+router.post("/", requireBilling, (req, res) => {
   const b = req.body;
   const title = String(b.title || "").trim();
   if (!title) return res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm({ ...b, _err: "제목을 입력하세요." }) }));
@@ -169,10 +169,10 @@ router.post("/", requireInvoice, (req, res) => {
 });
 
 // ── 상세 ──
-router.get("/:id", requireInvoice, (req, res) => {
+router.get("/:id", requireBilling, (req, res) => {
   const inv = getInvoiceForUser(req.user, Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const admin = canInvoice(req.user);
+  const admin = canBill(req.user);
   const bal = balanceOf(inv);
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
@@ -234,7 +234,7 @@ router.get("/:id", requireInvoice, (req, res) => {
 });
 
 // ── 거래명세서 PDF (발행/입금완료 또는 견적서 타입은 미발행도 허용. PII → 인증 필수·no-store·즉석 스트리밍) ──
-router.get("/:id/statement.pdf", requireInvoice, asyncHandler(async (req, res) => {
+router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) => {
   let inv = getInvoiceForUser(req.user, Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const docType = normalizeDocType(req.query.type);
@@ -279,13 +279,13 @@ function invoiceItemsCard(items) {
 }
 
 // ── 수정(관리자) ──
-router.get("/:id/edit", requireInvoice, (req, res) => {
+router.get("/:id/edit", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm(inv, true) }));
 });
 
-router.post("/:id", requireInvoice, (req, res) => {
+router.post("/:id", requireBilling, (req, res) => {
   const id = Number(req.params.id);
   const inv = db().prepare("SELECT id, status, client_id FROM invoices WHERE id = ?").get(id);
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
@@ -328,7 +328,7 @@ router.post("/:id", requireInvoice, (req, res) => {
 });
 
 // ── 입금 처리(관리자) ──
-router.post("/:id/pay", requireInvoice, (req, res) => {
+router.post("/:id/pay", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const paid = req.body.full === "1" ? inv.amount : parseMoney(req.body.paid_amount);
@@ -354,7 +354,7 @@ router.post("/:id/pay", requireInvoice, (req, res) => {
 });
 
 // ── 상태 변경(관리자) ──
-router.post("/:id/status", requireInvoice, (req, res) => {
+router.post("/:id/status", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const status = normalizeInvoiceStatus(req.body.status);
@@ -376,7 +376,7 @@ router.post("/:id/status", requireInvoice, (req, res) => {
 });
 
 // ── 삭제(관리자) ── 연결 작업의 청구 잠금을 먼저 해제(좀비 작업 방지). data.js deleteInvoice 트랜잭션.
-router.post("/:id/delete", requireInvoice, (req, res) => {
+router.post("/:id/delete", requireBilling, (req, res) => {
   deleteInvoice(req.user, Number(req.params.id));
   res.redirect("/invoices?flash=deleted");
 });

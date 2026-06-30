@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireAuth, requireEditor, requireChief, requireInvoice, canEdit, canInvoice } = require("../auth");
+const { requireAuth, requireEditor, requireChief, requireBilling, canEdit, canBill } = require("../auth");
 const {
   TASK_GROUP_LABELS,
   TASK_STATUSES,
@@ -198,7 +198,7 @@ router.post("/:id/delete", requireChief, (req, res) => {
 
 function renderProjectDetail(req, res, p, formState = null, err = "") {
   const editable = canEdit(req.user); // 치프/스태프는 편집, 대표는 열람 전용
-  const showInvoice = canInvoice(req.user); // 청구 섹션은 치프/대표만
+  const showInvoice = canBill(req.user); // 청구 섹션=치프·대표·스태프(청구서 발행)
   const managers = editable ? listProjectManagers() : []; // 작업·세션 엔지니어 선택용(담당자 마스터)
 
   const meta = editable
@@ -426,7 +426,7 @@ router.post("/tasks/:taskId/delete", requireEditor, (req, res) => {
   }
 });
 
-router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
+router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
   try {
     const inv = createInvoiceFromTasks(req.user, {
       projectId: Number(req.params.id),

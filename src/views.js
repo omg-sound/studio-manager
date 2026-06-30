@@ -124,7 +124,7 @@ const NAV = [
   { href: "/projects", label: "프로젝트", key: "projects", access: "all", group: "ops" },
   { href: "/sessions", label: "일정", key: "sessions", access: "all", group: "ops" },
   { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "editor", group: "ops" },
-  { href: "/invoices", label: "청구", key: "invoices", access: "invoice", group: "billing" },
+  { href: "/invoices", label: "청구", key: "invoices", access: "billing", group: "billing" },
   { href: "/contacts", label: "연락처", key: "contacts", access: "editor", group: "manage" },
   { href: "/clients", label: "클라이언트", key: "clients", access: "editor", group: "manage" },
   { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
@@ -142,9 +142,11 @@ const NAV_GROUPS = [
 function navItemsFor(user) {
   const role = user && user.role;
   const canInvoice = role === "chief" || role === "owner";
+  const canBill = role === "chief" || role === "owner" || role === "staff"; // 청구서=전원(매출·정산은 invoice 유지)
   const isChief = role === "chief";
   const canEditNav = role === "chief" || role === "staff"; // 편집자(대표 제외)
   return NAV.filter((i) => {
+    if (i.access === "billing") return canBill;
     if (i.access === "invoice") return canInvoice;
     if (i.access === "chief") return isChief;
     if (i.access === "editor") return canEditNav;

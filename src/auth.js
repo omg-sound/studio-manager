@@ -144,6 +144,11 @@ function canInvoice(user) {
   return isChief(user) || isOwner(user);
 }
 
+/** 청구서(인보이스) 생성·발행·관리 권한 — 치프·대표·스태프 전원. (매출 집계·외주 정산은 canInvoice=치프·대표 유지.) */
+function canBill(user) {
+  return isChief(user) || isOwner(user) || isStaffRole(user);
+}
+
 /** 로그인 필수. 아니면 로그인 페이지로(브라우저) 또는 401(API). */
 function requireAuth(req, res, next) {
   if (req.user) return next();
@@ -173,6 +178,7 @@ const requireEditor = gate(canEdit, "권한이 없습니다(편집 권한 필요
 const requireChief = gate(isChief, "권한이 없습니다(치프 엔지니어 전용).");
 /** 치프/대표 — 청구(발행·입금·매출). */
 const requireInvoice = gate(canInvoice, "권한이 없습니다(청구 권한 필요).");
+const requireBilling = gate(canBill, "권한이 없습니다(청구 권한 필요).");
 
 // ── Google OAuth2 클라이언트 ──
 function oauthClient() {
@@ -199,9 +205,11 @@ module.exports = {
   isLoggedInRole,
   canEdit,
   canInvoice,
+  canBill,
   requireAuth,
   requireEditor,
   requireChief,
   requireInvoice,
+  requireBilling,
   oauthClient,
 };
