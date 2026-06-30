@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, syncUserToManager, findUserById } = require("../auth");
-const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, TASK_GROUPS, TASK_GROUP_LABELS, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
+const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
 const {
   listProjectManagers,
   listRooms,
@@ -160,15 +160,10 @@ function contentTab() {
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">작업 종류 <span class="text-sm font-normal text-muted">(곡·콘텐츠 후반작업)</span></h2>
-          <p class="mt-1 text-xs text-muted">곡·콘텐츠의 작업 종류(보컬튠·믹싱·마스터링 등)와 기본 단가·과금·분류를 관리합니다. '빠른추가'를 켜면 곡·콘텐츠의 빠른 추가 버튼에 노출됩니다.</p>
+          <p class="mt-1 text-xs text-muted">곡·콘텐츠의 작업 종류(보컬튠·믹싱·마스터링 등)와 기본 단가·과금을 관리합니다. '빠른추가'를 켜면 곡·콘텐츠의 빠른 추가 버튼에 노출됩니다.</p>
         </div>
         <form method="post" action="/settings/task-types" class="space-y-2 rounded-lg border border-border bg-bg p-3">
-          <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input py-1.5 text-sm" name="label" placeholder="작업 종류명 (예: 보컬튠)" required />
-            <select class="input py-1.5 text-sm" name="task_group">
-              ${TASK_GROUPS.map((g) => `<option value="${esc(g)}">${esc(TASK_GROUP_LABELS[g] || g)}</option>`).join("")}
-            </select>
-          </div>
+          <input class="input py-1.5 text-sm w-full" name="label" placeholder="작업 종류명 (예: 보컬튠)" required />
           <div class="grid gap-2 sm:grid-cols-2">
             <select class="input py-1.5 text-sm" name="billing_type">
               ${BILLING_TYPES.map((b) => `<option value="${esc(b)}">${esc(BILLING_TYPE_LABELS[b] || b)}</option>`).join("")}
@@ -652,7 +647,6 @@ function rateItemRow(r) {
 
 /** 작업 종류 카탈로그 행(삭제-only). 편집/삭제는 details 안. */
 function taskTypeRow(t) {
-  const groupLabel = TASK_GROUP_LABELS[t.task_group] || t.task_group;
   const billLabel = BILLING_TYPE_LABELS[t.billing_type] || t.billing_type;
   const priceLabel = t.unit_price ? formatKRW(t.unit_price) : "단가 미정";
   return `
@@ -661,7 +655,6 @@ function taskTypeRow(t) {
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             <span class="font-medium">${esc(t.label)}</span>
-            <span class="badge bg-bg text-muted">${esc(groupLabel)}</span>
             ${t.is_quick ? '<span class="badge bg-primary/10 text-primary">빠른추가</span>' : ""}
           </div>
           <div class="mt-0.5 text-xs text-muted">${esc(billLabel)} · ${priceLabel}</div>
@@ -670,12 +663,7 @@ function taskTypeRow(t) {
       <details class="group mt-2 border-t border-border pt-2">
         <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
         <form method="post" action="/settings/task-types/${t.id}" class="mt-2 space-y-2">
-          <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input py-1.5 text-sm" name="label" value="${esc(t.label)}" required />
-            <select class="input py-1.5 text-sm" name="task_group">
-              ${TASK_GROUPS.map((g) => `<option value="${esc(g)}" ${g === t.task_group ? "selected" : ""}>${esc(TASK_GROUP_LABELS[g] || g)}</option>`).join("")}
-            </select>
-          </div>
+          <input class="input py-1.5 text-sm w-full" name="label" value="${esc(t.label)}" required />
           <div class="grid gap-2 sm:grid-cols-2">
             <select class="input py-1.5 text-sm" name="billing_type">
               ${BILLING_TYPES.map((b) => `<option value="${esc(b)}" ${b === t.billing_type ? "selected" : ""}>${esc(BILLING_TYPE_LABELS[b] || b)}</option>`).join("")}

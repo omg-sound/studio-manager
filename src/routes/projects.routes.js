@@ -4,7 +4,6 @@ const express = require("express");
 const { db } = require("../db");
 const { requireAuth, requireEditor, requireChief, requireBilling, canEdit, canBill } = require("../auth");
 const {
-  TASK_GROUP_LABELS,
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
@@ -24,7 +23,6 @@ const {
   listRateItems,
   activeTaskTypes,
   taskTypeLabel,
-  taskTypeGroup,
   listDeliverablesForProject,
   listInvoicesForProject,
   listInvoiceItemsForInvoice,
@@ -685,12 +683,13 @@ function trackCard(track, { isAdmin, managers = [], expandTaskId = null }) {
 function trackProgressSummary(tasks) {
   if (!tasks || !tasks.length) return "";
   const order = { Pending: 0, In_Progress: 1, Completed: 2 };
-  const byGroup = {};
+  // 분류 폐기 — 작업 종류별(보컬튠·믹싱 등)로 최고 진행 상태를 요약(이전 그룹 묶음 대체).
+  const byType = {};
   for (const t of tasks) {
-    const g = taskTypeGroup(t.task_type);
-    if (byGroup[g] == null || (order[t.status] || 0) > (order[byGroup[g]] || 0)) byGroup[g] = t.status;
+    const label = taskTypeLabel(t.task_type);
+    if (byType[label] == null || (order[t.status] || 0) > (order[byType[label]] || 0)) byType[label] = t.status;
   }
-  const parts = Object.keys(byGroup).map((g) => `${TASK_GROUP_LABELS[g] || g} ${TASK_STATUS_LABELS[byGroup[g]] || byGroup[g]}`);
+  const parts = Object.keys(byType).map((label) => `${label} ${TASK_STATUS_LABELS[byType[label]] || byType[label]}`);
   return parts.length ? `<div class="mb-2 text-xs text-muted">진행: ${esc(parts.join(" · "))}</div>` : "";
 }
 
@@ -814,16 +813,12 @@ function taskQuickAdd(track) {
       <input type="hidden" name="status" value="Pending" />
       <button class="rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary" type="submit">${esc(t.label)}</button>
     </form>`;
-  const groups = {};
-  for (const t of types) (groups[t.task_group] = groups[t.task_group] || []).push(t);
-  const grouped = Object.keys(groups)
-    .map((g) => `<optgroup label="${esc(TASK_GROUP_LABELS[g] || g)}">${groups[g].map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join("")}</optgroup>`)
-    .join("");
+  const flatOptions = types.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join(""); // 분류 폐기 — optgroup 없이 평면 목록
   const other = `
     <details class="align-top">
       <summary class="cursor-pointer list-none rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary">+ 기타</summary>
       <form method="post" action="/projects/tracks/${track.id}/tasks" class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
-        <select class="input py-1.5 text-sm" name="task_type">${grouped}</select>
+        <select class="input py-1.5 text-sm" name="task_type">${flatOptions}</select>
         <input type="hidden" name="status" value="Pending" />
         <button class="btn-primary btn-xs" type="submit">추가</button>
       </form>

@@ -20,7 +20,6 @@ const {
   normalizeSessionStatus,
   normalizeRecordingCategory,
   normalizeClientKind,
-  normalizeTaskGroup,
   timeSlots,
   SESSION_START_SLOTS,
 } = require("./config");
@@ -577,11 +576,6 @@ function taskTypeLabel(key) {
   const r = taskTypeCache().byKey.get(key);
   return (r && r.label) || key;
 }
-/** key → 분류(그룹). 없으면 '기타'. */
-function taskTypeGroup(key) {
-  const r = taskTypeCache().byKey.get(key);
-  return (r && r.task_group) || "기타";
-}
 /** key → 작업 종류 기본단가(없으면 0). 작업 생성·수정 시 금액 자동 적용(청구 탭에서 조정). */
 function taskTypeUnitPrice(key) {
   const r = taskTypeCache().byKey.get(key);
@@ -598,7 +592,7 @@ function normalizeTaskTypeDb(key) {
 function taskTypeFields(input) {
   return {
     label: String(input.label || "").trim(),
-    task_group: normalizeTaskGroup(input.task_group),
+    task_group: "Post_Production", // 분류 개념 폐기 — 곡·콘텐츠 작업은 모두 후반작업(task_group은 레거시 컬럼으로만 보존)
     billing_type: normalizeBillingType(input.billing_type),
     unit_price: parseWon(input.unit_price),
     is_quick: input.is_quick ? 1 : 0,
@@ -1768,7 +1762,6 @@ module.exports = {
   listTaskTypes,
   activeTaskTypes,
   taskTypeLabel,
-  taskTypeGroup,
   createTaskType,
   updateTaskType,
   deleteTaskType,
