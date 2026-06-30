@@ -823,6 +823,14 @@ function setStudioHours(start, end) {
   setState("studio_hours_end", cleanTime(end) || null);
 }
 
+/** 기본 예약 담당자(이름) — 세션 폼에서 예약 담당자 기본 선택. 미설정이면 null. */
+function getDefaultBooker() {
+  return getState("default_booker") || null;
+}
+function setDefaultBooker(name) {
+  setState("default_booker", String(name || "").trim() || null);
+}
+
 /** 운영시간 기반 30분 시작 슬롯 배열(예약 그리드). 무효/역전 범위면 기본 그리드(SESSION_START_SLOTS). */
 function studioStartSlots() {
   const { start, end } = getStudioHours();
@@ -1421,6 +1429,8 @@ module.exports = {
   setStudioLogo,
   getStudioHours,
   setStudioHours,
+  getDefaultBooker,
+  setDefaultBooker,
   studioStartSlots,
   ensureInvoiceNumber,
   invoiceStats,

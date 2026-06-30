@@ -5,7 +5,7 @@
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, studioStartSlots } = require("./data");
+const { listRooms, studioStartSlots, getDefaultBooker } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -28,9 +28,9 @@ function roomSelect(rooms, currentId) {
 }
 
 /** 담당자 마스터 선택지. 현재값이 목록에 없으면 보존용으로 추가. 예약 담당자·담당 엔지니어 공용. */
-function managerOptions(managers, current, placeholder = "담당자 미지정") {
+function managerOptions(managers, current, placeholder = "담당자 미지정", { allowEmpty = true } = {}) {
   const names = managers.map((m) => m.name);
-  const out = [`<option value="">${esc(placeholder)}</option>`];
+  const out = allowEmpty ? [`<option value="">${esc(placeholder)}</option>`] : []; // allowEmpty=false면 '미지정' 옵션 없음
   if (current && !names.includes(current)) {
     out.push(`<option value="${esc(current)}" selected>${esc(current)} (목록 외)</option>`);
   }
@@ -147,7 +147,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms) {
       <div><label class="label-sm">날짜</label>
         <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date required /></div>
       <div><label class="label-sm">예약 담당자</label>
-        <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || "", "예약 담당자 미지정")}</select></div>
+        <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || getDefaultBooker() || "", "", { allowEmpty: false })}</select></div>
       <div><label class="label-sm">상태</label>
         <select class="input py-1.5 text-sm" name="status">${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}</select></div>
     </div>

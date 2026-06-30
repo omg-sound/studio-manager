@@ -23,6 +23,8 @@ const {
   setStudioLogo,
   getStudioHours,
   setStudioHours,
+  getDefaultBooker,
+  setDefaultBooker,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron } = require("../views");
 const { asyncHandler } = require("../lib/async");
@@ -42,7 +44,10 @@ function isBootstrapChief(user) {
 }
 
 function listUsers() {
-  return db().prepare("SELECT * FROM users ORDER BY active DESC, role, email").all();
+  // 연계된 작업 담당자(project_managers)의 전화를 함께 — 하우스 엔지니어 정보 수정 폼에 표시
+  return db().prepare(`SELECT u.*, pm.phone AS mgr_phone FROM users u
+       LEFT JOIN project_managers pm ON pm.user_id = u.id
+       ORDER BY u.active DESC, u.role, u.email`).all();
 }
 
 const SETTINGS_TABS = [
@@ -60,7 +65,7 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = (await studioCalendarSection()) + roomsSection() + studioHoursSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 룸 + 운영시간 + 공급자 + 알림
+  else tabContent = (await studioCalendarSection()) + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 알림
 
   const body = `
     ${flashBanner(req.query)}
@@ -265,6 +270,26 @@ function studioHoursSection() {
     </section>`;
 }
 
+/** 기본 예약 담당자 — 세션 예약 폼에서 예약 담당자로 기본 선택될 담당자(이름). */
+function defaultBookerSection() {
+  const cur = getDefaultBooker() || "";
+  const managers = listProjectManagers();
+  return `
+    <section class="card space-y-4">
+      <div>
+        <h2 class="font-display text-lg font-semibold">기본 예약 담당자</h2>
+        <p class="mt-1 text-xs text-muted">새 세션 예약 폼에서 '예약 담당자'로 기본 선택됩니다.</p>
+      </div>
+      <form method="post" action="/settings/default-booker" class="flex flex-wrap items-end gap-2">
+        <select class="input py-1.5 text-sm" name="default_booker">
+          <option value="">지정 안 함</option>
+          ${managers.map((m) => `<option value="${esc(m.name)}" ${m.name === cur ? "selected" : ""}>${esc(m.name)}</option>`).join("")}
+        </select>
+        <button class="btn-primary btn-sm shrink-0" type="submit">저장</button>
+      </form>
+    </section>`;
+}
+
 /** 공급자(스튜디오) 세금정보 — 거래명세서 PDF의 '공급자'란. */
 function studioInfoSection() {
   const s = getStudioInfo();
@@ -344,6 +369,10 @@ router.post("/studio-logo", requireChief, logoUpload.single("logo"), (req, res) 
     if (!checkMagicBytes(f.buffer, mime)) return res.status(400).send("PNG 또는 JPG 이미지만 업로드할 수 있습니다.");
     setStudioLogo(`data:${mime};base64,${f.buffer.toString("base64")}`);
   }
+  res.redirect("/settings?tab=settings&flash=saved");
+});
+router.post("/default-booker", requireChief, (req, res) => {
+  setDefaultBooker(req.body.default_booker);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 router.post("/studio-logo/delete", requireChief, (req, res) => {
@@ -426,6 +455,17 @@ router.post("/users/:id/delete", requireChief, (req, res) => {
     db().prepare("DELETE FROM users WHERE id = ?").run(id);
   }
   res.redirect("/settings?flash=deleted");
+});
+
+// 하우스 엔지니어 정보 수정(이름·전화) — 이름은 users + 작업 담당자 동기화, 전화는 작업 담당자 행에 저장.
+router.post("/users/:id/edit", requireChief, (req, res) => {
+  const id = Number(req.params.id);
+  const name = String(req.body.name || "").trim();
+  if (name) db().prepare("UPDATE users SET name = ? WHERE id = ?").run(name, id);
+  syncUserToManager(findUserById(id)); // users.name·email·active → 작업 담당자(project_managers) 동기화
+  const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ?").get(id);
+  if (mgr) db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(String(req.body.phone || "").trim() || null, mgr.id);
+  res.redirect("/settings?tab=people&flash=saved");
 });
 
 // ── 단가표(과금 항목) 관리 ──
@@ -524,6 +564,14 @@ function userRow(u, currentUser) {
           ${del}
         </div>
       </div>
+      <details class="mt-2">
+        <summary class="cursor-pointer text-xs text-muted hover:text-fg">정보 수정 (이름 · 전화)</summary>
+        <form method="post" action="/settings/users/${u.id}/edit" class="mt-2 grid gap-2 sm:grid-cols-2">
+          <input class="input py-1.5 text-sm" name="name" value="${esc(u.name || "")}" placeholder="이름 (표시명)" />
+          <input class="input py-1.5 text-sm" name="phone" value="${esc(u.mgr_phone || "")}" placeholder="전화" />
+          <button class="btn-primary btn-sm sm:col-span-2" type="submit">저장</button>
+        </form>
+      </details>
     </div>`;
 }
 
