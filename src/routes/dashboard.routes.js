@@ -25,7 +25,7 @@ router.get("/", requireAuth, (req, res) => {
   const statCard = (label, value, sub = "") => `
     <div class="card border-l-2 [border-left-color:rgb(var(--color-primary))]">
       <div class="text-sm text-muted">${esc(label)}</div>
-      <div class="mt-1 font-display text-2xl font-bold tabular">${esc(String(value))}</div>
+      <div class="mt-1 font-display text-xl font-bold tabular">${esc(String(value))}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 
@@ -50,7 +50,7 @@ router.get("/", requireAuth, (req, res) => {
   const moneyCard = (label, amount, danger = false, sub = "") => `
     <div class="card border-l-2 ${danger ? "[border-left-color:rgb(var(--color-danger))]" : "[border-left-color:rgb(var(--color-success))]"}">
       <div class="text-sm text-muted">${esc(label)}</div>
-      <div class="mt-1 font-display text-2xl font-bold tabular ${danger && amount > 0 ? "text-danger" : ""}">${formatKRW(amount)}</div>
+      <div class="mt-1 font-display text-xl font-bold tabular ${danger && amount > 0 ? "text-danger" : ""}">${formatKRW(amount)}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 

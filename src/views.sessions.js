@@ -277,8 +277,8 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
         <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
       </summary>
       <div class="mt-3 space-y-3 border-t border-border pt-3">
-        ${isAdmin ? sessionCreateForm(project, managers, rateItems, roomList) : ""}
         <div class="space-y-2">${list}</div>
+        ${isAdmin ? `<div class="border-t border-border pt-3"><div class="mb-2 text-sm font-medium text-muted">새 세션 추가</div>${sessionCreateForm(project, managers, rateItems, roomList)}</div>` : ""}
       </div>
     </details>`;
   }
@@ -287,8 +287,8 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
       <div class="flex items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
       </div>
-      ${isAdmin ? sessionCreateForm(project, managers, rateItems, roomList) : ""}
       <div class="space-y-2">${list}</div>
+      ${isAdmin ? `<div class="border-t border-border pt-3"><div class="mb-2 text-sm font-medium text-muted">새 세션 추가</div>${sessionCreateForm(project, managers, rateItems, roomList)}</div>` : ""}
     </section>`;
 }
 
