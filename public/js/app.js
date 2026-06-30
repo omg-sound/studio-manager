@@ -357,17 +357,35 @@
     var search = wrap.querySelector("[data-client-search], [data-contact-search]");
     var hidden = wrap.querySelector("[data-client-id], [data-contact-id]");
     var listEl = search ? document.getElementById(search.getAttribute("list")) : null;
+    var info = wrap.querySelector("[data-contact-info]"); // 고객측 담당자 콤보에만 있음(전화·이메일·소속 표시)
     if (!search || !hidden || !listEl) return;
     function sync() {
       var v = search.value.trim();
-      var id = "";
+      var id = "", matched = null;
       for (var i = 0; i < listEl.options.length; i++) {
-        if (listEl.options[i].value === v) { id = listEl.options[i].getAttribute("data-id") || ""; break; }
+        if (listEl.options[i].value === v) { matched = listEl.options[i]; id = matched.getAttribute("data-id") || ""; break; }
       }
       hidden.value = id;
+      if (info) {
+        if (matched) {
+          var parts = [];
+          var ph = matched.getAttribute("data-phone"); if (ph) parts.push("☎ " + ph);
+          var em = matched.getAttribute("data-email"); if (em) parts.push("✉ " + em);
+          var cl = matched.getAttribute("data-client"); if (cl) parts.push("소속: " + cl);
+          info.textContent = parts.join("   ·   ");
+          info.classList.toggle("hidden", parts.length === 0);
+        } else if (v) {
+          info.textContent = "목록에 없는 이름 — 저장 시 새 연락처로 등록됩니다.";
+          info.classList.remove("hidden");
+        } else {
+          info.textContent = "";
+          info.classList.add("hidden");
+        }
+      }
     }
     search.addEventListener("input", sync);
     search.addEventListener("change", sync);
     search.addEventListener("blur", sync);
+    sync(); // 초기 로드 시 기존 선택값 정보 표시
   });
 })();

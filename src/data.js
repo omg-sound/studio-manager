@@ -238,7 +238,7 @@ function deleteAffiliation(affId) {
 /** 콤보용: 연락처 + 현재 소속 회사명(라벨 병기). */
 function contactOptions() {
   return db().prepare(
-    `SELECT ct.id, ct.name, ct.phone,
+    `SELECT ct.id, ct.name, ct.phone, ct.email,
             (SELECT c.name FROM contact_affiliations a LEFT JOIN clients c ON c.id = a.client_id
               WHERE a.contact_id = ct.id AND a.ended_on IS NULL
               ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS current_client
@@ -329,6 +329,7 @@ function listRateItems({ includeInactive = false } = {}) {
 function createRateItem(input = {}) {
   const f = rateFields(input);
   if (!f.name) throw new Error("RATE_NAME_REQUIRED");
+  if (!f.base_price && !f.extra_price) throw new Error("RATE_PRICE_REQUIRED"); // 기준가·초과가 모두 0인 단가 항목 생성 방지
   const info = db()
     .prepare(
       `INSERT INTO rate_items (name, category, base_minutes, base_price, extra_minutes, extra_price, active)
@@ -341,6 +342,7 @@ function createRateItem(input = {}) {
 function updateRateItem(id, input = {}) {
   const f = rateFields(input);
   if (!f.name) throw new Error("RATE_NAME_REQUIRED");
+  if (!f.base_price && !f.extra_price) throw new Error("RATE_PRICE_REQUIRED"); // 기준가·초과가 모두 0인 단가 항목 생성 방지
   db()
     .prepare(
       `UPDATE rate_items SET name=@name, category=@category, base_minutes=@base_minutes, base_price=@base_price,
@@ -969,24 +971,6 @@ function deleteInvoice(user, id) {
 function dashboardStats(user) {
   const d = db();
   const total = d.prepare("SELECT COUNT(*) AS n FROM projects").get().n;
-  const today = todayYmd();
-  // '다가오는 마감'은 오늘 이후만. 지난 마감은 별도 '지연' 목록으로 분리(임박 항목이 밀리지 않게).
-  const upcoming = d
-    .prepare(
-      `SELECT p.*, c.name AS client_name FROM projects p
-       LEFT JOIN clients c ON c.id = p.client_id
-       WHERE p.due_date IS NOT NULL AND p.due_date <> '' AND p.due_date >= @today
-       ORDER BY p.due_date ASC LIMIT 5`
-    )
-    .all({ today });
-  const overdue = d
-    .prepare(
-      `SELECT p.*, c.name AS client_name FROM projects p
-       LEFT JOIN clients c ON c.id = p.client_id
-       WHERE p.due_date IS NOT NULL AND p.due_date <> '' AND p.due_date < @today
-       ORDER BY p.due_date DESC LIMIT 5`
-    )
-    .all({ today });
   const showInvoices = canInvoice(user);
   const showClients = isChief(user);
   return {
@@ -994,8 +978,6 @@ function dashboardStats(user) {
     isChief: showClients,
     total,
     clients: showClients ? d.prepare("SELECT COUNT(*) AS n FROM clients").get().n : null,
-    upcoming,
-    overdue,
     invoices: showInvoices ? invoiceStats(user) : null,
   };
 }

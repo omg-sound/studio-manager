@@ -37,12 +37,13 @@ const {
   updateTask,
   deleteTask,
   createInvoiceFromTasks,
+  createContact,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, listGroup, listRow } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
-const { isValidYmd, formatYmdShort, todayYmd, ddayLabel } = require("../lib/date");
+const { isValidYmd, formatYmdShort, todayYmd } = require("../lib/date");
 const { notifyInvoiceIssued } = require("../notify");
 
 const router = express.Router();
@@ -70,6 +71,14 @@ function resolveAutoClientId(b) {
 function toArray(value) {
   if (value == null || value === "") return [];
   return Array.isArray(value) ? value : [value];
+}
+
+/** 고객측 담당자: contact_id(목록에서 선택) 우선, 없고 contact_name(목록 외 새 이름)만 있으면 이름으로 새 연락처 생성·연결. */
+function resolveContactId(b) {
+  if (b.contact_id) return Number(b.contact_id);
+  const name = String(b.contact_name || "").trim();
+  if (!name) return null;
+  return createContact({ name });
 }
 
 // ── 목록(URL = 필터; 플레이북2 §3.7) ──
@@ -127,8 +136,7 @@ function projectListRow(p) {
   const amount = projectAmount(p)
     ? `<div class="text-sm font-medium tabular">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
-  const dueLine = p.due_date ? `<div class="mt-0.5 text-xs text-muted tabular">${esc(ddayLabel(p.due_date))}</div>` : "";
-  return listRow({ href: `/projects/${p.id}`, left, right: `${amount}${dueLine}` });
+  return listRow({ href: `/projects/${p.id}`, left, right: amount });
 }
 
 // ── 새 프로젝트 폼(관리자) — 유형 구분 없음(모든 신규=세션 취급) ──
@@ -144,8 +152,8 @@ router.post("/", requireEditor, (req, res) => {
   if (!title) return res.send(layout({ title: "새 프로젝트", user: req.user, current: "/projects", body: projectForm({ ...b, project_type: type, _err: "프로젝트 명을 입력하세요." }) }));
   const info = db()
     .prepare(
-      `INSERT INTO projects (title, project_type, artist, artist_company, production_company, client_id, manager_id, contact_id, due_date, memo)
-       VALUES (@title, @project_type, @artist, @artist_company, @production_company, @client_id, @manager_id, @contact_id, @due_date, @memo)`
+      `INSERT INTO projects (title, project_type, artist, artist_company, production_company, client_id, manager_id, contact_id, memo)
+       VALUES (@title, @project_type, @artist, @artist_company, @production_company, @client_id, @manager_id, @contact_id, @memo)`
     )
     .run({
       title,
@@ -155,8 +163,7 @@ router.post("/", requireEditor, (req, res) => {
       production_company: String(b.production_company || "").trim() || null,
       client_id: null,
       manager_id: b.manager_id ? Number(b.manager_id) : null,
-      contact_id: b.contact_id ? Number(b.contact_id) : null,
-      due_date: cleanYmd(b.due_date),
+      contact_id: resolveContactId(b),
       memo: String(b.memo || "").trim() || null,
     });
   ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
@@ -268,13 +275,12 @@ function projectMetaLine(p) {
   const amount = projectAmount(p)
     ? `<div class="text-sm font-semibold">${formatKRW(projectAmount(p))}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
-  const dueLine = p.due_date ? `<div class="mt-0.5 text-xs text-muted">${esc(ddayLabel(p.due_date))}</div>` : "";
-  return { left: esc(left), amount, dueLine };
+  return { left: esc(left), amount };
 }
 
 /** 클라이언트(읽기 전용) 메타 카드. */
 function projectMetaReadonly(p) {
-  const { left, amount, dueLine } = projectMetaLine(p);
+  const { left, amount } = projectMetaLine(p);
   const extra = [
     p.artist_company ? `소속사 ${esc(p.artist_company)}` : "",
     p.production_company ? `제작사 ${esc(p.production_company)}` : "",
@@ -283,7 +289,7 @@ function projectMetaReadonly(p) {
     <div class="card">
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0 text-sm text-muted">${left}</div>
-        <div class="shrink-0 text-right">${amount}${dueLine}</div>
+        <div class="shrink-0 text-right">${amount}</div>
       </div>
       ${extra ? `<div class="mt-1 text-xs text-muted">${extra}</div>` : ""}
       ${p.memo ? `<div class="mt-2 whitespace-pre-wrap border-t border-border pt-2 text-sm">${esc(p.memo)}</div>` : ""}
@@ -333,7 +339,7 @@ router.post("/:id", requireEditor, (req, res) => {
     .prepare(
       `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
        production_company=@production_company, client_id=@client_id, manager_id=@manager_id,
-       contact_id=@contact_id, due_date=@due_date, memo=@memo WHERE id=@id`
+       contact_id=@contact_id, memo=@memo WHERE id=@id`
     )
     .run({
       id,
@@ -343,8 +349,7 @@ router.post("/:id", requireEditor, (req, res) => {
       production_company: String(b.production_company || "").trim() || null,
       client_id: resolveAutoClientId(b),
       manager_id: b.manager_id ? Number(b.manager_id) : null,
-      contact_id: b.contact_id ? Number(b.contact_id) : null,
-      due_date: cleanYmd(b.due_date),
+      contact_id: resolveContactId(b),
       memo: String(b.memo || "").trim() || null,
     });
   res.redirect(`/projects/${id}?flash=saved`);
@@ -470,16 +475,12 @@ function projectForm(p = {}, err = "") {
         </div>
       </div>
       <div>
-        <label class="label">고객 담당자</label>
+        <label class="label">고객측 담당자</label>
         ${contactCombo(p.contact_id)}
       </div>
       <div>
         <label class="label">담당 엔지니어</label>
         ${managerSelect(p.manager_id)}
-      </div>
-      <div>
-        <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
-        <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
       </div>
       <div>
         <label class="label">메모</label>
@@ -518,16 +519,12 @@ function projectEditForm(p = {}, err = "") {
         </div>
       </div>
       <div>
-        <label class="label">고객 담당자</label>
+        <label class="label">고객측 담당자</label>
         ${contactCombo(p.contact_id)}
       </div>
       <div>
         <label class="label">담당 엔지니어</label>
         ${managerSelect(p.manager_id)}
-      </div>
-      <div>
-        <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
-        <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
       </div>
       <div>
         <label class="label">메모</label>
@@ -572,11 +569,6 @@ function clientCombo(selectedId) {
     </div>`;
 }
 
-/** 클라이언트 담당자 콤보 라벨: "이름 · 소속"(소속으로 동명 구분). 소속 없으면 이름만. */
-function contactComboLabel(o) {
-  return o.current_client ? `${o.name} · ${o.current_client}` : o.name;
-}
-
 /**
  * 클라이언트 담당자(연락처) 검색형 콤보박스: clientCombo와 동일 패턴.
  * <input list>+<datalist>로 이름 일부만 입력해 필터, 선택값은 hidden contact_id로 app.js([data-contact-combo])가 동기화.
@@ -585,15 +577,17 @@ function contactComboLabel(o) {
 function contactCombo(selectedId) {
   const opts = contactOptions();
   const sel = selectedId ? opts.find((o) => o.id === Number(selectedId)) : null;
+  // 선택 시 app.js가 전화·이메일·소속을 [data-contact-info]에 채운다. 목록에 없는 이름은 저장 시 새 연락처로 등록(E).
   return `
     <div data-contact-combo>
       <input type="hidden" name="contact_id" value="${sel ? sel.id : ""}" data-contact-id />
-      <input class="input" type="text" list="dl-contacts" data-contact-search autocomplete="off"
-        placeholder="이름 일부 입력 후 선택…" value="${sel ? esc(contactComboLabel(sel)) : ""}" aria-label="고객 담당자 검색" />
+      <input class="input" type="text" name="contact_name" list="dl-contacts" data-contact-search autocomplete="off"
+        placeholder="이름 입력 — 목록에서 선택하거나 새 이름" value="${sel ? esc(sel.name) : ""}" aria-label="고객측 담당자 검색" />
       <datalist id="dl-contacts">
-        ${opts.map((o) => `<option value="${esc(contactComboLabel(o))}" data-id="${o.id}"></option>`).join("")}
+        ${opts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
       </datalist>
-      <p class="mt-1 text-xs text-muted">이름 일부만 입력해도 좁혀집니다. 비워 두면 미연결.</p>
+      <div class="mt-1.5 hidden text-xs text-muted" data-contact-info></div>
+      <p class="mt-1 text-xs text-muted">목록에 없는 이름을 입력하면 저장 시 <span class="text-fg">새 연락처</span>로 등록됩니다. 비워 두면 미연결.</p>
     </div>`;
 }
 

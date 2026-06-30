@@ -106,8 +106,8 @@ app.use((req, res, next) => {
 });
 
 app.use(cookieParser());
-app.use(express.urlencoded({ extended: true })); // 클래식 폼 POST
-app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: "1mb" })); // 클래식 폼 POST
+app.use(express.json({ limit: "1mb" }));
 
 // 모든 요청에 req.user 부착(라우트 차단은 각 라우트의 미들웨어가 담당)
 app.use(attachUser);

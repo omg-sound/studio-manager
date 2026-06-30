@@ -433,7 +433,7 @@ router.post("/rate-items", requireChief, (req, res) => {
   try {
     createRateItem(req.body);
   } catch (e) {
-    if (e.message !== "RATE_NAME_REQUIRED") throw e;
+    if (!["RATE_NAME_REQUIRED", "RATE_PRICE_REQUIRED"].includes(e.message)) throw e; // 이름·가격 누락은 조용히 생성 안 함
   }
   res.redirect("/settings?tab=content&flash=saved");
 });
@@ -442,7 +442,7 @@ router.post("/rate-items/:id", requireChief, (req, res) => {
   try {
     updateRateItem(Number(req.params.id), req.body);
   } catch (e) {
-    if (e.message !== "RATE_NAME_REQUIRED") throw e;
+    if (!["RATE_NAME_REQUIRED", "RATE_PRICE_REQUIRED"].includes(e.message)) throw e; // 이름·가격 누락은 조용히 생성 안 함
   }
   res.redirect("/settings?tab=content&flash=saved");
 });

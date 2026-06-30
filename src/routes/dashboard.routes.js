@@ -3,8 +3,8 @@
 const express = require("express");
 const { requireAuth } = require("../auth");
 const { dashboardStats, upcomingSessions } = require("../data");
-const { layout, pageHeader, esc, serviceBadges, formatKRW, emptyState } = require("../views");
-const { ddayLabel, todayYmd, formatYmdShort } = require("../lib/date");
+const { layout, pageHeader, esc, formatKRW, emptyState } = require("../views");
+const { todayYmd, formatYmdShort } = require("../lib/date");
 
 const router = express.Router();
 
@@ -29,24 +29,6 @@ router.get("/", requireAuth, (req, res) => {
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 
-  const upcomingList = s.upcoming.length
-    ? s.upcoming
-        .map(
-          (p) => `
-      <a href="/projects/${p.id}" class="row-link flex items-center justify-between gap-3 border-b border-border py-3 last:border-0">
-        <div class="min-w-0">
-          <div class="truncate font-medium">${esc(p.title)}</div>
-          <div class="mt-1 flex flex-wrap gap-1">${serviceBadges(p)}</div>
-          <div class="text-xs text-muted">${esc(p.client_name || "청구처 미지정")}</div>
-        </div>
-        <div class="flex shrink-0 items-center gap-2">
-          <span class="text-xs tabular text-muted">${esc(ddayLabel(p.due_date))}</span>
-        </div>
-      </a>`
-        )
-        .join("")
-    : emptyState("임박한 마감이 없습니다.");
-
   const moneyCard = (label, amount, danger = false, sub = "") => `
     <div class="card border-l-2 ${danger ? "[border-left-color:rgb(var(--color-danger))]" : "[border-left-color:rgb(var(--color-success))]"}">
       <div class="text-sm text-muted">${esc(label)}</div>
@@ -70,7 +52,6 @@ router.get("/", requireAuth, (req, res) => {
   }
   cardItems.push(statCard("프로젝트", s.total));
   if (s.isChief) cardItems.push(statCard("클라이언트", s.clients));
-  if (!s.canInvoice) cardItems.push(statCard("임박한 마감", s.upcoming.length));
   const cols = cardItems.length >= 4 ? "lg:grid-cols-4" : cardItems.length === 3 ? "lg:grid-cols-3" : "";
   const cards = `<div class="grid grid-cols-2 gap-3 ${cols}">${cardItems.join("")}</div>`;
 
@@ -105,10 +86,6 @@ router.get("/", requireAuth, (req, res) => {
         <span class="text-xs text-muted">오늘 ${todaySessions.length}건 · 이번 주 ${weekSessions.length}건</span>
       </div>
       ${sessionList}
-    </div>
-    <div class="card mt-4">
-      <h2 class="mb-2 font-display text-base font-semibold">임박한 마감</h2>
-      ${upcomingList}
     </div>`;
 
   res.send(layout({ title: "대시보드", user, current: "/", body }));
