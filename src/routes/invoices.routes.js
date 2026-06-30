@@ -157,7 +157,7 @@ router.post("/", requireBilling, (req, res) => {
       client_id: refs.clientId,
       title,
       amount,
-      tax: Math.round(amount - amount / 1.1), // VAT 포함 총액에서 부가세 역산(공급가=amount/1.1)
+      tax: b.vat_included != null ? Math.round(amount - amount / 1.1) : 0, // 부가세 포함 체크 시 역산, 현금(미포함)이면 0
       discount,
       paid,
       status,
@@ -316,7 +316,7 @@ router.post("/:id", requireBilling, (req, res) => {
       client_id: refs.clientId,
       title,
       amount,
-      tax: Math.round(amount - amount / 1.1), // VAT 포함 총액에서 부가세 역산
+      tax: b.vat_included != null ? Math.round(amount - amount / 1.1) : 0, // 부가세 포함 체크 시 역산, 현금(미포함)이면 0
       discount,
       paid,
       status,
@@ -406,9 +406,12 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
       <div><label class="label">프로젝트</label>${projSelect}</div>
       <div><label class="label">청구처(프로젝트 선택 시 자동)</label>${clientSelect}</div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">총액(원) <span class="font-normal text-muted text-xs">VAT 포함</span></label><input class="input" name="amount" inputmode="numeric" value="${inv.amount ? esc(String(inv.amount)) : ""}" placeholder="0" /></div>
+        <div><label class="label">총액(원) <span class="font-normal text-muted text-xs">입력 금액 기준</span></label><input class="input" name="amount" inputmode="numeric" value="${inv.amount ? esc(String(inv.amount)) : ""}" placeholder="0" /></div>
         <div><label class="label">할인(원) <span class="font-normal text-muted text-xs">선택 — 표시용</span></label><input class="input" name="discount_amount" inputmode="numeric" value="${inv.discount_amount ? esc(String(inv.discount_amount)) : ""}" placeholder="0" /></div>
       </div>
+      <label class="flex items-center gap-1.5 text-sm">
+        <input type="checkbox" name="vat_included" value="1" ${isEdit && inv.amount > 0 && (inv.tax_amount || 0) === 0 ? "" : "checked"} /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 현금 거래(VAT 0, 총액 전체가 공급가)</span>
+      </label>
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div>
       </div>

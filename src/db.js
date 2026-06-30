@@ -5,6 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { config, TASK_TYPES } = require("./config");
 const { openDatabase } = require("./sqlite");
+const { splitKoreanName } = require("./lib/korean-name");
 
 let _db = null;
 
@@ -286,6 +287,7 @@ function init() {
   addColumn("clients", "biz_no", "TEXT");      // 사업자등록번호
   addColumn("clients", "owner_name", "TEXT");  // 대표자명
   addColumn("clients", "address", "TEXT");     // 사업장 주소
+  addColumn("clients", "source_contact_id", "INTEGER"); // 담당자(연락처)를 청구처로 변환 시 출처 contact — 동명이인 병합 방지
   // 거래처 외부 열람(client) 폐기 → 잔여 client 계정은 비활성화(로그인 차단).
   try {
     d.exec("UPDATE users SET active = 0 WHERE role = 'client'");
@@ -409,14 +411,34 @@ function init() {
   // 멱등: contact_id가 이미 있는 행은 건너뜀.
   if (!getState("manager_contacts_backfill_v1")) {
     const managers = d.prepare("SELECT id, name, phone, email FROM project_managers WHERE active = 1 AND contact_id IS NULL").all();
-    const insContact = d.prepare("INSERT INTO contacts (name, phone, email) VALUES (?, ?, ?)");
+    const insContact = d.prepare("INSERT INTO contacts (name, family_name, given_name, phone, email) VALUES (?, ?, ?, ?, ?)");
     const updMgr = d.prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?");
     for (const m of managers) {
       if (!m.name || !String(m.name).trim()) continue;
-      const info = insContact.run(m.name, m.phone || null, m.email || null);
+      const { family, given } = splitKoreanName(m.name); // 담당자 이름 → 성·이름 자동 분리
+      const info = insContact.run(m.name, family || null, given || null, m.phone || null, m.email || null);
       updMgr.run(info.lastInsertRowid, m.id);
     }
     setState("manager_contacts_backfill_v1", "done");
+  }
+
+  // 기존 연락처 중 성·이름이 둘 다 비어있는 행을 표시명(name)으로 1회 백필(splitKoreanName).
+  // manager_contacts_backfill 뒤에 둬서 새로 만든 담당자 연락처(이미 성·이름 채워짐)는 자연히 건너뛴다.
+  if (!getState("contact_family_name_backfill_v1")) {
+    const rows = d
+      .prepare(
+        `SELECT id, name FROM contacts
+          WHERE name IS NOT NULL AND TRIM(name) <> ''
+            AND (family_name IS NULL OR TRIM(family_name) = '')
+            AND (given_name IS NULL OR TRIM(given_name) = '')`
+      )
+      .all();
+    const upd = d.prepare("UPDATE contacts SET family_name = ?, given_name = ? WHERE id = ?");
+    for (const r of rows) {
+      const { family, given } = splitKoreanName(r.name);
+      if (family || given) upd.run(family || null, given || null, r.id);
+    }
+    setState("contact_family_name_backfill_v1", "done");
   }
 
   // ── 후속 단계 테이블 자리(스키마만; 아직 미사용) ──

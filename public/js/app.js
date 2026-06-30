@@ -478,34 +478,42 @@
   });
 })();
 
-// 곡·콘텐츠 작업 폼 자동저장([data-task-form]): 입력 변경 시 디바운스 후 저장(저장 버튼 없음). 응답으로 헤더 금액·상태 배지 갱신.
+// 곡·콘텐츠 작업 폼 자동저장([data-task-form]): 입력 변경 시 디바운스 후 저장. progressive-enhancement(JS 등록 성공 시 제출 버튼 숨김·실패 시 폴백 유지).
 (function () {
   "use strict";
-  var forms = document.querySelectorAll("[data-task-form]");
-  if (!forms.length) return;
-  Array.prototype.forEach.call(forms, function (form) {
-    var details = form.closest("details");
-    var amountEl = details && details.querySelector("[data-row-amount]");
-    var statusEl = details && details.querySelector("[data-row-status]");
-    var state = form.querySelector("[data-save-state]");
-    var timer = null;
-    function save() {
-      if (state) state.textContent = "저장 중…";
-      fetch(form.getAttribute("action"), { method: "POST", body: new FormData(form), headers: { "X-Requested-With": "fetch" } })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-        .then(function (j) {
-          if (amountEl && j.amount != null) amountEl.textContent = j.amount;
-          if (statusEl) { if (j.statusLabel != null) statusEl.textContent = j.statusLabel; if (j.statusCls) statusEl.className = "badge " + j.statusCls; }
-          if (state) { state.textContent = "저장됨"; setTimeout(function () { if (state.textContent === "저장됨") state.textContent = ""; }, 1500); }
-        })
-        .catch(function () { if (state) state.textContent = "저장 실패 — 잠시 후 다시"; });
-    }
-    function schedule() { clearTimeout(timer); timer = setTimeout(save, 700); }
-    form.addEventListener("input", schedule);
-    form.addEventListener("change", function (e) {
-      if (e.target && e.target.tagName === "SELECT") { clearTimeout(timer); save(); } else schedule(); // select(종류·담당·상태)는 즉시, 텍스트는 디바운스
+  try {
+    var forms = document.querySelectorAll("[data-task-form]");
+    if (!forms.length) return;
+    Array.prototype.forEach.call(forms, function (form) {
+      var details = form.closest("details");
+      var amountEl = details && details.querySelector("[data-row-amount]");
+      var statusEl = details && details.querySelector("[data-row-status]");
+      var state = form.querySelector("[data-save-state]");
+      var btn = form.querySelector("[data-task-save-btn]");
+      var timer = null, ctrl = null, reqId = 0;
+      function save() {
+        if (state) state.textContent = "저장 중…";
+        if (ctrl) ctrl.abort(); // 직전 in-flight 요청 취소(race 방지)
+        ctrl = new AbortController();
+        var myId = ++reqId;
+        fetch(form.getAttribute("action"), { method: "POST", body: new FormData(form), headers: { "X-Requested-With": "fetch" }, signal: ctrl.signal })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+          .then(function (j) {
+            if (myId !== reqId) return; // 더 최신 저장이 진행 중이면 stale 응답 무시
+            if (amountEl && j.amount != null) amountEl.textContent = j.amount;
+            if (statusEl) { if (j.statusLabel != null) statusEl.textContent = j.statusLabel; if (j.statusCls) statusEl.className = "badge " + j.statusCls; }
+            if (state) { state.textContent = "저장됨"; setTimeout(function () { if (state.textContent === "저장됨") state.textContent = ""; }, 1500); }
+          })
+          .catch(function (e) { if (e && e.name === "AbortError") return; if (state) state.textContent = "저장 실패 — 잠시 후 다시"; });
+      }
+      function schedule() { clearTimeout(timer); timer = setTimeout(save, 700); }
+      form.addEventListener("input", schedule);
+      form.addEventListener("change", function (e) {
+        if (e.target && e.target.tagName === "SELECT") { clearTimeout(timer); save(); } else schedule(); // select(종류·담당·상태)는 즉시, 텍스트는 디바운스
+      });
+      if (btn) btn.hidden = true; // 핸들러 등록 성공 후 수동 버튼 숨김(등록 실패 시 버튼이 폴백)
     });
-  });
+  } catch (err) { /* 자동저장 초기화 실패 시 폼 제출 버튼(data-task-save-btn)이 폴백으로 동작 */ }
 })();
 
 // 드롭존([data-dropzone]): 파일 끌어놓기 또는 클릭 선택. CSP-safe(인라인 0, 외부 JS 파일).

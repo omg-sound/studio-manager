@@ -161,11 +161,11 @@ function buildSvg({ studio, client, invoice, items, logo, docType }) {
     svg += sumRow("소계(공급가)", won(supply));
     svg += sumRow("할인", "- " + won(discountAmt), false, "#16a34a");
     svg += sumRow("과세표준", won(taxable));
-    svg += sumRow("VAT (10%)", won(tax));
+    if (tax > 0) svg += sumRow("VAT (10%)", won(tax)); // 현금(VAT 0)이면 줄 생략
     svg += sumRow("합계", won(grand));
   } else {
     svg += sumRow("소계", won(supply));
-    svg += sumRow("VAT (10%)", won(tax));
+    if (tax > 0) svg += sumRow("VAT (10%)", won(tax)); // 현금(VAT 0)이면 줄 생략
     svg += sumRow("합계", won(grand));
   }
 

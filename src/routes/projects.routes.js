@@ -574,7 +574,7 @@ function clientCombo(selectedId) {
         placeholder="클라이언트·담당자 이름 일부 입력 후 선택…" value="${sel ? esc(clientComboLabel(sel)) : ""}" aria-label="청구처 검색" />
       <datalist id="dl-payer-clients">
         ${opts.map((c) => `<option value="${esc(clientComboLabel(c))}" data-id="${c.id}"></option>`).join("")}
-        ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자" data-contact-id="${o.id}"></option>`).join("")}
+        ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자${o.current_client ? " · " + esc(o.current_client) : o.phone ? " · " + esc(o.phone) : " #" + o.id}" data-contact-id="${o.id}"></option>`).join("")}
       </datalist>
       <p class="mt-1 text-xs text-muted">클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.</p>
     </div>`;
@@ -777,6 +777,7 @@ function taskEditForm(task, managers = []) {
         </select>
       </div>
       ${legacyName ? `<input type="hidden" name="engineer_name" value="${esc(legacyName)}" />` : ""}
+      <button class="btn-primary btn-xs sm:col-span-2" type="submit" data-task-save-btn>작업 저장</button>
       <div class="text-right text-xs text-muted sm:col-span-2" data-save-state aria-live="polite"></div>
     </form>
     <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">

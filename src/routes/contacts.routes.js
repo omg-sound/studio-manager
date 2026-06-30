@@ -364,7 +364,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
         <div><label class="label">휴대전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" placeholder="010-0000-0000" /></div>
         <div>
           <label class="label">이메일${isHouseEngineer ? ` <span class="font-normal text-muted">(로그인 계정)</span>` : ""}</label>
-          <input class="input" type="email" name="email" value="${esc(c.email || "")}"${isHouseEngineer ? ' readonly aria-readonly="true" class="input opacity-60 cursor-not-allowed"' : ""} />
+          <input class="input${isHouseEngineer ? " opacity-60 cursor-not-allowed" : ""}" type="email" name="email" value="${esc(c.email || "")}"${isHouseEngineer ? ' readonly aria-readonly="true"' : ""} />
           ${isHouseEngineer ? `<p class="mt-0.5 text-xs text-muted">하우스 엔지니어 로그인 계정 이메일이라 변경 불가합니다.</p>` : ""}
         </div>
       </div>

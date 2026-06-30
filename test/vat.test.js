@@ -139,3 +139,25 @@ test("할인 포함 createInvoiceFromTasks: 공급가 1,000,000 · 할인 100,00
   assert.strictEqual(inv.tax_amount, 90_000, "VAT = 900,000 * 0.1");
   assert.strictEqual(inv.amount, 990_000, "총액 = 900,000 + 90,000");
 });
+
+// ── 부가세 토글(vatIncluded=false = 현금/부가세 미포함) ──
+test("VAT off: 부가세 미포함(현금) — tax 0, total=공급가", () => {
+  const r = invoiceAmountsFromSupply(1_000_000, 0, false);
+  assert.strictEqual(r.tax, 0, "현금 거래는 VAT 0");
+  assert.strictEqual(r.total, 1_000_000, "총액 = 공급가");
+});
+
+test("VAT off + 할인: 공급가 1,000,000 · 할인 100,000 → taxable 900,000 · tax 0 · total 900,000", () => {
+  const r = invoiceAmountsFromSupply(1_000_000, 100_000, false);
+  assert.strictEqual(r.taxable, 900_000);
+  assert.strictEqual(r.tax, 0);
+  assert.strictEqual(r.total, 900_000);
+});
+
+test("createInvoiceFromTasks vatIncluded=false: 현금 청구 — tax_amount 0 · amount=공급가", () => {
+  const { projectId, taskId } = seedTask(500_000);
+  const inv = createInvoiceFromTasks(CHIEF, { projectId, taskIds: [taskId], issueDate: "2026-06-15", vatIncluded: false });
+  assert.ok(inv);
+  assert.strictEqual(inv.tax_amount, 0);
+  assert.strictEqual(inv.amount, 500_000);
+});

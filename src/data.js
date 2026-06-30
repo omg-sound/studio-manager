@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const { db, getState, setState } = require("./db");
 const { todayYmd, isValidYmd, formatYmdShort, timeToMin, minutesBetween } = require("./lib/date");
 const { parseMoney } = require("./lib/forms");
+const { splitKoreanName } = require("./lib/korean-name");
 const { canInvoice, canBill, isChief, canEdit } = require("./auth");
 const {
   normalizeTrackContentType,
@@ -144,13 +145,16 @@ function ensureClientsFromProject(p = {}) {
   ensureClient(p.production_company, "제작사");
 }
 
-/** 연락처(담당자)를 청구처로 쓸 때: 같은 이름 '기타' 클라이언트 재사용 또는 생성 후 client_id 반환(개인 청구처). */
+/** 연락처(담당자)를 청구처로 쓸 때: **contact별** '기타' 클라이언트 재사용(source_contact_id) 또는 생성 후 client_id 반환. 이름이 아닌 출처 contact로 매핑해 동명이인이 한 클라이언트로 병합되지 않게 한다. */
 function ensureClientFromContact(contactId) {
-  const c = db().prepare("SELECT id, name, phone, email FROM contacts WHERE id = ?").get(Number(contactId));
+  const id = Number(contactId);
+  const c = db().prepare("SELECT id, name, phone, email FROM contacts WHERE id = ?").get(id);
   if (!c || !String(c.name || "").trim()) return null;
-  const existing = db().prepare("SELECT id FROM clients WHERE name = ? AND kind = '기타'").get(c.name);
+  const existing = db().prepare("SELECT id FROM clients WHERE source_contact_id = ?").get(id);
   if (existing) return existing.id;
-  const info = db().prepare("INSERT INTO clients (name, kind, phone, email) VALUES (?, '기타', ?, ?)").run(c.name, c.phone || null, c.email || null);
+  const info = db()
+    .prepare("INSERT INTO clients (name, kind, phone, email, source_contact_id) VALUES (?, '기타', ?, ?, ?)")
+    .run(c.name, c.phone || null, c.email || null, id);
   return info.lastInsertRowid;
 }
 
@@ -349,7 +353,14 @@ function getManagerByContactId(contactId) {
 function classifyContact(contactId, aff) {
   const id = Number(contactId);
   const badges = [];
-  const m = db().prepare("SELECT user_id FROM project_managers WHERE contact_id = ?").get(id);
+  // 대표(owner)는 작업 담당자가 아니므로 제외(getManagerByContactId 정책과 정렬) — owner를 '녹음실 스태프'로 오표시 방지.
+  const m = db()
+    .prepare(
+      `SELECT pm.user_id FROM project_managers pm
+       LEFT JOIN users u ON u.id = pm.user_id
+       WHERE pm.contact_id = ? AND (pm.user_id IS NULL OR u.role != 'owner')`
+    )
+    .get(id);
   if (m) {
     badges.push(m.user_id != null ? { label: "녹음실 스태프", cls: "badge-info" } : { label: "외주 작업자", cls: "badge-neutral" });
   } else {
@@ -366,18 +377,6 @@ function classifyContact(contactId, aff) {
  * 담당자(managerId)에 연동 연락처가 없으면 contacts 행을 생성해 contact_id 연결 후 contactId 반환.
  * 이미 연결되어 있으면 기존 contact_id 반환. 외주·하우스 공통. 멱등.
  */
-/** 한국식 성명 분리: 공백 있으면 첫 토큰=성, 없으면 첫 글자=성(나머지=이름). 복성은 사용자가 보강. */
-function splitKoreanName(full) {
-  const s = String(full || "").trim();
-  if (!s) return { family: "", given: "" };
-  if (s.includes(" ")) {
-    const [f, ...rest] = s.split(/\s+/);
-    return { family: f, given: rest.join(" ").trim() };
-  }
-  if (s.length >= 2) return { family: s.slice(0, 1), given: s.slice(1) };
-  return { family: s, given: "" };
-}
-
 function ensureContactForManager(managerId) {
   const m = db().prepare("SELECT * FROM project_managers WHERE id = ?").get(Number(managerId));
   if (!m) return null;
@@ -390,9 +389,18 @@ function ensureContactForManager(managerId) {
     }
     return m.contact_id;
   }
-  const contactId = createContact({ name: m.name, family_name: family, given_name: given, phone: m.phone, email: m.email });
-  db().prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?").run(contactId, Number(managerId));
-  return contactId;
+  // 신규 연락처 생성 + 담당자 연결을 원자화(중간 예외 시 고아 연락처 방지).
+  const d = db();
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    const contactId = createContact({ name: m.name, family_name: family, given_name: given, phone: m.phone, email: m.email });
+    d.prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?").run(contactId, Number(managerId));
+    d.exec("COMMIT;");
+    return contactId;
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
 }
 
 /**

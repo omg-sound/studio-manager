@@ -26,6 +26,7 @@ const {
   getDefaultBooker,
   setDefaultBooker,
   syncManagerToContact,
+  ensureContactForManager,
   formatPhone,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron } = require("../views");
@@ -417,21 +418,36 @@ router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) =
   res.redirect("/settings?tab=settings&flash=tested");
 }));
 
+// 하우스 엔지니어(user_id 연결) → 활성 담당자 행에 연동 연락처 보장(+성·이름 자동 분리). owner·비활성은 제외.
+function ensureContactForHouseUser(userId) {
+  const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ? AND active = 1").get(userId);
+  if (mgr) ensureContactForManager(mgr.id);
+}
+
 // ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
 router.post("/users", requireChief, (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const name = String(req.body.name || "").trim();
   const role = normalizeRole(req.body.role);
   if (email && /^\S+@\S+\.\S+$/.test(email)) {
-    const exists = db().prepare("SELECT id FROM users WHERE email = ?").get(email);
+    const exists = db().prepare("SELECT id, role FROM users WHERE email = ?").get(email);
     if (exists) {
+      // /role과 동일 불변식: 본인 역할은 강등 불가(현재 역할 유지) + 마지막 활성 치프 강등 거부(락아웃 방지)
+      let nextRole = role;
+      if (exists.id === req.user.id) nextRole = req.user.role;
+      if (exists.role === "chief" && nextRole !== "chief") {
+        const others = db().prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'chief' AND active = 1 AND id != ?").get(exists.id).n;
+        if (others === 0) return res.redirect("/settings?tab=people&flash=last_chief");
+      }
       // 이름은 비어있지 않을 때만 갱신(로그인으로 받은 Google 이름 보존)
-      if (name) db().prepare("UPDATE users SET role = ?, name = ?, active = 1 WHERE id = ?").run(role, name, exists.id);
-      else db().prepare("UPDATE users SET role = ?, active = 1 WHERE id = ?").run(role, exists.id);
+      if (name) db().prepare("UPDATE users SET role = ?, name = ?, active = 1 WHERE id = ?").run(nextRole, name, exists.id);
+      else db().prepare("UPDATE users SET role = ?, active = 1 WHERE id = ?").run(nextRole, exists.id);
       syncUserToManager(findUserById(exists.id));
+      ensureContactForHouseUser(exists.id); // 하우스 엔지니어 → 연동 연락처+성·이름 보장
     } else {
       const info = db().prepare("INSERT INTO users (email, role, name, active) VALUES (?, ?, ?, 1)").run(email, role, name);
       syncUserToManager(findUserById(info.lastInsertRowid));
+      ensureContactForHouseUser(info.lastInsertRowid); // 하우스 엔지니어 → 연동 연락처+성·이름 보장
     }
   }
   res.redirect("/settings?flash=saved");
@@ -448,6 +464,7 @@ router.post("/users/:id/role", requireChief, (req, res) => {
     if (others === 0) return res.redirect("/settings?tab=people&flash=last_chief");
   }
   db().prepare("UPDATE users SET role = ? WHERE id = ?").run(role, id);
+  syncUserToManager(findUserById(id)); // 역할 변경(owner↔치프/스태프) 시 작업 담당자 활성/이름 즉시 동기화
   res.redirect("/settings?tab=people&flash=saved");
 });
 
@@ -472,6 +489,7 @@ router.post("/users/:id/edit", requireChief, (req, res) => {
   if (mgr) {
     db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(formatPhone(req.body.phone), mgr.id);
     syncManagerToContact(mgr.id); // 전화 → 연동 연락처 동기화(하우스는 이메일 제외)
+    ensureContactForManager(mgr.id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
   }
   res.redirect("/settings?tab=people&flash=saved");
 });
