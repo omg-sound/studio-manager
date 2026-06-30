@@ -467,12 +467,12 @@ function projectForm(p = {}, err = "") {
       </div>
       ${payerField(p)}
       <div>
-        <label class="label">담당자</label>
-        ${managerSelect(p.manager_id)}
-      </div>
-      <div>
         <label class="label">클라이언트 담당자</label>
         ${contactCombo(p.contact_id)}
+      </div>
+      <div>
+        <label class="label">담당자 <span class="font-normal text-muted">(스튜디오 내부)</span></label>
+        ${managerSelect(p.manager_id)}
       </div>
       <div>
         <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
@@ -516,12 +516,12 @@ function projectEditForm(p = {}, err = "") {
       </div>
       ${payerField(p)}
       <div>
-        <label class="label">담당자</label>
-        ${managerSelect(p.manager_id)}
-      </div>
-      <div>
         <label class="label">클라이언트 담당자</label>
         ${contactCombo(p.contact_id)}
+      </div>
+      <div>
+        <label class="label">담당자 <span class="font-normal text-muted">(스튜디오 내부)</span></label>
+        ${managerSelect(p.manager_id)}
       </div>
       <div>
         <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>

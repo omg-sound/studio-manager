@@ -63,16 +63,20 @@ router.get("/", (req, res) => {
 
 // ── 새 연락처 ──
 router.get("/new", (req, res) => {
-  res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}) }));
+  res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}, false, listClients({})) }));
 });
 
 router.post("/", (req, res) => {
   const b = req.body;
   try {
     const id = createContact({ name: b.name, phone: b.phone, email: b.email, memo: b.memo });
+    // 생성 폼에서 현재 소속(회사/직함)을 같이 받았으면 첫 소속으로 등록.
+    if (b.client_id || (b.title && String(b.title).trim())) {
+      addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
+    }
     res.redirect(`/contacts/${id}?flash=created`);
   } catch (_e) {
-    res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }) }));
+    res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({})) }));
   }
 });
 
@@ -212,12 +216,30 @@ router.get("/:id", (req, res) => {
 });
 
 // ── 폼(추가/수정 공용) ──
-function contactForm(c = {}, isEdit = false) {
+function contactForm(c = {}, isEdit = false, clients = []) {
   const e = c._err || "";
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
   const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
+  // 생성 시에만 '현재 소속'을 같이 입력(첫 소속 등록). 수정 시 소속은 상세의 이력에서 관리(이직 등).
+  const affBlock = isEdit ? "" : `
+      <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
+        <div class="text-sm font-medium">현재 소속 <span class="font-normal text-muted">— 선택(나중에 상세에서 추가·이직 가능)</span></div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="label">소속 회사</label>
+            <select class="input" name="client_id">
+              <option value="">무소속 (프리·지인)</option>
+              ${clients.map((cl) => `<option value="${cl.id}" ${String(c.client_id || "") === String(cl.id) ? "selected" : ""}>${esc(cl.name)} · ${esc(cl.kind)}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label class="label">직함 <span class="font-normal text-muted">(선택)</span></label>
+            <input class="input" name="title" value="${esc(c.title || "")}" placeholder="예: A&R · 매니저" />
+          </div>
+        </div>
+      </div>`;
   return `
-    ${pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 메모", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
+    ${pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
     <form method="post" action="${action}" class="card space-y-4">
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div><label class="label">이름</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
@@ -226,6 +248,7 @@ function contactForm(c = {}, isEdit = false) {
         <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>
       </div>
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
+      ${affBlock}
       <div class="flex gap-2">
         <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
         <a href="${cancelHref}" class="btn-ghost">취소</a>
