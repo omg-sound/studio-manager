@@ -584,3 +584,19 @@
   // 레이아웃 안정(폰트·이미지 로드) 후 중앙 정렬 스크롤.
   setTimeout(function () { el.scrollIntoView({ block: "center" }); }, 60);
 })();
+
+// 청구 수정/수동 생성 폼([data-vat-amount-form]): 부가세 포함 토글 시 총액(amount)에 VAT 가감.
+// 포함=공급가×1.1(VAT 더함), 해제=÷1.1(총액에서 VAT 제거) → 부가세 토글이 총액에 즉시 반영(서버 저장도 일치).
+(function () {
+  "use strict";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-vat-amount-form]"), function (form) {
+    var vat = form.querySelector('input[name="vat_included"]');
+    var amount = form.querySelector('input[name="amount"]');
+    if (!vat || !amount) return;
+    vat.addEventListener("change", function () {
+      var v = parseInt(String(amount.value).replace(/[^\d]/g, "") || "0", 10) || 0;
+      if (!v) return;
+      amount.value = vat.checked ? Math.round(v * 1.1) : Math.round(v / 1.1);
+    });
+  });
+})();

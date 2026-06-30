@@ -454,7 +454,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed 
         <div><label class="label">할인(원) <span class="font-normal text-muted text-xs">선택 — 표시용</span></label><input class="input" name="discount_amount" inputmode="numeric" value="${inv.discount_amount ? esc(String(inv.discount_amount)) : ""}" placeholder="0" /></div>
       </div>
       <label class="flex items-center gap-1.5 text-sm">
-        <input type="checkbox" name="vat_included" value="1" ${isEdit && inv.amount > 0 && (inv.tax_amount || 0) === 0 ? "" : "checked"} /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 현금 거래(VAT 0, 총액 전체가 공급가)</span>
+        <input type="checkbox" name="vat_included" value="1" ${isEdit && inv.amount > 0 && (inv.tax_amount || 0) === 0 ? "" : "checked"} /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 총액에서 VAT를 빼고 현금 거래로(VAT 0)</span>
       </label>
       ${payField}
       <div class="grid gap-3 sm:grid-cols-2">
@@ -466,7 +466,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed 
   if (embed) {
     // 펼침 안 인라인 수정 폼: pageHeader·카드 없이 폼만(배경은 펼침 카드). 저장/취소 모두 returnPath(프로젝트 청구 탭)로.
     return `
-    <form method="post" action="${action}" class="space-y-3">
+    <form method="post" action="${action}" class="space-y-3" data-vat-amount-form>
       ${retHidden}${errBox}${fields}
       <div class="flex gap-2"><button class="btn-primary btn-sm" type="submit">저장</button>
         <a href="${returnPath || `/invoices/${inv.id}`}" class="btn-ghost btn-sm">취소</a></div>
@@ -474,7 +474,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed 
   }
   return `
     ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
-    <form method="post" action="${action}" class="card space-y-4">
+    <form method="post" action="${action}" class="card space-y-4" data-vat-amount-form>
       ${retHidden}${errBox}
       ${!isEdit ? `<p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>` : ""}
       ${fields}
