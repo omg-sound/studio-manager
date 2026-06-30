@@ -596,7 +596,8 @@
     vat.addEventListener("change", function () {
       var v = parseInt(String(amount.value).replace(/[^\d]/g, "") || "0", 10) || 0;
       if (!v) return;
-      amount.value = vat.checked ? Math.round(v * 1.1) : Math.round(v / 1.1);
+      // 천단위 콤마 유지(프로그램 .value 대입은 input 이벤트가 안 떠 콤마 포맷터가 안 돎 → 직접 포맷).
+      amount.value = (vat.checked ? Math.round(v * 1.1) : Math.round(v / 1.1)).toLocaleString("en-US");
     });
   });
 })();
