@@ -37,6 +37,13 @@
   if (saved === "dark" || saved === "light") {
     document.documentElement.setAttribute("data-theme", saved);
   }
+  // 토글 라벨([data-theme-label])을 '누르면 갈 방향'으로 갱신: 현재 dark면 "라이트 모드", 아니면(라이트·미설정) "다크 모드".
+  function syncThemeLabel(mode) {
+    var text = mode === "dark" ? "라이트 모드" : "다크 모드";
+    Array.prototype.forEach.call(document.querySelectorAll("[data-theme-label]"), function (el) {
+      el.textContent = text;
+    });
+  }
   document.addEventListener("click", function (e) {
     var btn = e.target.closest && e.target.closest("[data-theme-toggle]");
     if (!btn) return;
@@ -44,7 +51,9 @@
     var next = current === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     try { localStorage.setItem("theme", next); } catch (e) {}
+    syncThemeLabel(next);
   });
+  syncThemeLabel(document.documentElement.getAttribute("data-theme")); // 초기 로드 시 현재값 기준 1회 동기화
 })();
 
 // 복사 버튼([data-copy]) + 삭제 확인([data-confirm]) + 자동 제출([data-autosubmit]).
@@ -106,6 +115,7 @@
   var customInput = form.querySelector("[data-custom-hours]");
   var presets = form.querySelectorAll("[data-duration-preset]");
   var sessionTypeSel = form.querySelector('select[name="session_type"]');
+  var roomSel = form.querySelector('select[name="room_id"]');
   var showWhenRec = form.querySelectorAll('[data-show-when="rec"]');
   var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 720 : 720;
   var busy = {};
@@ -187,7 +197,13 @@
   }
   function refreshAvailability() {
     if (!grid || !dateInput || !dateInput.value) return;
-    fetch("/sessions/availability?date=" + encodeURIComponent(dateInput.value), { headers: { Accept: "application/json" }, credentials: "same-origin" })
+    // 편집 폼은 자기 세션을 exclude(자기 일정을 충돌로 보지 않음)하고, 선택한 룸으로 범위를 좁혀 조회(같은 룸만 충돌).
+    // 둘 다 없으면(추가 폼·룸 미선택) 파라미터를 생략해 기존 동작 유지.
+    var url = "/sessions/availability?date=" + encodeURIComponent(dateInput.value);
+    var sid = form.getAttribute("data-session-id");
+    if (sid) url += "&exclude=" + encodeURIComponent(sid);
+    if (roomSel && roomSel.value) url += "&room=" + encodeURIComponent(roomSel.value);
+    fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data || !data.busy) return;
@@ -200,6 +216,7 @@
   }
 
   if (dateInput) dateInput.addEventListener("change", refreshAvailability);
+  if (roomSel) roomSel.addEventListener("change", refreshAvailability); // 룸 변경 시 해당 룸 기준으로 가용성 재조회(날짜 변경과 동일)
   if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); });
   if (sessionTypeSel) sessionTypeSel.addEventListener("change", syncRecFields);
   // 슬라이더 드래그(30분 단위) → custom_hours 동기화.

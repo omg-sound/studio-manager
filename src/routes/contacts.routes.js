@@ -30,7 +30,7 @@ router.get("/", (req, res) => {
 
   const searchBar = `
     <form method="get" action="/contacts" class="mb-4 flex gap-2">
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 · 전화 검색" />
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 · 전화 검색" aria-label="연락처 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
 

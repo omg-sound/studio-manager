@@ -1119,6 +1119,13 @@ function resolveEndTime(input, start) {
   return addMinutesToHHMM(start, mins);
 }
 
+/** 활성 룸 id 집합에 있으면 그대로, 없거나 비어 있으면 null로. */
+function validRoomId(raw) {
+  const id = Number(raw) || null;
+  if (!id) return null;
+  return listRooms().some((r) => r.id === id) ? id : null;
+}
+
 function sessionFields(input) {
   const date = String(input.session_date || "").trim();
   if (!isValidYmd(date)) throw new Error("SESSION_DATE_REQUIRED");
@@ -1134,7 +1141,7 @@ function sessionFields(input) {
     engineer_name: String(input.engineer_name || "").trim() || null,
     status: normalizeSessionStatus(input.status),
     rate_item_id: rateItemId,
-    room_id: Number(input.room_id) || null, // 룸(빈 값/0이면 NULL=미지정)
+    room_id: validRoomId(input.room_id), // 활성 룸 검증 — 없거나 삭제된 id는 null
     memo: String(input.memo || "").trim() || null,
   };
 }

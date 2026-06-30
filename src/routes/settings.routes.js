@@ -467,21 +467,6 @@ router.post("/rooms/:id/delete", requireChief, (req, res) => {
   res.redirect("/settings?tab=settings&flash=deleted");
 });
 
-router.post("/managers", requireChief, (req, res) => {
-  const name = String(req.body.name || "").trim();
-  if (name) {
-    db()
-      .prepare("INSERT INTO project_managers (name, email, phone, active) VALUES (?, ?, ?, 1)")
-      .run(name, clean(req.body.email), clean(req.body.phone));
-  }
-  res.redirect("/settings?flash=saved");
-});
-
-router.post("/managers/:id/delete", requireChief, (req, res) => {
-  db().prepare("DELETE FROM project_managers WHERE id = ?").run(Number(req.params.id)); // projects.manager_id → SET NULL
-  res.redirect("/settings?flash=deleted");
-});
-
 // ── 작업 종류 카탈로그 관리(삭제-only) ──
 router.post("/task-types", requireChief, (req, res) => {
   try {
@@ -505,10 +490,6 @@ router.post("/task-types/:id/delete", requireChief, (req, res) => {
   deleteTaskType(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
 });
-
-function clean(value) {
-  return String(value || "").trim() || null;
-}
 
 function userRow(u, currentUser) {
   const locked = isBootstrapChief(u) || u.id === currentUser.id; // 강등/비활성 불가
@@ -590,21 +571,6 @@ function rateItemRow(r) {
           <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
         </form>
       </details>
-    </div>`;
-}
-
-function managerRow(m) {
-  return `
-    <div class="rounded-lg border border-border bg-bg p-3">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="font-medium">${esc(m.name)}</div>
-          <div class="mt-0.5 truncate text-xs text-muted">${esc([m.email, m.phone].filter(Boolean).join(" · ") || "연락처 없음")}</div>
-        </div>
-        <form method="post" action="/settings/managers/${m.id}/delete" data-confirm="${esc(m.name)} (외주 작업자)를 삭제할까요?">
-          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
-        </form>
-      </div>
     </div>`;
 }
 

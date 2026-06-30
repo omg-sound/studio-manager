@@ -109,7 +109,7 @@ router.get("/", requireInvoice, (req, res) => {
   const searchBar = `
     <form method="get" action="/invoices" class="mb-4 flex gap-2">
       ${f ? `<input type="hidden" name="f" value="${esc(f)}" />` : ""}
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="제목 · 채번 · 클라이언트 검색" />
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="제목 · 채번 · 클라이언트 검색" aria-label="청구 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
   const resultNote = q
@@ -154,6 +154,7 @@ router.post("/", requireInvoice, (req, res) => {
     return res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm({ ...b, _err: refs.error }) }));
   }
   const amount = parseMoney(b.amount);
+  if (amount <= 0) return res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm({ ...b, _err: "청구 금액을 입력하세요." }) }));
   const status = normalizeInvoiceStatus(b.status);
   // 입금완료로 만들면 입금액=총액 자동
   const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
@@ -185,6 +186,8 @@ router.get("/:id", requireInvoice, (req, res) => {
   const bal = balanceOf(inv);
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
+  const issued = inv.status === "발행" || inv.status === "입금완료";
+  const pdfTypes = issued ? DOC_TYPES : ["견적서"]; // 미발행은 견적서 PDF만 허용(라우트 가드와 일치)
 
   const row = (label, value) =>
     `<div class="flex justify-between border-b border-border py-2 last:border-0"><span class="text-sm text-muted">${esc(label)}</span><span class="text-sm font-medium">${value}</span></div>`;
@@ -203,9 +206,10 @@ router.get("/:id", requireInvoice, (req, res) => {
         <div class="flex-1">
           <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
           <input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
+          <p class="mt-1 text-[11px] text-muted">누적 입금액 기준(부분납 가능)</p>
         </div>
-        <button class="btn-ghost">입금 반영</button>
-        <button class="btn-primary" name="full" value="1">전액 입금</button>
+        <button class="btn-ghost">입력액으로 갱신</button>
+        <button class="btn-primary" name="full" value="1">완납 처리</button>
       </form>
       <div class="flex gap-2 pt-1">
         <a href="/invoices/${inv.id}/edit" class="btn-ghost">수정</a>
@@ -228,10 +232,10 @@ router.get("/:id", requireInvoice, (req, res) => {
       ${row("마감일", inv.due_date ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}` : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
     </div>
-    ${(inv.status === "발행" || inv.status === "입금완료") ? `<div class="mt-3 flex flex-wrap items-center gap-1.5">
+    <div class="mt-3 flex flex-wrap items-center gap-1.5">
         <span class="text-xs text-muted">PDF 발행:</span>
-        ${DOC_TYPES.map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
-      </div>` : ""}
+        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(issued ? t : t + " PDF")}</a>`).join("")}
+      </div>
     ${invoiceItemsCard(items)}
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
     ${adminControls}`;
@@ -306,6 +310,7 @@ router.post("/:id", requireInvoice, (req, res) => {
     return res.status(409).send(errorPage({ code: 409, title: "청구처를 변경할 수 없습니다", message: "발행된 청구의 청구처는 변경할 수 없습니다. 매출 추적 정합을 위해 미발행 상태에서만 변경하세요.", user: req.user }));
   }
   const amount = parseMoney(b.amount);
+  if (amount <= 0) return res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm({ ...b, id, _err: "청구 금액을 입력하세요." }, true) }));
   const status = normalizeInvoiceStatus(b.status);
   const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
   db()
@@ -359,8 +364,8 @@ router.post("/:id/status", requireInvoice, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const status = normalizeInvoiceStatus(req.body.status);
-  // 입금완료로 변경 시 입금액=총액 자동
-  const paid = status === "입금완료" ? inv.amount : inv.paid_amount;
+  // 입금완료로 변경 시 입금액=총액 자동. 입금완료→다른 상태 강등 시 입금액 0 리셋(완납 모순 방지, /pay 보정 규칙과 일관).
+  const paid = status === "입금완료" ? inv.amount : inv.status === "입금완료" ? 0 : inv.paid_amount;
   // 채번 원자화: status UPDATE + invoice_number 채번을 BEGIN IMMEDIATE로 묶어 부분 실패 방지.
   const d = db();
   d.exec("BEGIN IMMEDIATE");

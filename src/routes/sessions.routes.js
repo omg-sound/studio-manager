@@ -56,14 +56,14 @@ async function syncSessionEvent(user, session) {
 }
 
 /** 세션 시간 겹침 안내 페이지(409, 앱 내부 세션끼리 · 같은 룸). */
-function sessionConflictMessage(c) {
+function sessionConflictMessage(c, user) {
   const when = [c.session_date, [c.start_time, c.end_time].filter(Boolean).join("–")].filter(Boolean).join(" ");
   const room = c.room_name || "룸 미지정";
   return errorPage({
     code: 409,
     title: "세션 시간이 겹칩니다",
     message: `같은 룸(${room})에 이미 같은 시간대 ${c.session_type} 세션이 있습니다 — ${c.project_title} (${when}). 다른 시간이나 다른 룸으로 예약하세요.`,
-    user: null,
+    user,
   });
 }
 
@@ -93,10 +93,14 @@ router.get("/sessions", requireAuth, (req, res) => {
     const up = upcomingSessions(req.user, { limit: 50 }).filter(matchesQ);
     const past = pastSessions(req.user, { limit: 20 }).filter(matchesQ);
     const searchBox = `
-      <form method="get" action="/sessions" class="mb-3">
+      <form method="get" action="/sessions" class="mb-4 flex gap-2">
         <input type="hidden" name="view" value="list" />
-        <input class="input" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 예약 담당자 · 엔지니어 검색" />
+        <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 예약 담당자 · 엔지니어 검색" aria-label="세션 검색" />
+        <button class="btn-primary shrink-0" type="submit">검색</button>
       </form>`;
+    const resultNote = q
+      ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${up.length + past.length}건 · <a href="/sessions?view=list" class="text-primary hover:underline">전체 보기</a></div>`
+      : "";
     const upList = up.length
       ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div></div>`
       : emptyState(q ? "검색 결과가 없습니다." : "다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
@@ -109,7 +113,7 @@ router.get("/sessions", requireAuth, (req, res) => {
            <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div>
          </details>`
       : "";
-    content = `${searchBox}${upList}${pastList}`;
+    content = `${searchBox}${resultNote}${upList}${pastList}`;
   }
 
   const body = `
@@ -124,16 +128,19 @@ router.get("/sessions", requireAuth, (req, res) => {
 router.get("/sessions/availability", requireEditor, asyncHandler(async (req, res) => {
   const date = String(req.query.date || "");
   const excludeId = Number(req.query.exclude) || null;
-  const dbBusy = busySessionSlots(date, SESSION_TIME_SLOTS, { excludeId });
+  const room = req.query.room !== undefined && req.query.room !== "" ? Number(req.query.room) : undefined;
+  const dbBusy = busySessionSlots(date, SESSION_TIME_SLOTS, { excludeId, room });
   const calBusy = await calendar.busySlotsForDate(date, SESSION_TIME_SLOTS);
   const busy = Array.from(new Set([...dbBusy, ...calBusy])).sort();
   res.json({ date, slots: SESSION_TIME_SLOTS, busy });
 }));
 
-function sessionInputError(e, res) {
-  if (e.message === "SESSION_DATE_REQUIRED") return res.status(400).send("세션 날짜를 입력하세요.");
-  if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict));
-  if (e.message === "SESSION_INVOICED") return res.status(400).send("이미 청구된 세션은 수정·삭제할 수 없습니다. 인보이스를 삭제한 뒤 시도하세요.");
+function sessionInputError(e, res, user) {
+  if (e.message === "SESSION_DATE_REQUIRED")
+    return res.status(400).send(errorPage({ code: 400, title: "세션 날짜가 필요합니다", message: "세션 날짜를 입력하세요.", user }));
+  if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict, user));
+  if (e.message === "SESSION_INVOICED")
+    return res.status(400).send(errorPage({ code: 400, title: "이미 청구된 세션", message: "이미 청구된 세션은 수정·삭제할 수 없습니다. 인보이스를 삭제한 뒤 시도하세요.", user }));
   throw e;
 }
 
@@ -143,7 +150,7 @@ router.post("/sessions", requireEditor, asyncHandler(async (req, res) => {
   try {
     s = createSession(req.user, Number(req.body.project_id), req.body); // 내부 겹침 검사 + 종료 자동계산
   } catch (e) {
-    return sessionInputError(e, res);
+    return sessionInputError(e, res, req.user);
   }
   if (!s) return res.status(404).send("프로젝트를 찾을 수 없습니다.");
   // 다중 룸 도입: 단일 스튜디오 캘린더는 룸을 구분하지 못해 다른 룸 일정으로 오탐 차단이 생긴다.
@@ -163,7 +170,7 @@ router.post("/sessions/:id", requireEditor, asyncHandler(async (req, res) => {
       const ex = getSessionForUser(req.user, Number(req.params.id));
       return res.redirect(`/projects/${ex ? ex.project_id : ""}?tab=sessions&error=session_invoiced`);
     }
-    return sessionInputError(e, res);
+    return sessionInputError(e, res, req.user);
   }
   if (!s) return res.status(404).send("세션을 찾을 수 없습니다.");
   await syncSessionEvent(req.user, s); // 일정 수정(취소면 삭제, id 없으면 생성)
@@ -198,7 +205,7 @@ router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res)
     if (e.message === "SESSION_INVOICED") {
       return res.redirect(`/projects/${existing ? existing.project_id : ""}?tab=sessions&error=session_invoiced`);
     }
-    return sessionInputError(e, res);
+    return sessionInputError(e, res, req.user);
   }
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
   if (existing && existing.gcal_event_id) await calendar.deleteEvent(existing.gcal_event_id);

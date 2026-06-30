@@ -47,27 +47,14 @@ router.get("/", (req, res) => {
     : "";
 
   const list = displayed.length
-    ? displayed
-        .map((c) => {
+    ? listGroup({
+        rows: displayed.map((c) => {
           const taxLine = [c.biz_no ? "사업자 " + esc(c.biz_no) : "", c.owner_name ? "대표 " + esc(c.owner_name) : ""].filter(Boolean).join(" · ");
-          return `
-      <div class="card mb-3 row-link">
-        <div class="flex items-start justify-between gap-3">
-          <a href="/clients/${c.id}" class="min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="badge-neutral">${esc(c.kind)}</span>
-              <span class="font-semibold">${esc(c.name)}</span>
-            </div>
-            ${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}
-            <div class="mt-0.5 text-sm text-muted">
-              ${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}
-            </div>
-          </a>
-          <a href="/clients/${c.id}/edit" class="btn-ghost shrink-0 btn-xs">수정</a>
-        </div>
-      </div>`;
-        })
-        .join("")
+          const left = `<div class="flex items-center gap-2"><span class="badge-neutral">${esc(c.kind)}</span><span class="font-semibold">${esc(c.name)}</span></div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
+          const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
+          return listRow({ href: `/clients/${c.id}`, left, right });
+        }),
+      })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : emptyState(activeKind ? esc(activeKind) + " 분류의 클라이언트가 없습니다." : "클라이언트가 없습니다.", {
@@ -145,8 +132,12 @@ router.post("/:id", (req, res) => {
 });
 
 // ── 삭제(강제: 연결된 프로젝트·청구서·사용자의 client_id는 SET NULL로 자동 해제) ──
+// 단, 발행/입금완료 인보이스가 있으면 청구처 보존을 위해 삭제 거부
 router.post("/:id/delete", (req, res) => {
-  db().prepare("DELETE FROM clients WHERE id = ?").run(Number(req.params.id));
+  const id = Number(req.params.id);
+  const active = db().prepare("SELECT 1 FROM invoices WHERE client_id=? AND status IN ('발행','입금완료') LIMIT 1").get(id);
+  if (active) return res.status(409).send(errorPage({ code: 409, title: "청구처로 발행된 청구가 있어 삭제할 수 없습니다", message: "발행·입금완료된 청구의 청구처입니다. 관련 청구를 먼저 정리하세요(매출 추적 보존).", user: req.user }));
+  db().prepare("DELETE FROM clients WHERE id = ?").run(id);
   res.redirect("/clients?flash=deleted");
 });
 

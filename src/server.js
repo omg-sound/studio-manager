@@ -21,7 +21,6 @@ const clientRoutes = require("./routes/clients.routes");
 const contactRoutes = require("./routes/contacts.routes");
 const workerRoutes = require("./routes/workers.routes");
 const settingsRoutes = require("./routes/settings.routes");
-const apiRoutes = require("./routes/api.routes");
 const maintenanceRoutes = require("./routes/maintenance.routes");
 
 init(); // 스키마/마이그레이션 보장
@@ -120,7 +119,6 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 // 중요(플레이북 §3-1): 인증 게이팅 라우트가 정적 서빙보다 먼저 와야 한다.
 // 보호 대상 HTML은 모두 서버 렌더 라우트이며, static은 /css·/js 자산만 제공한다.
 app.use("/", authRoutes); // /login, /auth/google, /logout, (/dev-login)
-app.use("/", apiRoutes); // REST API blueprint (/api/...)
 app.use("/", maintenanceRoutes); // /internal/cron/* (BACKUP_TOKEN 게이트, 세션 불필요)
 app.use("/", dashboardRoutes); // /  (requireAuth)
 app.use("/projects", projectRoutes); // requireAuth (+ client 범위 제한)

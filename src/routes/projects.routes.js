@@ -43,6 +43,7 @@ const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
 const { isValidYmd, formatYmdShort, todayYmd, ddayLabel } = require("../lib/date");
+const { notifyInvoiceIssued } = require("../notify");
 
 const router = express.Router();
 
@@ -83,13 +84,13 @@ router.get("/", requireAuth, (req, res) => {
     ? listGroup({ rows: rows.map(projectListRow) })
     : searched
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
-      : emptyState(`프로젝트가 없습니다.${canCreate ? ' <a href="/projects/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
+      : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
 
   const action = canCreate ? newProjectMenu() : "";
 
   const searchBar = `
     <form method="get" action="/projects" class="mb-4 flex gap-2">
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 아티스트 검색" />
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 아티스트 검색" aria-label="프로젝트 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
   const resultNote = searched
@@ -431,6 +432,8 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
       dueDate: cleanYmd(req.body.due_date),
     });
     if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+    // createInvoiceFromTasks는 즉시 '발행' 상태로 생성 → 발행 알림 발송(notify는 fail-safe·비차단, 청구 흐름 비차단).
+    notifyInvoiceIssued(inv);
     res.redirect(`/invoices/${inv.id}?flash=created`);
   } catch (e) {
     const message = e.message === "TASK_IDS_REQUIRED" ? "청구할 작업·세션을 선택하세요." : "청구 가능한 작업·세션만 선택할 수 있습니다.";
@@ -590,36 +593,6 @@ function contactCombo(selectedId) {
         ${opts.map((o) => `<option value="${esc(contactComboLabel(o))}" data-id="${o.id}"></option>`).join("")}
       </datalist>
       <p class="mt-1 text-xs text-muted">이름 일부만 입력해도 좁혀집니다. 비워 두면 미연결.</p>
-    </div>`;
-}
-
-/** 청구처 표시 라벨: "분류 이름"(예: "제작사 OOO"). 없으면 null. (kind는 프로젝트 조인에 없어 직접 조회) */
-function payerLabel(clientId) {
-  const c = db().prepare("SELECT name, kind FROM clients WHERE id = ?").get(Number(clientId));
-  return c ? `${c.kind} ${c.name}` : null;
-}
-
-/**
- * 청구처 필드: 자동 선택 결과(또는 자동 규칙)를 텍스트로 보이고, 토글로만 드롭다운을 펼친다.
- * 신규는 방금 친 이름이 목록에 없어도 저장 시 resolveAutoClientId(제작사>소속사>아티스트)가 자동 연결하므로,
- * 드롭다운을 강제하지 않고 규칙만 안내한다. CSP-safe: 닫힌 <details> 안 <select>도 그대로 폼 제출(JS 불필요).
- */
-function payerField(p) {
-  const sel = p.client_id ? Number(p.client_id) : null;
-  const current = sel ? payerLabel(sel) : null;
-  const auto = resolveAutoClientId(p);
-  const isAuto = current && auto && Number(auto) === sel;
-  const head = current
-    ? `<div class="text-sm"><span class="font-medium">${esc(current)}</span>${isAuto ? ` <span class="text-xs text-muted">(자동 선택)</span>` : ""}</div>`
-    : `<div class="text-sm text-muted">저장 시 제작사 › 소속사 › 아티스트 순으로 자동 선택됩니다.</div>`;
-  return `
-    <div>
-      <label class="label">청구처</label>
-      ${head}
-      <details class="mt-1">
-        <summary class="cursor-pointer list-none text-xs text-primary hover:underline">${current ? "직접 변경" : "직접 지정"}</summary>
-        <div class="mt-1.5">${clientCombo(sel)}</div>
-      </details>
     </div>`;
 }
 

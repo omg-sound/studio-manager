@@ -14,6 +14,7 @@
 const dns = require("dns");
 const { isIP } = require("net");
 const { getState, setState, encrypt, decrypt } = require("./db");
+const { config } = require("./config");
 
 // 사설·링크로컬·루프백 IP 패턴(IPv4 + IPv6)
 const PRIVATE_IP_PATTERNS = [
@@ -120,9 +121,36 @@ function notifyAsync(event) {
     .catch(() => {});
 }
 
+/** 원화 표기(views.formatKRW와 동일 출력) — notify를 뷰 레이어에 의존시키지 않으려 인라인. */
+function formatKRW(amount) {
+  return new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(Number(amount || 0));
+}
+
+/**
+ * 인보이스 '발행' 알림(공용·fail-safe·비차단). 신규 '발행' 전이(자동 from-tasks·수동 발행)의 공통 진입점.
+ * 절대 throw하지 않음 — 호출부 try/catch가 알림 실패를 청구 실패로 오인하지 않도록 내부에서 흡수.
+ * @param {{id?:number, invoice_number?:string, title?:string, amount?:number, client_name?:string, project_title?:string}} inv
+ *   getInvoiceForUser 형태의 인보이스 행(조인된 client_name·project_title 포함).
+ */
+function notifyInvoiceIssued(inv) {
+  try {
+    if (!inv) return;
+    notifyAsync({
+      type: "invoice_issued",
+      title: `[청구 발행] ${inv.invoice_number || inv.title}`,
+      text: `${formatKRW(inv.amount)} · ${inv.client_name || "청구처 미지정"}`,
+      fields: [{ label: "프로젝트", value: inv.project_title || "-" }],
+      url: config.baseUrl ? `${config.baseUrl}/invoices/${inv.id}` : undefined,
+    });
+  } catch (e) {
+    console.warn("[notify] invoice_issued 구성 실패(무시):", e && e.message ? e.message : String(e));
+  }
+}
+
 module.exports = {
   notify,
   notifyAsync,
+  notifyInvoiceIssued,
   getWebhookUrl,
   getConfiguredWebhook,
   setWebhookUrl,

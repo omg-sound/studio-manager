@@ -244,7 +244,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
         <span class="flex shrink-0 items-center gap-2">${quickComplete}${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
-        <form method="post" action="/sessions/${s.id}" data-session-form>
+        <form method="post" action="/sessions/${s.id}" data-session-form data-session-id="${s.id}">
           ${sessionBookingFields(s, managers, rateItems, rooms)}
           <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">세션 저장</button>
         </form>
@@ -279,6 +279,12 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
     </section>`;
 }
 
+/** 캘린더 칩 색 — 목록 상태 배지와 같은 기조(예정=info, 완료=success, 취소=muted). */
+function calendarChipColor(status) {
+  if (status === "예정") return "bg-info/10 text-info";
+  return SESSION_STATUS_BADGE[status] || "bg-muted/10 text-muted";
+}
+
 /** 월 캘린더 그리드(YYYY-MM). 날짜별 세션을 셀에 배치하고 이전/다음 월로 이동. */
 function monthCalendar(ym, sessions) {
   const [y, mo] = String(ym).split("-").map(Number);
@@ -301,7 +307,7 @@ function monthCalendar(ym, sessions) {
     const items = ds
       .map((s) => {
         const t = s.start_time ? esc(s.start_time) + " " : "";
-        return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded bg-primary/10 px-1 py-0.5 text-[11px] text-primary hover:bg-primary/20" title="${esc(s.session_type)} · ${esc(s.project_title || "")}">${t}${esc(s.session_type)}</a>`;
+        return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded ${calendarChipColor(s.status)} px-1 py-0.5 text-[11px] hover:opacity-80" title="${esc(s.session_type)} · ${esc(s.project_title || "")}">${t}${esc(s.session_type)}</a>`;
       })
       .join("");
     cells += `<div class="min-h-[88px] rounded-md border ${isToday ? "border-primary" : "border-border/40"} p-1">
