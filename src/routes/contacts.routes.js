@@ -345,16 +345,13 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       ${managerBanner}
       <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
-        <div class="text-sm font-medium">이름 <span class="font-normal text-muted">— 성·이름 입력 시 표시명 자동 생성. 직접 입력도 가능</span></div>
+        <div class="text-sm font-medium">이름 <span class="font-normal text-muted">— 성·이름·호칭으로 표시됩니다</span></div>
         <div class="grid gap-3 sm:grid-cols-3">
-          <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
           <div><label class="label">성</label><input class="input" name="family_name" value="${esc(c.family_name || "")}" placeholder="예: 김" /></div>
           <div><label class="label">이름</label><input class="input" name="given_name" value="${esc(c.given_name || "")}" placeholder="예: 지훈" /></div>
+          <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
         </div>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div><label class="label">표시명 <span class="font-normal text-muted">(자동 생성, 수동 입력 가능)</span></label><input class="input" name="name" value="${esc(c.name || "")}" placeholder="성·이름 입력 시 자동 채움" /></div>
-          <div><label class="label">별명</label><input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 준, 해피" /></div>
-        </div>
+        <div class="sm:max-w-xs"><label class="label">별명</label><input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 준, 해피" /></div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
         <div><label class="label">회사</label><input class="input" name="company" value="${esc(c.company || "")}" placeholder="소속 회사명" /></div>

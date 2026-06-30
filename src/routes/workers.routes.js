@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, requireInvoice, isChief } = require("../auth");
-const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel, syncManagerToContact } = require("../data");
+const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel, syncManagerToContact, formatPhone } = require("../data");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE } = require("../config");
 
@@ -52,7 +52,7 @@ router.post("/", requireChief, (req, res) => {
   if (name) {
     db()
       .prepare("INSERT INTO project_managers (name, email, phone, active) VALUES (?, ?, ?, 1)")
-      .run(name, String(req.body.email || "").trim() || null, String(req.body.phone || "").trim() || null);
+      .run(name, String(req.body.email || "").trim() || null, formatPhone(req.body.phone));
   }
   res.redirect("/workers?flash=created");
 });
@@ -68,7 +68,7 @@ router.post("/:id/edit", requireChief, (req, res) => {
   const name = String(req.body.name || "").trim();
   if (name) {
     db().prepare("UPDATE project_managers SET name = ?, email = ?, phone = ? WHERE id = ? AND user_id IS NULL")
-      .run(name, String(req.body.email || "").trim() || null, String(req.body.phone || "").trim() || null, id);
+      .run(name, String(req.body.email || "").trim() || null, formatPhone(req.body.phone), id);
     db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, id); // 이름 변경 시 작업 스냅샷 동기화(정산 매칭 유지)
     syncManagerToContact(id); // 전화·이메일 → 연동 연락처 동기화
   }

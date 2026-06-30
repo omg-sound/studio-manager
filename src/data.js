@@ -161,6 +161,15 @@ function listProjectManagers({ includeInactive = false, externalOnly = false } =
 // 회사(clients)와 별개 '사람' 마스터. 소속은 contact_affiliations 타임라인(ended_on NULL=현재 소속).
 
 const blankToNull = (v) => { const s = String(v == null ? "" : v).trim(); return s || null; };
+// 전화번호 정규화: 숫자 11자리→010-####-####, 10자리→###-###-####, 그 외는 입력 보존. 빈값 null.
+const formatPhone = (v) => {
+  const raw = String(v == null ? "" : v).trim();
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, "");
+  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`; // 010-####-####
+  if (d.length === 10 && d.startsWith("02")) return `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`; // 서울 02-####-####
+  return raw; // 그 외(지역번호 다양)는 입력 보존
+};
 
 function listContacts({ q } = {}) {
   const term = String(q || "").trim();
@@ -179,7 +188,7 @@ function getContact(id) {
 function resolveContactName({ name, honorific, family_name, given_name, nickname } = {}) {
   const explicit = String(name || "").trim();
   if (explicit) return explicit;
-  const parts = [honorific, family_name, given_name].map((s) => String(s || "").trim()).filter(Boolean);
+  const parts = [family_name, given_name, honorific].map((s) => String(s || "").trim()).filter(Boolean);
   if (parts.length) return parts.join(" ");
   const nick = String(nickname || "").trim();
   if (nick) return nick;
@@ -193,7 +202,7 @@ function createContact({ name, phone, email, memo, family_name, given_name, hono
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     n,
-    blankToNull(phone), blankToNull(email), blankToNull(memo),
+    formatPhone(phone), blankToNull(email), blankToNull(memo),
     blankToNull(family_name), blankToNull(given_name), blankToNull(honorific),
     blankToNull(nickname), blankToNull(company), blankToNull(job_title), blankToNull(department)
   ).lastInsertRowid;
@@ -207,7 +216,7 @@ function updateContact(id, { name, phone, email, memo, family_name, given_name, 
      company = ?, job_title = ?, department = ? WHERE id = ?`
   ).run(
     n,
-    blankToNull(phone), blankToNull(email), blankToNull(memo),
+    formatPhone(phone), blankToNull(email), blankToNull(memo),
     blankToNull(family_name), blankToNull(given_name), blankToNull(honorific),
     blankToNull(nickname), blankToNull(company), blankToNull(job_title), blankToNull(department),
     Number(id)
@@ -1630,6 +1639,7 @@ function deleteClientFile(clientId, kind) {
 }
 
 module.exports = {
+  formatPhone,
   listClients,
   clientKindCounts,
   getClient,
