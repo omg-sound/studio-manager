@@ -33,6 +33,7 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
   const issued = inv.status === "발행" || inv.status === "입금완료";
   const pdfTypes = issued ? DOC_TYPES : ["견적서"]; // 미발행은 견적서 PDF만(상세 페이지 규칙과 일치)
   const ret = esc(returnTo);
+  const editForm = inv.editForm || ""; // 라우트가 첨부한 인라인 수정 폼(invoiceForm embed) — 펼친 자리에서 수정
 
   const cell = (label, value) =>
     `<div class="flex items-center justify-between gap-2"><dt class="text-muted">${esc(label)}</dt><dd class="tabular font-medium">${value}</dd></div>`;
@@ -82,8 +83,13 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
            <button class="btn-ghost btn-sm">입력액으로 갱신</button>
            <button class="btn-primary btn-sm" name="full" value="1">완납 처리</button>
          </form>
+         ${editForm
+           ? `<details class="rounded-lg border border-border bg-bg">
+           <summary class="cursor-pointer list-none px-3 py-2 text-sm font-medium text-fg hover:bg-elevated">✎ 청구서 수정 <span class="text-xs font-normal text-muted">— 제목·청구처·금액·발행일·메모</span></summary>
+           <div class="border-t border-border p-3">${editForm}</div>
+         </details>`
+           : `<a href="/invoices/${inv.id}/edit?return=${encodeURIComponent(returnTo)}" class="btn-ghost btn-sm">수정</a>`}
          <div class="flex gap-2">
-           <a href="/invoices/${inv.id}/edit?return=${encodeURIComponent(returnTo)}" class="btn-ghost btn-sm">수정</a>
            <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요?">
              <input type="hidden" name="return" value="${ret}" />
              <button class="btn-ghost btn-sm text-danger">삭제</button>

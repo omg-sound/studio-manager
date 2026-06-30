@@ -407,7 +407,9 @@ router.post("/:id/delete", requireBilling, (req, res) => {
 });
 
 // ── 폼 ──
-function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "") {
+// embed=true → 프로젝트 청구 탭 펼침 안 '인라인 수정 폼'(pageHeader·카드 없음, datalist id 폼별 유니크,
+// 입금액·상태는 펼침의 빠른 폼이 담당하므로 현재값을 hidden으로만 전송 — 누락 시 0/빈값 덮어쓰기 방지).
+function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "", embed = false) {
   const e = err || inv._err || "";
   const action = isEdit ? `/invoices/${inv.id}` : "/invoices";
   const clients = clientOptions();
@@ -418,26 +420,32 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "") {
       ${projects.map((p) => `<option value="${p.id}" ${Number(inv.project_id) === p.id ? "selected" : ""}>${esc(p.title)}</option>`).join("")}
     </select>`;
   // 청구처 콤보(클라이언트 + 담당자) — from-tasks와 동일 UX. 담당자 선택 시 payer_contact_id → ensureClientFromContact로 개인 청구처 변환.
+  // 인라인(embed)은 한 페이지에 폼이 여러 개라 datalist id를 인보이스별로 유니크하게(app.js는 input의 list 속성으로 datalist를 찾음).
   const contactOpts = contactOptions();
   const selClient = inv.client_id ? clients.find((c) => c.id === Number(inv.client_id)) : null;
+  const dlId = embed ? `dl-inv-clients-${inv.id || "new"}` : "dl-inv-clients";
   const clientSelect = `
     <div data-client-combo>
       <input type="hidden" name="client_id" value="${selClient ? selClient.id : ""}" data-client-id />
       <input type="hidden" name="payer_contact_id" value="" data-payer-contact-id />
-      <input class="input" type="text" list="dl-inv-clients" data-client-search autocomplete="off"
+      <input class="input" type="text" list="${dlId}" data-client-search autocomplete="off"
         placeholder="클라이언트·담당자 이름 일부 입력 후 선택…" value="${selClient ? esc(selClient.name + (selClient.kind ? " · " + selClient.kind : "")) : ""}" aria-label="청구처 검색" />
-      <datalist id="dl-inv-clients">
+      <datalist id="${dlId}">
         ${clients.map((c) => `<option value="${esc(c.name + (c.kind ? " · " + c.kind : ""))}" data-id="${c.id}"></option>`).join("")}
         ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자${o.current_client ? " · " + esc(o.current_client) : o.phone ? " · " + esc(o.phone) : " #" + o.id}" data-contact-id="${o.id}"></option>`).join("")}
       </datalist>
       <p class="mt-1 text-xs text-muted">클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.</p>
     </div>`;
-  return `
-    ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
-    <form method="post" action="${action}" class="card space-y-4">
-      ${returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : ""}
-      ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
-      ${!isEdit ? `<p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>` : ""}
+  const retHidden = returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : "";
+  const errBox = e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : "";
+  // 입금액·상태: 풀폼은 편집 필드, 인라인(embed)은 빠른 폼이 담당 → 현재값 hidden만(폼 제출 시 0/빈값으로 덮어쓰기 방지).
+  const payField = embed
+    ? `<input type="hidden" name="paid_amount" value="${inv.paid_amount || 0}" />`
+    : `<div class="grid gap-3 sm:grid-cols-2"><div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div></div>`;
+  const statusField = embed
+    ? `<input type="hidden" name="status" value="${esc(inv.status || INVOICE_STATUSES[0])}" />`
+    : `<div><label class="label">상태</label><select name="status" class="input">${INVOICE_STATUSES.map((s) => `<option ${s === (inv.status || INVOICE_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></div>`;
+  const fields = `
       <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
       <div><label class="label">프로젝트</label>${projSelect}</div>
       <div><label class="label">청구처(프로젝트 선택 시 자동)</label>${clientSelect}</div>
@@ -448,20 +456,28 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "") {
       <label class="flex items-center gap-1.5 text-sm">
         <input type="checkbox" name="vat_included" value="1" ${isEdit && inv.amount > 0 && (inv.tax_amount || 0) === 0 ? "" : "checked"} /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 현금 거래(VAT 0, 총액 전체가 공급가)</span>
       </label>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div>
-      </div>
+      ${payField}
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">발행일</label><input class="input" type="date" name="issued_date" value="${esc(inv.issued_date || "")}" /></div>
         <div><label class="label">마감일</label><input class="input" type="date" name="due_date" value="${esc(inv.due_date || "")}" /></div>
       </div>
-      <div>
-        <label class="label">상태</label>
-        <select name="status" class="input">
-          ${INVOICE_STATUSES.map((s) => `<option ${s === (inv.status || INVOICE_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}
-        </select>
-      </div>
-      <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(inv.memo || "")}</textarea></div>
+      ${statusField}
+      <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(inv.memo || "")}</textarea></div>`;
+  if (embed) {
+    // 펼침 안 인라인 수정 폼: pageHeader·카드 없이 폼만(배경은 펼침 카드). 저장/취소 모두 returnPath(프로젝트 청구 탭)로.
+    return `
+    <form method="post" action="${action}" class="space-y-3">
+      ${retHidden}${errBox}${fields}
+      <div class="flex gap-2"><button class="btn-primary btn-sm" type="submit">저장</button>
+        <a href="${returnPath || `/invoices/${inv.id}`}" class="btn-ghost btn-sm">취소</a></div>
+    </form>`;
+  }
+  return `
+    ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
+    <form method="post" action="${action}" class="card space-y-4">
+      ${retHidden}${errBox}
+      ${!isEdit ? `<p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>` : ""}
+      ${fields}
       <div class="flex gap-2">
         <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
         <a href="${returnPath || (isEdit ? `/invoices/${inv.id}` : "/invoices")}" class="btn-ghost">취소</a>
@@ -470,3 +486,4 @@ function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "") {
 }
 
 module.exports = router;
+module.exports.invoiceForm = invoiceForm; // 프로젝트 청구 탭 인라인 수정 폼 재사용(projects.routes)
