@@ -126,7 +126,7 @@ app.use("/projects", projectRoutes); // requireAuth(열람) — 내부 도구: �
 app.use("/", deliverableRoutes); // /deliverables, /projects/:pid/deliverables, 공개 /d/:token
 app.use("/invoices", invoiceRoutes); // requireInvoice (치프/대표)
 app.use("/", sessionRoutes); // /sessions (일정) + 세션 CRUD
-app.use("/clients", clientRoutes); // requireChief
+app.use("/clients", clientRoutes); // requireEditor(목록·상세·기본편집=치프·스태프), 첨부 서류만 requireChief
 app.use("/contacts", contactRoutes); // requireEditor (클라이언트 측 담당자 마스터 + 소속 이력)
 app.use("/workers", workerRoutes); // requireChief (외주 작업자 + 정산)
 app.use("/revenue", revenueRoutes); // requireInvoice (담당 엔지니어별 매출, 대표·치프)

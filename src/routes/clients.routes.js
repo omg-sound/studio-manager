@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const express = require("express");
 const multer = require("multer");
 const { db } = require("../db");
-const { requireChief } = require("../auth");
+const { requireChief, requireEditor, isChief } = require("../auth");
 const { CLIENT_KINDS, normalizeClientKind } = require("../config");
 const {
   listClients, clientKindCounts, getClient, listProjectsForClient,
@@ -21,7 +21,7 @@ const { invoiceRow } = require("../views.invoices");
 const router = express.Router();
 
 // 모든 클라이언트 라우트는 치프 전용
-router.use(requireChief);
+router.use(requireEditor); // 목록·상세·기본정보 편집=치프·스태프. 첨부 서류(민감 금융정보) 라우트만 requireChief 개별 적용.
 
 // 첨부 서류 업로드: 디스크 스토리지(메모리 금지 — OOM 방지, 플레이북 §3-2), 10MB 제한
 const upload = multer({
@@ -158,7 +158,7 @@ router.get("/:id/edit", (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const files = listClientFiles(c.id);
   const fileErr = String(req.query.ferr || "").trim();
-  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr) }));
+  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, isChief(req.user)) }));
 });
 
 router.post("/:id", (req, res) => {
@@ -169,7 +169,7 @@ router.post("/:id", (req, res) => {
   const name = String(b.name || "").trim();
   if (!name) {
     const files = listClientFiles(id);
-    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files) }));
+    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", isChief(req.user)) }));
   }
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
@@ -201,7 +201,7 @@ router.post("/:id/delete", (req, res) => {
 
 // ── 첨부 서류 업로드(치프 전용 — router.use(requireChief)로 이미 보호) ──
 // 보안: 디스크 multer + 매직바이트 검증(PNG·JPEG·PDF) + 인증 다운로드만(공개 링크 없음).
-router.post("/:id/files/:kind", upload.single("file"), asyncHandler(async (req, res) => {
+router.post("/:id/files/:kind", requireChief, upload.single("file"), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
   const c = getClient(id);
@@ -240,7 +240,7 @@ router.post("/:id/files/:kind", upload.single("file"), asyncHandler(async (req, 
 }));
 
 // ── 첨부 서류 인증 다운로드(치프 전용 인증 후 프록시 — 공개 URL 없음) ──
-router.get("/:id/files/:kind/raw", asyncHandler(async (req, res) => {
+router.get("/:id/files/:kind/raw", requireChief, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
   if (!FILE_KINDS.find((k) => k.key === kind)) return res.status(404).send("파일을 찾을 수 없습니다.");
@@ -261,7 +261,7 @@ router.get("/:id/files/:kind/raw", asyncHandler(async (req, res) => {
 }));
 
 // ── 첨부 서류 삭제 ──
-router.post("/:id/files/:kind/delete", asyncHandler(async (req, res) => {
+router.post("/:id/files/:kind/delete", requireChief, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
   if (!FILE_KINDS.find((k) => k.key === kind)) return res.redirect(`/clients/${id}/edit`);
@@ -319,7 +319,7 @@ router.get("/:id", (req, res) => {
     : `<p class="text-sm text-muted">등록된 담당자 연락처가 없습니다.</p>`;
 
   // 첨부 서류 열람 링크(있으면만 표시, 공개 URL 없음)
-  const filesSection = files.length
+  const filesSection = files.length && isChief(req.user)
     ? `<div class="mb-4">
         <h3 class="mb-2 text-sm font-medium text-muted">첨부 서류</h3>
         <div class="flex flex-wrap gap-2">
@@ -395,7 +395,7 @@ function clientFileSection(c, fileMap, fileErr) {
   </section>`;
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "") {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   const fileMap = {};
@@ -429,7 +429,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "") {
         <a href="/clients" class="btn-ghost">취소</a>
       </div>
     </form>
-    ${isEdit ? clientFileSection(c, fileMap, fileErr) : ""}
+    ${isEdit && canFiles ? clientFileSection(c, fileMap, fileErr) : ""}
     ${isEdit ? `
     <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
       <button class="btn-ghost text-danger" type="submit">클라이언트 삭제</button>
