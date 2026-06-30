@@ -267,7 +267,7 @@ function init() {
   `);
 
   addColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
-  // 실결제자(공급받는 자) 세금계산서 정보
+  // 청구처(공급받는 자) 세금계산서 정보
   addColumn("clients", "biz_no", "TEXT");      // 사업자등록번호
   addColumn("clients", "owner_name", "TEXT");  // 대표자명
   addColumn("clients", "address", "TEXT");     // 사업장 주소

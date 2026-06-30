@@ -51,7 +51,7 @@ function cleanYmd(v) {
   return isValidYmd(s) ? s : null;
 }
 
-/** 프로젝트 저장 정보로 실결제자를 우선순위(제작사>소속사/레이블>아티스트)로 자동 선택. ensureClientsFromProject 후 호출. */
+/** 프로젝트 저장 정보로 청구처를 우선순위(제작사>소속사/레이블>아티스트)로 자동 선택. ensureClientsFromProject 후 호출. */
 function resolveAutoClientId(b) {
   const candidates = [
     [String(b.production_company || "").trim(), "제작사"],
@@ -152,18 +152,16 @@ router.post("/", requireEditor, (req, res) => {
       artist: String(b.artist || "").trim() || null,
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
-      client_id: b.client_id ? Number(b.client_id) : null,
+      client_id: null,
       manager_id: b.manager_id ? Number(b.manager_id) : null,
       contact_id: b.contact_id ? Number(b.contact_id) : null,
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
   ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
-  // 실결제자 미지정 시 우선순위(제작사>소속사/레이블>아티스트)로 자동 연결
-  if (!b.client_id) {
-    const autoId = resolveAutoClientId(b);
-    if (autoId) db().prepare("UPDATE projects SET client_id = ? WHERE id = ?").run(autoId, info.lastInsertRowid);
-  }
+  // 청구처는 메타 폼에서 받지 않고 항상 우선순위(제작사>소속사/레이블>아티스트)로 자동 파생
+  const autoId = resolveAutoClientId(b);
+  if (autoId) db().prepare("UPDATE projects SET client_id = ? WHERE id = ?").run(autoId, info.lastInsertRowid);
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
 });
 
@@ -328,6 +326,8 @@ router.post("/:id", requireEditor, (req, res) => {
     return renderProjectDetail(req, res, p, { ...b, id }, "프로젝트 명을 입력하세요.");
   }
   // project_type은 UPDATE에서 제외 → 기존 DB 값 보존(유형 구분은 UI에서 제거, 레거시 컬럼은 건드리지 않음).
+  ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
+  // 청구처는 메타 폼에서 받지 않고 항상 우선순위(제작사>소속사/레이블>아티스트)로 자동 파생(생성과 동일)
   db()
     .prepare(
       `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
@@ -340,13 +340,12 @@ router.post("/:id", requireEditor, (req, res) => {
       artist: String(b.artist || "").trim() || null,
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
-      client_id: b.client_id ? Number(b.client_id) : null,
+      client_id: resolveAutoClientId(b),
       manager_id: b.manager_id ? Number(b.manager_id) : null,
       contact_id: b.contact_id ? Number(b.contact_id) : null,
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
-  ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
   res.redirect(`/projects/${id}?flash=saved`);
 });
 
@@ -426,6 +425,7 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
       projectId: Number(req.params.id),
       taskIds: toArray(req.body.task_id),
       sessionIds: toArray(req.body.session_id),
+      clientId: req.body.client_id ? Number(req.body.client_id) : null,
       title: req.body.title,
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
@@ -465,13 +465,12 @@ function projectForm(p = {}, err = "") {
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
       </div>
-      ${payerField(p)}
       <div>
-        <label class="label">클라이언트 담당자</label>
+        <label class="label">고객 담당자</label>
         ${contactCombo(p.contact_id)}
       </div>
       <div>
-        <label class="label">담당자 <span class="font-normal text-muted">(스튜디오 내부)</span></label>
+        <label class="label">담당 엔지니어</label>
         ${managerSelect(p.manager_id)}
       </div>
       <div>
@@ -514,13 +513,12 @@ function projectEditForm(p = {}, err = "") {
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
       </div>
-      ${payerField(p)}
       <div>
-        <label class="label">클라이언트 담당자</label>
+        <label class="label">고객 담당자</label>
         ${contactCombo(p.contact_id)}
       </div>
       <div>
-        <label class="label">담당자 <span class="font-normal text-muted">(스튜디오 내부)</span></label>
+        <label class="label">담당 엔지니어</label>
         ${managerSelect(p.manager_id)}
       </div>
       <div>
@@ -545,13 +543,13 @@ function projectFieldDatalists() {
   return dl("dl-artists", f.artists) + dl("dl-companies", f.companies) + dl("dl-productions", f.productions);
 }
 
-/** 실결제자 콤보 라벨: "이름 · 분류"(분류로 동명 구분, 검색 시 분류로도 좁혀짐). */
+/** 청구처 콤보 라벨: "이름 · 분류"(분류로 동명 구분, 검색 시 분류로도 좁혀짐). */
 function clientComboLabel(c) {
   return c.kind ? `${c.name} · ${c.kind}` : c.name;
 }
 
 /**
- * 실결제자 검색형 콤보박스: <input list>+<datalist>로 이름 일부만 입력해 필터, 선택값은 hidden client_id로 app.js가 동기화.
+ * 청구처 검색형 콤보박스: <input list>+<datalist>로 이름 일부만 입력해 필터, 선택값은 hidden client_id로 app.js가 동기화.
  * 클라이언트가 많아도 타이핑으로 좁힌다. 목록에 없으면 비워 두면 저장 시 자동 매칭(resolveAutoClientId: 제작사>소속사>아티스트).
  * CSP-safe: datalist/hidden은 정적, 값 동기화는 외부 app.js([data-client-combo]).
  */
@@ -562,7 +560,7 @@ function clientCombo(selectedId) {
     <div data-client-combo>
       <input type="hidden" name="client_id" value="${sel ? sel.id : ""}" data-client-id />
       <input class="input" type="text" list="dl-payer-clients" data-client-search autocomplete="off"
-        placeholder="이름 일부 입력 후 목록에서 선택…" value="${sel ? esc(clientComboLabel(sel)) : ""}" aria-label="실결제자 검색" />
+        placeholder="이름 일부 입력 후 목록에서 선택…" value="${sel ? esc(clientComboLabel(sel)) : ""}" aria-label="청구처 검색" />
       <datalist id="dl-payer-clients">
         ${opts.map((c) => `<option value="${esc(clientComboLabel(c))}" data-id="${c.id}"></option>`).join("")}
       </datalist>
@@ -587,7 +585,7 @@ function contactCombo(selectedId) {
     <div data-contact-combo>
       <input type="hidden" name="contact_id" value="${sel ? sel.id : ""}" data-contact-id />
       <input class="input" type="text" list="dl-contacts" data-contact-search autocomplete="off"
-        placeholder="이름 일부 입력 후 선택…" value="${sel ? esc(contactComboLabel(sel)) : ""}" aria-label="클라이언트 담당자 검색" />
+        placeholder="이름 일부 입력 후 선택…" value="${sel ? esc(contactComboLabel(sel)) : ""}" aria-label="고객 담당자 검색" />
       <datalist id="dl-contacts">
         ${opts.map((o) => `<option value="${esc(contactComboLabel(o))}" data-id="${o.id}"></option>`).join("")}
       </datalist>
@@ -595,14 +593,14 @@ function contactCombo(selectedId) {
     </div>`;
 }
 
-/** 실결제자 표시 라벨: "분류 이름"(예: "제작사 OOO"). 없으면 null. (kind는 프로젝트 조인에 없어 직접 조회) */
+/** 청구처 표시 라벨: "분류 이름"(예: "제작사 OOO"). 없으면 null. (kind는 프로젝트 조인에 없어 직접 조회) */
 function payerLabel(clientId) {
   const c = db().prepare("SELECT name, kind FROM clients WHERE id = ?").get(Number(clientId));
   return c ? `${c.kind} ${c.name}` : null;
 }
 
 /**
- * 실결제자 필드: 자동 선택 결과(또는 자동 규칙)를 텍스트로 보이고, 토글로만 드롭다운을 펼친다.
+ * 청구처 필드: 자동 선택 결과(또는 자동 규칙)를 텍스트로 보이고, 토글로만 드롭다운을 펼친다.
  * 신규는 방금 친 이름이 목록에 없어도 저장 시 resolveAutoClientId(제작사>소속사>아티스트)가 자동 연결하므로,
  * 드롭다운을 강제하지 않고 규칙만 안내한다. CSP-safe: 닫힌 <details> 안 <select>도 그대로 폼 제출(JS 불필요).
  */
@@ -616,7 +614,7 @@ function payerField(p) {
     : `<div class="text-sm text-muted">저장 시 제작사 › 소속사 › 아티스트 순으로 자동 선택됩니다.</div>`;
   return `
     <div>
-      <label class="label">실결제자</label>
+      <label class="label">청구처</label>
       ${head}
       <details class="mt-1">
         <summary class="cursor-pointer list-none text-xs text-primary hover:underline">${current ? "직접 변경" : "직접 지정"}</summary>
@@ -629,7 +627,7 @@ function managerSelect(selectedId) {
   const opts = listProjectManagers();
   return `
     <select name="manager_id" class="input">
-      <option value="">담당자 미지정</option>
+      <option value="">담당 엔지니어 미지정</option>
       ${opts.map((m) => `<option value="${m.id}" ${Number(selectedId) === m.id ? "selected" : ""}>${esc(m.name)}</option>`).join("")}
     </select>`;
 }
@@ -888,6 +886,10 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       <div class="mb-2 flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 녹음 세션)</span></h3>
         <div class="text-right text-xs text-muted">공급가 ${formatKRW(subtotal)} · VAT ${formatKRW(tax)}</div>
+      </div>
+      <div class="mb-2">
+        <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
+        ${clientCombo(project.client_id)}
       </div>
       <div class="rounded-lg border border-border bg-surface px-3">${taskList}${sessionList}</div>
       ${hasPending ? `<p class="mt-1.5 text-xs text-muted">미완료(대기·진행중) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.</p>` : ""}

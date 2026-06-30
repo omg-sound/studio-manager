@@ -35,7 +35,7 @@ function notifyInvoiceIssued(user, id) {
   notifyAsync({
     type: "invoice_issued",
     title: `[청구 발행] ${inv.invoice_number || inv.title}`,
-    text: `${formatKRW(inv.amount)} · ${inv.client_name || "실결제자 미지정"}`,
+    text: `${formatKRW(inv.amount)} · ${inv.client_name || "청구처 미지정"}`,
     fields: [{ label: "프로젝트", value: inv.project_title || "-" }],
     url: config.baseUrl ? `${config.baseUrl}/invoices/${inv.id}` : undefined,
   });
@@ -52,12 +52,12 @@ function resolveInvoiceRefs(body) {
   if (projectId) {
     const p = db().prepare("SELECT id, client_id FROM projects WHERE id = ?").get(projectId);
     if (!p) return { error: "선택한 프로젝트를 찾을 수 없습니다." };
-    if (p.client_id) clientId = p.client_id;
+    if (!clientId && p.client_id) clientId = p.client_id;
   }
 
   if (clientId) {
     const c = db().prepare("SELECT id FROM clients WHERE id = ?").get(clientId);
-    if (!c) return { error: "선택한 실결제자를 찾을 수 없습니다." };
+    if (!c) return { error: "선택한 청구처를 찾을 수 없습니다." };
   }
 
   return { projectId, clientId };
@@ -216,7 +216,7 @@ router.get("/:id", requireInvoice, (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: inv.title, desc: inv.client_name || "실결제자 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
+    ${pageHeader({ title: inv.title, desc: inv.client_name || "청구처 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
     <div class="card">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
       ${row("총액", formatKRW(inv.amount))}
@@ -292,7 +292,7 @@ router.get("/:id/edit", requireInvoice, (req, res) => {
 
 router.post("/:id", requireInvoice, (req, res) => {
   const id = Number(req.params.id);
-  const inv = db().prepare("SELECT id FROM invoices WHERE id = ?").get(id);
+  const inv = db().prepare("SELECT id, status, client_id FROM invoices WHERE id = ?").get(id);
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
   const title = String(b.title || "").trim();
@@ -300,6 +300,10 @@ router.post("/:id", requireInvoice, (req, res) => {
   const refs = resolveInvoiceRefs(b);
   if (refs.error) {
     return res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm({ ...b, id, _err: refs.error }, true) }));
+  }
+  // 발행 후 청구처 잠금: 발행/입금완료 인보이스는 청구처(client_id) 변경을 차단(매출 추적 정합). 미발행은 자유 변경.
+  if ((inv.status === "발행" || inv.status === "입금완료") && (refs.clientId || null) !== (inv.client_id || null)) {
+    return res.status(409).send(errorPage({ code: 409, title: "청구처를 변경할 수 없습니다", message: "발행된 청구의 청구처는 변경할 수 없습니다. 매출 추적 정합을 위해 미발행 상태에서만 변경하세요.", user: req.user }));
   }
   const amount = parseMoney(b.amount);
   const status = normalizeInvoiceStatus(b.status);
@@ -391,7 +395,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
     </select>`;
   const clientSelect = `
     <select name="client_id" class="input">
-      <option value="">실결제자 자동(프로젝트 기준) / 미지정</option>
+      <option value="">청구처 자동(프로젝트 기준) / 미지정</option>
       ${clients.map((c) => `<option value="${c.id}" ${Number(inv.client_id) === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}
     </select>`;
   return `
@@ -401,7 +405,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
       ${!isEdit ? `<p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>` : ""}
       <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
       <div><label class="label">프로젝트</label>${projSelect}</div>
-      <div><label class="label">실결제자(프로젝트 선택 시 자동)</label>${clientSelect}</div>
+      <div><label class="label">청구처(프로젝트 선택 시 자동)</label>${clientSelect}</div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">총액(원)</label><input class="input" name="amount" inputmode="numeric" value="${inv.amount ? esc(String(inv.amount)) : ""}" placeholder="0" /></div>
         <div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div>

@@ -838,7 +838,7 @@ function ensureInvoiceNumber(inv) {
   return { ...inv, invoice_number: number };
 }
 
-function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, issueDate, dueDate, title } = {}) {
+function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title } = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project || !canInvoice(user)) return null;
   const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
@@ -903,7 +903,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, issueDat
       )
       .run({
         project_id: project.id,
-        client_id: project.client_id || null,
+        client_id: (clientId ? Number(clientId) : null) || project.client_id || null,
         title: invoiceTitle,
         invoice_number: invoiceNumber,
         amount: total,

@@ -26,7 +26,7 @@ function invoiceBadge(inv) {
 function invoiceRow(inv, { compact = false } = {}) {
   const bal = balanceOf(inv);
   const sub = compact
-    ? esc(inv.client_name || "실결제자 미지정")
+    ? esc(inv.client_name || "청구처 미지정")
     : `${esc(inv.project_title || "프로젝트 없음")}${inv.client_name ? " · " + esc(inv.client_name) : ""}`;
   const dueLine = inv.due_date
     ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}`

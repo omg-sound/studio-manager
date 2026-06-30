@@ -37,7 +37,7 @@ router.get("/", requireAuth, (req, res) => {
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(p.title)}</div>
           <div class="mt-1 flex flex-wrap gap-1">${serviceBadges(p)}</div>
-          <div class="text-xs text-muted">${esc(p.client_name || "실결제자 미지정")}</div>
+          <div class="text-xs text-muted">${esc(p.client_name || "청구처 미지정")}</div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <span class="text-xs tabular text-muted">${esc(ddayLabel(p.due_date))}</span>

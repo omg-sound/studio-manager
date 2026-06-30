@@ -78,7 +78,7 @@ router.get("/", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "클라이언트", desc: "아티스트 · 소속사/레이블 · 제작사 (프로젝트에서 자동 등록). 실결제자가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
+    ${pageHeader({ title: "클라이언트", desc: "아티스트 · 소속사/레이블 · 제작사 (프로젝트에서 자동 등록). 청구처가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
     ${searchBar}
     ${kindChips}
     ${resultNote}
@@ -178,7 +178,7 @@ router.get("/:id", (req, res) => {
         </div>
         <div class="space-y-2">${invoices.map((i) => invoiceRow(i, { compact: true })).join("")}</div>`;
     } else {
-      content = emptyState("이 클라이언트가 실결제자인 청구 내역이 없습니다.", { card: true });
+      content = emptyState("이 클라이언트가 청구처인 청구 내역이 없습니다.", { card: true });
     }
   } else {
     content = projects.length
@@ -226,7 +226,7 @@ function clientForm(c = {}, isEdit = false) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   return `
-    ${pageHeader({ title: isEdit ? "클라이언트 수정" : "새 클라이언트", desc: "분류 · 연락처 · 세금계산서 정보(실결제자가 될 경우)" })}
+    ${pageHeader({ title: isEdit ? "클라이언트 수정" : "새 클라이언트", desc: "분류 · 연락처 · 세금계산서 정보(청구처가 될 경우)" })}
     <form method="post" action="${action}" class="card space-y-4">
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div><label class="label">상호(이름)</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
