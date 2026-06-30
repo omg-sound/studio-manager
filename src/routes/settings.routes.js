@@ -565,7 +565,7 @@ function userRow(u, currentUser) {
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(u.name || u.email)}</div>
           <div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-            <span class="truncate">${esc(u.email)}</span>${status}${isSelf ? `<span class="text-muted">${esc(ROLE_LABELS[u.role] || u.role)} · 본인</span>` : isBootstrapChief(u) ? `<span class="text-muted">· 기본 치프(삭제 불가)</span>` : ""}
+            <span class="truncate">${esc(u.email)}</span>${status}${isSelf ? `<span class="text-muted">${esc(ROLE_LABELS[u.role] || u.role)} · 본인</span>` : isBootstrapChief(u) ? `<span class="text-muted">· 기본 계정(삭제 불가)</span>` : ""}
           </div>
         </div>
         <div class="flex shrink-0 items-center gap-2">

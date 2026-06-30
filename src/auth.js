@@ -57,7 +57,12 @@ function upsertUserFromGoogle(profile) {
 
   if (existing) {
     if (!existing.active && !isBootstrapAdmin) return null; // 비활성 차단
-    const role = isBootstrapAdmin ? "chief" : existing.role;
+    // ADMIN_EMAIL이라도 기존 역할 존중(스태프·대표로 강등 가능). 단 활성 치프가 0이면 락아웃 방지로 chief 복구.
+    let role = existing.role;
+    if (isBootstrapAdmin && existing.role !== "chief") {
+      const otherChiefs = db().prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'chief' AND active = 1 AND id != ?").get(existing.id).n;
+      if (otherChiefs === 0) role = "chief";
+    }
     db()
       .prepare("UPDATE users SET name=?, google_sub=?, role=?, active=1 WHERE id=?")
       .run(profile.name || existing.name || "", profile.sub || existing.google_sub || null, role, existing.id);

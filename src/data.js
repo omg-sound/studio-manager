@@ -188,8 +188,9 @@ function getContact(id) {
 function resolveContactName({ name, honorific, family_name, given_name, nickname } = {}) {
   const explicit = String(name || "").trim();
   if (explicit) return explicit;
-  const parts = [family_name, given_name, honorific].map((s) => String(s || "").trim()).filter(Boolean);
-  if (parts.length) return parts.join(" ");
+  const fullName = `${String(family_name || "").trim()}${String(given_name || "").trim()}`; // 한국식: 성+이름 붙임
+  const h = String(honorific || "").trim();
+  if (fullName || h) return [fullName, h].filter(Boolean).join(" "); // 호칭만 띄움 → "김보종 대표님"
   const nick = String(nickname || "").trim();
   if (nick) return nick;
   throw new Error("CONTACT_NAME_REQUIRED");
