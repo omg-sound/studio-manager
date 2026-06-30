@@ -295,7 +295,8 @@
 // 금액 입력 천단위 콤마: 표시용 콤마 + 제출 시 순수 숫자 복원(서버는 정수 '원'). 표시 텍스트는 formatKRW가 담당.
 (function () {
   "use strict";
-  var MONEY = /^(unit_price|base_price|extra_price|amount|paid_amount)$/;
+  // 천단위 콤마 대상 금액칸: 청구 총액·입금·할인, 단가표, 외주 지급단가, 작업별 청구 금액(task_amount_<id> 동적 name).
+  var MONEY = /^(unit_price|base_price|extra_price|amount|paid_amount|discount_amount|worker_rate|task_amount_\d+)$/;
   function fmt(v) {
     var d = String(v == null ? "" : v).replace(/[^\d]/g, "");
     return d ? Number(d).toLocaleString("en-US") : "";
@@ -389,7 +390,8 @@
     var pct = parseFloat(pctInput.value) || 0;
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
-    amtInput.value = clamp(Math.round(supply() * pct / 100));
+    // 천단위 콤마 유지(프로그램 .value 대입은 input 이벤트가 안 떠 콤마 포맷터가 안 돎 → 직접 포맷).
+    amtInput.value = clamp(Math.round(supply() * pct / 100)).toLocaleString("en-US");
     updatePreview();
   }
 
