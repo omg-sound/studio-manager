@@ -329,3 +329,27 @@
   kindSel.addEventListener("change", sync);
   sync();
 })();
+
+// 실결제자 콤보박스: <input list> 검색값 ↔ hidden client_id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정(아니면 미지정=저장 시 자동매칭).
+(function () {
+  "use strict";
+  var combos = document.querySelectorAll("[data-client-combo]");
+  if (!combos.length) return;
+  Array.prototype.forEach.call(combos, function (wrap) {
+    var search = wrap.querySelector("[data-client-search]");
+    var hidden = wrap.querySelector("[data-client-id]");
+    var listEl = search ? document.getElementById(search.getAttribute("list")) : null;
+    if (!search || !hidden || !listEl) return;
+    function sync() {
+      var v = search.value.trim();
+      var id = "";
+      for (var i = 0; i < listEl.options.length; i++) {
+        if (listEl.options[i].value === v) { id = listEl.options[i].getAttribute("data-id") || ""; break; }
+      }
+      hidden.value = id;
+    }
+    search.addEventListener("input", sync);
+    search.addEventListener("change", sync);
+    search.addEventListener("blur", sync);
+  });
+})();

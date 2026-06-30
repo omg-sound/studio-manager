@@ -125,7 +125,7 @@ function setTaskPayout(taskId, paid) {
   db().prepare("UPDATE track_tasks SET worker_paid = ?, worker_paid_date = ? WHERE id = ?").run(p, p ? todayYmd() : null, Number(taskId));
 }
 function clientOptions() {
-  return db().prepare("SELECT id, name FROM clients ORDER BY name COLLATE NOCASE").all();
+  return db().prepare("SELECT id, name, kind FROM clients ORDER BY name COLLATE NOCASE").all();
 }
 
 /** 이름+분류로 클라이언트가 없으면 생성(있으면 무시). 프로젝트 입력값 자동 등록용. */

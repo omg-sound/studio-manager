@@ -528,13 +528,29 @@ function projectFieldDatalists() {
   return dl("dl-artists", f.artists) + dl("dl-companies", f.companies) + dl("dl-productions", f.productions);
 }
 
-function clientSelect(selectedId) {
+/** 실결제자 콤보 라벨: "이름 · 분류"(분류로 동명 구분, 검색 시 분류로도 좁혀짐). */
+function clientComboLabel(c) {
+  return c.kind ? `${c.name} · ${c.kind}` : c.name;
+}
+
+/**
+ * 실결제자 검색형 콤보박스: <input list>+<datalist>로 이름 일부만 입력해 필터, 선택값은 hidden client_id로 app.js가 동기화.
+ * 클라이언트가 많아도 타이핑으로 좁힌다. 목록에 없으면 비워 두면 저장 시 자동 매칭(resolveAutoClientId: 제작사>소속사>아티스트).
+ * CSP-safe: datalist/hidden은 정적, 값 동기화는 외부 app.js([data-client-combo]).
+ */
+function clientCombo(selectedId) {
   const opts = clientOptions();
+  const sel = selectedId ? opts.find((c) => c.id === Number(selectedId)) : null;
   return `
-    <select name="client_id" class="input">
-      <option value="">실결제자 미지정</option>
-      ${opts.map((c) => `<option value="${c.id}" ${Number(selectedId) === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}
-    </select>`;
+    <div data-client-combo>
+      <input type="hidden" name="client_id" value="${sel ? sel.id : ""}" data-client-id />
+      <input class="input" type="text" list="dl-payer-clients" data-client-search autocomplete="off"
+        placeholder="이름 일부 입력 후 목록에서 선택…" value="${sel ? esc(clientComboLabel(sel)) : ""}" aria-label="실결제자 검색" />
+      <datalist id="dl-payer-clients">
+        ${opts.map((c) => `<option value="${esc(clientComboLabel(c))}" data-id="${c.id}"></option>`).join("")}
+      </datalist>
+      <p class="mt-1 text-xs text-muted">이름 일부만 입력해도 좁혀집니다. 비워 두면 저장 시 자동 연결.</p>
+    </div>`;
 }
 
 /** 실결제자 표시 라벨: "분류 이름"(예: "제작사 OOO"). 없으면 null. (kind는 프로젝트 조인에 없어 직접 조회) */
@@ -562,7 +578,7 @@ function payerField(p) {
       ${head}
       <details class="mt-1">
         <summary class="cursor-pointer list-none text-xs text-primary hover:underline">${current ? "직접 변경" : "직접 지정"}</summary>
-        <div class="mt-1.5">${clientSelect(sel)}</div>
+        <div class="mt-1.5">${clientCombo(sel)}</div>
       </details>
     </div>`;
 }
