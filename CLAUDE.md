@@ -20,10 +20,9 @@
   내부 도구라 로그인 직원은 전 프로젝트 열람. 치프가 `/settings`에서 화이트리스트(이메일+역할) 운영.
 
 ### 프로젝트
-- 유형 2종(핵심 모티브): **세션**(`session`, 클라이언트 방문·예약·실시간 작업) / **작업**(`task`, 예약 없이 항목만). "+ 새 프로젝트" 드롭다운.
-  세션형은 **세션 일정 탭**이 기본, 작업형은 **세션 탭 없이** 곡·콘텐츠가 기본(레거시 `NULL`은 세션 탭 유지). 구 `recording→session`·`mixing→task`는 멱등 마이그레이션(`project_type_rename_v1`)으로 1회 전환. 편집 시 **유형(세션↔작업) 변경 가능**.
-- 상세는 **탭**: `프로젝트(메타) / 세션 일정 / 곡·콘텐츠 / 자료 전달 / 청구`(청구는 청구권자만; 작업형은 세션 탭 숨김). 메타 편집은 **'프로젝트' 탭**(첫 탭·기본), URL `?tab=`.
-- 메타('프로젝트' 탭): 프로젝트명·아티스트(2열) / 소속사/레이블·제작사·실결제자(3열) / 담당자·**마감일**·메모. **마감일** 입력 복원(D-day 표기). 실결제자 **자동 연결**(아티스트·소속사·제작사 저장 시 클라이언트 마스터 매칭). 편집 폼 항상 펼침(접기·금액 표시 없음). 아티스트/소속사/제작사는 기존값 기반 `<datalist>` 자동완성(브라우저 히스토리는 끔).
+- **유형 구분 없음**(2026-06-30 폐기): 세션 일정 자체가 클라이언트 방문·예약이고 녹음/믹스는 그 안에서 일어나므로 프로젝트 단에서 세션/작업을 나누지 않는다. **모든 프로젝트가 세션 일정 + 곡·콘텐츠를 동일하게** 갖는다. "+ 새 프로젝트"는 단일 진입. `project_type`/`PROJECT_TYPES`는 레거시 컬럼·상수로만 보존(신규=`session` 고정, 편집 시 기존값 유지, UI 미노출·드롭다운/배지 제거).
+- 상세는 **탭**: `프로젝트(메타) / 세션 일정 / 곡·콘텐츠 / 자료 전달 / 청구`(청구는 청구권자만). 세션 일정 탭은 **전 프로젝트 노출**. 메타 편집은 **'프로젝트' 탭**(첫 탭·기본), URL `?tab=`.
+- 메타('프로젝트' 탭): 프로젝트명·아티스트 / 아티스트·소속사/레이블·제작사 / **실결제자**(검색형 콤보 `clientCombo` — 별도 행, 이름 일부 입력→`<datalist>` 필터·분류 병기, hidden `client_id`를 app.js가 동기화) / **클라이언트 담당자**(연락처 콤보 `contactCombo`, 실결제자 바로 다음 — 회사 정보와 한 묶음) / **담당자(스튜디오 내부, `manager_id`)** / **마감일**(D-day)·메모. 실결제자 **자동 연결**(아티스트·소속사·제작사 저장 시 클라이언트 마스터 매칭, 미선택 시 제작사›소속사›아티스트 우선순위). 아티스트/소속사/제작사는 `<datalist>` 자동완성(브라우저 히스토리 끔).
 - 목록=한 줄 요약 카드 + 검색(`?q=`). 목록 금액에 **세션액 합산**(`sessionAmountsByProject` 헬퍼, 프로젝트 카드에 녹음 세션 청구 예정액 반영).
 - 삭제=치프 전용(상세 메타 하단, CASCADE: 트랙·세션·자료 / 인보이스는 `project_id=NULL` 보존). **청구된 작업·세션이 있으면 삭제 거부**(`PROJECT_HAS_INVOICED`).
 - **곡 일괄 추가**: 줄바꿈으로 여러 곡명 한 번에 추가.
@@ -67,6 +66,13 @@
 - 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록.
   **목록 이름 검색**(`?q=`). **상세**(`GET /clients/:id`): 탭 = 진행 프로젝트(이름 매칭 또는 실결제자) / 청구·결제(실결제자 인보이스 전체 + 합계·입금·미수).
   세금계산서 정보(`biz_no`·`owner_name`·`address`; **아티스트(개인)는 없음** — 폼에서 숨김·서버에서 null 강제). **실결제자**=클라이언트가 특정 프로젝트/인보이스에서 갖는 결제 역할(`client_id`).
+- **상세에 담당자 연락처**: 회사(client) 상세 상단에 그 회사의 **현재 소속 연락처(직원)** 목록(`listContactsForClient`, `ended_on IS NULL`) 노출.
+
+### 연락처 (클라이언트 측 담당자)
+- 클라이언트 회사와 **별개의 '사람' 마스터**(`contacts`): 레이블/제작사 직원·프리 매니저·아티스트 지인 등. 사이드바 `/contacts` 독립 메뉴(NAV `access:"editor"`, 라우트 `requireEditor` — 치프·스태프 편집, **대표 제외·메뉴 미노출**). 목록·이름/전화 검색(`?q=`)·CRUD. 메뉴 아이콘=명함(클라이언트 '여러 사람'과 구분).
+- **소속 이력(이직 히스토리)**: `contact_affiliations` 타임라인. `ended_on IS NULL`=현재 소속(가장 최근 1건), `client_id` NULL=무소속(프리·지인). **이직**=소속 추가 시 `closeCurrent`로 기존 현재 소속을 자동 종료(`ended_on`)하고 새 소속 INSERT. 상세에 현재(`badge-success`)/종료(`badge-neutral`) 타임라인 + 추가·이직/종료/삭제 + 연결 프로젝트.
+- **생성 시 현재 소속 입력**: 새 연락처 폼에 소속 회사 select(무소속+`listClients`)+직함 → 생성과 동시에 첫 소속 등록(`addAffiliation`, `closeCurrent=false`) → 회사 상세 직원 목록에 즉시 반영.
+- **프로젝트 연결**: 프로젝트 메타의 '클라이언트 담당자'(`contactCombo`, `projects.contact_id`). 내부 '담당자'(`manager_id`=스튜디오 엔지니어)와 별개. 상세 메타에 이름·전화 표시.
 
 ### 자료 전달
 - 업로드(multer 디스크) → Drive/로컬 폴백 → 인증 다운로드(프록시) + 공개 만료 토큰 링크 `/d/:token`(다운로드 카운트·철회·만료).
@@ -106,6 +112,10 @@
 - **디자인 기반 정비**: Pretendard 한글폰트 도입(Inter→Pretendard, jsdelivr CDN + CSP 허용); 쿨톤 `--color-info`+`badge-info`(상태색/브랜드 클레이 분리); 사이드바 운영/청구/관리 그룹화(좌측 레일 활성표시); 수동 테마 토글(라이트/다크, 크림 기본, `html[data-theme]`+localStorage); `listGroup`/`listRow`/`emptyState` 공통 헬퍼 신설; tailwind `opacity.12` 추가(badge-* 빌드 실패 근본 수정).
 - **백엔드 정리**: `resolveEndTime` pro1/2 죽은분기 제거·custom_hours 단일+720분 상한 클램프; 0원 작업 청구 가드(`total_price>0`); 죽은 코드 일괄 제거(calendar FreeBusy 3종·config 정규화 함수·`setRateItemActive`·`project_service_items` DB 시드·`listProjects` 필터 2종); `parseWon`=`parseMoney`·`timeToMin`→`lib/date` 통합; 운영시간 인프라 신설(`getStudioHours`/`setStudioHours`/`studioStartSlots`, `admin_state.studio_hours` 백킹).
 - **라운드2 UX**: 세션폼 녹음 단가 항목 조건부 노출(종류=녹음일 때만), 예정 세션 1클릭 완료, 청구 결핍 사유 인라인 표시, `/sessions` 검색(`?q=`), 운영시간 기반 동적 시작슬롯; 프로젝트 실결제자 자동선택 `<details>` 가시화·빠른추가 금액 인라인·군더더기 제거·목록 `listRow` 통일; 청구 진입점 단일화·입금액 라벨 변경·상태배지 `badge-info`; 클라이언트 이름 검색(`?q=`); 설정 운영시간 폼(`POST /settings/studio-hours`); 대시보드 지표 강화.
+- **프로젝트 유형 구분 폐기**: 세션/작업(session/task) 구분 제거 — 전 프로젝트가 세션 일정+곡·콘텐츠 동일. 드롭다운·목록 배지·유형 select 제거, `project_type`/`PROJECT_TYPES` 레거시 보존(신규=session, 편집 기존값 유지).
+- **연락처(담당자) 도메인 신규**: `contacts`+`contact_affiliations`(소속 이력=이직 히스토리, `ended_on` NULL=현재, `closeCurrent` 자동 종료). `/contacts` 독립 메뉴(`requireEditor`·명함 아이콘), 생성 시 현재 소속 입력. 프로젝트 '클라이언트 담당자'(`contact_id`·`contactCombo`, 내부 `manager_id`와 별개), 클라이언트 상세 직원 목록.
+- **실결제자 검색형 콤보**: 평면 select → `clientCombo`(`<input list>`+`<datalist>`, hidden id를 app.js가 동기화·분류 병기) — 클라이언트 다수 대비. `[data-client-combo]`/`[data-contact-combo]` 공용 IIFE.
+- **UI 마무리**: 대시보드 지표 금액카드 넘침 수정(`text-lg`+좁은 화면 2열), 세션·곡콘텐츠 탭 목록↑·추가폼↓, 실결제자 필드 별도 행, 상세→목록 back 링크(`pageHeader.back`).
 
 ## 스택
 
@@ -124,7 +134,7 @@
 
 - **role 기반 게이트(3단계)**: `attachUser`(활성 + owner/chief/staff만 세션 인정) → 권한 술어
   `isOwner`/`isChief`/`isStaffRole`, 복합술어 `canEdit`(chief|staff)·`canInvoice`(chief|owner)
-  (모두 `auth.js`). 미들웨어: `requireAuth`(로그인=보기), `requireEditor`(canEdit=프로젝트·곡·작업·자료
+  (모두 `auth.js`). 미들웨어: `requireAuth`(로그인=보기), `requireEditor`(canEdit=프로젝트·곡·작업·자료·**연락처**
   편집, **대표 차단**), `requireChief`(치프 전용=스태프·담당자·클라이언트·설정), `requireInvoice`(canInvoice=
   청구). 내부 도구이므로 로그인 직원은 모든 프로젝트를 열람한다(클라이언트 범위 강제 폐기).
 - **Google 화이트리스트(`auth.js upsertUserFromGoogle`)**: 로그인 Google 이메일이 `ADMIN_EMAIL`(부트스트랩
@@ -151,9 +161,11 @@
   UI상 **클라이언트**(통칭). 프로젝트의 아티스트·소속사/레이블·제작사가 저장 시 분류별로 자동 등록되고
   (`ensureClientsFromProject`), 그중 하나가 프로젝트/인보이스의 **실결제자(공급받는 자)** 역할로 선택된다(`client_id`).
   `biz_no`(사업자등록번호)·`owner_name`(대표자)·`address`(사업장 주소)는 세금계산서용 상세정보.
-- `projects(title, project_type[session|task], artist?, artist_company?, production_company?,
-  client_id?→clients ON DELETE SET NULL, manager_id?→project_managers ON DELETE SET NULL, services JSON, due_date?, rate, memo)` —
-  `services`는 레거시 `{key,label,...}` 배열(편집 UI 제거). `status`·`kind`·`due_date`는 호환용으로만 유지.
+- `contacts(name, phone?, email?, memo?, created_at)` — **연락처(클라이언트 측 사람)** 마스터(회사 `clients`와 별개). `/contacts`에서 `requireEditor`(치프·스태프)가 CRUD. 삭제 시 affiliations CASCADE·`projects.contact_id` SET NULL.
+- `contact_affiliations(contact_id→contacts CASCADE, client_id?→clients SET NULL, title?, started_on?, ended_on?, memo?, created_at)` — **소속 이력(이직 히스토리)**. `ended_on IS NULL`=현재 소속, `client_id` NULL=무소속(프리·지인). 이직 시 기존 현재 소속 종료 후 새 행. 헬퍼: `currentAffiliation`·`listAffiliations`·`addAffiliation(closeCurrent)`·`listContactsForClient`·`listProjectsForContact`.
+- `projects(title, project_type[레거시·미사용], artist?, artist_company?, production_company?,
+  client_id?→clients ON DELETE SET NULL, manager_id?→project_managers ON DELETE SET NULL, contact_id?→contacts ON DELETE SET NULL, services JSON, due_date?, rate, memo)` —
+  `project_type`은 **레거시**(유형 구분 폐기 — 신규=session, UI 미노출). `contact_id`=클라이언트 측 담당 연락처(내부 `manager_id`와 별개). `services`는 레거시 배열(편집 UI 제거). `status`·`kind`·`due_date`는 호환용.
 - `project_managers(name, email?, phone?, active, user_id?→users, created_at)` — 작업 담당자 마스터.
   `user_id` 있으면 **하우스 엔지니어**(로그인 사용자와 링크, `auth.syncUserToManager`가 자동 생성·동기화),
   null이면 **외주 작업자**(로그인 없이 관리에서 직접 추가). 둘 다 세션·작업 담당 드롭다운에 노출.
@@ -267,6 +279,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 9. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 도메인별 모듈화 검토.
 10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
+> **완료(이번 세션)**: **프로젝트 유형 구분 폐기**(전 프로젝트=세션일정+곡콘텐츠, `project_type` 레거시), **연락처(담당자) 도메인**(`contacts`+`contact_affiliations` 소속이력·이직, `/contacts` 메뉴·명함아이콘, 생성시 소속입력, 프로젝트 클라이언트 담당자, 클라이언트 직원목록), **실결제자 검색 콤보**(`clientCombo`), UI 마무리(대시보드 금액카드·탭 목록순서·실결제자 별도행·back 링크), CLAUDE.md 현행화.
+> **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
