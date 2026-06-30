@@ -731,9 +731,10 @@ function listProjects(_user, { q } = {}) {
   const sql = `
     SELECT p.*, c.name AS client_name, m.name AS manager_name,
       (SELECT GROUP_CONCAT(tr.title, '||') FROM project_tracks tr WHERE tr.project_id = p.id) AS track_titles,
-      (SELECT COALESCE(SUM(t.total_price), 0)
+      (SELECT COALESCE(SUM(COALESCE(NULLIF(t.total_price, 0), tt.unit_price, 0)), 0)
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
+       LEFT JOIN task_types tt ON tt.key = t.task_type
        WHERE tr.project_id = p.id) AS task_total
     FROM projects p
     LEFT JOIN clients c ON c.id = p.client_id
@@ -763,9 +764,10 @@ function getProjectForUser(user, id) {
          GROUP BY project_id
        ) tr_sum ON tr_sum.project_id = p.id
        LEFT JOIN (
-         SELECT tr.project_id, COALESCE(SUM(t.total_price), 0) AS task_total
+         SELECT tr.project_id, COALESCE(SUM(COALESCE(NULLIF(t.total_price, 0), tt.unit_price, 0)), 0) AS task_total
          FROM project_tracks tr
          LEFT JOIN track_tasks t ON t.track_id = tr.id
+         LEFT JOIN task_types tt ON tt.key = t.task_type
          GROUP BY tr.project_id
        ) task_sum ON task_sum.project_id = p.id
        WHERE p.id = ?`

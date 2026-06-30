@@ -23,6 +23,7 @@ const {
   listRateItems,
   activeTaskTypes,
   taskTypeLabel,
+  taskTypeUnitPrice,
   listDeliverablesForProject,
   listInvoicesForProject,
   listInvoiceItemsForInvoice,
@@ -858,21 +859,24 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   // 세션 '완료 강제'와 규칙 통일: 완료 상태 작업만 기본 체크. 미완료(대기·진행중)는 체크 해제·흐리게(선택은 가능).
   const isDone = (t) => t.status === "Completed";
   const hasPending = tasks.some((t) => !isDone(t));
+  // 작업 예상 금액 = 확정 total_price(>0) 우선, 없으면 종류 기본단가(taskTypeUnitPrice). 프로젝트 목록 합산과 동일 규칙.
+  const taskAmt = (t) => (t.total_price > 0 ? t.total_price : taskTypeUnitPrice(t.task_type));
   const subtotal =
-    tasks.filter(isDone).reduce((sum, task) => sum + (task.total_price || 0), 0) +
+    tasks.filter(isDone).reduce((sum, task) => sum + taskAmt(task), 0) +
     sessionRows.reduce((sum, s) => sum + (s.billing ? s.billing.amount : 0), 0);
   const tax = Math.round(subtotal * 0.1);
   const taskList = tasks
     .map((task) => {
       const label = taskTypeLabel(task.task_type);
       const done = isDone(task);
+      const amt = taskAmt(task);
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(TASK_STATUS_LABELS[task.status] || task.status)}</span>`;
       return `
         <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
-          <input class="shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${task.total_price || 0}" ${done ? "checked" : ""} id="task-cb-${task.id}" />
+          <input class="shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${amt}" ${done ? "checked" : ""} id="task-cb-${task.id}" />
           <label for="task-cb-${task.id}" class="min-w-0 flex-1 cursor-pointer text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</label>
           <div class="relative w-28 shrink-0">
-            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${task.total_price || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
+            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${amt || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
             <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
           </div>
         </div>`;
