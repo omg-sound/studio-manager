@@ -323,18 +323,47 @@ function listSessionsForContact(contactId) {
 
 /** contact_id로 연결된 담당자(project_managers) 조회. 없으면 null. */
 function getManagerByContactId(contactId) {
-  return db().prepare("SELECT * FROM project_managers WHERE contact_id = ?").get(Number(contactId)) || null;
+  // 대표(owner)는 작업 담당자가 아니므로 연동 대상에서 제외(연락처 '담당자 연동' 배지 오표시 방지).
+  return (
+    db()
+      .prepare(
+        `SELECT pm.* FROM project_managers pm
+         LEFT JOIN users u ON u.id = pm.user_id
+         WHERE pm.contact_id = ? AND (pm.user_id IS NULL OR u.role != 'owner')`
+      )
+      .get(Number(contactId)) || null
+  );
 }
 
 /**
  * 담당자(managerId)에 연동 연락처가 없으면 contacts 행을 생성해 contact_id 연결 후 contactId 반환.
  * 이미 연결되어 있으면 기존 contact_id 반환. 외주·하우스 공통. 멱등.
  */
+/** 한국식 성명 분리: 공백 있으면 첫 토큰=성, 없으면 첫 글자=성(나머지=이름). 복성은 사용자가 보강. */
+function splitKoreanName(full) {
+  const s = String(full || "").trim();
+  if (!s) return { family: "", given: "" };
+  if (s.includes(" ")) {
+    const [f, ...rest] = s.split(/\s+/);
+    return { family: f, given: rest.join(" ").trim() };
+  }
+  if (s.length >= 2) return { family: s.slice(0, 1), given: s.slice(1) };
+  return { family: s, given: "" };
+}
+
 function ensureContactForManager(managerId) {
   const m = db().prepare("SELECT * FROM project_managers WHERE id = ?").get(Number(managerId));
   if (!m) return null;
-  if (m.contact_id) return m.contact_id;
-  const contactId = createContact({ name: m.name, phone: m.phone, email: m.email });
+  const { family, given } = splitKoreanName(m.name); // 담당자 이름 → 성·이름 자동 분리(하우스·외주 연동 시)
+  if (m.contact_id) {
+    // 기존 연락처: 성·이름이 둘 다 비어있을 때만 자동 분리값으로 채움(수동 입력 보호).
+    const c = db().prepare("SELECT family_name, given_name FROM contacts WHERE id = ?").get(m.contact_id);
+    if (c && !String(c.family_name || "").trim() && !String(c.given_name || "").trim() && (family || given)) {
+      db().prepare("UPDATE contacts SET family_name = ?, given_name = ? WHERE id = ?").run(family || null, given || null, m.contact_id);
+    }
+    return m.contact_id;
+  }
+  const contactId = createContact({ name: m.name, family_name: family, given_name: given, phone: m.phone, email: m.email });
   db().prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?").run(contactId, Number(managerId));
   return contactId;
 }

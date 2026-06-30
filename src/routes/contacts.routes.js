@@ -207,7 +207,7 @@ router.get("/:id", (req, res) => {
   const clients = listClients({});
   const linkedManager = getManagerByContactId(c.id);
 
-  const nameDetail = [c.honorific, c.family_name, c.given_name].filter(Boolean).join(" ");
+  const nameDetail = [`${String(c.family_name || "").trim()}${String(c.given_name || "").trim()}`, c.honorific].filter(Boolean).join(" "); // 한국식: 성+이름 붙이고 호칭 뒤
   const managerBadge = linkedManager
     ? `<div class="text-sm"><span class="text-muted">담당자 연동</span> ${
         linkedManager.user_id != null
