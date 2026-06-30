@@ -9,7 +9,7 @@
 > 이 파일은 **살아있는 설계 일지**다(현재 상태·아키텍처·데이터 모델·env·함정·TODO). 변경 시 갱신할 것.
 > 상세 변경 근거는 git 커밋 메시지에 있다. 배포 런북=`DEPLOY.md`, 작업 이어가기=`WORKFLOW.md`.
 
-## 현재 상태 (2026-06-29)
+## 현재 상태 (2026-06-30)
 
 **프로덕션 라이브**: `https://omg-studios-manager.onrender.com` (Render web + 일일 백업/연체 cron). 기능별 현재 동작:
 
@@ -30,17 +30,18 @@
 
 ### 세션 일정(예약)
 - 프로젝트 하위 세션 CRUD + 사이드바 `/sessions`(**목록/캘린더 뷰 전환** `?view=`; 목록=다가오는/지난, 캘린더=월 그리드 `?month=YYYY-MM`, `monthCalendar`/`sessionsForMonth`). 예약 담당자·담당 엔지니어 별개(담당자 마스터 select).
-- **폼 레이아웃(추가·편집 완전 통일)**: 추가·편집 모두 `sessionBookingFields`(날짜·예약·상태 / 세션종류·녹음종류·엔지니어·**룸** / **시작 그리드+직접입력** / **소요 슬라이더**). 편집 폼은 기존 시간으로 슬라이더 초기화(`minutesBetween`), 저장 시 시작+소요로 종료 산정. `app.js`가 `[data-session-form]`을 **폼별로 초기화(멀티폼)**. **세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능**. 세션 저장 버튼도 추가 버튼처럼 full.
+- **폼 레이아웃(추가·편집 완전 통일)**: 추가·편집 모두 `sessionBookingFields`(날짜·예약·상태 / 세션종류·**녹음 단가 항목**(세션 종류=녹음일 때만 노출)·엔지니어·**룸** / **시작 그리드+직접입력** / **소요 슬라이더**). 편집 폼은 기존 시간으로 슬라이더 초기화(`minutesBetween`), 저장 시 시작+소요로 종료 산정. `app.js`가 `[data-session-form]`을 **폼별로 초기화(멀티폼)**. **세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능**. 세션 저장 버튼도 추가 버튼처럼 full.
 - **용어 통일**: `녹음 종류` = **단가표 항목**(`rate_item_id`, 스튜디오/로케이션 분류 optgroup, `rateSelectGrouped`).
   `세션 종류` = `session_type`(녹음/믹싱/마스터링/기타). 추가·편집 폼에서 동일 의미(이전 라벨 혼동 정리).
-- 예약 폼=버튼 UX: 시작 시간 30분 그리드(14:00–18:30, 예약된 슬롯 회색, **선택=테두리 강조**). 그리드 밖은 '직접입력' →
-  **텍스트 직접입력**(HH:MM; 숫자만 입력하면 콜론 자동 삽입 `1425`→`14:25`, `pattern`+서버 `cleanTime` 검증). (이전의 '녹음 종류 미선택 시 시작 시간 비활성' 필수 게이트는 세션 종류 가변화로 **미사용** — `rateSelectGrouped`의 `required`/`data-rate-required` 인터페이스만 보존, 향후 세션 종류='녹음' 시 동적 복원 가능.)
+- 예약 폼=버튼 UX: 시작 시간 그리드(**운영시간 기반 동적 생성** — `studioStartSlots`가 `admin_state.studio_hours` 읽음; 예약된 슬롯 회색, **선택=테두리 강조**). 그리드 밖은 '직접입력' →
+  **텍스트 직접입력**(HH:MM; 숫자만 입력하면 콜론 자동 삽입 `1425`→`14:25`, `pattern`+서버 `cleanTime` 검증). (이전의 '녹음 종류 미선택 시 시작 시간 비활성' 필수 게이트는 세션 종류 가변화로 **미사용** — 대신 세션 종류=녹음일 때만 녹음 단가 항목 select 노출로 대체. `rateSelectGrouped`의 `required`/`data-rate-required` 인터페이스 보존.)
 - 소요시간 **슬라이더**(30분 단위·최대 12시간) + 아래 `[1Pro][2Pro][직접입력]` 프리셋(슬라이더와 양방향 동기화). 종료는 서버가 시작+길이로 계산(`custom_hours`+`duration_mode=custom`, 1Pro=녹음 종류 기준시간).
   폼 인터랙션은 `public/js/app.js`(CSP: 인라인 0).
 - **다중 룸**: `rooms` 테이블 + `sessions.room_id`. 세션 폼에 룸 select. 겹침 검사를 `IFNULL(room_id,0)`으로 룸별 판정 — **같은 룸만 충돌, 다른 룸은 동시간 병렬 허용**(레거시 NULL끼리는 가상 룸 0으로 처리). 룸 CRUD는 `/settings` 환경설정 탭(`POST /settings/rooms`, `/:id/delete`). 기본 '메인 룸' 1회 시드.
 - **겹침 차단**: **앱 DB 룸별 겹침이 정식 차단**(409). 구글 FreeBusy 하드차단은 **비활성화** — 단일 캘린더로는 룸 구분이 불가하므로(캘린더 일정 자동 생성/수정/삭제 동기화는 유지).
 - **구글 캘린더 자동 연동**: 예약 시 스튜디오 캘린더에 일정 자동 생성/수정/삭제(제목=제작사·아티스트, 장소=기본 장소,
   `gcal_event_id` 추적). 미연동/오류는 fail-safe(예약은 정상). 세션 '취소' 시에도 캘린더 일정 삭제 동기화. 역방향(캘린더→앱) 동기화는 미구현(보류).
+- **예정 세션 1클릭 완료**: 세션 목록/상세에서 '예정' 상태 행에 완료 버튼 인라인 제공(별도 편집 폼 없이). **`/sessions` 목록 검색**(`?q=`) 지원. 청구 결핍 사유(미완료·단가 미선택·시간 없음)는 청구 생성 폼에 인라인 표시.
 
 ### 곡 · 콘텐츠 (녹음과 별개의 후반작업)
 - 프로젝트 하위 곡/콘텐츠(`project_tracks`) + 모듈형 작업(`track_tasks`). **진행 단계 빠른 버튼**(보컬튠·오디오편집·믹싱·
@@ -64,7 +65,7 @@
 
 ### 클라이언트
 - 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록.
-  **상세**(`GET /clients/:id`): 탭 = 진행 프로젝트(이름 매칭 또는 실결제자) / 청구·결제(실결제자 인보이스 전체 + 합계·입금·미수).
+  **목록 이름 검색**(`?q=`). **상세**(`GET /clients/:id`): 탭 = 진행 프로젝트(이름 매칭 또는 실결제자) / 청구·결제(실결제자 인보이스 전체 + 합계·입금·미수).
   세금계산서 정보(`biz_no`·`owner_name`·`address`; **아티스트(개인)는 없음** — 폼에서 숨김·서버에서 null 강제). **실결제자**=클라이언트가 특정 프로젝트/인보이스에서 갖는 결제 역할(`client_id`).
 
 ### 자료 전달
@@ -75,7 +76,7 @@
 - **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계). **외주 작업자는 `/workers` 메뉴로 일원화 완료** — 이 탭에서는 안내 링크만 표시(기존 `/settings`의 외주 추가/삭제 폼 제거).
 - **`/workers` 권한 분리**: 목록·상세 열람 + **정산(지급 처리/취소)** = 대표·치프(`requireInvoice`), 작업자 **추가·삭제**(마스터) = 치프(`requireChief`). 추가 폼·삭제 버튼은 치프에게만 노출. 외주 **지급단가**(`worker_rate`) 입력은 작업 편집(`requireEditor`=치프·스태프)이라 대표는 단가는 안 건드리고 **지급만** 실행. 흐름: 치프/스태프 외주단가 입력 → 완료 → 대표/치프 정산 탭 지급.
 - **컨텐츠**: 단가표(녹음 종류)·**작업 종류 카탈로그**(곡·콘텐츠 후반작업 종류 + 기본단가·과금·분류·빠른추가). 모두 삭제-only.
-- **환경설정**: 스튜디오 캘린더(자동 연동 대상)·예약 일정 기본 장소·**룸 CRUD**(추가/삭제, `POST /settings/rooms`, `/:id/delete`)·**공급자(스튜디오) 세금정보 + 로고**(거래명세서 PDF용; 로고는 PNG/JPG 업로드→base64, 매직바이트 검증)·알림 웹훅 URL.
+- **환경설정**: 스튜디오 캘린더(자동 연동 대상)·예약 일정 기본 장소·**운영시간**(스튜디오 영업 시작·종료·간격, `POST /settings/studio-hours`, `admin_state.studio_hours` 백킹 → 예약 그리드 동적 생성)·**룸 CRUD**(추가/삭제, `POST /settings/rooms`, `/:id/delete`)·**공급자(스튜디오) 세금정보 + 로고**(거래명세서 PDF용; 로고는 PNG/JPG 업로드→base64, 매직바이트 검증)·알림 웹훅 URL.
 
 ### 배포 · 운영
 - Render Blueprint(web + cron) + Disk. 일일 백업(`VACUUM INTO`·14일 보존)·연체 스캔 cron(`/internal/cron/daily`, `BACKUP_TOKEN`).
@@ -102,6 +103,9 @@
 - **보안 하드닝**: `sameOriginRequest` 무헤더 비안전메서드 기본거부(Authorization/`/internal` cron 예외), OAuth state 랜덤 논스+httpOnly 쿠키 대조(로그인-CSRF 차단), 웹훅 SSRF 방어(DNS 해석 후 사설IP 차단), 로고 업로드 매직바이트(PNG/JPEG) 검증, 공개 토큰 로그 제거, 로컬 스트림 FD 누수 수정.
 - **UX·공통 헬퍼**: 대시보드 오늘/이번 주 세션 카드, 프로젝트 마감일 D-day 복원·유형 변경·곡 일괄추가·실결제자 자동연결·목록 세션액 합산, 청구 검색·견적서 미발행 발행, muted 대비 AA(#6E6A5F), badge 변형 클래스, `tabBar`/`filterChips`/`projectTypeBadge` 헬퍼 신설(views.js).
 - **외주 관리 일원화 완료**: `/settings` 담당자 탭 외주 추가/삭제 폼 제거 → `/workers` 안내 링크.
+- **디자인 기반 정비**: Pretendard 한글폰트 도입(Inter→Pretendard, jsdelivr CDN + CSP 허용); 쿨톤 `--color-info`+`badge-info`(상태색/브랜드 클레이 분리); 사이드바 운영/청구/관리 그룹화(좌측 레일 활성표시); 수동 테마 토글(라이트/다크, 크림 기본, `html[data-theme]`+localStorage); `listGroup`/`listRow`/`emptyState` 공통 헬퍼 신설; tailwind `opacity.12` 추가(badge-* 빌드 실패 근본 수정).
+- **백엔드 정리**: `resolveEndTime` pro1/2 죽은분기 제거·custom_hours 단일+720분 상한 클램프; 0원 작업 청구 가드(`total_price>0`); 죽은 코드 일괄 제거(calendar FreeBusy 3종·config 정규화 함수·`setRateItemActive`·`project_service_items` DB 시드·`listProjects` 필터 2종); `parseWon`=`parseMoney`·`timeToMin`→`lib/date` 통합; 운영시간 인프라 신설(`getStudioHours`/`setStudioHours`/`studioStartSlots`, `admin_state.studio_hours` 백킹).
+- **라운드2 UX**: 세션폼 녹음 단가 항목 조건부 노출(종류=녹음일 때만), 예정 세션 1클릭 완료, 청구 결핍 사유 인라인 표시, `/sessions` 검색(`?q=`), 운영시간 기반 동적 시작슬롯; 프로젝트 실결제자 자동선택 `<details>` 가시화·빠른추가 금액 인라인·군더더기 제거·목록 `listRow` 통일; 청구 진입점 단일화·입금액 라벨 변경·상태배지 `badge-info`; 클라이언트 이름 검색(`?q=`); 설정 운영시간 폼(`POST /settings/studio-hours`); 대시보드 지표 강화.
 
 ## 스택
 
@@ -113,7 +117,7 @@
 | 저장소 | Google Drive(관리자 토큰 재사용, `drive.file`) — 자료 전달용. 미연동 시 로컬 디스크 폴백 |
 | 캘린더 | Google Calendar(관리자 토큰, scope `calendar`) — 일정 자동 생성/수정/삭제(취소 포함). FreeBusy 하드차단은 비활성(다중 룸 도입으로 앱 DB 룸별 겹침이 정식 차단) |
 | 보안 | helmet(CSP, 인라인 스크립트 0) + express-rate-limit + 토큰 AES-256-GCM 암호화 |
-| 프론트 | 서버 렌더 HTML(`src/views.js`) + 클래식 폼 POST + 최소 JS(`public/js/app.js`), Tailwind CLI 빌드 |
+| 프론트 | 서버 렌더 HTML(`src/views.js`) + 클래식 폼 POST + 최소 JS(`public/js/app.js`), Tailwind CLI 빌드; **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용); 크림·클레이 디자인 톤; 수동 라이트/다크 테마(`html[data-theme]`+localStorage) |
 | 배포 | Render Blueprint(`render.yaml`) + Disk — **라이브** |
 
 ## 아키텍처 핵심
@@ -135,7 +139,7 @@
 - **CSRF 방어**: `sameOriginRequest`가 비안전 메서드(POST/PUT/PATCH/DELETE)에서 Sec-Fetch-Site 헤더 없으면 기본 거부. Authorization 헤더 요청과 `/internal` cron 경로만 예외.
 - **OAuth 논스**: Google OAuth state에 랜덤 논스 포함 + httpOnly 쿠키 대조(로그인-CSRF 차단). `safeNext` 역슬래시(`\`) open-redirect 우회 차단.
 - **모바일 UX(플레이북2 §5)**: 입력 16px(iOS 자동확대 방지), 반응형 카드, 콘텐츠 max-width 통일. 모바일 드로어 헤더(로고+X), 포커스링, theme-color 다크 대응.
-- **UI 공통 헬퍼**(views.js): `tabBar`(aria-current 포함)·`filterChips`·`projectTypeBadge`. badge 변형 5종(`badge-neutral`·`badge-success`·`badge-warning`·`badge-error`·`badge-info`). muted 대비 AA 충족(#6E6A5F 5.15:1).
+- **UI 공통 헬퍼**(views.js): `tabBar`(aria-current 포함)·`filterChips`·`projectTypeBadge`·`listGroup`/`listRow`(목록 행 통일)·`emptyState`(아이콘·CTA). badge 변형 5종(`badge-neutral`·`badge-success`·`badge-warning`·`badge-error`·`badge-info`); 쿨톤 `--color-info`(상태색/브랜드 클레이 분리). 사이드바 그룹화(운영/청구/관리 섹션, 좌측 레일 활성표시). 수동 테마 토글(라이트/다크, 크림 기본, `html[data-theme]`+localStorage). muted 대비 AA 충족(#6E6A5F 5.15:1).
 
 ## 데이터 모델 (생성됨)
 
@@ -157,7 +161,7 @@
   (곡·콘텐츠 후반작업). config `TASK_TYPES`를 `task_types_seed_v1` 게이트로 1회 시드 후 DB가 단일 진실원천(기존 9 key 보존, 신규=`tt_<hex>`).
   `track_tasks.task_type`이 이 key를 문자열로 보관(FK 아님). 라벨·그룹 해석은 `data.js` 모듈 캐시(`taskTypeLabel`/`taskTypeGroup`, 쓰기 시 무효화).
   `is_quick`=곡·콘텐츠 빠른추가 버튼 노출, `unit_price`=빠른추가 기본 단가. 삭제-only(강제), 치프가 `/settings` 컨텐츠 탭 CRUD.
-- `project_service_items(key UNIQUE, label, active, created_at)` — 레거시(구 services JSON 라벨 호환). **관리 UI 폐기**(작업 종류 카탈로그가 대체), 테이블만 잔존.
+- `project_service_items(key UNIQUE, label, active, created_at)` — 레거시(구 services JSON 라벨 호환). **관리 UI·시드 폐기**(작업 종류 카탈로그가 대체), 테이블만 잔존.
 - `rate_items(name, category[스튜디오 녹음|로케이션 녹음], base_minutes, base_price, extra_minutes, extra_price, active)` —
   **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 세션 폼의 '녹음 종류'에 분류별 optgroup으로
   묶여 표시된다. 기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
@@ -182,7 +186,7 @@
   rate_item_id?→rate_items SET NULL, room_id?→rooms SET NULL, gcal_event_id?)` — 스튜디오 일정.
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   `rate_item_id`는 녹음 세션 시간제 자동 산정용 단가표 연결. `room_id`는 룸별 겹침 검사 단위(IFNULL 0으로 가상룸 처리). `gcal_event_id`는 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적).
-- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`studio_logo`(거래명세서 로고, base64 data URI)·`alert_webhook_url`(알림 웹훅, 암호화).
+- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·**`studio_hours`**(운영시간 JSON·예약 그리드 시작슬롯 소스)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`studio_logo`(거래명세서 로고, base64 data URI)·`alert_webhook_url`(알림 웹훅, 암호화).
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시).
 
 ## 자료 전달 아키텍처 (플레이북1 §2.3·§4.3)
@@ -234,6 +238,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 10. **메인터넌스는 브라우저 헤더로 E2E**: curl이 아니라 Sec-Fetch-Site·Origin·multipart 헤더로 폼 제출까지 검증할 것.
 11. **웹훅 SSRF**: 알림 웹훅 URL을 그대로 fetch하면 내부망 공격 가능. `notify.js`에서 DNS 해석 후 사설IP 대역(`10.`, `172.16-31.`, `192.168.`, `127.`, `::1`) 차단 후 전송.
 12. **로고 업로드 매직바이트 검증**: Content-Type 헤더만 믿으면 안 됨. PNG(`\x89PNG`)·JPEG(`\xFF\xD8\xFF`) 매직바이트를 서버에서 확인 후 거부.
+13. **Tailwind opacity.12 미등록**: `badge-*`(`bg-*/12` 같은 불투명도 변형 클래스)를 Tailwind 커스텀 색과 함께 쓸 때 opacity 스케일에 `12`가 없으면 CSS 빌드에서 제거된다. `tailwind.config.js`의 `theme.extend.opacity`에 `'12': '0.12'` 추가.
 
 ## 검증 상태
 
@@ -247,6 +252,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 - **구글 캘린더 자동 연동**: 코드·fail-safe 검증 완료. 실제 동작은 사용자 사전작업(GCP Calendar API 활성화 +
   치프 재로그인(scope `calendar`) + `/settings`에서 캘린더 선택 + 기본 장소 입력) 후 확인.
 - **Drive 실연동**: 미검증(자료 업로드 시 local→drive 자동 전환, 현재는 local 저장).
+- **디자인·UX(라운드2)**: build:css exit 0, 폰트 로드·사이드바 그룹·테마 토글·조건부 녹음 단가·예정 완료1클릭·운영시간 그리드·검색·클라이언트 검색 E2E — 페이지 200 + 라이트 테마 시각 확인 통과.
 
 ## 다음 단계 TODO
 
@@ -258,6 +264,9 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 6. (선택) 자료 다중 업로드(현재 단건).
 7. (선택) 청구서 클라이언트 정보 스냅샷(현재 발행 시점 실시간 조회).
 8. (선택) 백업 오프사이트 전송(현재 Render Disk 내 14일 보존만).
+9. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 도메인별 모듈화 검토.
+10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: 다중 룸(룸별 겹침 + FreeBusy 폐기), 외주 지급단가 분리(`worker_rate`·`engineer_id`), 청구 완료요건 통일, 정합·보안 즉시 보수(세션잠금·삭제가드·open-redirect), 보안 하드닝(CSRF 기본거부·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·채번원자화), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge 변형·AA대비), 외주 관리 일원화(`/workers` 단일화).
-> **이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
+> **완료(이번 세션)**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
+> **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
+> **더 이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).

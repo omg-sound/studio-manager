@@ -4,12 +4,13 @@
 > 이 문서는 **다음 작업을 빠르게 이어받기 위한 현재 스냅샷 + 실행 가이드**다.
 > 상세 설계 변천사·함정은 [`CLAUDE.md`](./CLAUDE.md) 참조.
 >
-> **현재 상태(2026-06-29)**: **프로덕션 라이브**(`omg-studios-manager.onrender.com`). MVP + 권한 3단계 +
-> 세션(예약 그리드·**다중 룸(룸별 겹침)**·구글 캘린더 자동 연동·텍스트 직접입력·소요 슬라이더·세션 종류 선택·일정 목록/캘린더 전환·청구 잠금) +
+> **현재 상태(2026-06-30)**: **프로덕션 라이브**(`omg-studios-manager.onrender.com`). MVP + 권한 3단계 +
+> 세션(예약 그리드·**다중 룸(룸별 겹침)**·구글 캘린더 자동 연동·텍스트 직접입력·소요 슬라이더·세션 종류 선택·**조건부 녹음 단가**(종류=녹음일 때만)·**예정 완료 1클릭**·**목록 검색**·**운영시간 기반 동적 슬롯**·일정 목록/캘린더 전환·청구 잠금) +
 > 곡·콘텐츠(후반작업·**외주 지급단가 `worker_rate`·`engineer_id`**) + 작업 종류 카탈로그(DB 관리·삭제-only) + **거래명세서 PDF**(resvg + 한글 폰트 번들·문서명 3종) +
 > 알림 채널(웹훅·암호화·fail-safe) + 관리 항목 삭제 + 녹음 세션 직접 청구(청구 탭 자동 노출·세션 잠금) +
-> 클라이언트 상세(진행 프로젝트 + 청구·결제 히스토리) + **외주 작업자 메뉴**(`/workers`, 일원화 완료·정산=Σworker_rate) +
-> **UX**: 대시보드 오늘/이번 주 세션 카드, 프로젝트 마감일 D-day·유형 변경·곡 일괄추가, 청구 검색·견적서 미발행 발행·채번 원자화 +
+> 클라이언트 상세(진행 프로젝트 + 청구·결제 히스토리·**이름 검색**) + **외주 작업자 메뉴**(`/workers`, 일원화 완료·정산=Σworker_rate) +
+> **UX**: 대시보드 오늘/이번 주 세션 카드·지표 강화, 프로젝트 마감일 D-day·유형 변경·곡 일괄추가·실결제자 가시화, 청구 검색·견적서·채번 원자화 +
+> **디자인**: **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용), 쿨톤 info색(`badge-info`), 사이드바 그룹화(운영/청구/관리), 수동 테마 토글(크림 기본, `html[data-theme]`+localStorage), `listGroup`/`listRow`/`emptyState` 공통 헬퍼 +
 > **보안 하드닝**: CSRF 기본거부·OAuth 논스·SSRF 차단·로고 매직바이트.
 > **용어**: 프로젝트 유형 = **세션(session)·작업(task)** / 녹음 종류 = 단가표 항목(rate_item) / 세션 종류 = session_type / 룸 = rooms / 클라이언트(통칭)·실결제자(역할).
 > 미완(검증): 프로덕션에서 PDF 렌더·알림 웹훅 동작 확인, Drive 실연동. 선택: 구글 캘린더 역방향 동기화·알림 Gmail 어댑터·입금 이력 분리.
@@ -85,7 +86,7 @@ DEV_LOGIN=1 npm run dev     # build:css 후 서버 (http://localhost:3000)
 | `task_types` | **작업 종류 카탈로그**(곡·콘텐츠 후반작업). config `TASK_TYPES` 1회 시드 후 DB 단일 출처. `track_tasks.task_type`이 key 보관(FK 아님), 라벨/그룹은 data.js 캐시. 삭제-only |
 | `project_service_items` | 레거시(구 services JSON 라벨 호환). 관리 UI 폐기(작업 종류 카탈로그가 대체), 테이블만 잔존 |
 | `deliverables` | 자료 전달(Drive/로컬, 토큰 공개링크) |
-| `admin_state` | drive folder_id·refresh token(암호화)·테마·studio_calendar_id·studio_location·studio_biz_*·studio_logo·alert_webhook_url |
+| `admin_state` | drive folder_id·refresh token(암호화)·테마·studio_calendar_id·studio_location·**studio_hours(운영시간)**·studio_biz_*·studio_logo·alert_webhook_url |
 
 > 도메인 상수(역할·상태·작업종류)는 `src/config.js`가 단일 진실원천. **DB CHECK 제약 금지**(마이그레이션 지옥 회피).
 
@@ -99,9 +100,9 @@ src/
   config.js              env 검증(fail-fast) · 역할/상태/작업종류 상수 · normalize
   db.js                  스키마 · 멱등 마이그레이션 · AES-256-GCM 암호화
   auth.js                JWT 세션 · 권한 술어/미들웨어 · Google OAuth(논스+쿠키 대조) · 화이트리스트
-  data.js                데이터 헬퍼(전 직원 전체 열람, 청구는 canInvoice 분기). listRooms/createRoom/deleteRoom. sessionAmountsByProject
+  data.js                데이터 헬퍼(전 직원 전체 열람, 청구는 canInvoice 분기). listRooms/createRoom/deleteRoom. sessionAmountsByProject. **getStudioHours/setStudioHours/studioStartSlots**(운영시간 인프라)
   notify.js              웹훅 알림(SSRF 방어: DNS→사설IP 차단, fail-safe)
-  views.js               레이아웃 · 사이드바(권한별 NAV) · flashBanner · tabBar/filterChips/projectTypeBadge 헬퍼
+  views.js               레이아웃 · **사이드바 그룹화**(운영/청구/관리, 권한별 NAV) · flashBanner · tabBar/filterChips/projectTypeBadge/**listGroup/listRow/emptyState** 헬퍼 · **테마 토글**
   views.invoices.js      청구 행/배지/섹션
   views.sessions.js      세션 폼(추가/편집 통일 그리드+슬라이더+룸 select)·세션 행 토글·월 캘린더 그리드
   views.deliverables.js  자료 행/섹션
@@ -110,10 +111,10 @@ src/
     dashboard.routes.js  / (역할별 카드 + 오늘/이번 주 세션 카드)
     projects.routes.js   목록(검색·세션액 합산)·상세(곡콘텐츠·작업·자료·청구)·CRUD(유형변경·곡일괄·마감일·삭제가드)
     invoices.routes.js   청구 CRUD(검색) · 입금/상태 · 채번 원자화 · 발행알림 첫전이
-    sessions.routes.js   전역 일정(/sessions) + 세션 CRUD(룸별 겹침·취소 캘린더 동기화·상태잠금)
+    sessions.routes.js   전역 일정(/sessions, **목록 검색·예정 세션 1클릭 완료**) + 세션 CRUD(룸별 겹침·취소 캘린더 동기화·상태잠금)
     clients.routes.js    클라이언트 CRUD + 분류 탭(filterChips) + 상세(진행 프로젝트·청구 히스토리) (치프)
     workers.routes.js    외주 작업자 목록·추가·삭제 + 상세(작업 히스토리·정산 지급 토글, worker_rate 기준) (치프)
-    settings.routes.js   사용자·담당자(외주 안내링크)·작업종류·환경설정(룸 CRUD·로고 매직바이트) 관리 (치프)
+    settings.routes.js   사용자·담당자(외주 안내링크)·작업종류·환경설정(**운영시간 studio-hours**·룸 CRUD·로고 매직바이트) 관리 (치프)
     deliverables.routes.js  업로드·토큰링크·다운로드
     api.routes.js        REST blueprint
     maintenance.routes.js  /internal/cron/* (BACKUP_TOKEN 게이트, 백업+연체 스캔)
@@ -122,7 +123,7 @@ src/
   lib/maintenance.js     VACUUM INTO 백업 + 14일 prune + 연체 요약
   storage.js · drive.js  스토리지 추상화(Drive↔로컬 폴백, 스트림 조기종료 FD 정리)
 public/js/app.js         최소 JS(드로어·복사·자동제출·삭제확인·flash 배너·aria-expanded). CSP: 인라인 스크립트 0
-public/css/src.css       Tailwind 소스. muted #6E6A5F(AA 5.15:1), badge 변형 5종, btn-xs, focus-visible 링
+public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **쿨톤 `--color-info`**(badge-info), 수동 **테마 토글**(`html[data-theme]`), muted #6E6A5F(AA 5.15:1), badge 변형 5종, btn-xs, focus-visible 링
 ```
 
 ---
@@ -162,9 +163,12 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 4. (선택) 알림 Gmail 어댑터(현재 웹훅만; `notify.js` 어댑터 슬롯).
 5. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
 6. (선택) 자료 다중 업로드·백업 오프사이트 전송.
+7. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 향후 도메인별 분리 검토.
+8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산=Σworker_rate), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·open-redirect·발행알림·채번원자화), 보안 하드닝(CSRF 기본거부·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일 D-day·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
-> **이전 완료**: Render 실배포·OAuth, 세션 UX(그리드·슬라이더·캘린더 뷰·청구잠금), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
+> **완료(이번 세션)**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 배지·진입점 단일화·클라이언트 검색·대시보드 강화).
+> **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
+> **더 이전 완료**: Render 실배포·OAuth, 세션 UX(그리드·슬라이더·캘린더 뷰·청구잠금), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
 
 ---
 
