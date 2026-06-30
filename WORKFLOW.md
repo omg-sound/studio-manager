@@ -7,12 +7,12 @@
 > **현재 상태(2026-06-30)**: **프로덕션 라이브**(`omg-studios-manager.onrender.com`). MVP + 권한 3단계 +
 > 세션(예약 그리드·**다중 룸(룸별 겹침)**·구글 캘린더 자동 연동·텍스트 직접입력·소요 슬라이더·세션 종류 선택·**조건부 녹음 단가**(종류=녹음일 때만)·**예정 완료 1클릭**·**목록 검색**·**운영시간 기반 동적 슬롯**·일정 목록/캘린더 전환·청구 잠금) +
 > 곡·콘텐츠(후반작업·**외주 지급단가 `worker_rate`·`engineer_id`**) + 작업 종류 카탈로그(DB 관리·삭제-only) + **거래명세서 PDF**(resvg + 한글 폰트 번들·문서명 3종) +
-> 알림 채널(웹훅·암호화·fail-safe) + 관리 항목 삭제 + 녹음 세션 직접 청구(청구 탭 자동 노출·세션 잠금) +
+> 알림 채널(웹훅·암호화·fail-safe) + 관리 항목 삭제 + 녹음 세션 직접 청구(청구 탭 자동 노출·세션 잠금·**청구처는 청구 시점 결정**·발행후 변경 잠금) +
 > 클라이언트 상세(진행 프로젝트 + 청구·결제 히스토리·**이름 검색**·**담당자 연락처**) + **연락처(담당자) 도메인**(`/contacts`, 소속 이력·이직·생성 시 소속·프로젝트 클라이언트 담당자) + **외주 작업자 메뉴**(`/workers`, 일원화 완료·정산=Σworker_rate) +
-> **UX**: 대시보드 오늘/이번 주 세션 카드·지표 강화, 프로젝트 마감일 D-day·곡 일괄추가·실결제자 검색형 콤보, 청구 검색·견적서·채번 원자화 +
+> **UX**: 대시보드 오늘/이번 주 세션 카드·지표 강화, 프로젝트 마감일 D-day·곡 일괄추가·**청구처 검색 콤보**(청구 폼), 청구 검색·견적서·채번 원자화 +
 > **디자인**: **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용), 쿨톤 info색(`badge-info`), 사이드바 그룹화(운영/청구/관리), 수동 테마 토글(크림 기본, `html[data-theme]`+localStorage), `listGroup`/`listRow`/`emptyState` 공통 헬퍼 +
 > **보안 하드닝**: CSRF 기본거부·OAuth 논스·SSRF 차단·로고 매직바이트.
-> **용어**: 프로젝트 = **유형 구분 없음**(전 프로젝트 세션일정+곡콘텐츠, `project_type` 레거시) / 녹음 종류 = 단가표 항목(rate_item) / 세션 종류 = session_type / 룸 = rooms / 클라이언트(회사)·실결제자(역할)·**연락처(담당자·소속이력)**.
+> **용어**: 프로젝트 = **유형 구분 없음**(`project_type` 레거시) / **청구처**(=실결제자, `client_id` — 청구 시점 결정, 메타엔 자동파생 기본값) / 녹음 종류 = 단가표 항목(rate_item) / 세션 종류 = session_type / 룸 = rooms / 클라이언트(회사)·**연락처(담당자·소속이력)**·고객 담당자(`contact_id`)·담당 엔지니어(`manager_id`).
 > 미완(검증): 프로덕션에서 PDF 렌더·알림 웹훅 동작 확인, Drive 실연동. 선택: 구글 캘린더 역방향 동기화·알림 Gmail 어댑터·입금 이력 분리.
 
 ---
@@ -76,8 +76,8 @@ DEV_LOGIN=1 npm run dev     # build:css 후 서버 (http://localhost:3000)
 |---|---|
 | `rooms` | **룸 마스터**. `name`·`sort_order`·`active`. 기본 '메인 룸' 시드. `/settings` 환경설정에서 CRUD |
 | `users` | 로그인 계정. `role[owner\|chief\|staff]`·`active`·`google_sub`. `password_hash`/`client_id`는 레거시 |
-| `clients` | **클라이언트**(통칭: 아티스트·소속사·제작사). 그중 하나가 프로젝트/청구의 **실결제자**(`client_id`). `biz_no`·`owner_name`·`address`(세금계산서; **아티스트는 없음**). 상세 `/clients/:id` = 진행 프로젝트 + 청구·결제 탭 |
-| `projects` | 프로젝트 메타. `client_id`=실결제자, `manager_id`=담당자, `due_date`=마감일 |
+| `clients` | **클라이언트**(통칭: 아티스트·소속사·제작사). 그중 하나가 청구의 **청구처**(=실결제자, `client_id`). `biz_no`·`owner_name`·`address`(세금계산서; **아티스트는 없음**). 상세 `/clients/:id` = 진행 프로젝트 + 청구·결제 + 담당자 연락처 |
+| `projects` | 프로젝트 메타. `client_id`=청구처 자동파생(청구폼서 결정), `manager_id`=담당 엔지니어, `contact_id`=고객 담당자, `due_date`=마감일 |
 | `project_tracks` | **곡·콘텐츠**. `content_type[Music\|Video_Post]` 상수·정규화는 있으나 **UI 미노출 → 현재 전부 Music** |
 | `track_tasks` | **작업**. `task_type`·`billing_type`·`unit_price`·`engineer_name`·`engineer_id`→PM·`worker_rate`(외주 지급단가)·`status`·`is_invoiced`·`session_id`(세션 직접 청구)·`worker_paid`/`worker_paid_date`(외주 정산). 정산 합계=Σ`worker_rate` |
 | `sessions` | **세션(일정)**. `session_type`·`session_date`·`start_time`/`end_time`·`booker_name`·`engineer_name`·`status`·`rate_item_id`·`room_id`→rooms·`gcal_event_id` |
@@ -185,7 +185,7 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 | 녹음 종류 | `rate_items` (`rate_item_id`) | **단가표 항목**(보컬녹음 등), 스튜디오/로케이션 분류 그룹. 녹음 세션 1Pro 산정. UI 라벨 통일 |
 | 세션 종류 | `session_type` | 녹음/믹싱/마스터링/기타(세션 구분, 겹침검사 단위). '녹음 종류'와 다른 필드 |
 | 작업 종류 카탈로그 | `task_types` | 곡·콘텐츠 작업 종류(보컬튠·믹싱…), DB 관리·삭제-only |
-| 클라이언트 | `clients` | 통칭(아티스트·소속사·제작사). **실결제자**=프로젝트/청구의 결제 역할(`client_id`) |
+| 클라이언트 | `clients` | 통칭(아티스트·소속사·제작사). **청구처**(=실결제자)=청구의 결제 역할(`client_id`, 청구폼서 결정) |
 | 하우스 엔지니어 / 외주 작업자 | `project_managers`(`user_id` 유/무) | 작업 담당자 select 출처. 외주는 **`/workers` 메뉴** 단독 관리(일원화 완료). 정산 합계=Σ`worker_rate` |
 | 룸 | `rooms` / `room_id` | 스튜디오 룸. 세션별 지정. 겹침 검사 단위(같은 룸만 충돌, 다른 룸 병렬 허용) |
 | 지급단가 / 고객청구 | `worker_rate` / `total_price` | 작업 단위. 정산=Σworker_rate, total_price는 마진 산정용 참고 |

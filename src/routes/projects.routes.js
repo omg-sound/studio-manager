@@ -908,6 +908,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <input class="input py-1.5 text-sm" type="date" name="due_date" />
           </div>
         </div>
+        <p class="mb-2 text-xs text-muted">생성하면 바로 <span class="font-medium text-fg">발행</span>됩니다. 발행 후에는 청구처를 바꿀 수 없어요(미발행 상태에서만 변경).</p>
         <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성</button>
       </div>
     </form>`;
