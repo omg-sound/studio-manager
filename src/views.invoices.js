@@ -7,6 +7,37 @@ const { esc, formatKRW, emptyState, detailsChevron, listRow } = require("./views
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel } = require("./lib/date");
 
+/**
+ * 청구처(클라이언트) 정보 카드 — 대표자·사업자등록번호(첨부 사업자등록증 링크)·주소·담당자 연락처.
+ * 청구 상세/프로젝트 청구 탭에서 청구처 정보를 바로 확인. hasBizFile=true면 사업자번호를 클릭해 등록증 열람.
+ */
+function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = false } = {}) {
+  if (!client || !client.id) return "";
+  const cell = (label, value) =>
+    `<div class="flex items-start justify-between gap-3 py-0.5"><span class="text-xs text-muted">${esc(label)}</span><span class="text-right text-sm font-medium">${value}</span></div>`;
+  const rows = [];
+  if (client.kind) rows.push(cell("분류", esc(client.kind)));
+  if (client.owner_name) rows.push(cell("대표자", esc(client.owner_name)));
+  if (client.biz_no) {
+    const bn = esc(client.biz_no);
+    rows.push(cell("사업자등록번호", hasBizFile
+      ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" class="text-primary hover:underline" title="첨부된 사업자등록증 보기">${bn} <span class="text-xs">↗</span></a>`
+      : bn));
+  }
+  if (client.address) rows.push(cell("주소", esc(client.address)));
+  if (contacts && contacts.length) {
+    const c = contacts[0];
+    const parts = [`<span class="font-medium">${esc(c.name)}</span>`];
+    if (c.phone) parts.push(`<a href="tel:${esc(String(c.phone).replace(/[^0-9+]/g, ""))}" class="text-info">${esc(c.phone)}</a>`);
+    if (c.email) parts.push(`<a href="mailto:${esc(c.email)}" class="text-info">${esc(c.email)}</a>`);
+    rows.push(cell("담당자", parts.join(" · ")));
+  }
+  const head = `<div class="mb-1 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold">청구처 정보</h3><a href="/clients/${client.id}" class="text-xs text-muted hover:text-fg hover:underline">클라이언트 ↗</a></div>`;
+  const inner = `${head}<div class="font-semibold">${esc(client.name)}</div>${rows.join("")}`;
+  if (compact) return `<div class="rounded-lg border border-border bg-bg p-3 text-sm">${inner}</div>`;
+  return `<div class="card mt-3"><div class="text-sm">${inner}</div></div>`;
+}
+
 /** 표시용 상태(연체/부분납 파생 반영). */
 function displayStatus(inv) {
   if (isOverdue(inv)) return "연체";
@@ -101,7 +132,8 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
       <a href="/invoices/${inv.id}" class="ml-auto text-xs text-muted hover:text-fg hover:underline">전체 화면으로 ↗</a>
     </div>`;
 
-  return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${amountGrid}${itemList}${adminControls}${pdfAndFull}</div>`;
+  const payer = inv.payerCard || ""; // 라우트가 첨부한 청구처 정보 카드(compact)
+  return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${amountGrid}${payer}${itemList}${adminControls}${pdfAndFull}</div>`;
 }
 
 /** 목록 행(링크 카드). compact=프로젝트 상세 청구 탭용 — 클릭하면 그 자리에서 펼침(페이지 이동 없음). */
@@ -222,4 +254,4 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </div>`;
 }
 
-module.exports = { invoiceBadge, invoiceRow, invoicesSection, displayStatus };
+module.exports = { invoiceBadge, invoiceRow, invoicesSection, displayStatus, payerInfoCard };

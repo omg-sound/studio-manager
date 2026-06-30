@@ -18,10 +18,12 @@ const {
   getStudioInfo,
   getStudioLogo,
   getClient,
+  getClientFile,
+  listContactsForClient,
   ensureInvoiceNumber,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup } = require("../views");
-const { invoiceRow, invoiceBadge } = require("../views.invoices");
+const { invoiceRow, invoiceBadge, payerInfoCard } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
 const { asyncHandler } = require("../lib/async");
@@ -201,6 +203,11 @@ router.get("/:id", requireBilling, (req, res) => {
   const items = itemBundle ? itemBundle.rows : [];
   const issued = inv.status === "발행" || inv.status === "입금완료";
   const pdfTypes = issued ? DOC_TYPES : ["견적서"]; // 미발행은 견적서 PDF만 허용(라우트 가드와 일치)
+  // 청구처 정보(대표자·사업자번호·담당자 연락처) — 청구처가 클라이언트일 때
+  const payerClient = inv.client_id ? getClient(inv.client_id) : null;
+  const payerCard = payerClient
+    ? payerInfoCard(payerClient, listContactsForClient(payerClient.id), !!getClientFile(payerClient.id, "biz_license"))
+    : "";
 
   const row = (label, value) =>
     `<div class="flex justify-between border-b border-border py-2 last:border-0"><span class="text-sm text-muted">${esc(label)}</span><span class="text-sm font-medium">${value}</span></div>`;
@@ -246,6 +253,7 @@ router.get("/:id", requireBilling, (req, res) => {
       ${row("마감일", inv.due_date ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}` : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
     </div>
+    ${payerCard}
     <div class="mt-3 flex flex-wrap items-center gap-1.5">
         <span class="text-xs text-muted">PDF 발행:</span>
         ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(issued ? t : t + " PDF")}</a>`).join("")}

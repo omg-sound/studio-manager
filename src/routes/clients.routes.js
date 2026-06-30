@@ -12,6 +12,7 @@ const {
   listClients, clientKindCounts, getClient, listProjectsForClient,
   listInvoicesForClientEntity, listContactsForClient,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
+  contactOptions, createContact, addAffiliation,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -149,6 +150,7 @@ router.post("/", (req, res) => {
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
     });
+  linkClientContact(info.lastInsertRowid, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect("/clients?flash=created#c" + info.lastInsertRowid);
 });
 
@@ -186,6 +188,7 @@ router.post("/:id", (req, res) => {
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
     });
+  linkClientContact(id, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect("/clients?flash=saved#c" + id);
 });
 
@@ -395,6 +398,41 @@ function clientFileSection(c, fileMap, fileErr) {
   </section>`;
 }
 
+/** 클라이언트 담당자 연락처 콤보 — 이름 선택/입력 시 연락처에 연동(이 클라이언트 소속으로). 프로젝트 contactCombo와 동일 패턴(app.js 처리). */
+function clientContactCombo(c, isEdit) {
+  const opts = contactOptions();
+  const cur = isEdit && c.id ? (listContactsForClient(c.id)[0] || null) : null;
+  return `
+    <div>
+      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 연락처에 연동)</span></label>
+      <div data-contact-combo>
+        <input type="hidden" name="contact_id" value="${cur ? cur.id : ""}" data-contact-id />
+        <input class="input" type="text" name="contact_name" list="dl-client-contacts" data-contact-search autocomplete="off"
+          placeholder="이름 입력 — 목록에서 선택하거나 새 이름" value="${cur ? esc(cur.name) : ""}" aria-label="담당자 검색" />
+        <datalist id="dl-client-contacts">
+          ${opts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
+        </datalist>
+        <div class="mt-1 hidden text-sm text-muted" data-contact-info></div>
+        <p class="mt-0.5 text-xs text-muted">목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.</p>
+      </div>
+    </div>`;
+}
+
+/** 클라이언트 담당자(연락처) 연동: 선택/입력된 담당자를 이 클라이언트 소속으로 연결(이미 현 소속이면 생략). */
+function linkClientContact(clientId, body) {
+  let contactId = body.contact_id ? Number(body.contact_id) : null;
+  if (!contactId) {
+    const name = String(body.contact_name || "").trim();
+    if (!name) return;
+    contactId = createContact({ name });
+  }
+  if (!contactId) return;
+  const already = db()
+    .prepare("SELECT 1 FROM contact_affiliations WHERE contact_id = ? AND client_id = ? AND ended_on IS NULL LIMIT 1")
+    .get(contactId, Number(clientId));
+  if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가
+}
+
 function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
@@ -423,6 +461,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>
         <div><label class="label">전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" /></div>
       </div>
+      ${clientContactCombo(c, isEdit)}
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       <div class="flex gap-2">
         <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>

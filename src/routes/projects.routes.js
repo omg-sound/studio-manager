@@ -38,10 +38,13 @@ const {
   deleteTask,
   createInvoiceFromTasks,
   createContact,
+  getClient,
+  getClientFile,
+  listContactsForClient,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, listGroup, listRow } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
-const { invoicesSection } = require("../views.invoices");
+const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
 const { isValidYmd, formatYmdShort, todayYmd } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
@@ -234,10 +237,15 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     const inv = listInvoicesForProject(req.user, p.id);
     // 각 인보이스에 청구 항목을 붙여 청구 탭에서 펼쳐본다(입금·상태·삭제·PDF). 수정은 없음(발행=확정, 변경은 삭제 후 재발행). 프로젝트당 인보이스 소수라 N+1 무해.
     const invoiceRows = inv
-      ? inv.rows.map((r) => ({
-          ...r,
-          items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [],
-        }))
+      ? inv.rows.map((r) => {
+          const pc = r.client_id ? getClient(r.client_id) : null;
+          return {
+            ...r,
+            items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [],
+            // 청구처 정보(대표자·사업자번호·담당자) 카드 — 청구 탭 펼침에서 바로 확인. 프로젝트당 인보이스 소수라 N+1 무해.
+            payerCard: pc ? payerInfoCard(pc, listContactsForClient(pc.id), !!getClientFile(pc.id, "biz_license"), { compact: true }) : "",
+          };
+        })
       : [];
     const unbilled = listUnbilledTasksForProject(req.user, p.id);
     const unbilledRows = unbilled ? unbilled.rows : [];
