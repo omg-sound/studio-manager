@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireAuth, requireEditor, requireChief, requireBilling, canEdit, canBill } = require("../auth");
+const { requireAuth, requireEditor, requireBilling, canEdit, canBill } = require("../auth");
 const {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
@@ -184,8 +184,8 @@ router.get("/:id", requireAuth, (req, res) => {
   renderProjectDetail(req, res, p);
 });
 
-// ── 프로젝트 삭제 (치프 전용) ──
-router.post("/:id/delete", requireChief, (req, res) => {
+// ── 프로젝트 삭제 (치프·스태프) ──
+router.post("/:id/delete", requireEditor, (req, res) => {
   const p = getProjectForUser(req.user, Number(req.params.id));
   if (!p) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   try {
