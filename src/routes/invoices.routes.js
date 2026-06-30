@@ -30,6 +30,16 @@ const { notifyInvoiceIssued } = require("../notify");
 
 const router = express.Router();
 
+/**
+ * 변경 후 복귀 경로 결정: 폼이 보낸 return(프로젝트 청구 탭 펼침 복귀)이 안전한 내부 경로면 그쪽, 아니면 기본(청구 상세).
+ * 내부 절대경로만 허용(`//`·`/\` open-redirect 차단, safeNext와 동일 규칙). flash는 기존 쿼리 유무에 맞춰 합친다.
+ */
+function returnTo(req, fallback, flash) {
+  const v = req.body && req.body.return;
+  const safe = typeof v === "string" && /^\/(?![/\\])/.test(v) ? v : fallback;
+  return safe + (safe.includes("?") ? "&" : "?") + "flash=" + flash;
+}
+
 function projectOptions() {
   return db().prepare("SELECT id, title, client_id FROM projects ORDER BY created_at DESC").all();
 }
@@ -353,7 +363,7 @@ router.post("/:id/pay", requireBilling, (req, res) => {
     throw e;
   }
   if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(getInvoiceForUser(req.user, inv.id)); // 미발행→발행/입금완료 첫 전이 시 1회 알림
-  res.redirect(`/invoices/${inv.id}?flash=paid`);
+  res.redirect(returnTo(req, `/invoices/${inv.id}`, "paid"));
 });
 
 // ── 상태 변경(관리자) ──
@@ -375,13 +385,14 @@ router.post("/:id/status", requireBilling, (req, res) => {
     throw e;
   }
   if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(getInvoiceForUser(req.user, inv.id)); // 미발행→발행/입금완료 첫 전이 시 1회 알림
-  res.redirect(`/invoices/${inv.id}?flash=saved`);
+  res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
 });
 
 // ── 삭제(관리자) ── 연결 작업의 청구 잠금을 먼저 해제(좀비 작업 방지). data.js deleteInvoice 트랜잭션.
 router.post("/:id/delete", requireBilling, (req, res) => {
   deleteInvoice(req.user, Number(req.params.id));
-  res.redirect("/invoices?flash=deleted");
+  // 삭제 후엔 인보이스가 없으니 청구 탭 복귀 시 open=ID는 무시됨(그 행 미생성). 기본은 청구 목록.
+  res.redirect(returnTo(req, "/invoices", "deleted"));
 });
 
 // ── 폼 ──

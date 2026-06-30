@@ -560,3 +560,14 @@
     });
   });
 })();
+
+// 프로젝트 청구 탭 펼침 복귀(?open=ID): 입금·상태 처리 후 그 인보이스 행으로 스크롤(서버가 details를 open으로 렌더).
+(function () {
+  "use strict";
+  var m = (location.search || "").match(/[?&]open=(\d+)/);
+  if (!m) return;
+  var el = document.getElementById("inv-" + m[1]);
+  if (!el || !el.scrollIntoView) return;
+  // 레이아웃 안정(폰트·이미지 로드) 후 중앙 정렬 스크롤.
+  setTimeout(function () { el.scrollIntoView({ block: "center" }); }, 60);
+})();

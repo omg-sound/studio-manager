@@ -27,6 +27,7 @@ const {
   taskTypeGroup,
   listDeliverablesForProject,
   listInvoicesForProject,
+  listInvoiceItemsForInvoice,
   listTracksForProject,
   listUnbilledTasksForProject,
   listBillableSessionsForProject,
@@ -233,12 +234,14 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     tabContent = deliverablesSection({ project: p, rows: deliv ? deliv.rows : [], isAdmin: editable, baseUrl: config.baseUrl, collapsed: false });
   } else if (tab === "invoice" && showInvoice) {
     const inv = listInvoicesForProject(req.user, p.id);
+    // 각 인보이스에 청구 항목을 붙여 청구 탭에서 펼쳐볼 수 있게(페이지 이동 없이 인라인 상세). 프로젝트당 인보이스 소수라 N+1 무해.
+    const invoiceRows = inv ? inv.rows.map((r) => ({ ...r, items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [] })) : [];
     const unbilled = listUnbilledTasksForProject(req.user, p.id);
     const unbilledRows = unbilled ? unbilled.rows : [];
     const billable = listBillableSessionsForProject(req.user, p.id);
     const sessionRows = billable ? billable.rows : [];
     const unbilledForm = (unbilledRows.length || sessionRows.length) ? unbilledInvoiceForm(p, unbilledRows, sessionRows) : "";
-    tabContent = invoicesSection({ project: p, rows: inv ? inv.rows : [], isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length + sessionRows.length });
+    tabContent = invoicesSection({ project: p, rows: invoiceRows, isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length + sessionRows.length, openId: Number(req.query.open) || null });
   } else {
     const rateItems = editable ? listRateItems() : [];
     const sessionBundle2 = listSessionsForProject(req.user, p.id);
