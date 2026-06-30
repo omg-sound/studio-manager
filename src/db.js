@@ -318,6 +318,7 @@ function init() {
   addColumn("rate_items", "category", "TEXT NOT NULL DEFAULT '스튜디오 녹음'"); // 단가표(녹음 종류) 분류: 스튜디오 녹음 | 로케이션 녹음
   addColumn("sessions", "rate_item_id", "INTEGER REFERENCES rate_items(id) ON DELETE SET NULL"); // 녹음 세션 시간제 단가표 연결
   addColumn("project_managers", "user_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL"); // 하우스 엔지니어(로그인 사용자)와 링크. null=외주 작업자
+  addColumn("project_managers", "contact_id", "INTEGER"); // 연동 연락처(contacts.id). null=미연동
   addColumn("sessions", "booker_name", "TEXT"); // 예약 담당자(담당자 마스터에서 선택, 담당 엔지니어와 별개)
   addColumn("sessions", "gcal_event_id", "TEXT"); // 예약 시 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적)
   addColumn("sessions", "room_id", "INTEGER"); // 룸(스튜디오 공간). FK 없음(ALTER 한계) — 룸별 겹침 검사, 룸 삭제 시 코드가 NULL 처리(SET NULL 의미)
@@ -402,6 +403,20 @@ function init() {
         AND (SELECT COUNT(*) FROM project_managers pm2 WHERE pm2.name = track_tasks.engineer_name) = 1
     `);
     setState("track_engineer_id_backfill_v1", "done");
+  }
+
+  // 활성 담당자(project_managers) 중 연동 연락처가 없는 행에 contacts 행을 1회 생성.
+  // 멱등: contact_id가 이미 있는 행은 건너뜀.
+  if (!getState("manager_contacts_backfill_v1")) {
+    const managers = d.prepare("SELECT id, name, phone, email FROM project_managers WHERE active = 1 AND contact_id IS NULL").all();
+    const insContact = d.prepare("INSERT INTO contacts (name, phone, email) VALUES (?, ?, ?)");
+    const updMgr = d.prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?");
+    for (const m of managers) {
+      if (!m.name || !String(m.name).trim()) continue;
+      const info = insContact.run(m.name, m.phone || null, m.email || null);
+      updMgr.run(info.lastInsertRowid, m.id);
+    }
+    setState("manager_contacts_backfill_v1", "done");
   }
 
   // ── 후속 단계 테이블 자리(스키마만; 아직 미사용) ──

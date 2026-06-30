@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, requireInvoice, isChief } = require("../auth");
-const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel } = require("../data");
+const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel, syncManagerToContact } = require("../data");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE } = require("../config");
 
@@ -70,6 +70,7 @@ router.post("/:id/edit", requireChief, (req, res) => {
     db().prepare("UPDATE project_managers SET name = ?, email = ?, phone = ? WHERE id = ? AND user_id IS NULL")
       .run(name, String(req.body.email || "").trim() || null, String(req.body.phone || "").trim() || null, id);
     db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, id); // 이름 변경 시 작업 스냅샷 동기화(정산 매칭 유지)
+    syncManagerToContact(id); // 전화·이메일 → 연동 연락처 동기화
   }
   res.redirect(`/workers/${id}?flash=saved`);
 });

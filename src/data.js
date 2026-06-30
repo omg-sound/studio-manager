@@ -309,6 +309,62 @@ function listSessionsForContact(contactId) {
   ).all(Number(contactId));
 }
 
+// ── 담당자(project_managers) ↔ 연락처(contacts) 연동 ──
+
+/** contact_id로 연결된 담당자(project_managers) 조회. 없으면 null. */
+function getManagerByContactId(contactId) {
+  return db().prepare("SELECT * FROM project_managers WHERE contact_id = ?").get(Number(contactId)) || null;
+}
+
+/**
+ * 담당자(managerId)에 연동 연락처가 없으면 contacts 행을 생성해 contact_id 연결 후 contactId 반환.
+ * 이미 연결되어 있으면 기존 contact_id 반환. 외주·하우스 공통. 멱등.
+ */
+function ensureContactForManager(managerId) {
+  const m = db().prepare("SELECT * FROM project_managers WHERE id = ?").get(Number(managerId));
+  if (!m) return null;
+  if (m.contact_id) return m.contact_id;
+  const contactId = createContact({ name: m.name, phone: m.phone, email: m.email });
+  db().prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?").run(contactId, Number(managerId));
+  return contactId;
+}
+
+/**
+ * 연락처 수정 → 연결된 담당자(project_managers) 동기화.
+ * 전화: 항상. 이메일: 외주(user_id IS NULL)만 — 하우스는 users.email 보호.
+ * 루프 방지: 단순 UPDATE만 수행, syncManagerToContact 재호출 금지.
+ */
+function syncContactToManager(contactId) {
+  const c = db().prepare("SELECT phone, email FROM contacts WHERE id = ?").get(Number(contactId));
+  if (!c) return;
+  const m = db().prepare("SELECT id, user_id FROM project_managers WHERE contact_id = ?").get(Number(contactId));
+  if (!m) return;
+  if (m.user_id == null) {
+    // 외주: 전화 + 이메일 동기화
+    db().prepare("UPDATE project_managers SET phone = ?, email = ? WHERE id = ?").run(c.phone, c.email, m.id);
+  } else {
+    // 하우스: 전화만 동기화(이메일은 users.email 보호)
+    db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(c.phone, m.id);
+  }
+}
+
+/**
+ * 담당자 수정 → 연결된 연락처(contacts) 동기화.
+ * 전화: 항상. 이메일: 외주(user_id IS NULL)만 — 하우스는 이메일 제외.
+ * 루프 방지: 단순 UPDATE만 수행, syncContactToManager 재호출 금지.
+ */
+function syncManagerToContact(managerId) {
+  const m = db().prepare("SELECT contact_id, phone, email, user_id FROM project_managers WHERE id = ?").get(Number(managerId));
+  if (!m || !m.contact_id) return;
+  if (m.user_id == null) {
+    // 외주: 전화 + 이메일 동기화
+    db().prepare("UPDATE contacts SET phone = ?, email = ? WHERE id = ?").run(m.phone, m.email, m.contact_id);
+  } else {
+    // 하우스: 전화만 동기화
+    db().prepare("UPDATE contacts SET phone = ? WHERE id = ?").run(m.phone, m.contact_id);
+  }
+}
+
 // ── 룸(스튜디오 공간) — 룸별 겹침 검사. 치프가 /settings에서 CRUD ──
 
 /** 활성(또는 전체) 룸 목록. 정렬: sort_order → 이름. */
@@ -1601,6 +1657,10 @@ module.exports = {
   listContactsForClient,
   listProjectsForContact,
   listSessionsForContact,
+  getManagerByContactId,
+  ensureContactForManager,
+  syncContactToManager,
+  syncManagerToContact,
   listRooms,
   createRoom,
   deleteRoom,

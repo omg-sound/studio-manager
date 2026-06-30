@@ -17,6 +17,8 @@ const {
   listProjectsForContact,
   listSessionsForContact,
   listClients,
+  getManagerByContactId,
+  syncContactToManager,
 } = require("../data");
 const people = require("../people");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge } = require("../views");
@@ -116,20 +118,28 @@ router.post("/", async (req, res) => {
 router.get("/:id/edit", (req, res) => {
   const c = getContact(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(c, true) }));
+  const linkedManager = getManagerByContactId(c.id);
+  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(c, true, [], linkedManager) }));
 });
 
 router.post("/:id", async (req, res) => {
   const id = Number(req.params.id);
   const c = getContact(id);
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  // 하우스 엔지니어 연동 연락처면 이메일은 기존값 유지(users.email 보호)
+  const linkedManager = getManagerByContactId(id);
+  const isHouseEngineer = linkedManager && linkedManager.user_id != null;
   const b = req.body;
   try {
     updateContact(id, {
-      name: b.name, phone: b.phone, email: b.email, memo: b.memo,
+      name: b.name, phone: b.phone,
+      email: isHouseEngineer ? c.email : b.email,  // 하우스: 기존 이메일 유지
+      memo: b.memo,
       family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
       nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
     });
+    // 담당자(project_managers) 동기화: 전화(항상) + 이메일(외주만)
+    syncContactToManager(id);
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
       const updated = getContact(id);
@@ -143,7 +153,7 @@ router.post("/:id", async (req, res) => {
     } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=saved`);
   } catch (_e) {
-    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
+    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, [], linkedManager) }));
   }
 });
 
@@ -195,8 +205,16 @@ router.get("/:id", (req, res) => {
   const projects = listProjectsForContact(c.id);
   const sessions = listSessionsForContact(c.id);
   const clients = listClients({});
+  const linkedManager = getManagerByContactId(c.id);
 
   const nameDetail = [c.honorific, c.family_name, c.given_name].filter(Boolean).join(" ");
+  const managerBadge = linkedManager
+    ? `<div class="text-sm"><span class="text-muted">담당자 연동</span> ${
+        linkedManager.user_id != null
+          ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
+          : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
+      }</div>`
+    : "";
   const infoCard = `
     <div class="card mb-6 space-y-2">
       ${nameDetail && nameDetail !== c.name ? `<div class="text-sm"><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : ""}
@@ -204,8 +222,9 @@ router.get("/:id", (req, res) => {
       ${c.company ? `<div class="text-sm"><span class="text-muted">회사</span> ${esc(c.company)}</div>` : ""}
       ${c.job_title ? `<div class="text-sm"><span class="text-muted">직책</span> ${esc(c.job_title)}${c.department ? " · " + esc(c.department) : ""}</div>` : c.department ? `<div class="text-sm"><span class="text-muted">부서</span> ${esc(c.department)}</div>` : ""}
       <div class="text-sm"><span class="text-muted">휴대전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
-      <div class="text-sm"><span class="text-muted">이메일</span> ${c.email ? esc(c.email) : `<span class="text-muted">없음</span>`}</div>
+      <div class="text-sm"><span class="text-muted">이메일</span> ${c.email ? esc(c.email) : `<span class="text-muted">없음</span>`}${linkedManager && linkedManager.user_id != null ? ` <span class="text-xs text-muted">(로그인 계정)</span>` : ""}</div>
       ${c.memo ? `<div class="text-sm"><span class="text-muted">메모</span> ${esc(c.memo)}</div>` : ""}
+      ${managerBadge}
       <div class="flex gap-2 pt-1">
         <a href="/contacts/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>
         <form method="post" action="/contacts/${c.id}/delete" data-confirm="${esc(c.name)} 연락처를 삭제할까요? 소속 이력도 함께 삭제됩니다.">
@@ -290,10 +309,11 @@ router.get("/:id", (req, res) => {
 });
 
 // ── 폼(추가/수정 공용) ──
-function contactForm(c = {}, isEdit = false, clients = []) {
+function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
   const e = c._err || "";
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
   const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
+  const isHouseEngineer = manager && manager.user_id != null;
   // 생성 시에만 '현재 소속'을 같이 입력(첫 소속 등록). 수정 시 소속은 상세의 이력에서 관리(이직 등).
   const affBlock = isEdit ? "" : `
       <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
@@ -312,10 +332,18 @@ function contactForm(c = {}, isEdit = false, clients = []) {
           </div>
         </div>
       </div>`;
+  const managerBanner = manager
+    ? `<div class="rounded-lg px-3 py-2 text-sm ${isHouseEngineer ? "bg-info/10 text-info" : "bg-neutral/10 text-fg"}">
+        ${isHouseEngineer
+          ? `<span class="badge badge-info">하우스 엔지니어</span> <strong>${esc(manager.name)}</strong> 연동 연락처 — 이메일은 로그인 계정이라 변경할 수 없습니다.`
+          : `<span class="badge badge-neutral">외주 작업자</span> <strong>${esc(manager.name)}</strong> 연동 연락처 — 전화·이메일이 양방향으로 동기화됩니다.`}
+      </div>`
+    : "";
   return `
     ${pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
     <form method="post" action="${action}" class="card space-y-4">
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
+      ${managerBanner}
       <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
         <div class="text-sm font-medium">이름 <span class="font-normal text-muted">— 성·이름 입력 시 표시명 자동 생성. 직접 입력도 가능</span></div>
         <div class="grid gap-3 sm:grid-cols-3">
@@ -335,7 +363,11 @@ function contactForm(c = {}, isEdit = false, clients = []) {
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">휴대전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" placeholder="010-0000-0000" /></div>
-        <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>
+        <div>
+          <label class="label">이메일${isHouseEngineer ? ` <span class="font-normal text-muted">(로그인 계정)</span>` : ""}</label>
+          <input class="input" type="email" name="email" value="${esc(c.email || "")}"${isHouseEngineer ? ' readonly aria-readonly="true" class="input opacity-60 cursor-not-allowed"' : ""} />
+          ${isHouseEngineer ? `<p class="mt-0.5 text-xs text-muted">하우스 엔지니어 로그인 계정 이메일이라 변경 불가합니다.</p>` : ""}
+        </div>
       </div>
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       ${affBlock}

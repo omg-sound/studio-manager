@@ -25,6 +25,7 @@ const {
   setStudioHours,
   getDefaultBooker,
   setDefaultBooker,
+  syncManagerToContact,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron } = require("../views");
 const { asyncHandler } = require("../lib/async");
@@ -464,7 +465,10 @@ router.post("/users/:id/edit", requireChief, (req, res) => {
   if (name) db().prepare("UPDATE users SET name = ? WHERE id = ?").run(name, id);
   syncUserToManager(findUserById(id)); // users.name·email·active → 작업 담당자(project_managers) 동기화
   const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ?").get(id);
-  if (mgr) db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(String(req.body.phone || "").trim() || null, mgr.id);
+  if (mgr) {
+    db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(String(req.body.phone || "").trim() || null, mgr.id);
+    syncManagerToContact(mgr.id); // 전화 → 연동 연락처 동기화(하우스는 이메일 제외)
+  }
   res.redirect("/settings?tab=people&flash=saved");
 });
 
