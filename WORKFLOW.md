@@ -8,11 +8,11 @@
 > 세션(예약 그리드·**다중 룸(룸별 겹침)**·구글 캘린더 자동 연동·텍스트 직접입력·소요 슬라이더·세션 종류 선택·**조건부 녹음 단가**(종류=녹음일 때만)·**예정 완료 1클릭**·**목록 검색**·**운영시간 기반 동적 슬롯**·일정 목록/캘린더 전환·청구 잠금) +
 > 곡·콘텐츠(후반작업·**외주 지급단가 `worker_rate`·`engineer_id`**) + 작업 종류 카탈로그(DB 관리·삭제-only) + **거래명세서 PDF**(resvg + 한글 폰트 번들·문서명 3종) +
 > 알림 채널(웹훅·암호화·fail-safe) + 관리 항목 삭제 + 녹음 세션 직접 청구(청구 탭 자동 노출·세션 잠금) +
-> 클라이언트 상세(진행 프로젝트 + 청구·결제 히스토리·**이름 검색**) + **외주 작업자 메뉴**(`/workers`, 일원화 완료·정산=Σworker_rate) +
-> **UX**: 대시보드 오늘/이번 주 세션 카드·지표 강화, 프로젝트 마감일 D-day·유형 변경·곡 일괄추가·실결제자 가시화, 청구 검색·견적서·채번 원자화 +
+> 클라이언트 상세(진행 프로젝트 + 청구·결제 히스토리·**이름 검색**·**담당자 연락처**) + **연락처(담당자) 도메인**(`/contacts`, 소속 이력·이직·생성 시 소속·프로젝트 클라이언트 담당자) + **외주 작업자 메뉴**(`/workers`, 일원화 완료·정산=Σworker_rate) +
+> **UX**: 대시보드 오늘/이번 주 세션 카드·지표 강화, 프로젝트 마감일 D-day·곡 일괄추가·실결제자 검색형 콤보, 청구 검색·견적서·채번 원자화 +
 > **디자인**: **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용), 쿨톤 info색(`badge-info`), 사이드바 그룹화(운영/청구/관리), 수동 테마 토글(크림 기본, `html[data-theme]`+localStorage), `listGroup`/`listRow`/`emptyState` 공통 헬퍼 +
 > **보안 하드닝**: CSRF 기본거부·OAuth 논스·SSRF 차단·로고 매직바이트.
-> **용어**: 프로젝트 유형 = **세션(session)·작업(task)** / 녹음 종류 = 단가표 항목(rate_item) / 세션 종류 = session_type / 룸 = rooms / 클라이언트(통칭)·실결제자(역할).
+> **용어**: 프로젝트 = **유형 구분 없음**(전 프로젝트 세션일정+곡콘텐츠, `project_type` 레거시) / 녹음 종류 = 단가표 항목(rate_item) / 세션 종류 = session_type / 룸 = rooms / 클라이언트(회사)·실결제자(역할)·**연락처(담당자·소속이력)**.
 > 미완(검증): 프로덕션에서 PDF 렌더·알림 웹훅 동작 확인, Drive 실연동. 선택: 구글 캘린더 역방향 동기화·알림 Gmail 어댑터·입금 이력 분리.
 
 ---
@@ -109,7 +109,8 @@ src/
   routes/
     auth.routes.js       /login · OAuth(state 논스) · safeNext(역슬래시 차단) · /dev-login
     dashboard.routes.js  / (역할별 카드 + 오늘/이번 주 세션 카드)
-    projects.routes.js   목록(검색·세션액 합산)·상세(곡콘텐츠·작업·자료·청구)·CRUD(유형변경·곡일괄·마감일·삭제가드)
+    projects.routes.js   목록(검색·세션액 합산)·상세(곡콘텐츠·작업·자료·청구)·CRUD(곡일괄·마감일·삭제가드·클라이언트 담당자)
+    contacts.routes.js   연락처 CRUD + 소속 이력(이직·종료)·생성 시 소속(requireEditor)
     invoices.routes.js   청구 CRUD(검색) · 입금/상태 · 채번 원자화 · 발행알림 첫전이
     sessions.routes.js   전역 일정(/sessions, **목록 검색·예정 세션 1클릭 완료**) + 세션 CRUD(룸별 겹침·취소 캘린더 동기화·상태잠금)
     clients.routes.js    클라이언트 CRUD + 분류 탭(filterChips) + 상세(진행 프로젝트·청구 히스토리) (치프)
@@ -176,7 +177,8 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 
 | UI 표기 | 코드 식별자 | 비고 |
 |---|---|---|
-| 세션 / 작업 | `project_type` (`session`\|`task`) | 프로젝트 유형 2종. **세션**=방문·예약·실시간(세션 일정 탭) / **작업**=항목만(세션 탭 없음). 레거시 `NULL`은 세션 탭 유지 |
+| ~~세션 / 작업~~ | `project_type` (레거시) | **유형 구분 폐기**(2026-06-30) — 전 프로젝트가 세션 일정+곡·콘텐츠 동일. `project_type`은 레거시 컬럼(신규=session, UI 미노출) |
+| 연락처 / 소속 | `contacts` / `contact_affiliations` | 클라이언트 측 담당자 + 소속 이력(이직). `ended_on` NULL=현재, 무소속=`client_id` NULL. 프로젝트 `contact_id`로 연결 |
 | 곡 · 콘텐츠 | `project_tracks` / `track` | 녹음과 별개의 후반작업 단위. `content_type`(Music\|Video_Post)은 UI 미노출(현재 전부 Music) |
 | 작업 | `track_tasks` / `task` | 보컬튠·믹싱·마스터링 등 모듈 단위 |
 | 일정 / 세션 | `sessions` | 녹음/믹싱/마스터링 예약. 사이드바 "일정" |
