@@ -62,6 +62,18 @@ router.post("/:id/delete", requireChief, (req, res) => {
   res.redirect("/workers?flash=deleted");
 });
 
+// 외주 작업자 정보 수정(이름·전화·이메일) — 치프만(마스터 관리). user_id IS NULL로 외주만.
+router.post("/:id/edit", requireChief, (req, res) => {
+  const id = Number(req.params.id);
+  const name = String(req.body.name || "").trim();
+  if (name) {
+    db().prepare("UPDATE project_managers SET name = ?, email = ?, phone = ? WHERE id = ? AND user_id IS NULL")
+      .run(name, String(req.body.email || "").trim() || null, String(req.body.phone || "").trim() || null, id);
+    db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, id); // 이름 변경 시 작업 스냅샷 동기화(정산 매칭 유지)
+  }
+  res.redirect(`/workers/${id}?flash=saved`);
+});
+
 // ── 외주 작업자 상세(작업 히스토리 / 정산) ──
 router.get("/:id", requireInvoice, (req, res) => {
   const w = getWorker(Number(req.params.id));
@@ -127,9 +139,21 @@ router.get("/:id", requireInvoice, (req, res) => {
     content = `<div class="space-y-2">${rows}</div>`;
   }
 
+  const editForm = isChief(req.user)
+    ? `<details class="card mb-3">
+        <summary class="cursor-pointer text-sm font-medium text-muted hover:text-fg">정보 수정 (이름 · 전화 · 이메일)</summary>
+        <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3">
+          <input class="input py-1.5 text-sm" name="name" value="${esc(w.name || "")}" placeholder="이름" required />
+          <input class="input py-1.5 text-sm" name="email" value="${esc(w.email || "")}" placeholder="이메일" />
+          <input class="input py-1.5 text-sm" name="phone" value="${esc(w.phone || "")}" placeholder="전화" />
+          <button class="btn-primary btn-sm sm:col-span-3" type="submit">저장</button>
+        </form>
+      </details>`
+    : "";
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
+    ${editForm}
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: w.name, user: req.user, current: "/workers", body }));
