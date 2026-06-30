@@ -18,6 +18,7 @@ const {
   listSessionsForContact,
   listClients,
   getManagerByContactId,
+  classifyContact,
   syncContactToManager,
 } = require("../data");
 const people = require("../people");
@@ -61,8 +62,9 @@ router.get("/", (req, res) => {
     ? listGroup({
         rows: rows.map((c) => {
           const cur = currentAffiliation(c.id);
-          const affBadge = cur ? `<span class="badge badge-neutral">${esc(cur.client_name || "무소속")}${cur.title ? " · " + esc(cur.title) : ""}</span>` : "";
-          const left = `<div class="flex items-center gap-2"><span class="font-semibold">${esc(c.name)}</span>${affBadge}</div>`;
+          const typeBadges = classifyContact(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
+          const affBadge = cur && cur.client_id ? `<span class="badge badge-neutral">${esc(cur.client_name || "")}${cur.title ? " · " + esc(cur.title) : ""}</span>` : "";
+          const left = `<div class="flex flex-wrap items-center gap-2"><span class="font-semibold">${esc(c.name)}</span>${typeBadges}${affBadge}</div>`;
           const right = c.phone ? `<span class="text-sm text-muted">${esc(c.phone)}</span>` : "";
           return listRow({ href: `/contacts/${c.id}`, left, right });
         }),
@@ -296,7 +298,7 @@ router.get("/:id", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: c.name, desc: "연락처(클라이언트 측 담당자)", back: { href: "/contacts", label: "연락처" } })}
+    ${pageHeader({ title: c.name, desc: `연락처 · ${classifyContact(c.id).map((t) => t.label).join(" · ")}`, back: { href: "/contacts", label: "연락처" } })}
     ${infoCard}
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
     ${timeline}

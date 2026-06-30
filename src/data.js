@@ -335,6 +335,23 @@ function getManagerByContactId(contactId) {
   );
 }
 
+/** 연락처 유형 배지 — 녹음실 스태프(내부 로그인)/외주 작업자/고객측 담당자 + 디렉터(세션 디렉팅 겸직). aff 주입 시 소속 재조회 생략(목록 N+1 완화). */
+function classifyContact(contactId, aff) {
+  const id = Number(contactId);
+  const badges = [];
+  const m = db().prepare("SELECT user_id FROM project_managers WHERE contact_id = ?").get(id);
+  if (m) {
+    badges.push(m.user_id != null ? { label: "녹음실 스태프", cls: "badge-info" } : { label: "외주 작업자", cls: "badge-neutral" });
+  } else {
+    const a = aff !== undefined ? aff : currentAffiliation(id);
+    if (a && a.client_id) badges.push({ label: "고객측 담당자", cls: "badge-success" });
+  }
+  const director = db().prepare("SELECT 1 FROM sessions WHERE director_contact_id = ? LIMIT 1").get(id);
+  if (director) badges.push({ label: "디렉터", cls: "badge-warning" });
+  if (!badges.length) badges.push({ label: "지인·기타", cls: "badge-neutral" });
+  return badges;
+}
+
 /**
  * 담당자(managerId)에 연동 연락처가 없으면 contacts 행을 생성해 contact_id 연결 후 contactId 반환.
  * 이미 연결되어 있으면 기존 contact_id 반환. 외주·하우스 공통. 멱등.
@@ -1698,6 +1715,7 @@ module.exports = {
   listProjectsForContact,
   listSessionsForContact,
   getManagerByContactId,
+  classifyContact,
   ensureContactForManager,
   syncContactToManager,
   syncManagerToContact,
