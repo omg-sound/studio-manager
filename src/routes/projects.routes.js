@@ -408,6 +408,10 @@ router.post("/tasks/:taskId", requireEditor, (req, res) => {
   try {
     const task = updateTask(req.user, Number(req.params.taskId), req.body);
     if (!task) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+    if (req.get("X-Requested-With") === "fetch") {
+      // 자동저장(AJAX): 리다이렉트 대신 갱신된 헤더값 JSON 반환(금액·상태 배지).
+      return res.json({ ok: true, amount: task.total_price ? formatKRW(task.total_price) : "", statusLabel: TASK_STATUS_LABELS[task.status] || task.status, statusCls: TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted" });
+    }
     res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
     if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "수정 불가", message: "이미 청구된 작업은 수정할 수 없습니다.", user: req.user }));
@@ -684,9 +688,9 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
   const label = taskTypeLabel(task.task_type);
   const status = TASK_STATUS_LABELS[task.status] || task.status;
   const statusCls = TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted";
-  const amount = task.total_price ? `<span class="text-sm font-semibold">${formatKRW(task.total_price)}</span>` : "";
+  const amount = `<span class="text-sm font-semibold" data-row-amount>${task.total_price ? formatKRW(task.total_price) : ""}</span>`;
   const title = `<span class="min-w-0 truncate text-sm"><span class="font-medium">${esc(label)}</span>${task.engineer_name ? `<span class="text-xs text-muted"> · ${esc(task.engineer_name)}</span>` : ""}</span>`;
-  const statusBadge = `<span class="badge ${statusCls}">${esc(status)}</span>`;
+  const statusBadge = `<span class="badge ${statusCls}" data-row-status>${esc(status)}</span>`;
 
   // 비관리자/청구된 작업: 편집 불가 → 단순 행(접기 없음).
   if (!isAdmin || task.is_invoiced) {
@@ -769,7 +773,7 @@ function taskEditForm(task, managers = []) {
         </select>
       </div>
       ${legacyName ? `<input type="hidden" name="engineer_name" value="${esc(legacyName)}" />` : ""}
-      <button class="btn-primary btn-xs sm:col-span-2" type="submit">작업 저장</button>
+      <div class="text-right text-xs text-muted sm:col-span-2" data-save-state aria-live="polite"></div>
     </form>
     <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
       <button class="btn-ghost btn-xs text-danger" type="submit">작업 삭제</button>
