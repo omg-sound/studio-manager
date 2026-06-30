@@ -436,8 +436,9 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
     notifyInvoiceIssued(inv);
     res.redirect(`/invoices/${inv.id}?flash=created`);
   } catch (e) {
-    const message = e.message === "TASK_IDS_REQUIRED" ? "청구할 작업·세션을 선택하세요." : "청구 가능한 작업·세션만 선택할 수 있습니다.";
-    return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message, user: req.user }));
+    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다." };
+    if (!known[e.message]) throw e; // 알 수 없는 오류(DB 등)는 전역 핸들러(500+로깅)로 — 검증 실패로 위장 방지
+    return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message: known[e.message], user: req.user }));
   }
 });
 

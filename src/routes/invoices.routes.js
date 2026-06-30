@@ -148,14 +148,15 @@ router.post("/", requireInvoice, (req, res) => {
 
   const info = db()
     .prepare(
-      `INSERT INTO invoices (project_id, client_id, title, amount, paid_amount, status, issued_date, due_date, memo)
-       VALUES (@project_id,@client_id,@title,@amount,@paid,@status,@issued_date,@due_date,@memo)`
+      `INSERT INTO invoices (project_id, client_id, title, amount, tax_amount, paid_amount, status, issued_date, due_date, memo)
+       VALUES (@project_id,@client_id,@title,@amount,@tax,@paid,@status,@issued_date,@due_date,@memo)`
     )
     .run({
       project_id: refs.projectId,
       client_id: refs.clientId,
       title,
       amount,
+      tax: Math.round(amount - amount / 1.1), // VAT 포함 총액에서 부가세 역산(공급가=amount/1.1)
       paid,
       status,
       issued_date: cleanYmd(b.issued_date),
@@ -302,7 +303,7 @@ router.post("/:id", requireInvoice, (req, res) => {
   const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
   db()
     .prepare(
-      `UPDATE invoices SET project_id=@project_id, client_id=@client_id, title=@title, amount=@amount,
+      `UPDATE invoices SET project_id=@project_id, client_id=@client_id, title=@title, amount=@amount, tax_amount=@tax,
        paid_amount=@paid, status=@status, issued_date=@issued_date, due_date=@due_date, memo=@memo WHERE id=@id`
     )
     .run({
@@ -311,6 +312,7 @@ router.post("/:id", requireInvoice, (req, res) => {
       client_id: refs.clientId,
       title,
       amount,
+      tax: Math.round(amount - amount / 1.1), // VAT 포함 총액에서 부가세 역산
       paid,
       status,
       issued_date: cleanYmd(b.issued_date),

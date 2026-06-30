@@ -121,14 +121,14 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 app.use("/", authRoutes); // /login, /auth/google, /logout, (/dev-login)
 app.use("/", maintenanceRoutes); // /internal/cron/* (BACKUP_TOKEN 게이트, 세션 불필요)
 app.use("/", dashboardRoutes); // /  (requireAuth)
-app.use("/projects", projectRoutes); // requireAuth (+ client 범위 제한)
+app.use("/projects", projectRoutes); // requireAuth(열람) — 내부 도구: 로그인 직원 전 프로젝트 열람, 편집·작업·자료는 requireEditor
 app.use("/", deliverableRoutes); // /deliverables, /projects/:pid/deliverables, 공개 /d/:token
 app.use("/invoices", invoiceRoutes); // requireInvoice (치프/대표)
 app.use("/", sessionRoutes); // /sessions (일정) + 세션 CRUD
 app.use("/clients", clientRoutes); // requireChief
 app.use("/contacts", contactRoutes); // requireEditor (클라이언트 측 담당자 마스터 + 소속 이력)
 app.use("/workers", workerRoutes); // requireChief (외주 작업자 + 정산)
-app.use("/settings", settingsRoutes); // requireAdmin
+app.use("/settings", settingsRoutes); // requireChief
 
 // 정적 자산(css/js)만 — 보호 대상 HTML은 여기 없음
 app.use(

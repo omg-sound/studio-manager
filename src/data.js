@@ -1162,7 +1162,7 @@ function busySessionSlots(date, slots, { excludeId = null, room } = {}) {
   const rows = db()
     .prepare(
       `SELECT start_time, end_time FROM sessions
-       WHERE session_date = @date AND status <> '취소' AND session_type IN ('녹음','믹싱')
+       WHERE session_date = @date AND status <> '취소'
          AND start_time IS NOT NULL AND end_time IS NOT NULL AND id <> @excludeId ${roomClause}`
     )
     .all(params);
@@ -1209,7 +1209,6 @@ function findSessionConflict({ date, start, end, excludeId = null, room = null }
        JOIN projects p ON p.id = s.project_id
        LEFT JOIN rooms rm ON rm.id = s.room_id
        WHERE s.session_date = ? AND s.status <> '취소'
-         AND s.session_type IN ('녹음','믹싱')
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
          AND IFNULL(s.room_id, 0) = ?
          AND s.id <> ?

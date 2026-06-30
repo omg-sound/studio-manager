@@ -67,7 +67,7 @@ function startSlotGrid(current) {
     <div class="mt-1.5 flex items-center gap-1.5" data-custom-start-wrap ${showCustom ? "" : "hidden"}>
       <span class="text-xs text-muted">직접입력</span>
       <input class="input w-24 py-1.5 text-sm" type="text" inputmode="numeric" name="start_time_custom" data-custom-start
-        placeholder="예: 14:25" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
+        placeholder="예: 14:25" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
         value="${showCustom ? esc(current) : ""}" />
       <span class="text-xs text-muted">(시:분)</span>
     </div>`;
