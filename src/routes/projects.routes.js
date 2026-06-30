@@ -254,7 +254,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   }
 
   const errorModal = req.query.error === "session_invoiced" ? sessionInvoicedModal(p.id) : "";
-  const body = [flashBanner(req.query), errorModal, pageHeader({ title: p.title, desc }), tabBar, tabContent].join("\n");
+  const body = [flashBanner(req.query), errorModal, pageHeader({ title: p.title, desc, back: { href: "/projects", label: "프로젝트" } }), tabBar, tabContent].join("\n");
   res.send(layout({ title: p.title, user: req.user, current: "/projects", body }));
 }
 

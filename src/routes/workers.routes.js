@@ -129,7 +129,7 @@ router.get("/:id", requireInvoice, (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: esc(w.name), desc: "외주 작업자", action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
+    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: w.name, user: req.user, current: "/workers", body }));

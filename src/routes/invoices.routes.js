@@ -216,7 +216,7 @@ router.get("/:id", requireInvoice, (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: inv.title, desc: inv.client_name || "실결제자 미지정", action: invoiceBadge(inv) })}
+    ${pageHeader({ title: inv.title, desc: inv.client_name || "실결제자 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
     <div class="card">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
       ${row("총액", formatKRW(inv.amount))}

@@ -187,7 +187,7 @@ router.get("/:id", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: esc(c.name), desc: c.kind, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
+    ${pageHeader({ title: c.name, desc: c.kind, back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
