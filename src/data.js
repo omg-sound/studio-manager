@@ -10,7 +10,7 @@ const crypto = require("crypto");
 const { db, getState, setState } = require("./db");
 const { todayYmd, isValidYmd, formatYmdShort, timeToMin, minutesBetween } = require("./lib/date");
 const { parseMoney } = require("./lib/forms");
-const { canInvoice, isChief, canEdit } = require("./auth");
+const { canInvoice, canBill, isChief, canEdit } = require("./auth");
 const {
   normalizeTrackContentType,
   normalizeBillingType,
@@ -1035,7 +1035,7 @@ function invoiceAmountsFromSupply(supply, discount, vatIncluded = true) {
 
 function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true } = {}) {
   const project = getProjectForUser(user, projectId);
-  if (!project || !canInvoice(user)) return null;
+  if (!project || !canBill(user)) return null;
   const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
   const selectedSessions = Array.isArray(sessionIds) ? sessionIds.map(Number).filter(Boolean) : [];
   if (!selectedTasks.length && !selectedSessions.length) throw new Error("TASK_IDS_REQUIRED");
@@ -1143,7 +1143,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
  * (FK는 invoice_id만 SET NULL로 지울 뿐 is_invoiced=1은 남으므로 명시적 UPDATE 필요.)
  */
 function deleteInvoice(user, id) {
-  if (!canInvoice(user)) return null;
+  if (!canBill(user)) return null;
   const inv = db().prepare("SELECT id FROM invoices WHERE id = ?").get(id);
   if (!inv) return null;
   const d = db();

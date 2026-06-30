@@ -74,9 +74,16 @@ test("VAT: 여러 작업 합산 후 과세 — 600,000 + 400,000 → tax 100,000
   assert.strictEqual(inv.amount, 1_100_000);
 });
 
-test("청구 권한 가드: 스태프(canInvoice=false)는 청구 생성 불가(null)", () => {
+test("청구 권한: 스태프(canBill)도 청구서 생성 가능(스태프 청구 허용)", () => {
   const { projectId, taskId } = seedTask(500_000);
   const inv = createInvoiceFromTasks(STAFF, { projectId, taskIds: [taskId], issueDate: "2026-06-15" });
+  assert.ok(inv, "스태프도 청구서 발행 가능");
+  assert.strictEqual(inv.amount, 550_000); // 공급가 500,000 + VAT 50,000
+});
+
+test("청구 권한 가드: 무권한(로그인 역할 아님)은 청구 생성 불가(null)", () => {
+  const { projectId, taskId } = seedTask(500_000);
+  const inv = createInvoiceFromTasks({ id: 99, role: "none", email: "x@x.test" }, { projectId, taskIds: [taskId], issueDate: "2026-06-15" });
   assert.strictEqual(inv, null);
 });
 
