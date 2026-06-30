@@ -139,7 +139,7 @@ router.post("/", (req, res) => {
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 사업자등록번호·대표자·주소가 없음
   const info = db()
-    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, address) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@address)")
+    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, address, cash_receipt_no) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@address,@cash_receipt_no)")
     .run({
       name,
       kind,
@@ -149,6 +149,7 @@ router.post("/", (req, res) => {
       biz_no: artist ? null : String(b.biz_no || "").trim() || null,
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
+      cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
     });
   linkClientContact(info.lastInsertRowid, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect("/clients?flash=created#c" + info.lastInsertRowid);
@@ -176,7 +177,7 @@ router.post("/:id", (req, res) => {
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
   db()
-    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, address=@address WHERE id=@id")
+    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, address=@address, cash_receipt_no=@cash_receipt_no WHERE id=@id")
     .run({
       id,
       name,
@@ -187,6 +188,7 @@ router.post("/:id", (req, res) => {
       biz_no: artist ? null : String(b.biz_no || "").trim() || null,
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
+      cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
     });
   linkClientContact(id, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect("/clients?flash=saved#c" + id);
@@ -436,6 +438,7 @@ function linkClientContact(clientId, body) {
 function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
+  const isArtist = (c.kind || CLIENT_KINDS[0]) === "아티스트"; // 개인 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
   const fileMap = {};
   files.forEach((f) => { fileMap[f.kind] = f; });
 
@@ -450,12 +453,16 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
           ${CLIENT_KINDS.map((k) => `<option ${k === (c.kind || CLIENT_KINDS[0]) ? "selected" : ""}>${esc(k)}</option>`).join("")}
         </select>
       </div>
-      <div data-client-tax class="space-y-4">
+      <div data-client-tax class="space-y-4"${isArtist ? " hidden" : ""}>
         <div class="grid gap-3 sm:grid-cols-2">
           <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
           <div><label class="label">대표자</label><input class="input" name="owner_name" value="${esc(c.owner_name || "")}" /></div>
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
+      </div>
+      <div data-client-cash${isArtist ? "" : " hidden"}>
+        <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(개인 — 사업자등록증 없는 경우)</span></label>
+        <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>

@@ -25,6 +25,7 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
       : bn));
   }
   if (client.address) rows.push(cell("주소", esc(client.address)));
+  if (client.cash_receipt_no) rows.push(cell("현금영수증", esc(client.cash_receipt_no))); // 개인(사업자등록증 없음)
   if (contacts && contacts.length) {
     const c = contacts[0];
     const parts = [`<span class="font-medium">${esc(c.name)}</span>`];

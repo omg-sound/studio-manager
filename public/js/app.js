@@ -460,8 +460,13 @@
   "use strict";
   var kindSel = document.querySelector("[data-client-kind]");
   var tax = document.querySelector("[data-client-tax]");
+  var cash = document.querySelector("[data-client-cash]"); // 개인(아티스트)=현금영수증 정보(세금정보와 반대로 표시)
   if (!kindSel || !tax) return;
-  function sync() { tax.hidden = kindSel.value === "아티스트"; }
+  function sync() {
+    var isArtist = kindSel.value === "아티스트";
+    tax.hidden = isArtist;
+    if (cash) cash.hidden = !isArtist;
+  }
   kindSel.addEventListener("change", sync);
   sync();
 })();
