@@ -261,11 +261,15 @@ const FLASH_MESSAGES = {
   deleted: "삭제되었습니다.",
   paid: "입금이 반영되었습니다.",
   tested: "테스트 알림을 보냈습니다 — 채널을 확인하세요.",
+  last_chief: "치프 엔지니어는 최소 1명 있어야 합니다 — 마지막 치프는 스태프·대표로 바꿀 수 없습니다.",
 };
+const FLASH_WARN = new Set(["last_chief"]);
 function flashBanner(query) {
-  const msg = query && FLASH_MESSAGES[query.flash];
+  const key = query && query.flash;
+  const msg = FLASH_MESSAGES[key];
   if (!msg) return "";
-  return `<div data-flash class="mb-4 rounded-lg border border-success/30 bg-success/10 px-4 py-2 text-sm font-medium text-success">${esc(msg)}</div>`;
+  const cls = FLASH_WARN.has(key) ? "border-warning/30 bg-warning/10 text-warning" : "border-success/30 bg-success/10 text-success";
+  return `<div data-flash class="mb-4 rounded-lg border ${cls} px-4 py-2 text-sm font-medium">${esc(msg)}</div>`;
 }
 
 /** 스타일이 적용된 에러 페이지(404/403/500 등). raw 텍스트 대신 일관된 화면. */

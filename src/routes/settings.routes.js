@@ -441,11 +441,14 @@ router.post("/users/:id/role", requireChief, (req, res) => {
   const id = Number(req.params.id);
   const role = normalizeRole(req.body.role);
   const target = db().prepare("SELECT * FROM users WHERE id = ?").get(id);
-  // 본인·부트스트랩 치프는 강등 금지(자기 잠금/락아웃 방지)
-  if (target && !isBootstrapChief(target) && target.id !== req.user.id) {
-    db().prepare("UPDATE users SET role = ? WHERE id = ?").run(role, id);
+  if (!target || target.id === req.user.id) return res.redirect("/settings?tab=people&flash=saved"); // 본인 역할은 변경 불가
+  // 최소 1명의 치프 유지: 치프를 비치프로 강등 시, 본인 제외 활성 치프가 0이면 거부
+  if (target.role === "chief" && role !== "chief") {
+    const others = db().prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'chief' AND active = 1 AND id != ?").get(id).n;
+    if (others === 0) return res.redirect("/settings?tab=people&flash=last_chief");
   }
-  res.redirect("/settings?flash=saved");
+  db().prepare("UPDATE users SET role = ? WHERE id = ?").run(role, id);
+  res.redirect("/settings?tab=people&flash=saved");
 });
 
 router.post("/users/:id/delete", requireChief, (req, res) => {
@@ -537,20 +540,21 @@ router.post("/task-types/:id/delete", requireChief, (req, res) => {
 });
 
 function userRow(u, currentUser) {
-  const locked = isBootstrapChief(u) || u.id === currentUser.id; // 강등/비활성 불가
+  const isSelf = u.id === currentUser.id;
+  const delLocked = isBootstrapChief(u) || isSelf; // 삭제·비활성: 기본 치프·본인 보호(락아웃 방지). 역할 변경은 본인만 잠금.
   const status = !u.active
     ? `<span class="badge bg-muted/10 text-muted">비활성</span>`
     : u.google_sub
       ? `<span class="badge bg-success/10 text-success">활성</span>`
       : `<span class="badge bg-warning/10 text-warning">초대됨(미로그인)</span>`;
-  const roleControl = locked
+  const roleControl = isSelf
     ? `<span class="badge bg-bg text-muted">${esc(ROLE_LABELS[u.role] || u.role)}</span>`
     : `<form method="post" action="/settings/users/${u.id}/role">
          <select class="input py-1 text-xs" name="role" data-autosubmit>
            ${ROLES.map((r) => `<option value="${esc(r)}" ${r === u.role ? "selected" : ""}>${esc(ROLE_LABELS[r] || r)}</option>`).join("")}
          </select>
        </form>`;
-  const del = locked
+  const del = delLocked
     ? ""
     : `<form method="post" action="/settings/users/${u.id}/delete" data-confirm="${esc(u.name || u.email)} 계정을 삭제할까요? 로그인 화이트리스트와 작업 담당자에서 제거됩니다.">
          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
@@ -561,11 +565,11 @@ function userRow(u, currentUser) {
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(u.name || u.email)}</div>
           <div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-            <span class="truncate">${esc(u.email)}</span>${status}${locked ? `<span class="text-muted">${esc(ROLE_LABELS[u.role] || u.role)}${isBootstrapChief(u) ? " · 기본 치프" : " · 본인"}</span>` : ""}
+            <span class="truncate">${esc(u.email)}</span>${status}${isSelf ? `<span class="text-muted">${esc(ROLE_LABELS[u.role] || u.role)} · 본인</span>` : isBootstrapChief(u) ? `<span class="text-muted">· 기본 치프(삭제 불가)</span>` : ""}
           </div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
-          ${locked ? "" : roleControl}
+          ${roleControl}
           ${del}
         </div>
       </div>
