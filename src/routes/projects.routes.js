@@ -437,6 +437,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
       discount: parseMoney(req.body.discount_amount),
+      vatIncluded: req.body.vat_included != null, // 부가세 포함 체크박스(기본 체크) — 해제 시 미전송 → false(현금 거래)
     });
     if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     // createInvoiceFromTasks는 즉시 '발행' 상태로 생성 → 발행 알림 발송(notify는 fail-safe·비차단, 청구 흐름 비차단).
@@ -855,9 +856,8 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   const total = subtotal + tax;
   return `
     <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3" data-discount-form data-supply="${subtotal}">
-      <div class="mb-2 flex items-center justify-between gap-3">
+      <div class="mb-2">
         <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 녹음 세션)</span></h3>
-        <div class="text-right text-xs text-muted" data-discount-preview>공급가 ${formatKRW(subtotal)} · VAT ${formatKRW(tax)} · <strong>총 ${formatKRW(total)}</strong></div>
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
@@ -882,6 +882,15 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
               <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">%</span>
             </div>
           </div>
+        </div>
+        <div class="rounded-lg border border-border bg-surface p-3">
+          <div class="flex items-center justify-between text-sm"><span class="text-muted">공급가</span><span class="font-medium tabular" data-amt-supply>${formatKRW(subtotal)}</span></div>
+          <div class="mt-1 flex items-center justify-between text-sm" data-amt-discount-row hidden><span class="text-muted">할인</span><span class="font-medium tabular text-danger" data-amt-discount></span></div>
+          <label class="mt-1.5 flex cursor-pointer items-center justify-between text-sm">
+            <span class="flex items-center gap-1.5"><input type="checkbox" name="vat_included" value="1" checked data-vat-toggle /> 부가세(VAT 10%) 포함</span>
+            <span class="font-medium tabular" data-amt-vat>${formatKRW(tax)}</span>
+          </label>
+          <div class="mt-1.5 flex items-center justify-between border-t border-border pt-1.5 text-base font-bold"><span>총 금액</span><span class="tabular" data-amt-total>${formatKRW(total)}</span></div>
         </div>
         <div class="grid gap-2 sm:grid-cols-2">
           <div>

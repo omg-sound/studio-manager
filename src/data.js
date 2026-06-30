@@ -1014,16 +1014,16 @@ function ensureInvoiceNumber(inv) {
  * 반환: { discount(clamp됨), taxable, tax, total }
  * 돈=정수(원). VAT = round(taxable * 0.1).
  */
-function invoiceAmountsFromSupply(supply, discount) {
+function invoiceAmountsFromSupply(supply, discount, vatIncluded = true) {
   const raw = Math.round(Number(discount) || 0);
   const d = Math.min(Math.max(0, raw), supply);
   const taxable = supply - d;
-  const tax = Math.round(taxable * 0.1);
+  const tax = vatIncluded ? Math.round(taxable * 0.1) : 0; // 부가세 미포함(현금 거래) 시 VAT 0
   const total = taxable + tax;
   return { discount: d, taxable, tax, total };
 }
 
-function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount } = {}) {
+function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true } = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project || !canInvoice(user)) return null;
   const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
@@ -1072,7 +1072,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
   const subtotal =
     tasks.reduce((sum, task) => sum + (task.total_price || 0), 0) +
     billSessions.reduce((sum, x) => sum + x.calc.amount, 0);
-  const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0);
+  const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0, vatIncluded);
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
   const invoiceNumber = nextInvoiceNumber(issued);

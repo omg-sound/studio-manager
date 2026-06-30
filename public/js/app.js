@@ -344,9 +344,14 @@
   if (!form) return;
   var amtInput = form.querySelector("[data-discount-amount]");
   var pctInput = form.querySelector("[data-discount-pct]");
-  var preview = form.querySelector("[data-discount-preview]");
-  if (!amtInput || !pctInput || !preview) return;
+  if (!amtInput || !pctInput) return;
   var boxes = form.querySelectorAll('input[type="checkbox"][data-line-amount]');
+  var vatToggle = form.querySelector("[data-vat-toggle]");
+  var supplyEl = form.querySelector("[data-amt-supply]");
+  var discountRow = form.querySelector("[data-amt-discount-row]");
+  var discountEl = form.querySelector("[data-amt-discount]");
+  var vatEl = form.querySelector("[data-amt-vat]");
+  var totalEl = form.querySelector("[data-amt-total]");
 
   function supply() {
     if (!boxes.length) return parseInt(form.getAttribute("data-supply") || "0", 10) || 0;
@@ -364,21 +369,14 @@
   function updatePreview() {
     var sup = supply();
     var discount = clamp(parseInt(String(amtInput.value).replace(/[^\d]/g, "") || "0", 10));
+    var vatOn = !vatToggle || vatToggle.checked; // 부가세 포함 토글(기본 체크). 해제 시 VAT 0(현금).
     var taxable = sup - discount;
-    var tax = Math.round(taxable * 0.1);
-    if (discount > 0) {
-      preview.innerHTML =
-        "공급가 " + won(sup) +
-        " &middot; 할인 <strong>-" + won(discount) + "</strong>" +
-        " &middot; 과세표준 " + won(taxable) +
-        " &middot; VAT " + won(tax) +
-        " &middot; <strong>총 " + won(taxable + tax) + "</strong>";
-    } else {
-      preview.innerHTML =
-        "공급가 " + won(sup) +
-        " &middot; VAT " + won(Math.round(sup * 0.1)) +
-        " &middot; <strong>총 " + won(sup + Math.round(sup * 0.1)) + "</strong>";
-    }
+    var tax = vatOn ? Math.round(taxable * 0.1) : 0;
+    if (supplyEl) supplyEl.textContent = won(sup);
+    if (discountRow) discountRow.hidden = !(discount > 0);
+    if (discountEl) discountEl.textContent = "-" + won(discount);
+    if (vatEl) vatEl.textContent = won(tax);
+    if (totalEl) totalEl.textContent = won(taxable + tax);
   }
   function applyPct() {
     var pct = parseFloat(pctInput.value) || 0;
@@ -393,6 +391,7 @@
     updatePreview();
   });
   pctInput.addEventListener("input", applyPct);
+  if (vatToggle) vatToggle.addEventListener("change", updatePreview);
   Array.prototype.forEach.call(boxes, function (cb) {
     cb.addEventListener("change", function () {
       // 항목 선택이 바뀌면 공급가 변동 → 정률이면 재계산, 아니면 미리보기만 갱신(정액은 clamp).
