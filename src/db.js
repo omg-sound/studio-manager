@@ -245,6 +245,19 @@ function init() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 클라이언트 첨부 서류(사업자등록증·통장사본). 치프 전용, 인증 다운로드만. kind별 1개(교체 시 이전 파일 스토리지 정리).
+    CREATE TABLE IF NOT EXISTS client_files (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      kind            TEXT NOT NULL,                       -- 'biz_license' | 'bankbook'
+      storage_backend TEXT NOT NULL DEFAULT 'local',       -- 'drive' | 'local'
+      file_id         TEXT NOT NULL,                       -- drive fileId 또는 로컬 파일명
+      file_name       TEXT NOT NULL,                       -- 원본 파일명(다운로드 시 사용)
+      mime_type       TEXT,
+      file_size       INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
     CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
@@ -264,6 +277,8 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_invoice_items_task ON invoice_items(task_id);
     CREATE INDEX IF NOT EXISTS idx_contact_affiliations_contact ON contact_affiliations(contact_id, ended_on);
     CREATE INDEX IF NOT EXISTS idx_contact_affiliations_client ON contact_affiliations(client_id, ended_on);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_client_files_kind ON client_files(client_id, kind);
+    CREATE INDEX IF NOT EXISTS idx_client_files_client ON client_files(client_id);
   `);
 
   addColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");

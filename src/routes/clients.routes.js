@@ -1,10 +1,20 @@
 "use strict";
 
+const os = require("os");
+const fs = require("fs");
+const crypto = require("crypto");
 const express = require("express");
+const multer = require("multer");
 const { db } = require("../db");
 const { requireChief } = require("../auth");
 const { CLIENT_KINDS, normalizeClientKind } = require("../config");
-const { listClients, clientKindCounts, getClient, listProjectsForClient, listInvoicesForClientEntity, listContactsForClient } = require("../data");
+const {
+  listClients, clientKindCounts, getClient, listProjectsForClient,
+  listInvoicesForClientEntity, listContactsForClient,
+  listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
+} = require("../data");
+const storage = require("../storage");
+const { asyncHandler } = require("../lib/async");
 const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
@@ -12,6 +22,49 @@ const router = express.Router();
 
 // 모든 클라이언트 라우트는 치프 전용
 router.use(requireChief);
+
+// 첨부 서류 업로드: 디스크 스토리지(메모리 금지 — OOM 방지, 플레이북 §3-2), 10MB 제한
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, os.tmpdir()),
+    filename: (_req, _file, cb) => cb(null, "omgcf_" + crypto.randomBytes(8).toString("hex")),
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+/** multipart 파일명 latin1 → UTF-8 복원(한글 파일명 보존). */
+function decodeName(name) {
+  try { return Buffer.from(String(name || ""), "latin1").toString("utf8"); } catch { return String(name || ""); }
+}
+
+/**
+ * 파일 첫 4바이트 매직바이트로 실제 형식 검증(Content-Type 스푸핑 방어).
+ * PNG(89 50 4E 47)·JPEG(FF D8 FF)·PDF(25 50 44 46) 만 허용.
+ * 반환: 검증된 MIME 타입 문자열, 또는 null(불허).
+ */
+function detectMimeFromFile(filePath) {
+  const buf = Buffer.alloc(4);
+  let fd;
+  try {
+    fd = fs.openSync(filePath, "r");
+    fs.readSync(fd, buf, 0, 4, 0);
+  } catch { return null; } finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return "application/pdf";
+  return null;
+}
+
+/** 첨부 서류 종류 목록(화이트리스트). */
+const FILE_KINDS = [
+  { key: "biz_license", label: "사업자등록증" },
+  { key: "bankbook", label: "통장사본" },
+];
+
+function fileKindLabel(key) {
+  const f = FILE_KINDS.find((k) => k.key === key);
+  return f ? f.label : key;
+}
 
 // ── 목록(탭 = 분류 필터 + 이름 검색) ──
 router.get("/", (req, res) => {
@@ -102,17 +155,22 @@ router.post("/", (req, res) => {
 // ── 수정 ──
 router.get("/:id/edit", (req, res) => {
   const c = getClient(Number(req.params.id));
-  if (!c) return res.status(404).send("클라이언트를 찾을 수 없습니다.");
-  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true) }));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const files = listClientFiles(c.id);
+  const fileErr = String(req.query.ferr || "").trim();
+  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr) }));
 });
 
 router.post("/:id", (req, res) => {
   const id = Number(req.params.id);
   const c = getClient(id);
-  if (!c) return res.status(404).send("클라이언트를 찾을 수 없습니다.");
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
   const name = String(b.name || "").trim();
-  if (!name) return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true) }));
+  if (!name) {
+    const files = listClientFiles(id);
+    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files) }));
+  }
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
   db()
@@ -131,7 +189,7 @@ router.post("/:id", (req, res) => {
   res.redirect("/clients?flash=saved#c" + id);
 });
 
-// ── 삭제(강제: 연결된 프로젝트·청구서·사용자의 client_id는 SET NULL로 자동 해제) ──
+// ── 삭제(강제: 연결된 프로젝트·청구서·사용자의 client_id는 SET NULL으로 자동 해제) ──
 // 단, 발행/입금완료 인보이스가 있으면 청구처 보존을 위해 삭제 거부
 router.post("/:id/delete", (req, res) => {
   const id = Number(req.params.id);
@@ -141,8 +199,78 @@ router.post("/:id/delete", (req, res) => {
   res.redirect("/clients?flash=deleted");
 });
 
-// ── 폼 ──
-// ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리) ──
+// ── 첨부 서류 업로드(치프 전용 — router.use(requireChief)로 이미 보호) ──
+// 보안: 디스크 multer + 매직바이트 검증(PNG·JPEG·PDF) + 인증 다운로드만(공개 링크 없음).
+router.post("/:id/files/:kind", upload.single("file"), asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const kind = req.params.kind;
+  const c = getClient(id);
+  if (!c) {
+    if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
+    return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "", user: req.user }));
+  }
+  if (!FILE_KINDS.find((k) => k.key === kind)) {
+    if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
+    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("알 수 없는 서류 종류입니다.")}`);
+  }
+  if (!req.file) {
+    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("파일을 선택하세요.")}`);
+  }
+
+  // 매직바이트 검증: Content-Type 헤더를 신뢰하지 않고 파일 첫 바이트로 직접 확인
+  const detectedMime = detectMimeFromFile(req.file.path);
+  if (!detectedMime) {
+    fs.promises.unlink(req.file.path).catch(() => {});
+    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("PNG, JPG, PDF 파일만 업로드할 수 있습니다.")}`);
+  }
+
+  const originalName = decodeName(req.file.originalname);
+  try {
+    const { backend, fileId } = await storage.put({ filePath: req.file.path, name: originalName, mimeType: detectedMime });
+    // 기존 같은 kind 파일을 교체하는 경우 이전 파일 스토리지 정리
+    const old = upsertClientFile(id, kind, { storage_backend: backend, file_id: fileId, file_name: originalName, mime_type: detectedMime, file_size: req.file.size });
+    if (old) await storage.remove(old.storage_backend, old.file_id);
+    res.redirect(`/clients/${id}/edit?flash=saved`);
+  } catch (e) {
+    console.error("[client file upload]", e);
+    res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("업로드에 실패했습니다.")}`);
+  } finally {
+    if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
+  }
+}));
+
+// ── 첨부 서류 인증 다운로드(치프 전용 인증 후 프록시 — 공개 URL 없음) ──
+router.get("/:id/files/:kind/raw", asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const kind = req.params.kind;
+  if (!FILE_KINDS.find((k) => k.key === kind)) return res.status(404).send("파일을 찾을 수 없습니다.");
+  const cf = getClientFile(id, kind);
+  if (!cf) return res.status(404).send(errorPage({ code: 404, title: "파일이 없습니다", message: "아직 업로드된 파일이 없습니다.", user: req.user }));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Content-Type", cf.mime_type || "application/octet-stream");
+  // inline: 이미지·PDF를 브라우저에서 직접 표시(다운로드 강제 없음)
+  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(cf.file_name)}`);
+  if (cf.file_size > 0) res.setHeader("Content-Length", cf.file_size);
+  try {
+    await storage.stream(cf.storage_backend, cf.file_id, res);
+  } catch (e) {
+    console.error("[client file stream]", e);
+    if (!res.headersSent) res.status(502).send("파일을 가져오지 못했습니다.");
+    else res.destroy();
+  }
+}));
+
+// ── 첨부 서류 삭제 ──
+router.post("/:id/files/:kind/delete", asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const kind = req.params.kind;
+  if (!FILE_KINDS.find((k) => k.key === kind)) return res.redirect(`/clients/${id}/edit`);
+  const old = deleteClientFile(id, kind);
+  if (old) await storage.remove(old.storage_backend, old.file_id);
+  res.redirect(`/clients/${id}/edit?flash=deleted`);
+}));
+
+// ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리 + 첨부 서류 링크) ──
 router.get("/:id", (req, res) => {
   const c = getClient(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
@@ -150,6 +278,7 @@ router.get("/:id", (req, res) => {
   const projects = listProjectsForClient(c);
   const invoices = listInvoicesForClientEntity(c);
   const contacts = listContactsForClient(c.id);
+  const files = listClientFiles(c.id);
   const tabBarHtml = tabBar({
     tabs: [{ key: "projects", label: `프로젝트 ${projects.length}` }, { key: "invoices", label: `청구·결제 ${invoices.length}` }],
     activeKey: tab,
@@ -189,6 +318,16 @@ router.get("/:id", (req, res) => {
       })
     : `<p class="text-sm text-muted">등록된 담당자 연락처가 없습니다.</p>`;
 
+  // 첨부 서류 열람 링크(있으면만 표시, 공개 URL 없음)
+  const filesSection = files.length
+    ? `<div class="mb-4">
+        <h3 class="mb-2 text-sm font-medium text-muted">첨부 서류</h3>
+        <div class="flex flex-wrap gap-2">
+          ${files.map((f) => `<a href="/clients/${c.id}/files/${f.kind}/raw" target="_blank" rel="noopener" class="btn-ghost btn-sm">${esc(fileKindLabel(f.kind))} 보기</a>`).join("")}
+        </div>
+      </div>`
+    : "";
+
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: c.name, desc: c.kind, back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
@@ -196,10 +335,13 @@ router.get("/:id", (req, res) => {
       <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
       ${contactsSection}
     </div>
+    ${filesSection}
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
 });
+
+// ── 헬퍼 함수 ──
 
 /** 클라이언트 상세용 프로젝트 카드(제목·유형·메타 → 프로젝트 상세 링크). */
 function clientProjectCard(p) {
@@ -213,9 +355,52 @@ function clientProjectCard(p) {
   </a>`;
 }
 
-function clientForm(c = {}, isEdit = false) {
+/** 첨부 서류 업로드·교체 UI 섹션(isEdit=true일 때만 렌더). */
+function clientFileSection(c, fileMap, fileErr) {
+  const rows = FILE_KINDS.map(({ key, label }) => {
+    const existing = fileMap[key];
+    const existingRow = existing
+      ? `<div class="mb-2 flex items-center gap-3 text-sm">
+            <a href="/clients/${c.id}/files/${key}/raw" target="_blank" rel="noopener" class="font-medium text-primary hover:underline">${esc(label)} 보기</a>
+            <span class="max-w-[12rem] truncate text-xs text-muted">${esc(existing.file_name)}</span>
+            <form method="post" action="/clients/${c.id}/files/${key}/delete" class="inline" data-confirm="${esc(label)}을 삭제할까요?">
+              <button class="text-xs text-danger hover:underline" type="submit">삭제</button>
+            </form>
+          </div>`
+      : "";
+    return `
+    <div>
+      <label class="label">${esc(label)}</label>
+      ${existingRow}
+      <form enctype="multipart/form-data" method="post" action="/clients/${c.id}/files/${key}" class="flex items-center gap-2">
+        <div class="flex-1" data-dropzone>
+          <input type="file" name="file" accept="image/png,image/jpeg,application/pdf" class="sr-only" />
+          <div class="input flex cursor-pointer select-none items-center py-2 text-sm text-muted" data-dropzone-display>
+            <span data-dropzone-label>${existing ? "다른 파일로 교체" : "파일 끌어놓기 또는 클릭"}</span>
+          </div>
+        </div>
+        <button class="btn-ghost shrink-0" type="submit">업로드</button>
+      </form>
+    </div>`;
+  }).join("");
+
+  return `
+  <section class="card mt-3 space-y-4">
+    <div>
+      <h2 class="font-semibold">첨부 서류</h2>
+      <p class="mt-1 text-xs text-muted">PNG · JPG · PDF · 최대 10MB. 치프 전용 인증 열람(공개 링크 없음).</p>
+    </div>
+    ${fileErr ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(fileErr)}</p>` : ""}
+    ${rows}
+  </section>`;
+}
+
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "") {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
+  const fileMap = {};
+  files.forEach((f) => { fileMap[f.kind] = f; });
+
   return `
     ${pageHeader({ title: isEdit ? "클라이언트 수정" : "새 클라이언트", desc: "분류 · 연락처 · 세금계산서 정보(청구처가 될 경우)" })}
     <form method="post" action="${action}" class="card space-y-4">
@@ -244,6 +429,7 @@ function clientForm(c = {}, isEdit = false) {
         <a href="/clients" class="btn-ghost">취소</a>
       </div>
     </form>
+    ${isEdit ? clientFileSection(c, fileMap, fileErr) : ""}
     ${isEdit ? `
     <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
       <button class="btn-ghost text-danger" type="submit">클라이언트 삭제</button>

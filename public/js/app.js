@@ -410,3 +410,48 @@
     toggle();
   });
 })();
+
+// 드롭존([data-dropzone]): 파일 끌어놓기 또는 클릭 선택. CSP-safe(인라인 0, 외부 JS 파일).
+// [data-dropzone] 클릭 → 내부 input[type=file].click(). dragover/drop → input.files 할당 + 파일명 표시.
+(function () {
+  "use strict";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-dropzone]"), function (zone) {
+    var input = zone.querySelector('input[type="file"]');
+    if (!input) return;
+    var label = zone.querySelector("[data-dropzone-label]");
+    var display = zone.querySelector("[data-dropzone-display]");
+
+    // 클릭 시 파일 선택 대화상자 열기(input 자체 클릭은 무시)
+    zone.addEventListener("click", function (e) {
+      if (e.target === input) return;
+      input.click();
+    });
+
+    // 드래그 시 시각적 하이라이트
+    function highlight(on) {
+      if (display) display.style.boxShadow = on ? "0 0 0 2px var(--color-primary, currentColor)" : "";
+    }
+    zone.addEventListener("dragover", function (e) { e.preventDefault(); highlight(true); });
+    zone.addEventListener("dragenter", function (e) { e.preventDefault(); highlight(true); });
+    zone.addEventListener("dragleave", function () { highlight(false); });
+
+    // 드롭: input.files에 할당 + 파일명 표시(DataTransfer API, 현대 브라우저)
+    zone.addEventListener("drop", function (e) {
+      e.preventDefault();
+      highlight(false);
+      var droppedFiles = e.dataTransfer && e.dataTransfer.files;
+      if (!droppedFiles || !droppedFiles.length) return;
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(droppedFiles[0]);
+        input.files = dt.files;
+      } catch (_e) { /* DataTransfer 미지원 환경에서는 파일명 표시만 */ }
+      if (label) label.textContent = droppedFiles[0].name;
+    });
+
+    // 파일 선택(클릭) 후 파일명 표시
+    input.addEventListener("change", function () {
+      if (input.files && input.files[0] && label) label.textContent = input.files[0].name;
+    });
+  });
+})();
