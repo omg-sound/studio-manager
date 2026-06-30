@@ -488,6 +488,7 @@ router.post("/users/:id/edit", requireChief, (req, res) => {
   const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ?").get(id);
   if (mgr) {
     db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(formatPhone(req.body.phone), mgr.id);
+    if (name) db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, mgr.id); // 이름 변경 시 기존 작업 스냅샷 동기화(헤더 표시·매출 매칭) — 외주와 동일
     syncManagerToContact(mgr.id); // 전화 → 연동 연락처 동기화(하우스는 이메일 제외)
     ensureContactForManager(mgr.id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
   }

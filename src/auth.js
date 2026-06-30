@@ -65,7 +65,7 @@ function upsertUserFromGoogle(profile) {
     }
     db()
       .prepare("UPDATE users SET name=?, google_sub=?, role=?, active=1 WHERE id=?")
-      .run(profile.name || existing.name || "", profile.sub || existing.google_sub || null, role, existing.id);
+      .run((existing.name && existing.name.trim()) ? existing.name : (profile.name || ""), profile.sub || existing.google_sub || null, role, existing.id); // 기존 이름 보존(한글 수동 수정이 Google 영문에 덮어쓰이지 않게); 빈 경우만 Google 이름
     const u = findUserById(existing.id);
     syncUserToManager(u); // 로그인 시 하우스 엔지니어 이름을 작업 담당자로 동기화
     return u;
