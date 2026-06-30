@@ -493,42 +493,70 @@
   });
 })();
 
-// 곡·콘텐츠 작업 폼 자동저장([data-task-form]): 입력 변경 시 디바운스 후 저장. progressive-enhancement(JS 등록 성공 시 제출 버튼 숨김·실패 시 폴백 유지).
+// 곡·콘텐츠 작업 폼 자동저장([data-task-form]): 저장 버튼 없음 — 필드 변경 시 디바운스 후 fetch 저장.
+// 헤더 상태 select는 폼 밖(summary)에 있고 form= 로 연결되므로 위임(delegation)으로 처리(el.form == 그 폼).
+// 변경 즉시 종류 라벨·담당 엔지니어·금액을 헤더에 반영(data-row-type/engineer/amount).
 (function () {
   "use strict";
-  try {
-    var forms = document.querySelectorAll("[data-task-form]");
-    if (!forms.length) return;
-    Array.prototype.forEach.call(forms, function (form) {
-      var details = form.closest("details");
-      var amountEl = details && details.querySelector("[data-row-amount]");
-      var statusEl = details && details.querySelector("[data-row-status]");
-      var state = form.querySelector("[data-save-state]");
-      var btn = form.querySelector("[data-task-save-btn]");
-      var timer = null, ctrl = null, reqId = 0;
-      function save() {
-        if (state) state.textContent = "저장 중…";
-        if (ctrl) ctrl.abort(); // 직전 in-flight 요청 취소(race 방지)
-        ctrl = new AbortController();
-        var myId = ++reqId;
-        fetch(form.getAttribute("action"), { method: "POST", body: new FormData(form), headers: { "X-Requested-With": "fetch" }, signal: ctrl.signal })
-          .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-          .then(function (j) {
-            if (myId !== reqId) return; // 더 최신 저장이 진행 중이면 stale 응답 무시
-            if (amountEl && j.amount != null) amountEl.textContent = j.amount;
-            if (statusEl) { if (j.statusLabel != null) statusEl.textContent = j.statusLabel; if (j.statusCls) statusEl.className = "badge " + j.statusCls; }
-            if (state) { state.textContent = "저장됨"; setTimeout(function () { if (state.textContent === "저장됨") state.textContent = ""; }, 1500); }
-          })
-          .catch(function (e) { if (e && e.name === "AbortError") return; if (state) state.textContent = "저장 실패 — 잠시 후 다시"; });
-      }
-      function schedule() { clearTimeout(timer); timer = setTimeout(save, 700); }
-      form.addEventListener("input", schedule);
-      form.addEventListener("change", function (e) {
-        if (e.target && e.target.tagName === "SELECT") { clearTimeout(timer); save(); } else schedule(); // select(종류·담당·상태)는 즉시, 텍스트는 디바운스
-      });
-      if (btn) btn.hidden = true; // 핸들러 등록 성공 후 수동 버튼 숨김(등록 실패 시 버튼이 폴백)
-    });
-  } catch (err) { /* 자동저장 초기화 실패 시 폼 제출 버튼(data-task-save-btn)이 폴백으로 동작 */ }
+  var state = {}; // 폼별 { timer, ctrl, reqId }
+  function st(form) {
+    if (!form.id) form.id = "tf-" + Math.random().toString(36).slice(2);
+    return state[form.id] || (state[form.id] = { timer: null, ctrl: null, reqId: 0 });
+  }
+  function save(form) {
+    var s = st(form);
+    var details = form.closest("details");
+    var stateEl = form.querySelector("[data-save-state]");
+    if (stateEl) stateEl.textContent = "저장 중…";
+    if (s.ctrl) s.ctrl.abort(); // 직전 in-flight 취소(race 방지)
+    s.ctrl = new AbortController();
+    var myId = ++s.reqId;
+    // URLSearchParams로 전송(application/x-www-form-urlencoded) — 서버가 express.urlencoded만 파싱하므로
+    // FormData(multipart)로 보내면 req.body가 비어 기본값으로 저장됨(자동저장이 반영 안 되던 근본 원인).
+    var body = new URLSearchParams();
+    new FormData(form).forEach(function (v, k) { body.append(k, v); });
+    fetch(form.getAttribute("action"), { method: "POST", body: body, headers: { "X-Requested-With": "fetch" }, signal: s.ctrl.signal })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (j) {
+        if (myId !== s.reqId) return; // 더 최신 저장이 진행 중이면 stale 응답 무시
+        if (details) {
+          var typeEl = details.querySelector("[data-row-type]");
+          var engEl = details.querySelector("[data-row-engineer]");
+          var amtEl = details.querySelector("[data-row-amount]");
+          if (typeEl && j.typeLabel != null) typeEl.textContent = j.typeLabel;
+          if (engEl) engEl.textContent = j.engineerName ? " · " + j.engineerName : "";
+          if (amtEl && j.amount != null) amtEl.textContent = j.amount;
+        }
+        if (stateEl) { stateEl.textContent = "저장됨"; setTimeout(function () { if (stateEl.textContent === "저장됨") stateEl.textContent = ""; }, 1500); }
+      })
+      .catch(function (e) { if (e && e.name === "AbortError") return; if (stateEl) stateEl.textContent = "저장 실패 — 잠시 후 다시"; });
+  }
+  function schedule(form, immediate) {
+    var s = st(form);
+    clearTimeout(s.timer);
+    if (immediate) save(form);
+    else s.timer = setTimeout(function () { save(form); }, 700);
+  }
+  // el.form: 폼 내부 요소뿐 아니라 form= 속성으로 연결된 헤더 상태 select도 그 폼을 가리킨다.
+  function taskFormOf(el) {
+    var f = el && el.form;
+    return f && f.hasAttribute && f.hasAttribute("data-task-form") ? f : null;
+  }
+  document.addEventListener("input", function (e) {
+    var f = taskFormOf(e.target);
+    if (f) schedule(f, false); // 텍스트(외주단가 등) 디바운스
+  });
+  document.addEventListener("change", function (e) {
+    var f = taskFormOf(e.target);
+    if (f) schedule(f, e.target.tagName === "SELECT"); // select(종류·담당·상태)는 즉시 저장
+  });
+})();
+
+// 헤더 상태 select 등 [data-no-toggle] 요소를 클릭/조작해도 <details> 펼침이 토글되지 않게(접힌 채 상태 수정).
+(function () {
+  "use strict";
+  function guard(e) { if (e.target.closest && e.target.closest("[data-no-toggle]")) e.preventDefault(); }
+  document.addEventListener("click", guard); // 클릭의 기본동작(summary 토글) 취소 — select 드롭다운은 mousedown이라 영향 없음
 })();
 
 // 드롭존([data-dropzone]): 파일 끌어놓기 또는 클릭 선택. CSP-safe(인라인 0, 외부 JS 파일).

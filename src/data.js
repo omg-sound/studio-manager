@@ -103,6 +103,12 @@ function getWorker(id) {
   return db().prepare("SELECT * FROM project_managers WHERE id = ? AND user_id IS NULL").get(id) || null;
 }
 
+/** 로그인 사용자(하우스 엔지니어)와 연결된 담당자 마스터 행 — 새 작업의 담당 엔지니어 기본값용. */
+function getManagerByUserId(userId) {
+  if (!userId) return null;
+  return db().prepare("SELECT * FROM project_managers WHERE user_id = ?").get(Number(userId)) || null;
+}
+
 /** 외주 작업자가 담당한 작업(track_tasks) + 프로젝트/트랙 — 작업 히스토리·정산.
  *  매칭: engineer_id 우선(rename 내성), 폴백 (engineer_id IS NULL AND engineer_name = 이름)(레거시·미매칭분). */
 function listTasksForWorker(worker) {
@@ -889,6 +895,11 @@ function createTask(user, trackId, input = {}) {
   const hasPrice = input.unit_price != null && String(input.unit_price).trim() !== "";
   const unitPrice = hasPrice ? parseWon(input.unit_price) : taskTypeUnitPrice(taskType);
   const eng = resolveTaskEngineer(input);
+  // 담당 엔지니어 미지정 시 로그인한 계정(하우스 엔지니어)을 기본값으로(빠른 추가 시 본인 자동 선택).
+  if (!eng.engineer_id && !eng.engineer_name) {
+    const mine = getManagerByUserId(user.id);
+    if (mine) { eng.engineer_id = mine.id; eng.engineer_name = mine.name; eng.is_external = !mine.user_id; }
+  }
   const info = db()
     .prepare(
       `INSERT INTO track_tasks

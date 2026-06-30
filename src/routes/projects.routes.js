@@ -416,8 +416,15 @@ router.post("/tasks/:taskId", requireEditor, (req, res) => {
     const task = updateTask(req.user, Number(req.params.taskId), req.body);
     if (!task) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     if (req.get("X-Requested-With") === "fetch") {
-      // 자동저장(AJAX): 리다이렉트 대신 갱신된 헤더값 JSON 반환(금액·상태 배지).
-      return res.json({ ok: true, amount: task.is_invoiced && task.total_price ? formatKRW(task.total_price) : "", statusLabel: TASK_STATUS_LABELS[task.status] || task.status, statusCls: TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted" });
+      // 자동저장(AJAX): 리다이렉트 대신 갱신된 헤더값 JSON 반환(종류 라벨·담당 엔지니어·금액).
+      return res.json({
+        ok: true,
+        amount: task.is_invoiced && task.total_price ? formatKRW(task.total_price) : "",
+        typeLabel: taskTypeLabel(task.task_type),
+        engineerName: task.engineer_name || "",
+        statusLabel: TASK_STATUS_LABELS[task.status] || task.status,
+        statusCls: TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted",
+      });
     }
     res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
@@ -715,7 +722,8 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
   const statusCls = TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted";
   // 금액은 청구 탭에서 확정 — 작업 행엔 청구된 작업의 확정액만 표시(미청구는 숨김, '기록만' 일관).
   const amount = `<span class="text-sm font-semibold" data-row-amount>${task.is_invoiced && task.total_price ? formatKRW(task.total_price) : ""}</span>`;
-  const title = `<span class="min-w-0 truncate text-sm"><span class="font-medium">${esc(label)}</span>${task.engineer_name ? `<span class="text-xs text-muted"> · ${esc(task.engineer_name)}</span>` : ""}</span>`;
+  // 종류·담당은 작업 종류/엔지니어 변경 시 자동저장이 즉시 갱신(data-row-type/data-row-engineer).
+  const title = `<span class="min-w-0 truncate text-sm"><span class="font-medium" data-row-type>${esc(label)}</span><span class="text-xs text-muted" data-row-engineer>${task.engineer_name ? " · " + esc(task.engineer_name) : ""}</span></span>`;
   const statusBadge = `<span class="badge ${statusCls}" data-row-status>${esc(status)}</span>`;
 
   // 비관리자/청구된 작업: 편집 불가 → 단순 행(접기 없음).
@@ -727,14 +735,20 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
         <span class="flex shrink-0 items-center gap-1.5">${amount}${statusBadge}${billed}</span>
       </div>`;
   }
-  // 편집 가능: 헤더 전체가 접기 토글. 오른쪽 끝에 접기 버튼(chevron), 그 앞에 상태 배지.
+  // 편집 가능: 헤더 전체가 접기 토글. 상태 select는 헤더에 두어 접힌 채로도 수정 가능(form= 로 본문 폼에 연결, [data-no-toggle]로 펼침 방지).
+  const statusSelect = `
+    <span data-no-toggle>
+      <select class="input w-24 py-1 text-xs" name="status" form="task-form-${task.id}" aria-label="상태">
+        ${TASK_STATUSES.map((s) => `<option value="${esc(s)}" ${s === task.status ? "selected" : ""}>${esc(TASK_STATUS_LABELS[s] || s)}</option>`).join("")}
+      </select>
+    </span>`;
   return `
     <details id="task-${task.id}" class="group rounded-lg border border-border bg-surface"${open ? " open" : ""}>
       <summary class="flex cursor-pointer list-none items-center justify-between gap-2 p-2.5">
         ${title}
         <span class="flex shrink-0 items-center gap-2">
           ${amount}
-          ${statusBadge}
+          ${statusSelect}
           ${detailsChevron()}
         </span>
       </summary>
@@ -774,8 +788,10 @@ function taskTypeOptions(current) {
 
 function taskEditForm(task, managers = []) {
   const legacyName = !task.engineer_id && task.engineer_name ? String(task.engineer_name) : "";
+  // 상태(status) select는 헤더에 있고 form= 로 이 폼에 연결됨(접힌 채 수정). 본문엔 종류·담당·외주단가만.
+  // 저장 버튼 없음 — 변경 즉시 자동저장(app.js). JS 미동작 환경 대비 noscript 버튼만 폴백.
   return `
-    <form method="post" action="/projects/tasks/${task.id}" class="grid gap-2 sm:grid-cols-2" data-task-form>
+    <form method="post" action="/projects/tasks/${task.id}" id="task-form-${task.id}" class="grid gap-2 sm:grid-cols-2" data-task-form>
       <div>
         <label class="label mb-0.5 text-xs">작업 종류</label>
         <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
@@ -788,15 +804,11 @@ function taskEditForm(task, managers = []) {
         <label class="label mb-0.5 text-xs">외주 지급단가 <span class="font-normal text-muted">(정산 기준 · 원)</span></label>
         <input class="input py-1.5 text-sm" name="worker_rate" inputmode="numeric" placeholder="0" value="${esc(String(task.worker_rate || ""))}" />
       </div>
-      <div>
-        <label class="label mb-0.5 text-xs">상태</label>
-        <select class="input py-1.5 text-sm" name="status">
-          ${TASK_STATUSES.map((status) => `<option value="${esc(status)}" ${status === task.status ? "selected" : ""}>${esc(TASK_STATUS_LABELS[status] || status)}</option>`).join("")}
-        </select>
-      </div>
       ${legacyName ? `<input type="hidden" name="engineer_name" value="${esc(legacyName)}" />` : ""}
-      <button class="btn-primary btn-xs sm:col-span-2" type="submit" data-task-save-btn>작업 저장</button>
-      <div class="text-right text-xs text-muted sm:col-span-2" data-save-state aria-live="polite"></div>
+      <div class="flex items-center justify-between sm:col-span-2">
+        <span class="text-xs text-muted" data-save-state aria-live="polite"></span>
+        <noscript><button class="btn-primary btn-xs" type="submit">작업 저장</button></noscript>
+      </div>
     </form>
     <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
       <button class="btn-ghost btn-xs text-danger" type="submit">작업 삭제</button>
