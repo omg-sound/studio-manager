@@ -641,13 +641,13 @@ function getTaskForUser(user, taskId) {
 function resolveTaskEngineer(input) {
   const raw = String(input.engineer_id == null ? "" : input.engineer_id).trim();
   if (/^\d+$/.test(raw)) {
-    const m = db().prepare("SELECT id, name FROM project_managers WHERE id = ?").get(Number(raw));
-    if (m) return { engineer_id: m.id, engineer_name: m.name };
+    const m = db().prepare("SELECT id, name, user_id FROM project_managers WHERE id = ?").get(Number(raw));
+    if (m) return { engineer_id: m.id, engineer_name: m.name, is_external: !m.user_id }; // user_id 없으면 외주 작업자
   }
   if (raw === "legacy") {
-    return { engineer_id: null, engineer_name: String(input.engineer_name || "").trim() || null };
+    return { engineer_id: null, engineer_name: String(input.engineer_name || "").trim() || null, is_external: true };
   }
-  return { engineer_id: null, engineer_name: null };
+  return { engineer_id: null, engineer_name: null, is_external: false };
 }
 
 /** 작업 수정. 이미 청구된 작업은 거부(라인아이템 스냅샷이 잠금). total_price는 재계산. */
@@ -672,7 +672,7 @@ function updateTask(user, taskId, input = {}) {
       unit_price: unitPrice,
       engineer_name: eng.engineer_name,
       engineer_id: eng.engineer_id,
-      worker_rate: parseWon(input.worker_rate),
+      worker_rate: eng.is_external ? parseWon(input.worker_rate) : 0, // 하우스 엔지니어·미지정은 외주 지급단가 없음(0, NOT NULL 컬럼)
       status: normalizeTaskStatus(input.status),
     });
   return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
@@ -718,7 +718,7 @@ function createTask(user, trackId, input = {}) {
       unit_price: unitPrice,
       engineer_name: eng.engineer_name,
       engineer_id: eng.engineer_id,
-      worker_rate: parseWon(input.worker_rate),
+      worker_rate: eng.is_external ? parseWon(input.worker_rate) : 0, // 하우스 엔지니어·미지정은 외주 지급단가 없음(0, NOT NULL 컬럼)
       status: normalizeTaskStatus(input.status),
     });
   return db().prepare("SELECT * FROM track_tasks WHERE id = ?").get(info.lastInsertRowid);

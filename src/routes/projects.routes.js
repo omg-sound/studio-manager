@@ -586,7 +586,7 @@ function contactCombo(selectedId) {
       <datalist id="dl-contacts">
         ${opts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
       </datalist>
-      <div class="mt-1.5 hidden text-xs text-muted" data-contact-info></div>
+      <div class="mt-1.5 hidden text-sm text-muted" data-contact-info></div>
       <p class="mt-1 text-xs text-muted">목록에 없는 이름을 입력하면 저장 시 <span class="text-fg">새 연락처</span>로 등록됩니다. 비워 두면 미연결.</p>
     </div>`;
 }
@@ -723,7 +723,8 @@ function engineerSelect(managers, task) {
     out.push(`<option value="legacy" selected>${esc(legacyName)} (목록 외)</option>`);
   }
   for (const m of managers) {
-    out.push(`<option value="${m.id}" ${curId === m.id ? "selected" : ""}>${esc(m.name)}</option>`);
+    // data-external: 외주 작업자(user_id 없음)=1 → app.js가 외주 지급단가 토글. 하우스 엔지니어는 단가 숨김.
+    out.push(`<option value="${m.id}" ${curId === m.id ? "selected" : ""} data-external="${m.user_id ? "" : "1"}">${esc(m.name)}${m.user_id ? "" : " · 외주"}</option>`);
   }
   return out.join("");
 }
@@ -741,7 +742,7 @@ function taskTypeOptions(current) {
 function taskEditForm(task, managers = []) {
   const legacyName = !task.engineer_id && task.engineer_name ? String(task.engineer_name) : "";
   return `
-    <form method="post" action="/projects/tasks/${task.id}" class="grid gap-2 sm:grid-cols-2">
+    <form method="post" action="/projects/tasks/${task.id}" class="grid gap-2 sm:grid-cols-2" data-task-form>
       <div>
         <label class="label mb-0.5 text-xs">작업 종류</label>
         <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
@@ -754,7 +755,7 @@ function taskEditForm(task, managers = []) {
         <label class="label mb-0.5 text-xs">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_id">${engineerSelect(managers, task)}</select>
       </div>
-      <div>
+      <div data-worker-rate>
         <label class="label mb-0.5 text-xs">외주 지급단가 <span class="font-normal text-muted">(정산 기준 · 원)</span></label>
         <input class="input py-1.5 text-sm" name="worker_rate" inputmode="numeric" placeholder="0" value="${esc(String(task.worker_rate || ""))}" />
       </div>

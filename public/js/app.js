@@ -367,18 +367,21 @@
       }
       hidden.value = id;
       if (info) {
+        while (info.firstChild) info.removeChild(info.firstChild); // CSP-safe: innerHTML 대신 노드 생성
         if (matched) {
-          var parts = [];
-          var ph = matched.getAttribute("data-phone"); if (ph) parts.push("☎ " + ph);
-          var em = matched.getAttribute("data-email"); if (em) parts.push("✉ " + em);
-          var cl = matched.getAttribute("data-client"); if (cl) parts.push("소속: " + cl);
-          info.textContent = parts.join("   ·   ");
-          info.classList.toggle("hidden", parts.length === 0);
+          var ph = matched.getAttribute("data-phone");
+          var em = matched.getAttribute("data-email");
+          var cl = matched.getAttribute("data-client");
+          var nodes = [];
+          if (ph) { var an = document.createElement("a"); an.href = "tel:" + ph.replace(/[^0-9+]/g, ""); an.textContent = "☎ " + ph; an.className = "font-medium text-info"; nodes.push(an); }
+          if (em) { var ae = document.createElement("a"); ae.href = "mailto:" + em; ae.textContent = "✉ " + em; ae.className = "text-info"; nodes.push(ae); }
+          if (cl) { var sp = document.createElement("span"); sp.textContent = "소속: " + cl; nodes.push(sp); }
+          nodes.forEach(function (node, idx) { if (idx > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(node); });
+          info.classList.toggle("hidden", nodes.length === 0);
         } else if (v) {
           info.textContent = "목록에 없는 이름 — 저장 시 새 연락처로 등록됩니다.";
           info.classList.remove("hidden");
         } else {
-          info.textContent = "";
           info.classList.add("hidden");
         }
       }
@@ -387,5 +390,23 @@
     search.addEventListener("change", sync);
     search.addEventListener("blur", sync);
     sync(); // 초기 로드 시 기존 선택값 정보 표시
+  });
+})();
+
+// 곡·콘텐츠 작업 폼: 담당 엔지니어가 외주(data-external=1)일 때만 외주 지급단가 표시(하우스 엔지니어는 숨김).
+(function () {
+  "use strict";
+  var forms = document.querySelectorAll("[data-task-form]");
+  Array.prototype.forEach.call(forms, function (form) {
+    var sel = form.querySelector('select[name="engineer_id"]');
+    var wrap = form.querySelector("[data-worker-rate]");
+    if (!sel || !wrap) return;
+    function toggle() {
+      var opt = sel.options[sel.selectedIndex];
+      var external = opt && opt.getAttribute("data-external") === "1";
+      wrap.classList.toggle("hidden", !external);
+    }
+    sel.addEventListener("change", toggle);
+    toggle();
   });
 })();

@@ -15,14 +15,15 @@ function resolveRooms(rooms) {
   return Array.isArray(rooms) ? rooms : listRooms();
 }
 
-/** 룸 select. 현재값 선택. 룸이 1개뿐이고 현재값 없으면 그 룸 자동선택(단일룸 UX). 항상 '미지정' 옵션 제공. */
+/** 룸 select. 현재값 선택. 현재값이 없으면 첫 룸(A룸)을 기본 선택. '룸 미지정'은 맨 아래 옵션. */
 function roomSelect(rooms, currentId) {
   const cur = currentId == null || currentId === "" ? "" : String(currentId);
-  const auto = rooms.length === 1 && cur === "" ? String(rooms[0].id) : cur;
-  const opts = [`<option value="" ${auto === "" ? "selected" : ""}>룸 미지정</option>`];
+  const auto = cur === "" && rooms.length ? String(rooms[0].id) : cur; // 신규 예약은 A룸(첫 룸) 기본
+  const opts = [];
   for (const r of rooms) {
     opts.push(`<option value="${r.id}" ${String(r.id) === auto ? "selected" : ""}>${esc(r.name)}</option>`);
   }
+  opts.push(`<option value="" ${auto === "" ? "selected" : ""}>룸 미지정</option>`); // 맨 아래
   return `<select class="input py-1.5 text-sm" name="room_id">${opts.join("")}</select>`;
 }
 
