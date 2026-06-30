@@ -201,10 +201,10 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
       : "";
     const dueHint = due > 0 ? `<span class="tabular text-xs text-danger">미수 ${formatKRW(due)}</span>` : "";
     const body = `
-      ${unbilledForm ? `<div class="mb-3">${unbilledForm}</div>` : ""}
-      ${manualLink ? `<div class="mb-2 flex justify-end">${manualLink}</div>` : ""}
       ${summary}
-      ${list}`;
+      ${list}
+      ${manualLink ? `<div class="mt-2 flex justify-end">${manualLink}</div>` : ""}
+      ${unbilledForm ? `<div class="mt-4 border-t border-border pt-4">${unbilledForm}</div>` : ""}`;
     return `
     <details class="card group mt-3"${open}>
       <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
@@ -215,15 +215,17 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </details>`;
   }
 
+  // 만들어진 청구(목록)를 위로, 새 청구 생성 폼은 아래로(사용자 요청 — 이미 만든 청구를 먼저 보고, 새로 만들 땐 하단 폼).
   return `
     <div class="card mt-3">
       <div class="mb-2 flex items-center justify-between">
         <h2 class="font-display text-base font-semibold">청구</h2>
         ${manualLink}
       </div>
-      ${unbilledForm ? `<div class="mb-3">${unbilledForm}</div>` : ""}
       ${summary}
-      ${list}</div>`;
+      ${list}
+      ${unbilledForm ? `<div class="mt-4 border-t border-border pt-4">${unbilledForm}</div>` : ""}
+    </div>`;
 }
 
 module.exports = { invoiceBadge, invoiceRow, invoicesSection, displayStatus };

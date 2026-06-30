@@ -582,6 +582,11 @@ function taskTypeGroup(key) {
   const r = taskTypeCache().byKey.get(key);
   return (r && r.task_group) || "기타";
 }
+/** key → 작업 종류 기본단가(없으면 0). 작업 생성·수정 시 금액 자동 적용(청구 탭에서 조정). */
+function taskTypeUnitPrice(key) {
+  const r = taskTypeCache().byKey.get(key);
+  return (r && r.unit_price) || 0;
+}
 /** 카탈로그에 있는 key면 통과, 없으면 첫 활성 종류로 폴백(없으면 raw 유지). 신규 종류도 정규화 통과. */
 function normalizeTaskTypeDb(key) {
   const k = String(key || "").trim();
@@ -836,8 +841,10 @@ function updateTask(user, taskId, input = {}) {
   const task = getTaskForUser(user, taskId);
   if (!task) return null;
   if (task.is_invoiced) throw new Error("TASK_LOCKED");
-  // 후반작업은 전부 트랙/콘텐츠 고정(곡 1건당) — billing_type='Fixed_Per_Track'·quantity=1 고정, 금액(unit_price)만 직접 입력.
-  const unitPrice = parseWon(input.unit_price);
+  // 금액은 청구 탭에서 확정 — 곡·콘텐츠 탭엔 금액 칸 없음. 수정 시 종류 기본단가 자동 적용(입력값 있으면 우선).
+  const taskType = normalizeTaskTypeDb(input.task_type);
+  const hasPrice = input.unit_price != null && String(input.unit_price).trim() !== "";
+  const unitPrice = hasPrice ? parseWon(input.unit_price) : taskTypeUnitPrice(taskType);
   const eng = resolveTaskEngineer(input);
   db()
     .prepare(
@@ -849,7 +856,7 @@ function updateTask(user, taskId, input = {}) {
     )
     .run({
       id: task.id,
-      task_type: normalizeTaskTypeDb(input.task_type),
+      task_type: taskType,
       unit_price: unitPrice,
       engineer_name: eng.engineer_name,
       engineer_id: eng.engineer_id,
@@ -883,9 +890,10 @@ function deleteTask(user, taskId) {
 function createTask(user, trackId, input = {}) {
   const track = getTrackForUser(user, trackId);
   if (!track) return null;
-  // 후반작업은 전부 트랙/콘텐츠 고정 — billing_type·quantity 고정, 금액(unit_price=total_price)만 직접 입력.
-  const unitPrice = parseWon(input.unit_price);
+  // 후반작업은 트랙/콘텐츠 고정(billing_type·quantity). 금액은 청구 탭에서 확정 — 생성 시엔 종류 기본단가 자동(입력값 있으면 우선).
   const taskType = normalizeTaskTypeDb(input.task_type);
+  const hasPrice = input.unit_price != null && String(input.unit_price).trim() !== "";
+  const unitPrice = hasPrice ? parseWon(input.unit_price) : taskTypeUnitPrice(taskType);
   const eng = resolveTaskEngineer(input);
   const info = db()
     .prepare(
@@ -915,7 +923,6 @@ function listUnbilledTasksForProject(user, projectId) {
        JOIN project_tracks tr ON tr.id = t.track_id
        WHERE tr.project_id = ?
          AND t.is_invoiced = 0
-         AND t.total_price > 0
        ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
     )
     .all(project.id);
@@ -1044,7 +1051,7 @@ function invoiceAmountsFromSupply(supply, discount, vatIncluded = true) {
   return { discount: d, taxable, tax, total };
 }
 
-function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true } = {}) {
+function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true, taskAmounts = {} } = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project || !canBill(user)) return null;
   const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
@@ -1067,6 +1074,13 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
       .all(project.id, ...selectedTasks);
     if (tasks.length !== selectedTasks.length) throw new Error("TASK_NOT_BILLABLE");
   }
+  // 금액은 청구 탭에서 확정: 청구 폼에서 입력한 작업별 금액으로 total_price를 덮어쓴다(미입력 시 기존값=종류 기본단가). 0원은 청구 불가.
+  tasks = tasks.map((t) => {
+    const raw = taskAmounts[t.id] != null ? taskAmounts[t.id] : taskAmounts[String(t.id)];
+    const amt = raw != null && String(raw).trim() !== "" ? parseWon(raw) : (t.total_price || 0);
+    return { ...t, unit_price: amt, total_price: amt };
+  });
+  if (tasks.some((t) => !(t.total_price > 0))) throw new Error("TASK_AMOUNT_REQUIRED");
 
   // 녹음 세션 직접 청구분: 청구 가능(녹음+단가+시간)·미청구·미전환만 허용. 금액은 단가표로 재산정(스냅샷).
   let billSessions = [];
@@ -1126,7 +1140,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
        (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ? WHERE id = ?");
+    const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ?, unit_price = ?, total_price = ? WHERE id = ?");
     for (const task of tasks) {
       const taskLabel = taskTypeLabel(task.task_type);
       const description = `${task.track_title} - ${taskLabel}`;
@@ -1135,7 +1149,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
         task.track_title, task.task_type, description,
         task.quantity, task.unit_price, task.total_price
       );
-      markTask.run(invoiceId, task.id);
+      markTask.run(invoiceId, task.unit_price, task.total_price, task.id); // 청구 시 확정 금액을 작업에도 반영(매출·스냅샷 일치)
     }
     // 녹음 세션 직접 청구 라인: 곡·콘텐츠 없이 invoice_items에 스냅샷(session_id로 잠김). quantity=1·unit_price=amount.
     for (const { session, calc } of billSessions) {

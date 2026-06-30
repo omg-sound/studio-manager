@@ -353,11 +353,18 @@
   var vatEl = form.querySelector("[data-amt-vat]");
   var totalEl = form.querySelector("[data-amt-total]");
 
+  function lineAmount(cb) {
+    // 작업 행은 연결된 금액 input(data-line-input) 값으로, 세션 행은 고정 금액(data-line-amount)으로 합산.
+    var row = cb.closest && cb.closest("[data-line-row]");
+    var input = row && row.querySelector("[data-line-input]");
+    if (input) return parseInt(String(input.value).replace(/[^\d]/g, "") || "0", 10) || 0;
+    return parseInt(cb.getAttribute("data-line-amount") || "0", 10) || 0;
+  }
   function supply() {
     if (!boxes.length) return parseInt(form.getAttribute("data-supply") || "0", 10) || 0;
     var s = 0;
     Array.prototype.forEach.call(boxes, function (cb) {
-      if (cb.checked) s += parseInt(cb.getAttribute("data-line-amount") || "0", 10) || 0;
+      if (cb.checked) s += lineAmount(cb);
     });
     return s;
   }
@@ -395,6 +402,12 @@
   Array.prototype.forEach.call(boxes, function (cb) {
     cb.addEventListener("change", function () {
       // 항목 선택이 바뀌면 공급가 변동 → 정률이면 재계산, 아니면 미리보기만 갱신(정액은 clamp).
+      if (parseFloat(pctInput.value) > 0) applyPct(); else updatePreview();
+    });
+  });
+  // 작업 금액 input(data-line-input) 변경 시 공급가·VAT·총액 즉시 갱신(금액은 청구 시 확정).
+  Array.prototype.forEach.call(form.querySelectorAll("[data-line-input]"), function (inp) {
+    inp.addEventListener("input", function () {
       if (parseFloat(pctInput.value) > 0) applyPct(); else updatePreview();
     });
   });

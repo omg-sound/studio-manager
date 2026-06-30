@@ -421,7 +421,7 @@ router.post("/tasks/:taskId", requireEditor, (req, res) => {
     if (!task) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     if (req.get("X-Requested-With") === "fetch") {
       // 자동저장(AJAX): 리다이렉트 대신 갱신된 헤더값 JSON 반환(금액·상태 배지).
-      return res.json({ ok: true, amount: task.total_price ? formatKRW(task.total_price) : "", statusLabel: TASK_STATUS_LABELS[task.status] || task.status, statusCls: TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted" });
+      return res.json({ ok: true, amount: task.is_invoiced && task.total_price ? formatKRW(task.total_price) : "", statusLabel: TASK_STATUS_LABELS[task.status] || task.status, statusCls: TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted" });
     }
     res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
@@ -441,6 +441,16 @@ router.post("/tasks/:taskId/delete", requireEditor, (req, res) => {
   }
 });
 
+/** req.body의 task_amount_<id> 필드를 {taskId: 금액} 맵으로 추출(청구 폼에서 작업별로 입력/조정한 금액). */
+function extractTaskAmounts(body) {
+  const out = {};
+  for (const k of Object.keys(body || {})) {
+    const m = /^task_amount_(\d+)$/.exec(k);
+    if (m) out[m[1]] = body[k];
+  }
+  return out;
+}
+
 router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
   try {
     const inv = createInvoiceFromTasks(req.user, {
@@ -453,6 +463,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
       dueDate: cleanYmd(req.body.due_date),
       discount: parseMoney(req.body.discount_amount),
       vatIncluded: req.body.vat_included != null, // 부가세 포함 체크박스(기본 체크) — 해제 시 미전송 → false(현금 거래)
+      taskAmounts: extractTaskAmounts(req.body), // 금액은 청구 시점 확정 — 작업별 입력/조정 금액
     });
     if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     // createInvoiceFromTasks는 즉시 '발행' 상태로 생성 → 발행 알림 발송(notify는 fail-safe·비차단, 청구 흐름 비차단).
@@ -460,7 +471,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
     // 청구 메뉴로 이탈하지 않고 프로젝트 청구 탭으로 복귀 + 방금 만든 인보이스를 펼친 채(open) 노출.
     res.redirect(`/projects/${req.params.id}?tab=invoice&open=${inv.id}&flash=created`);
   } catch (e) {
-    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다." };
+    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다.", TASK_AMOUNT_REQUIRED: "청구할 작업의 금액을 입력하세요(0원은 청구할 수 없습니다)." };
     if (!known[e.message]) throw e; // 알 수 없는 오류(DB 등)는 전역 핸들러(500+로깅)로 — 검증 실패로 위장 방지
     return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message: known[e.message], user: req.user }));
   }
@@ -627,7 +638,7 @@ function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId =
     ? tracks.map((track) => trackCard(track, { isAdmin, managers, expandTaskId })).join("")
     : emptyState("등록된 곡·콘텐츠가 없습니다.");
   const hint = isAdmin
-    ? `<p class="text-xs text-muted">세션(예약·실시간 작업)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 한 세션에 여러 곡을 넣을 수 있고, 각 곡은 단계별로 이어집니다.</p>`
+    ? `<p class="text-xs text-muted">세션(예약·실시간 작업)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 여기선 <span class="text-fg">종류·담당·진행 상태</span>만 기록하고, <span class="text-fg">금액은 청구 탭에서</span> 정합니다.</p>`
     : "";
   return `
     <section class="card mt-3 space-y-4">
@@ -703,7 +714,8 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
   const label = taskTypeLabel(task.task_type);
   const status = TASK_STATUS_LABELS[task.status] || task.status;
   const statusCls = TASK_STATUS_BADGE[task.status] || "bg-muted/10 text-muted";
-  const amount = `<span class="text-sm font-semibold" data-row-amount>${task.total_price ? formatKRW(task.total_price) : ""}</span>`;
+  // 금액은 청구 탭에서 확정 — 작업 행엔 청구된 작업의 확정액만 표시(미청구는 숨김, '기록만' 일관).
+  const amount = `<span class="text-sm font-semibold" data-row-amount>${task.is_invoiced && task.total_price ? formatKRW(task.total_price) : ""}</span>`;
   const title = `<span class="min-w-0 truncate text-sm"><span class="font-medium">${esc(label)}</span>${task.engineer_name ? `<span class="text-xs text-muted"> · ${esc(task.engineer_name)}</span>` : ""}</span>`;
   const statusBadge = `<span class="badge ${statusCls}" data-row-status>${esc(status)}</span>`;
 
@@ -770,10 +782,6 @@ function taskEditForm(task, managers = []) {
         <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
       </div>
       <div>
-        <label class="label mb-0.5 text-xs">금액 <span class="font-normal text-muted">(고객 청구 · 원)</span></label>
-        <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="0" value="${esc(String(task.unit_price || ""))}" />
-      </div>
-      <div>
         <label class="label mb-0.5 text-xs">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_id">${engineerSelect(managers, task)}</select>
       </div>
@@ -803,7 +811,6 @@ function taskQuickAdd(track) {
   const quick = (t) => `
     <form method="post" action="/projects/tracks/${track.id}/tasks">
       <input type="hidden" name="task_type" value="${esc(t.key)}" />
-      <input type="hidden" name="unit_price" value="${t.unit_price || 0}" />
       <input type="hidden" name="status" value="Pending" />
       <button class="rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary" type="submit">${esc(t.label)}</button>
     </form>`;
@@ -817,7 +824,6 @@ function taskQuickAdd(track) {
       <summary class="cursor-pointer list-none rounded-md border border-border bg-bg btn-xs hover:border-primary hover:text-primary">+ 기타</summary>
       <form method="post" action="/projects/tracks/${track.id}/tasks" class="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
         <select class="input py-1.5 text-sm" name="task_type">${grouped}</select>
-        <input class="input w-28 py-1.5 text-sm" name="unit_price" inputmode="numeric" placeholder="금액(원)" />
         <input type="hidden" name="status" value="Pending" />
         <button class="btn-primary btn-xs" type="submit">추가</button>
       </form>
@@ -847,13 +853,14 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const done = isDone(task);
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(TASK_STATUS_LABELS[task.status] || task.status)}</span>`;
       return `
-        <label class="flex items-start gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}">
-          <input class="mt-1" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${task.total_price || 0}" ${done ? "checked" : ""} />
-          <span class="min-w-0 flex-1">
-            <span class="block text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</span>
-          </span>
-          <span class="text-sm font-semibold tabular">${formatKRW(task.total_price)}</span>
-        </label>`;
+        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
+          <input class="shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${task.total_price || 0}" ${done ? "checked" : ""} id="task-cb-${task.id}" />
+          <label for="task-cb-${task.id}" class="min-w-0 flex-1 cursor-pointer text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</label>
+          <div class="relative w-28 shrink-0">
+            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${task.total_price || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
+            <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+          </div>
+        </div>`;
     })
     .join("");
   // 녹음 세션 직접 청구 후보(곡·콘텐츠/버튼 없이 자동 노출). 체크하면 인보이스 라인으로 들어간다.
@@ -863,7 +870,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const dur = `${Math.floor(mins / 60)}시간${mins % 60 ? " " + (mins % 60) + "분" : ""}`;
       const time = [s.start_time, s.end_time].filter(Boolean).join("–");
       return `
-        <label class="flex items-start gap-2 border-b border-border py-2 last:border-0">
+        <label class="flex items-start gap-2 border-b border-border py-2 last:border-0" data-line-row>
           <input class="mt-1" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" checked />
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-medium">녹음 세션 ${esc(formatYmdShort(s.session_date))} · ${esc(s.billing.item.name)}</span>
