@@ -28,7 +28,7 @@
 - **곡 일괄 추가**: 줄바꿈으로 여러 곡명 한 번에 추가.
 
 ### 세션 일정(예약)
-- 프로젝트 하위 세션 CRUD + 사이드바 `/sessions`(**목록/캘린더 뷰 전환** `?view=`; 목록=다가오는/지난, 캘린더=월 그리드 `?month=YYYY-MM`, `monthCalendar`/`sessionsForMonth`). 예약 담당자·담당 엔지니어 별개(담당자 마스터 select).
+- 프로젝트 하위 세션 CRUD + 사이드바 `/sessions`(**목록/캘린더 뷰 전환** `?view=`; 목록=다가오는/지난, 캘린더=월 그리드 `?month=YYYY-MM`, `monthCalendar`/`sessionsForMonth`). 예약 담당자·담당 엔지니어 별개(담당자 마스터 select; **예약 담당자 '미지정' 옵션 제거 — 환경설정 기본 예약담당자 자동 선택**, `admin_state.default_booker`). **담당 디렉터**=고객측 연락처 콤보(고객측 담당자와 동일 — 이름 입력·목록 선택, 목록 외 이름 저장 시 새 연락처 자동 생성, `sessions.director_contact_id`); 연락처 상세에 '참여 세션' 기록.
 - **폼 레이아웃(추가·편집 완전 통일)**: 추가·편집 모두 `sessionBookingFields`(날짜·예약·상태 / 세션종류·**녹음 단가 항목**(세션 종류=녹음일 때만 노출)·엔지니어·**룸** / **시작 그리드+직접입력** / **소요 슬라이더**). 편집 폼은 기존 시간으로 슬라이더 초기화(`minutesBetween`), 저장 시 시작+소요로 종료 산정. `app.js`가 `[data-session-form]`을 **폼별로 초기화(멀티폼)**. **세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능**. 세션 저장 버튼도 추가 버튼처럼 full.
 - **용어 통일**: `녹음 종류` = **단가표 항목**(`rate_item_id`, 스튜디오/로케이션 분류 optgroup, `rateSelectGrouped`).
   `세션 종류` = `session_type`(녹음/믹싱/마스터링/기타). 추가·편집 폼에서 동일 의미(이전 라벨 혼동 정리).
@@ -36,7 +36,7 @@
   **텍스트 직접입력**(HH:MM; 숫자만 입력하면 콜론 자동 삽입 `1425`→`14:25`, `pattern`+서버 `cleanTime` 검증). (이전의 '녹음 종류 미선택 시 시작 시간 비활성' 필수 게이트는 세션 종류 가변화로 **미사용** — 대신 세션 종류=녹음일 때만 녹음 단가 항목 select 노출로 대체. `rateSelectGrouped`의 `required`/`data-rate-required` 인터페이스 보존.)
 - 소요시간 **슬라이더**(30분 단위·최대 12시간) + 아래 `[1Pro][2Pro][직접입력]` 프리셋(슬라이더와 양방향 동기화). 종료는 서버가 시작+길이로 계산(`custom_hours`+`duration_mode=custom`, 1Pro=녹음 종류 기준시간).
   폼 인터랙션은 `public/js/app.js`(CSP: 인라인 0).
-- **다중 룸**: `rooms` 테이블 + `sessions.room_id`. 세션 폼에 룸 select. 겹침 검사를 `IFNULL(room_id,0)`으로 룸별 판정 — **같은 룸만 충돌, 다른 룸은 동시간 병렬 허용**(레거시 NULL끼리는 가상 룸 0으로 처리). 룸 CRUD는 `/settings` 환경설정 탭(`POST /settings/rooms`, `/:id/delete`). 기본 '메인 룸' 1회 시드.
+- **다중 룸**: `rooms` 테이블 + `sessions.room_id`. 세션 폼에 룸 select(**첫 룸=A룸 기본 선택, '룸 미지정'은 맨 아래 옵션**). 겹침 검사를 `IFNULL(room_id,0)`으로 룸별 판정 — **같은 룸만 충돌, 다른 룸은 동시간 병렬 허용**(레거시 NULL끼리는 가상 룸 0으로 처리). 룸 CRUD는 `/settings` 환경설정 탭(`POST /settings/rooms`, `/:id/delete`). 기본 '메인 룸' 1회 시드.
 - **겹침 차단**: **앱 DB 룸별 겹침이 정식 차단**(409) — **모든 세션 종류(녹음·믹싱·마스터링·기타)가 룸을 점유**(같은 룸·같은 시간 더블부킹 방지, `findSessionConflict`/`busySessionSlots` session_type 무관). 구글 FreeBusy 하드차단은 **비활성화** — 단일 캘린더로는 룸 구분 불가(캘린더 일정 자동 생성/수정/삭제 동기화는 유지).
 - **구글 캘린더 자동 연동**: 예약 시 스튜디오 캘린더에 일정 자동 생성/수정/삭제(제목=제작사·아티스트, 장소=기본 장소,
   `gcal_event_id` 추적). 미연동/오류는 fail-safe(예약은 정상). 세션 '취소' 시에도 캘린더 일정 삭제 동기화. 역방향(캘린더→앱) 동기화는 미구현(보류).
@@ -45,7 +45,7 @@
 ### 곡 · 콘텐츠 (녹음과 별개의 후반작업)
 - 프로젝트 하위 곡/콘텐츠(`project_tracks`) + 모듈형 작업(`track_tasks`). **진행 단계 빠른 버튼**(보컬튠·오디오편집·믹싱·
   마스터링, +기타는 전체 종류 그룹 드롭다운), 곡별 **진행 요약** 한 줄, 작업 행 = **헤더 접기 토글**(`<details>`, 우측 chevron·상태 배지는 그 앞; 펼치면 편집 폼, **추가 시 자동 펼침** `?expand=`). **후반작업은 전부 트랙/콘텐츠 고정·수량 1 — 금액(`unit_price`=`total_price`)만 직접 입력**(과금 유형·수량 선택 UI 폐기, 라벨 표기).
-- 작업 폼에 **담당 엔지니어 select**(value=`project_managers.id`, 외주 포함) + **외주 지급단가**(`worker_rate`) 입력. 저장 시 `engineer_id` 기록(→ `engineer_name` 동기 기록). 외주 정산 합계 = Σ`worker_rate`(고객 청구 `total_price`는 마진 참고 표기).
+- 작업 폼에 **담당 엔지니어 select**(value=`project_managers.id`, 외주 포함) + **외주 지급단가**(`worker_rate`) 입력 — **담당 엔지니어가 외주 작업자일 때만 노출**(하우스 엔지니어=`user_id` 있으면 숨김·저장 시 0; engineerSelect `data-external`·app.js 토글). 저장 시 `engineer_id` 기록(→ `engineer_name` 동기 기록). 외주 정산 합계 = Σ`worker_rate`(고객 청구 `total_price`는 마진 참고 표기).
 - **곡·콘텐츠 청구 완료요건**: 청구 생성 폼에서 **완료(Completed) 작업만 기본 체크**, 미완료 항목은 흐리게 표시·체크 해제 + 안내 메시지(녹음 세션 완료 강제와 동일 규칙 통일).
 - 청구된 작업(`is_invoiced=1`)은 수정·삭제 거부(invoice_items 스냅샷 보존). 트랙 삭제는 작업 CASCADE.
 
@@ -58,6 +58,7 @@
 - **견적서 발행 허용**: 미발행 상태 인보이스도 견적서 PDF 발행 가능 — **미발행 상세에 '견적서' PDF 버튼 노출**(발행/입금완료는 거래명세서·내역서·견적서 전체). 발행알림은 미발행→발행/입금완료 **첫 전이에만** 발송. **청구 탭 from-tasks 주 경로 포함** 모든 발행이 `notify.js` 공용 `notifyInvoiceIssued(inv)`로 통지(수동·자동 경로 일원화).
 - 프로젝트 삭제 시 청구된 작업·세션이 있으면 거부(`PROJECT_HAS_INVOICED`).
 - 대시보드: 미수금·이번 달 발행·연체(치프/대표만) + **오늘·이번 주 세션 카드**(`upcomingSessions`).
+- **매출 현황**(`/revenue`, 사이드바 청구 그룹, 대표·치프 `requireInvoice`): 담당 엔지니어별 매출 = 작업(`track_tasks.engineer_id`별 Σ`total_price`) + 세션(`engineer_name`별 Σ`computeRatePrice`, 취소 제외). 행 클릭 시 담당 작업·세션 내역(`revenueByEngineer`/`revenueForEngineer`).
 - **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
   레이아웃: 좌측 **제목**(거래명세서/내역서/견적서 — `?type=`로 선택, `DOC_TYPES`) + 공급자 헤더·**로고**(우측), 청구처 박스, **품목|금액** 표(수량·단가 생략 — 곡/세션 단위 고정), 소계/VAT/합계, **납부하실금액** 강조(견적서는 '견적 금액'·전용 푸터).
   공급자=스튜디오 세금정보·로고(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
@@ -79,8 +80,8 @@
 - **권한**: 자료 전달은 **편집자(치프·스태프)만** — 사이드바 메뉴·`/deliverables`·인증 다운로드·프로젝트 상세 '자료 전달' 탭 모두 **대표 제외**(NAV `access:"editor"`=canEdit, 라우트 `requireEditor`). 공개 토큰 링크 `/d/:token`만 인증 불필요(유지).
 
 ### 관리(/settings) — 3탭
-- **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계). **외주 작업자는 `/workers` 메뉴로 일원화 완료** — 이 탭에서는 안내 링크만 표시(기존 `/settings`의 외주 추가/삭제 폼 제거).
-- **`/workers` 권한 분리**: 목록·상세 열람 + **정산(지급 처리/취소)** = 대표·치프(`requireInvoice`), 작업자 **추가·삭제**(마스터) = 치프(`requireChief`). 추가 폼·삭제 버튼은 치프에게만 노출. 외주 **지급단가**(`worker_rate`) 입력은 작업 편집(`requireEditor`=치프·스태프)이라 대표는 단가는 안 건드리고 **지급만** 실행. 흐름: 치프/스태프 외주단가 입력 → 완료 → 대표/치프 정산 탭 지급.
+- **담당자**: 하우스 엔지니어(로그인, 작업 담당자 자동 연계; **각 행 '정보 수정'으로 이름·전화 편집** `POST /settings/users/:id/edit` — 이름은 users+작업 담당자 동기화, 전화는 작업 담당자 행). **외주 작업자는 `/workers` 메뉴로 일원화 완료** — 이 탭에서는 안내 링크만 표시(기존 `/settings`의 외주 추가/삭제 폼 제거).
+- **`/workers` 권한 분리**: 목록·상세 열람 + **정산(지급 처리/취소)** = 대표·치프(`requireInvoice`), 작업자 **추가·삭제·정보수정**(마스터) = 치프(`requireChief`). 추가 폼·삭제·수정은 치프에게만 노출. 외주 **정보 수정**(이름·전화·이메일)=상세 `POST /workers/:id/edit`(이름 변경 시 `track_tasks.engineer_name` 동기화로 정산 매칭 유지). 외주 **지급단가**(`worker_rate`) 입력은 작업 편집(`requireEditor`=치프·스태프)이라 대표는 단가는 안 건드리고 **지급만** 실행. 흐름: 치프/스태프 외주단가 입력 → 완료 → 대표/치프 정산 탭 지급.
 - **컨텐츠**: 단가표(녹음 종류)·**작업 종류 카탈로그**(곡·콘텐츠 후반작업 종류 + 기본단가·과금·분류·빠른추가). 모두 삭제-only.
 - **환경설정**: 스튜디오 캘린더(자동 연동 대상)·예약 일정 기본 장소·**운영시간**(스튜디오 영업 시작·종료·간격, `POST /settings/studio-hours`, `admin_state.studio_hours` 백킹 → 예약 그리드 동적 생성)·**룸 CRUD**(추가/삭제, `POST /settings/rooms`, `/:id/delete`)·**공급자(스튜디오) 세금정보 + 로고**(거래명세서 PDF용; 로고는 PNG/JPG 업로드→base64, 매직바이트 검증)·알림 웹훅 URL.
 
@@ -120,6 +121,7 @@
 - **전방위 점검 개선(ultrawork)**: 🔴**세션 편집 시 시작/종료 유실** 수정(가용성 조회에 자기 세션 미제외 → `exclude`/`room` 전송[app.js]·편집폼 `data-session-id`·`busySessionSlots` 룸별 일치). **청구 탭(주 경로) 발행 알림 누락** → `notify.js` 공용 함수 통지. **클라이언트 삭제 가드**(발행 청구처면 409). 입금완료→발행 강등 시 `paid_amount` 리셋, 세션 `room_id` 활성 룸 검증. **죽은코드 제거**(미사용 `api.routes` 삭제·settings managers·`payerField`). UX: 미발행 견적서 PDF 버튼·세션 검색바 통일·테마 토글 현재모드 표시·클라이언트 목록 `listGroup`·입금폼 라벨('입력액으로 갱신'/'완납 처리')·빈상태 아이콘·캘린더 칩 상태색·검색 aria-label·세션 에러 `errorPage` 통일. `notifyInvoiceIssued` 일원화.
 - **/audit 진단 후속**: 수동 인보이스 `tax_amount` 미산정(거래명세서 VAT ₩0) → amount에서 역산 저장(`round(amount-amount/1.1)`). 세션 겹침을 **전 세션 종류로 확장**(마스터링·기타도 룸 점유, session_type IN 절 제거). from-tasks 청구 에러 흡수 해제(알 수 없는 오류는 전역 핸들러로 throw). server.js 스테일 주석·시작시간 `pattern` 2자리 통일. **금전 핵심 단위 테스트 도입**(node:test 24개: 채번·VAT·세션겹침·권한, 의존성 0·격리 임시 DB).
 - **프로젝트 폼 개선**: 마감일(`due_date`) UI 전부 제거(폼·목록 D-day·메타·대시보드 '임박한 마감'). '고객 담당자'→**'고객측 담당자'** + 선택 시 전화·이메일·소속 표시(`contactOptions` email·datalist `data-*`·app.js `[data-contact-info]`) + 목록 외 이름 저장 시 **새 연락처 자동 생성**(`resolveContactId`). 빠른 정합: body parser limit 1mb, 0원 단가 항목 생성 방지(`RATE_PRICE_REQUIRED`).
+- **세션·담당자·매출 개선**: 세션 **담당 디렉터**(고객측 연락처 콤보·`sessions.director_contact_id`·목록 외 이름→새 연락처·연락처 상세 참여세션), **룸 기본 A·'미지정' 맨 아래**, **예약담당자 '미지정' 제거+환경설정 기본값**(`admin_state.default_booker`), **외주 지급단가 조건부**(담당이 하우스면 숨김·저장 0, `data-external` 토글), **하우스/외주 작업자 정보 수정**(이름·전화·이메일; 외주는 이름변경 시 작업 스냅샷 동기화), **매출 현황 메뉴**(`/revenue`, 엔지니어별 작업+세션 집계, 대표·치프), 연락처 정보표시 전화 `tel:`·이메일 `mailto:` 링크(app.js createElement).
 
 ## 스택
 
@@ -200,10 +202,10 @@
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,
   start_time?, end_time? "HH:MM", booker_name?, engineer_name?, status[예정|완료|취소], memo,
-  rate_item_id?→rate_items SET NULL, room_id?→rooms SET NULL, gcal_event_id?)` — 스튜디오 일정.
+  rate_item_id?→rate_items SET NULL, room_id?→rooms SET NULL, director_contact_id?(→contacts, 담당 디렉터·연락처 콤보), gcal_event_id?)` — 스튜디오 일정.
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   `rate_item_id`는 녹음 세션 시간제 자동 산정용 단가표 연결. `room_id`는 룸별 겹침 검사 단위(IFNULL 0으로 가상룸 처리). `gcal_event_id`는 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적).
-- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·**`studio_hours`**(운영시간 JSON·예약 그리드 시작슬롯 소스)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`studio_logo`(거래명세서 로고, base64 data URI)·`alert_webhook_url`(알림 웹훅, 암호화).
+- `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·**`studio_hours`**(운영시간 JSON·예약 그리드 시작슬롯 소스)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`studio_logo`(거래명세서 로고, base64 data URI)·`alert_webhook_url`(알림 웹훅, 암호화)·**`default_booker`**(기본 예약 담당자 이름, 세션 폼 기본 선택).
 - 후속(스키마 자리만): `payments`(입금 이력 분리 필요 시).
 
 ## 자료 전달 아키텍처 (플레이북1 §2.3·§4.3)
@@ -284,7 +286,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 9. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 도메인별 모듈화 검토.
 10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: **프로젝트 폼 개선**(마감일 제거·**고객측 담당자** 정보표시[전화·이메일·소속]·목록 외 이름→**새 연락처 자동생성**·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개** node:test)·**진단 프롬프트**(`docs/IMPROVEMENT_AUDIT_PROMPT.md`·`/audit`), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드·UX·`notifyInvoiceIssued` 일원화), **청구처 청구시점 이동**·**용어 통일**(실결제자→청구처·담당 엔지니어·고객측 담당자)·**프로젝트 유형 구분 폐기**·**연락처(담당자) 도메인**, 문서 현행화.
+> **완료(이번 세션)**: **세션·담당자·매출 개선**(세션 **담당 디렉터**[연락처 콤보·참여세션]·**룸 기본 A**·**예약담당자 기본값**·**외주단가 조건부**[하우스 숨김]·**하우스/외주 작업자 정보수정**·**매출 현황 메뉴**[엔지니어별 작업+세션]·연락처 tel/mailto 링크), **프로젝트 폼 개선**(마감일 제거·**고객측 담당자** 정보표시[전화·이메일·소속]·목록 외 이름→**새 연락처 자동생성**·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개** node:test)·**진단 프롬프트**(`docs/IMPROVEMENT_AUDIT_PROMPT.md`·`/audit`), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드·UX·`notifyInvoiceIssued` 일원화), **청구처 청구시점 이동**·**용어 통일**(실결제자→청구처·담당 엔지니어·고객측 담당자)·**프로젝트 유형 구분 폐기**·**연락처(담당자) 도메인**, 문서 현행화.
 > **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
