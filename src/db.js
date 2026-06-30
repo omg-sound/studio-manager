@@ -305,6 +305,7 @@ function init() {
   addColumn("sessions", "booker_name", "TEXT"); // 예약 담당자(담당자 마스터에서 선택, 담당 엔지니어와 별개)
   addColumn("sessions", "gcal_event_id", "TEXT"); // 예약 시 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적)
   addColumn("sessions", "room_id", "INTEGER"); // 룸(스튜디오 공간). FK 없음(ALTER 한계) — 룸별 겹침 검사, 룸 삭제 시 코드가 NULL 처리(SET NULL 의미)
+  addColumn("sessions", "director_contact_id", "INTEGER"); // 담당 디렉터(클라이언트 측 연락처). FK 없음(ALTER 한계) — 연락처 삭제 시 코드가 NULL 처리.
   // room_id 컬럼은 위 addColumn으로 보장되므로 의존 인덱스는 여기서 생성(big exec 블록보다 뒤).
   d.exec("CREATE INDEX IF NOT EXISTS idx_sessions_room ON sessions(room_id);");
   addColumn("track_tasks", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 세션에서 생성된 청구 작업 추적(레거시 전환분)

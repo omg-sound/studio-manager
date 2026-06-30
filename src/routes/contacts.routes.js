@@ -14,6 +14,7 @@ const {
   endAffiliation,
   deleteAffiliation,
   listProjectsForContact,
+  listSessionsForContact,
   listClients,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge } = require("../views");
@@ -138,6 +139,7 @@ router.get("/:id", (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const affs = listAffiliations(c.id);
   const projects = listProjectsForContact(c.id);
+  const sessions = listSessionsForContact(c.id);
   const clients = listClients({});
 
   const infoCard = `
@@ -203,6 +205,17 @@ router.get("/:id", (req, res) => {
       })
     : emptyState("연결된 프로젝트가 없습니다.", { card: true });
 
+  const sessionList = sessions.length
+    ? listGroup({
+        rows: sessions.map((s) => {
+          const timeStr = s.start_time ? ` ${esc(s.start_time)}${s.end_time ? "–" + esc(s.end_time) : ""}` : "";
+          const left = `<div class="flex flex-wrap items-center gap-2"><span class="font-semibold">${esc(s.session_date)}${timeStr}</span><span class="badge bg-bg text-muted">${esc(s.session_type)}</span></div><div class="mt-0.5 text-xs text-muted">${esc(s.project_title || "")}</div>`;
+          const right = `<span class="text-xs text-muted">${esc(s.status)}</span>`;
+          return listRow({ href: `/projects/${s.project_id}?tab=sessions`, left, right });
+        }),
+      })
+    : emptyState("담당 디렉터로 지정된 세션이 없습니다.", { card: true });
+
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: c.name, desc: "연락처(클라이언트 측 담당자)", back: { href: "/contacts", label: "연락처" } })}
@@ -210,6 +223,8 @@ router.get("/:id", (req, res) => {
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
     ${timeline}
     ${affForm}
+    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">참여 세션</h2>
+    ${sessionList}
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">연결 프로젝트</h2>
     ${projectList}`;
   res.send(layout({ title: c.name, user: req.user, current: "/contacts", body }));

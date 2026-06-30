@@ -261,6 +261,17 @@ function listProjectsForContact(contactId) {
   return db().prepare("SELECT * FROM projects WHERE contact_id = ? ORDER BY created_at DESC, id DESC").all(Number(contactId));
 }
 
+/** 연락처가 담당 디렉터로 지정된 세션(연락처 상세 '참여 세션' 섹션용). 최근순. */
+function listSessionsForContact(contactId) {
+  return db().prepare(
+    `SELECT s.*, p.title AS project_title
+       FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+      WHERE s.director_contact_id = ?
+      ORDER BY s.session_date DESC, s.start_time DESC, s.id DESC`
+  ).all(Number(contactId));
+}
+
 // ── 룸(스튜디오 공간) — 룸별 겹침 검사. 치프가 /settings에서 CRUD ──
 
 /** 활성(또는 전체) 룸 목록. 정렬: sort_order → 이름. */
@@ -1122,6 +1133,12 @@ function sessionFields(input) {
   // 직접입력(그리드 밖 시간)이 있으면 우선, 없으면 그리드에서 고른 시작.
   const start = cleanTime(input.start_time_custom) || cleanTime(input.start_time);
   const rateItemId = Number(input.rate_item_id) || null;
+  // 담당 디렉터(클라이언트 측 연락처): director_contact_id(목록 선택) 우선, 없고 director_name(새 이름) 있으면 새 연락처 생성.
+  let directorContactId = Number(input.director_contact_id) || null;
+  if (!directorContactId) {
+    const dirName = String(input.director_name || "").trim();
+    if (dirName) directorContactId = createContact({ name: dirName });
+  }
   return {
     session_type: normalizeSessionType(input.session_type),
     session_date: date,
@@ -1132,6 +1149,7 @@ function sessionFields(input) {
     status: normalizeSessionStatus(input.status),
     rate_item_id: rateItemId,
     room_id: validRoomId(input.room_id), // 활성 룸 검증 — 없거나 삭제된 id는 null
+    director_contact_id: directorContactId,
     memo: String(input.memo || "").trim() || null,
   };
 }
@@ -1231,8 +1249,8 @@ function createSession(user, projectId, input = {}) {
   assertNoSessionConflict(f, null);
   const info = db()
     .prepare(
-      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, memo)
-       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @memo)`
+      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_contact_id, memo)
+       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_contact_id, @memo)`
     )
     .run({ project_id: project.id, ...f });
   return db().prepare("SELECT * FROM sessions WHERE id = ?").get(info.lastInsertRowid);
@@ -1248,7 +1266,7 @@ function updateSession(user, sessionId, input = {}) {
     .prepare(
       `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
        end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
-       rate_item_id=@rate_item_id, room_id=@room_id, memo=@memo WHERE id=@id`
+       rate_item_id=@rate_item_id, room_id=@room_id, director_contact_id=@director_contact_id, memo=@memo WHERE id=@id`
     )
     .run({ id: s.id, ...f });
   return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
@@ -1379,6 +1397,7 @@ module.exports = {
   contactOptions,
   listContactsForClient,
   listProjectsForContact,
+  listSessionsForContact,
   listRooms,
   createRoom,
   deleteRoom,
