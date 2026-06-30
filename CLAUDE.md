@@ -6,7 +6,8 @@
 > **스태프(staff, 엔지니어·매니저)** = 프로젝트·곡·작업·자료 편집까지. 전원 Google 화이트리스트
 > 로그인(치프가 허용한 계정만). 클라이언트(아티스트/소속사/제작사)는 프로젝트 데이터로 존속하고 로그인하지 않는다.
 > 선행 플레이북 2종(`webapp-build-playbook.md`, `녹음실-앱-개발-경험-플레이북.md`)의 검증된 패턴·함정 반영.
-> 이 파일은 **살아있는 설계 일지**다(현재 상태·아키텍처·데이터 모델·env·함정·TODO). 변경 시 갱신할 것.
+> 이 파일은 **살아있는 설계 일지**다(현재 상태·아키텍처·데이터 모델·env·함정·TODO).
+> **[필수] 모든 기능 추가·수정·삭제 커밋 직후, 사용자 요청이 없어도 이 파일과 `WORKFLOW.md`를 반드시 현행화한다** — 현재 상태·데이터 모델·env·변경 이력·완료(이번 세션) 섹션을 함께 갱신·커밋(2026-06-30 사용자 지시).
 > 상세 변경 근거는 git 커밋 메시지에 있다. 배포 런북=`DEPLOY.md`, 작업 이어가기=`WORKFLOW.md`.
 
 ## 현재 상태 (2026-06-30)
@@ -52,7 +53,7 @@
 ### 청구
 - 인보이스 생성/수정/입금(부분→발행 유지·전액→입금완료)·상태 전이(미발행→발행→입금완료)·연체 파생.
   채번 `INV-YYYYMM-###`(원자화: `BEGIN/COMMIT/ROLLBACK`으로 중복 방지), VAT=공급가 10%, 돈=정수(원).
-- 청구 탭 **청구 생성 폼**: **청구처 선택**(`clientCombo`, 기본값=프로젝트 자동파생값, 미선택 시 폴백 — 청구처 결정 지점) + **완료** 작업 + **청구 가능 녹음 세션**(녹음+단가+시간, 취소 제외)을 함께 체크박스로 노출 → 선택해 청구서로. **생성 즉시 발행**(폼에 안내); 발행/입금완료 인보이스의 **청구처 변경은 409 잠금**(미발행만 변경, `resolveInvoiceRefs`는 폼 선택 우선·미제공 시에만 프로젝트 폴백).
+- 청구 탭 **청구 생성 폼**: **청구처 선택**(`clientCombo`, 기본값=프로젝트 자동파생값, 미선택 시 폴백 — 청구처 결정 지점) + **완료** 작업 + **청구 가능 녹음 세션**(녹음+단가+시간, 취소 제외)을 함께 체크박스로 노출 → 선택해 청구서로. **생성 즉시 발행**(폼에 안내); 발행/입금완료 인보이스의 **청구처 변경은 409 잠금**(미발행만 변경, `resolveInvoiceRefs`는 폼 선택 우선·미제공 시에만 프로젝트 폴백). **할인**(선택): 청구서 단위(정액 원·정률 %), **공급가에서 차감 후 VAT 재계산**(과세표준=공급가−할인, VAT=과세표준×10%, `invoiceAmountsFromSupply`); 공급가는 **체크한 항목 합으로 동적**(app.js `[data-discount-form]`·`data-line-amount`), 거래명세서는 소계→할인→과세표준→VAT→합계. `invoices.discount_amount`, from-tasks 주 경로(수동 인보이스는 표시용 저장).
   미완료 작업은 흐리게·체크 해제(세션 완료 강제와 동일 규칙). 청구 목록 **검색**(`?q=` 제목·채번·클라이언트).
   **녹음 세션은 곡·콘텐츠/버튼 없이 직접 청구**: **완료 처리한** 녹음 세션의 예상 청구액이 청구 탭에 자동 노출(예정은 '완료 시 청구' 힌트만), 선택 시 `invoice_items.session_id` 스냅샷으로 청구(곡·콘텐츠 안 거침). 청구되면 세션 수정·삭제 잠금(`SESSION_INVOICED`), 인보이스 삭제 시 자동 미청구 복원. 관련: `listBillableSessionsForProject`·`unbilledInvoiceForm`·`createInvoiceFromTasks`(task+session 혼합)·`isSessionInvoiced`.
 - **견적서 발행 허용**: 미발행 상태 인보이스도 견적서 PDF 발행 가능 — **미발행 상세에 '견적서' PDF 버튼 노출**(발행/입금완료는 거래명세서·내역서·견적서 전체). 발행알림은 미발행→발행/입금완료 **첫 전이에만** 발송. **청구 탭 from-tasks 주 경로 포함** 모든 발행이 `notify.js` 공용 `notifyInvoiceIssued(inv)`로 통지(수동·자동 경로 일원화).
@@ -76,6 +77,7 @@
 - **소속 이력(이직 히스토리)**: `contact_affiliations` 타임라인. `ended_on IS NULL`=현재 소속(가장 최근 1건), `client_id` NULL=무소속(프리·지인). **이직**=소속 추가 시 `closeCurrent`로 기존 현재 소속을 자동 종료(`ended_on`)하고 새 소속 INSERT. 상세에 현재(`badge-success`)/종료(`badge-neutral`) 타임라인 + 추가·이직/종료/삭제 + 연결 프로젝트.
 - **생성 시 현재 소속 입력**: 새 연락처 폼에 소속 회사 select(무소속+`listClients`)+직함 → 생성과 동시에 첫 소속 등록(`addAffiliation`, `closeCurrent=false`) → 회사 상세 직원 목록에 즉시 반영.
 - **프로젝트 연결**: 프로젝트 메타의 '고객측 담당자'(`contactCombo`, `projects.contact_id`) — 선택 시 전화·이메일·소속을 즉시 표시(`contactOptions`에 email 포함·datalist `data-*`·app.js `[data-contact-info]`), **목록에 없는 이름 입력 시 저장하면 새 연락처 자동 생성**(`resolveContactId`→`createContact`, 이름만; 전화·소속은 연락처 메뉴에서 보강). 내부 '담당 엔지니어'(`manager_id`)와 별개.
+- **담당자(외주·하우스) 연동**: 전 담당자(`project_managers`)가 연락처에 **자동 노출**(`contact_id` 백필). 연락처에서 전화 수정→담당자 동기화(**양방향**), 이메일은 외주만 양방향·**하우스는 연락처에서도 잠금**(`users.email` 보호, 폼 readonly). 연락처 목록·상세에 외주/하우스 배지. `ensureContactForManager`/`syncContactToManager`/`syncManagerToContact`.
 
 ### 자료 전달
 - 업로드(multer 디스크) → Drive/로컬 폴백 → 인증 다운로드(프록시) + 공개 만료 토큰 링크 `/d/:token`(다운로드 카운트·철회·만료).
@@ -125,6 +127,7 @@
 - **프로젝트 폼 개선**: 마감일(`due_date`) UI 전부 제거(폼·목록 D-day·메타·대시보드 '임박한 마감'). '고객 담당자'→**'고객측 담당자'** + 선택 시 전화·이메일·소속 표시(`contactOptions` email·datalist `data-*`·app.js `[data-contact-info]`) + 목록 외 이름 저장 시 **새 연락처 자동 생성**(`resolveContactId`). 빠른 정합: body parser limit 1mb, 0원 단가 항목 생성 방지(`RATE_PRICE_REQUIRED`).
 - **세션·담당자·매출 개선**: 세션 **담당 디렉터**(고객측 연락처 콤보·`sessions.director_contact_id`·목록 외 이름→새 연락처·연락처 상세 참여세션), **룸 기본 A·'미지정' 맨 아래**, **예약담당자 '미지정' 제거+환경설정 기본값**(`admin_state.default_booker`), **외주 지급단가 조건부**(담당이 하우스면 숨김·저장 0, `data-external` 토글), **하우스/외주 작업자 정보 수정**(이름·전화·이메일; 외주는 이름변경 시 작업 스냅샷 동기화), **매출 현황 메뉴**(`/revenue`, 엔지니어별 작업+세션 집계, 대표·치프), 연락처 정보표시 전화 `tel:`·이메일 `mailto:` 링크(app.js createElement).
 - **클라이언트 첨부·연락처 확장·Google 동기화**: 클라이언트 **사업자등록증·통장사본** 드래그앤드롭 업로드/열람(`client_files`·매직바이트·치프 인증 다운로드·공개링크 없음). 연락처 **필드 확장**(성·이름·호칭·별명·회사·직책·부서·`resolveContactName`). **Google People API 양방향 동기화**(`people.js`·`google_resource_name`/`etag`·scope `contacts`): 앱→Google push(생성·수정·삭제) + **수동 'Google 동기화' 버튼**(`syncFromGoogle` syncToken 증분·삭제 양방향·루프방지=data 직접호출)·fail-safe·자동 cron 제거.
+- **청구서 할인·담당자↔연락처 연동·매출 아이콘**: 청구서 단위 **할인**(정액+정률, 공급가 차감 후 VAT 재계산 `invoiceAmountsFromSupply`, 선택 항목 동적 공급가, 거래명세서 할인 라인, `invoices.discount_amount`). 외주/하우스 담당자를 **연락처에 자동 노출**(`project_managers.contact_id` 백필)·전화 양방향·외주 이메일 양방향·하우스 이메일 잠금. NAV **매출 아이콘**(ICONS `revenue`) 누락 수정.
 
 ## 스택
 
@@ -177,9 +180,9 @@
 - `projects(title, project_type[레거시·미사용], artist?, artist_company?, production_company?,
   client_id?→clients ON DELETE SET NULL, manager_id?→project_managers ON DELETE SET NULL, contact_id?→contacts ON DELETE SET NULL, services JSON, due_date?, rate, memo)` —
   `project_type`은 **레거시**(유형 구분 폐기 — 신규=session, UI 미노출). `contact_id`=고객측 담당자 연락처(내부 `manager_id`와 별개). `services`는 레거시 배열(편집 UI 제거). `status`·`kind`·**`due_date`는 레거시**(프로젝트 마감일 UI 폐기 — 청구 입금마감일과 무관한 잔재 컬럼).
-- `project_managers(name, email?, phone?, active, user_id?→users, created_at)` — 작업 담당자 마스터.
+- `project_managers(name, email?, phone?, active, user_id?→users, contact_id?→contacts, created_at)` — 작업 담당자 마스터.
   `user_id` 있으면 **하우스 엔지니어**(로그인 사용자와 링크, `auth.syncUserToManager`가 자동 생성·동기화),
-  null이면 **외주 작업자**(로그인 없이 관리에서 직접 추가). 둘 다 세션·작업 담당 드롭다운에 노출.
+  null이면 **외주 작업자**(로그인 없이 관리에서 직접 추가). 둘 다 세션·작업 담당 드롭다운에 노출. **`contact_id`=연동 연락처**(서버 기동 시 백필로 전 담당자 자동 연결): 전화는 연락처↔담당자 **양방향**, 이메일은 외주만 양방향·**하우스는 잠금**(`users.email` 보호). `ensureContactForManager`/`syncContactToManager`/`syncManagerToContact`(상호 재호출 없음=루프 방지).
 - `task_types(key UNIQUE, label, task_group, billing_type, unit_price, is_quick, sort_order, active)` — **작업 종류 카탈로그**
   (곡·콘텐츠 후반작업). config `TASK_TYPES`를 `task_types_seed_v1` 게이트로 1회 시드 후 DB가 단일 진실원천(기존 9 key 보존, 신규=`tt_<hex>`).
   `track_tasks.task_type`이 이 key를 문자열로 보관(FK 아님). 라벨·그룹 해석은 `data.js` 모듈 캐시(`taskTypeLabel`/`taskTypeGroup`, 쓰기 시 무효화).
@@ -200,8 +203,8 @@
 - `deliverables(project_id→projects ON DELETE CASCADE, title, version, kind, storage_backend[drive|local],
   file_id, file_name, file_size, mime_type, access_token?, expires_at?, download_count, revoked, note)`
 - `invoices(project_id?→projects SET NULL, client_id?→clients SET NULL, title, amount, paid_amount,
-  invoice_number?, tax_amount, status[미발행|발행|입금완료], issued_date?, due_date?, memo)` —
-  돈=정수(원), 연체·부분납은 코드 파생. `amount`는 VAT 포함 총액.
+  invoice_number?, tax_amount, discount_amount, status[미발행|발행|입금완료], issued_date?, due_date?, memo)` —
+  돈=정수(원), 연체·부분납은 코드 파생. `amount`는 VAT 포함 총액. `discount_amount`=청구서 할인(공급가에서 차감, `invoiceAmountsFromSupply`로 과세표준·VAT 재계산; from-tasks 주 경로).
 - `invoice_items(invoice_id→invoices CASCADE, task_id?→track_tasks SET NULL, session_id?→sessions SET NULL, track_title, task_type,
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,
@@ -290,7 +293,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 9. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 도메인별 모듈화 검토.
 10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: **클라이언트 첨부 서류**(사업자등록증·통장사본 드래그앤드롭·매직바이트·치프 인증 다운로드·`client_files`) + **연락처 확장·Google People API 양방향 동기화**(성·이름·호칭·별명·회사·직책·부서; push+수동 'Google 동기화' 버튼·삭제 양방향·fail-safe·자동 cron 제거), **세션·담당자·매출 개선**(세션 **담당 디렉터**[연락처 콤보·참여세션]·**룸 기본 A**·**예약담당자 기본값**·**외주단가 조건부**[하우스 숨김]·**하우스/외주 작업자 정보수정**·**매출 현황 메뉴**[엔지니어별 작업+세션]·연락처 tel/mailto 링크), **프로젝트 폼 개선**(마감일 제거·**고객측 담당자** 정보표시[전화·이메일·소속]·목록 외 이름→**새 연락처 자동생성**·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개** node:test)·**진단 프롬프트**(`docs/IMPROVEMENT_AUDIT_PROMPT.md`·`/audit`), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드·UX·`notifyInvoiceIssued` 일원화), **청구처 청구시점 이동**·**용어 통일**(실결제자→청구처·담당 엔지니어·고객측 담당자)·**프로젝트 유형 구분 폐기**·**연락처(담당자) 도메인**, 문서 현행화.
+> **완료(이번 세션)**: **청구서 할인**(정액+정률·공급가 차감 후 VAT 재계산·선택 항목 동적 공급가·거래명세서 할인 라인·`invoices.discount_amount`) + **외주/하우스 담당자↔연락처 양방향 연동**(자동 노출·전화 양방향·외주 이메일 양방향·하우스 이메일 잠금·`project_managers.contact_id`)·**매출 아이콘 수정**, **클라이언트 첨부 서류**(사업자등록증·통장사본 드래그앤드롭·매직바이트·치프 인증 다운로드·`client_files`) + **연락처 확장·Google People API 양방향 동기화**(성·이름·호칭·별명·회사·직책·부서; push+수동 'Google 동기화' 버튼·삭제 양방향·fail-safe·자동 cron 제거), **세션·담당자·매출 개선**(세션 **담당 디렉터**[연락처 콤보·참여세션]·**룸 기본 A**·**예약담당자 기본값**·**외주단가 조건부**[하우스 숨김]·**하우스/외주 작업자 정보수정**·**매출 현황 메뉴**[엔지니어별 작업+세션]·연락처 tel/mailto 링크), **프로젝트 폼 개선**(마감일 제거·**고객측 담당자** 정보표시[전화·이메일·소속]·목록 외 이름→**새 연락처 자동생성**·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개** node:test)·**진단 프롬프트**(`docs/IMPROVEMENT_AUDIT_PROMPT.md`·`/audit`), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드·UX·`notifyInvoiceIssued` 일원화), **청구처 청구시점 이동**·**용어 통일**(실결제자→청구처·담당 엔지니어·고객측 담당자)·**프로젝트 유형 구분 폐기**·**연락처(담당자) 도메인**, 문서 현행화.
 > **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
