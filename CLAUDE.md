@@ -65,7 +65,7 @@
   공급자=스튜디오 세금정보·로고(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
 
 ### 클라이언트
-- 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록.
+- 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록. **치프·스태프 모두 열람·편집**(`requireEditor`, NAV `access:"editor"`) — 단 **첨부 서류만 치프 전용**(민감 금융정보, `requireChief` 개별).
   **목록 이름 검색**(`?q=`). **상세**(`GET /clients/:id`): 탭 = 진행 프로젝트(이름 매칭 또는 청구처) / 청구·결제(청구처 인보이스 전체 + 합계·입금·미수).
   세금계산서 정보(`biz_no`·`owner_name`·`address`; **아티스트(개인)는 없음** — 폼에서 숨김·서버에서 null 강제). **청구처**(=실결제자, `client_id`)=클라이언트가 특정 인보이스에서 갖는 결제 역할(청구 생성 폼에서 결정).
 - **상세에 담당자 연락처**: 회사(client) 상세 상단에 그 회사의 **현재 소속 연락처(직원)** 목록(`listContactsForClient`, `ended_on IS NULL`) 노출.
@@ -77,7 +77,7 @@
 - **소속 이력(이직 히스토리)**: `contact_affiliations` 타임라인. `ended_on IS NULL`=현재 소속(가장 최근 1건), `client_id` NULL=무소속(프리·지인). **이직**=소속 추가 시 `closeCurrent`로 기존 현재 소속을 자동 종료(`ended_on`)하고 새 소속 INSERT. 상세에 현재(`badge-success`)/종료(`badge-neutral`) 타임라인 + 추가·이직/종료/삭제 + 연결 프로젝트.
 - **생성 시 현재 소속 입력**: 새 연락처 폼에 소속 회사 select(무소속+`listClients`)+직함 → 생성과 동시에 첫 소속 등록(`addAffiliation`, `closeCurrent=false`) → 회사 상세 직원 목록에 즉시 반영.
 - **프로젝트 연결**: 프로젝트 메타의 '고객측 담당자'(`contactCombo`, `projects.contact_id`) — 선택 시 전화·이메일·소속을 즉시 표시(`contactOptions`에 email 포함·datalist `data-*`·app.js `[data-contact-info]`), **목록에 없는 이름 입력 시 저장하면 새 연락처 자동 생성**(`resolveContactId`→`createContact`, 이름만; 전화·소속은 연락처 메뉴에서 보강). 내부 '담당 엔지니어'(`manager_id`)와 별개.
-- **담당자(외주·하우스) 연동**: 전 담당자(`project_managers`)가 연락처에 **자동 노출**(`contact_id` 백필). 연락처에서 전화 수정→담당자 동기화(**양방향**), 이메일은 외주만 양방향·**하우스는 연락처에서도 잠금**(`users.email` 보호, 폼 readonly). 연락처 목록·상세에 외주/하우스 배지. `ensureContactForManager`/`syncContactToManager`/`syncManagerToContact`.
+- **담당자(외주·하우스) 연동**: 전 담당자(`project_managers`)가 연락처에 **자동 노출**(`contact_id` 백필). 연락처에서 전화 수정→담당자 동기화(**양방향**), 이메일은 외주만 양방향·**하우스는 연락처에서도 잠금**(`users.email` 보호, 폼 readonly). 연락처 목록·상세에 외주/하우스 배지. **담당자→연락처 연동 시 이름을 성·이름 자동 분리**(`splitKoreanName`, 김준상→성 김·이름 준상; 기존 연락처는 성·이름 둘 다 빈 경우만 백필=수동 입력 보호). **대표(owner)는 작업 담당자가 아니므로 연동 제외**(`getManagerByContactId`가 owner 제외, `syncUserToManager`가 owner는 비활성). `ensureContactForManager`/`syncContactToManager`/`syncManagerToContact`.
 
 ### 자료 전달
 - 업로드(multer 디스크) → Drive/로컬 폴백 → 인증 다운로드(프록시) + 공개 만료 토큰 링크 `/d/:token`(다운로드 카운트·철회·만료).
@@ -148,8 +148,8 @@
 
 - **role 기반 게이트(3단계)**: `attachUser`(활성 + owner/chief/staff만 세션 인정) → 권한 술어
   `isOwner`/`isChief`/`isStaffRole`, 복합술어 `canEdit`(chief|staff)·`canInvoice`(chief|owner)
-  (모두 `auth.js`). 미들웨어: `requireAuth`(로그인=보기), `requireEditor`(canEdit=프로젝트·곡·작업·자료·**연락처**
-  편집, **대표 차단**), `requireChief`(치프 전용=스태프·담당자·클라이언트·설정), `requireInvoice`(canInvoice=
+  (모두 `auth.js`). 미들웨어: `requireAuth`(로그인=보기), `requireEditor`(canEdit=프로젝트·곡·작업·자료·**연락처·클라이언트**(첨부 제외)
+  편집, **대표 차단**), `requireChief`(치프 전용=스태프·담당자·설정 + **클라이언트 첨부 서류**), `requireInvoice`(canInvoice=
   청구). 내부 도구이므로 로그인 직원은 모든 프로젝트를 열람한다(클라이언트 범위 강제 폐기).
 - **Google 화이트리스트(`auth.js upsertUserFromGoogle`)**: 로그인 Google 이메일이 `ADMIN_EMAIL`(부트스트랩
   **치프=chief**, 없으면 자동 생성)이거나 `users`에 등록된 활성 행이면 그 역할로 로그인, 아니면 거부. 치프는
@@ -294,7 +294,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 9. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 도메인별 모듈화 검토.
 10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: **연락처 표시명 제거·전화 정규화·치프 역할 전환**(표시명 항목 제거[name 자동="김보종 대표님" 한국식]·`formatPhone` 010-####-####·치프↔스태프 전환[본인 잠금·최소 1치프·ADMIN 강등 유지]), **청구서 할인**(정액+정률·공급가 차감 후 VAT 재계산·선택 항목 동적 공급가·거래명세서 할인 라인·`invoices.discount_amount`) + **외주/하우스 담당자↔연락처 양방향 연동**(자동 노출·전화 양방향·외주 이메일 양방향·하우스 이메일 잠금·`project_managers.contact_id`)·**매출 아이콘 수정**, **클라이언트 첨부 서류**(사업자등록증·통장사본 드래그앤드롭·매직바이트·치프 인증 다운로드·`client_files`) + **연락처 확장·Google People API 양방향 동기화**(성·이름·호칭·별명·회사·직책·부서; push+수동 'Google 동기화' 버튼·삭제 양방향·fail-safe·자동 cron 제거), **세션·담당자·매출 개선**(세션 **담당 디렉터**[연락처 콤보·참여세션]·**룸 기본 A**·**예약담당자 기본값**·**외주단가 조건부**[하우스 숨김]·**하우스/외주 작업자 정보수정**·**매출 현황 메뉴**[엔지니어별 작업+세션]·연락처 tel/mailto 링크), **프로젝트 폼 개선**(마감일 제거·**고객측 담당자** 정보표시[전화·이메일·소속]·목록 외 이름→**새 연락처 자동생성**·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개** node:test)·**진단 프롬프트**(`docs/IMPROVEMENT_AUDIT_PROMPT.md`·`/audit`), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드·UX·`notifyInvoiceIssued` 일원화), **청구처 청구시점 이동**·**용어 통일**(실결제자→청구처·담당 엔지니어·고객측 담당자)·**프로젝트 유형 구분 폐기**·**연락처(담당자) 도메인**, 문서 현행화.
+> **완료(이번 세션)**: **연락처 표시·담당자 연동·클라이언트 권한**(상세 '성명' 줄 한국식[성+이름 붙이고 호칭 뒤]·**대표 연동 '하우스 엔지니어' 오배지 제거**[owner는 작업 담당자 아님 — `getManagerByContactId`·`syncUserToManager` 제외]·**담당자→연락처 성·이름 자동 분리**[`splitKoreanName`]·**클라이언트 메뉴 스태프 접근**[`requireEditor`·첨부 서류만 치프]), **연락처 표시명 제거·전화 정규화·치프 역할 전환**(표시명 항목 제거[name 자동="김보종 대표님" 한국식]·`formatPhone` 010-####-####·치프↔스태프 전환[본인 잠금·최소 1치프·ADMIN 강등 유지]), **청구서 할인**(정액+정률·공급가 차감 후 VAT 재계산·선택 항목 동적 공급가·거래명세서 할인 라인·`invoices.discount_amount`) + **외주/하우스 담당자↔연락처 양방향 연동**(자동 노출·전화 양방향·외주 이메일 양방향·하우스 이메일 잠금·`project_managers.contact_id`)·**매출 아이콘 수정**, **클라이언트 첨부 서류**(사업자등록증·통장사본 드래그앤드롭·매직바이트·치프 인증 다운로드·`client_files`) + **연락처 확장·Google People API 양방향 동기화**(성·이름·호칭·별명·회사·직책·부서; push+수동 'Google 동기화' 버튼·삭제 양방향·fail-safe·자동 cron 제거), **세션·담당자·매출 개선**(세션 **담당 디렉터**[연락처 콤보·참여세션]·**룸 기본 A**·**예약담당자 기본값**·**외주단가 조건부**[하우스 숨김]·**하우스/외주 작업자 정보수정**·**매출 현황 메뉴**[엔지니어별 작업+세션]·연락처 tel/mailto 링크), **프로젝트 폼 개선**(마감일 제거·**고객측 담당자** 정보표시[전화·이메일·소속]·목록 외 이름→**새 연락처 자동생성**·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개** node:test)·**진단 프롬프트**(`docs/IMPROVEMENT_AUDIT_PROMPT.md`·`/audit`), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드·UX·`notifyInvoiceIssued` 일원화), **청구처 청구시점 이동**·**용어 통일**(실결제자→청구처·담당 엔지니어·고객측 담당자)·**프로젝트 유형 구분 폐기**·**연락처(담당자) 도메인**, 문서 현행화.
 > **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12 수정), 백엔드 정리(resolveEndTime 단순화·0원 가드·죽은코드 제거·parseMoney/timeToMin 통합·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·실결제자 가시화·청구 진입점 단일화·클라이언트 검색·대시보드 강화).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 프로젝트 유형(세션/작업), 세션 UX(그리드·슬라이더·캘린더 뷰), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
