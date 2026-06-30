@@ -215,14 +215,14 @@ router.get("/:id", requireBilling, (req, res) => {
         </select>
         <noscript><button class="btn-ghost">상태 변경</button></noscript>
       </form>
-      <form method="post" action="/invoices/${inv.id}/pay" class="flex items-end gap-2">
-        <div class="flex-1">
-          <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
-          <input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
-          <p class="mt-1 text-[11px] text-muted">누적 입금액 기준(부분납 가능)</p>
+      <form method="post" action="/invoices/${inv.id}/pay" class="space-y-1">
+        <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
+        <div class="flex items-stretch gap-2">
+          <input class="input flex-1" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
+          <button class="btn-ghost shrink-0" type="submit">입력액으로 갱신</button>
+          <button class="btn-primary shrink-0" name="full" value="1">완납 처리</button>
         </div>
-        <button class="btn-ghost">입력액으로 갱신</button>
-        <button class="btn-primary" name="full" value="1">완납 처리</button>
+        <p class="text-[11px] text-muted">누적 입금액 기준(부분납 가능)</p>
       </form>
       <div class="flex items-center gap-2 pt-1">
         <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다."><button class="btn-ghost text-danger">삭제</button></form>

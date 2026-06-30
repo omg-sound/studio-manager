@@ -158,7 +158,7 @@ router.get("/:id/edit", (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const files = listClientFiles(c.id);
   const fileErr = String(req.query.ferr || "").trim();
-  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, isChief(req.user)) }));
+  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, true) }));
 });
 
 router.post("/:id", (req, res) => {
@@ -169,7 +169,7 @@ router.post("/:id", (req, res) => {
   const name = String(b.name || "").trim();
   if (!name) {
     const files = listClientFiles(id);
-    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", isChief(req.user)) }));
+    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true) }));
   }
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
@@ -199,9 +199,9 @@ router.post("/:id/delete", (req, res) => {
   res.redirect("/clients?flash=deleted");
 });
 
-// ── 첨부 서류 업로드(치프 전용 — router.use(requireChief)로 이미 보호) ──
+// ── 첨부 서류 업로드(치프·스태프 — requireEditor) ──
 // 보안: 디스크 multer + 매직바이트 검증(PNG·JPEG·PDF) + 인증 다운로드만(공개 링크 없음).
-router.post("/:id/files/:kind", requireChief, upload.single("file"), asyncHandler(async (req, res) => {
+router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
   const c = getClient(id);
@@ -239,8 +239,8 @@ router.post("/:id/files/:kind", requireChief, upload.single("file"), asyncHandle
   }
 }));
 
-// ── 첨부 서류 인증 다운로드(치프 전용 인증 후 프록시 — 공개 URL 없음) ──
-router.get("/:id/files/:kind/raw", requireChief, asyncHandler(async (req, res) => {
+// ── 첨부 서류 인증 다운로드(치프·스태프 인증 후 프록시 — 공개 URL 없음) ──
+router.get("/:id/files/:kind/raw", requireEditor, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
   if (!FILE_KINDS.find((k) => k.key === kind)) return res.status(404).send("파일을 찾을 수 없습니다.");
@@ -261,7 +261,7 @@ router.get("/:id/files/:kind/raw", requireChief, asyncHandler(async (req, res) =
 }));
 
 // ── 첨부 서류 삭제 ──
-router.post("/:id/files/:kind/delete", requireChief, asyncHandler(async (req, res) => {
+router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
   if (!FILE_KINDS.find((k) => k.key === kind)) return res.redirect(`/clients/${id}/edit`);
@@ -319,7 +319,7 @@ router.get("/:id", (req, res) => {
     : `<p class="text-sm text-muted">등록된 담당자 연락처가 없습니다.</p>`;
 
   // 첨부 서류 열람 링크(있으면만 표시, 공개 URL 없음)
-  const filesSection = files.length && isChief(req.user)
+  const filesSection = files.length
     ? `<div class="mb-4">
         <h3 class="mb-2 text-sm font-medium text-muted">첨부 서류</h3>
         <div class="flex flex-wrap gap-2">
@@ -388,7 +388,7 @@ function clientFileSection(c, fileMap, fileErr) {
   <section class="card mt-3 space-y-4">
     <div>
       <h2 class="font-semibold">첨부 서류</h2>
-      <p class="mt-1 text-xs text-muted">PNG · JPG · PDF · 최대 10MB. 치프 전용 인증 열람(공개 링크 없음).</p>
+      <p class="mt-1 text-xs text-muted">PNG · JPG · PDF · 최대 10MB. 직원 인증 열람(공개 링크 없음).</p>
     </div>
     ${fileErr ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(fileErr)}</p>` : ""}
     ${rows}

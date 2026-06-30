@@ -416,6 +416,45 @@
   updatePreview();
 })();
 
+// 청구 생성 폼([data-discount-form]) 항목 금액 드래프트 자동저장(localStorage) + 0원 항목 제출 확인.
+// 작성 중이던 금액을 새로고침/이탈 후에도 보존, 제출 성공 시 정리. 0원 항목이 체크돼 있으면 제출 직전 확인창.
+(function () {
+  "use strict";
+  var form = document.querySelector("[data-discount-form]");
+  if (!form) return;
+  var m = (form.getAttribute("action") || "").match(/\/projects\/(\d+)\//);
+  var prefix = m ? "omgdraft:inv:" + m[1] + ":" : null;
+  var inputs = form.querySelectorAll("[data-line-input]");
+  function lineVal(cb) {
+    var row = cb.closest && cb.closest("[data-line-row]");
+    var inp = row && row.querySelector("[data-line-input]");
+    if (inp) return parseInt(String(inp.value).replace(/[^\d]/g, "") || "0", 10) || 0;
+    return parseInt(cb.getAttribute("data-line-amount") || "0", 10) || 0;
+  }
+  // 1) 드래프트 복원(+ input 디스패치로 콤마 포맷·미리보기 갱신)
+  if (prefix) {
+    Array.prototype.forEach.call(inputs, function (inp) {
+      try { var v = localStorage.getItem(prefix + inp.name); if (v != null && v !== "") inp.value = v; } catch (e) {}
+    });
+    Array.prototype.forEach.call(inputs, function (inp) { inp.dispatchEvent(new Event("input", { bubbles: true })); });
+    // 2) 입력 시 저장(순수 숫자)
+    form.addEventListener("input", function (e) {
+      if (e.target && e.target.getAttribute && e.target.getAttribute("data-line-input") != null) {
+        try { localStorage.setItem(prefix + e.target.name, String(e.target.value).replace(/[^\d]/g, "")); } catch (e2) {}
+      }
+    });
+  }
+  // 3) 제출: 0원 항목 확인 → 통과 시 드래프트 정리
+  form.addEventListener("submit", function (e) {
+    var hasZero = false;
+    Array.prototype.forEach.call(form.querySelectorAll('input[type="checkbox"][data-line-amount]'), function (cb) {
+      if (cb.checked && !(lineVal(cb) > 0)) hasZero = true;
+    });
+    if (hasZero && !window.confirm("금액이 0원인 청구 항목이 있습니다. 0원으로 청구할까요?")) { e.preventDefault(); return; }
+    if (prefix) Array.prototype.forEach.call(inputs, function (inp) { try { localStorage.removeItem(prefix + inp.name); } catch (_e) {} });
+  });
+})();
+
 // 클라이언트 폼: 아티스트(개인)는 사업자등록번호·대표자·주소가 없으므로 분류=아티스트면 세금정보 숨김.
 (function () {
   "use strict";

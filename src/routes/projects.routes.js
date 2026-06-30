@@ -248,7 +248,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   } else {
     const rateItems = editable ? listRateItems() : [];
     const sessionBundle2 = listSessionsForProject(req.user, p.id);
-    tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems });
+    tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems, defaultBooker: (req.user && req.user.name) || "" });
   }
 
   const errorModal = req.query.error === "session_invoiced" ? sessionInvoicedModal(p.id) : "";
@@ -899,7 +899,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구 제목</label>
-        <input class="input py-1.5 text-sm" name="title" value="${esc(project.title)} 청구" />
+        <input class="input" name="title" value="${esc(project.title)} 청구" />
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>

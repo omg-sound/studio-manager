@@ -73,14 +73,14 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
            </select>
            <noscript><button class="btn-ghost btn-sm">상태 변경</button></noscript>
          </form>
-         <form method="post" action="/invoices/${inv.id}/pay" class="flex items-end gap-2">
+         <form method="post" action="/invoices/${inv.id}/pay" class="space-y-1">
            <input type="hidden" name="return" value="${ret}" />
-           <div class="flex-1">
-             <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
-             <input class="input py-1.5 text-sm" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
+           <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
+           <div class="flex items-stretch gap-2">
+             <input class="input py-1.5 text-sm flex-1" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
+             <button class="btn-ghost btn-sm shrink-0" type="submit">입력액으로 갱신</button>
+             <button class="btn-primary btn-sm shrink-0" name="full" value="1">완납 처리</button>
            </div>
-           <button class="btn-ghost btn-sm">입력액으로 갱신</button>
-           <button class="btn-primary btn-sm" name="full" value="1">완납 처리</button>
          </form>
          <div class="flex items-center gap-2 pt-0.5">
            <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다.">

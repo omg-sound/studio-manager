@@ -1085,7 +1085,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
     const amt = raw != null && String(raw).trim() !== "" ? parseWon(raw) : (t.total_price || 0);
     return { ...t, unit_price: amt, total_price: amt };
   });
-  if (tasks.some((t) => !(t.total_price > 0))) throw new Error("TASK_AMOUNT_REQUIRED");
+  // 0원 항목 허용(클라이언트에서 '0원으로 청구?' 확인 후 제출) — 무료/서비스 항목 청구 가능.
 
   // 녹음 세션 직접 청구분: 청구 가능(녹음+단가+시간)·미청구·미전환만 허용. 금액은 단가표로 재산정(스냅샷).
   let billSessions = [];
@@ -1112,7 +1112,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
       const amount = raw != null && String(raw).trim() !== "" ? parseWon(raw) : x.calc.amount;
       return { ...x, amount };
     });
-    if (billSessions.some((x) => !(x.amount > 0))) throw new Error("TASK_AMOUNT_REQUIRED");
+    // 0원 세션 항목도 허용(작업과 동일 — 클라이언트 확인 후 제출).
   }
 
   const d = db();
