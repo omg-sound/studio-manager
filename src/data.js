@@ -151,7 +151,10 @@ function ensureClientFromContact(contactId) {
   const c = db().prepare("SELECT id, name, phone, email FROM contacts WHERE id = ?").get(id);
   if (!c || !String(c.name || "").trim()) return null;
   const existing = db().prepare("SELECT id FROM clients WHERE source_contact_id = ?").get(id);
-  if (existing) return existing.id;
+  if (existing) {
+    db().prepare("UPDATE clients SET phone = ?, email = ? WHERE id = ?").run(c.phone || null, c.email || null, existing.id); // 재사용 시 연락처의 최신 전화·이메일 반영
+    return existing.id;
+  }
   const info = db()
     .prepare("INSERT INTO clients (name, kind, phone, email, source_contact_id) VALUES (?, '기타', ?, ?, ?)")
     .run(c.name, c.phone || null, c.email || null, id);
@@ -1094,6 +1097,8 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
   const invoiceNumber = nextInvoiceNumber(issued);
+  const resolvedClientId = (clientId ? Number(clientId) : null) || project.client_id || null;
+  if (resolvedClientId && !d.prepare("SELECT 1 FROM clients WHERE id = ?").get(resolvedClientId)) throw new Error("CLIENT_NOT_FOUND"); // 잘못된 청구처 id → FK 롤백 500 대신 친절한 400
 
   d.exec("BEGIN IMMEDIATE;");
   try {
@@ -1105,7 +1110,7 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
       )
       .run({
         project_id: project.id,
-        client_id: (clientId ? Number(clientId) : null) || project.client_id || null,
+        client_id: resolvedClientId,
         title: invoiceTitle,
         invoice_number: invoiceNumber,
         amount: total,

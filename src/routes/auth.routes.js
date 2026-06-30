@@ -67,7 +67,7 @@ router.get("/auth/google", (req, res) => {
       "email",
       "profile",
       "https://www.googleapis.com/auth/drive.file", // 자료 전달 스토리지용 최소권한
-      "https://www.googleapis.com/auth/calendar", // 세션 겹침 검사(FreeBusy) + 예약 시 일정 자동 생성/수정/삭제
+      "https://www.googleapis.com/auth/calendar", // 예약 시 일정 자동 생성/수정/삭제(FreeBusy 하드차단은 다중 룸 도입으로 폐기)
       "https://www.googleapis.com/auth/contacts", // Google People API — 연락처 앱→Google push
     ],
     state: Buffer.from(JSON.stringify({ next, nonce })).toString("base64url"),
@@ -111,6 +111,10 @@ router.get("/auth/google/callback", async (req, res) => {
     const oauth2 = google.oauth2({ version: "v2", auth: client });
     const { data: profile } = await oauth2.userinfo.get();
     const email = String(profile.email || "").trim().toLowerCase();
+    // 이메일 미인증 Google 계정 거부(화이트리스트 신뢰 경계 하드닝). verified_email 누락(undefined)은 호환 위해 통과.
+    if (profile.verified_email === false) {
+      return res.redirect("/login?err=" + encodeURIComponent("이메일이 인증되지 않은 Google 계정입니다."));
+    }
 
     // 화이트리스트: 치프(ADMIN_EMAIL) 또는 관리자가 등록한 활성 사용자만 허용.
     const user = upsertUserFromGoogle({ email, name: profile.name, sub: profile.id });

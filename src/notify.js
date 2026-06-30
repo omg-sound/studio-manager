@@ -30,7 +30,9 @@ const PRIVATE_IP_PATTERNS = [
 ];
 
 function isPrivateIp(ip) {
-  return PRIVATE_IP_PATTERNS.some((r) => r.test(ip));
+  // IPv4-mapped IPv6(::ffff:127.0.0.1)를 정규화해 IPv4 패턴도 재검사 — 매핑 우회 차단
+  const v4 = String(ip).replace(/^::ffff:/i, "");
+  return PRIVATE_IP_PATTERNS.some((r) => r.test(ip) || r.test(v4));
 }
 
 /**
