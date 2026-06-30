@@ -261,27 +261,14 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
     </details>`;
 }
 
-/** 프로젝트 상세용 세션 섹션(세션형 전용). expand=true(탭 안)면 접지 않고 펼쳐 렌더. */
-function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], rooms, expand = false }) {
+/** 프로젝트 상세용 세션 섹션. 유형 구분 없이 항상 펼친 <section>으로 렌더(목록 + '새 세션 추가' 폼). */
+function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], rooms }) {
   const roomList = resolveRooms(rooms); // 룸 1회 조회 후 폼·행에 전달(호출부가 안 넘겨도 채워짐)
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
   const list = rows.length
     ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms: roomList, projectTitle: project.title })).join("")
     : emptyState("등록된 세션이 없습니다.");
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
-  const isTask = project && project.project_type === "task";
-  if (isTask && !expand) {
-    return `
-    <details class="card mt-3">
-      <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-        <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
-      </summary>
-      <div class="mt-3 space-y-3 border-t border-border pt-3">
-        <div class="space-y-2">${list}</div>
-        ${isAdmin ? `<div class="border-t border-border pt-3"><div class="mb-2 text-sm font-medium text-muted">새 세션 추가</div>${sessionCreateForm(project, managers, rateItems, roomList)}</div>` : ""}
-      </div>
-    </details>`;
-  }
   return `
     <section class="card mt-3 space-y-3">
       <div class="flex items-center justify-between gap-3">

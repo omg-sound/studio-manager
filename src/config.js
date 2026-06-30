@@ -197,7 +197,7 @@ module.exports = {
   PROJECT_TYPES,
   PROJECT_TYPE_LABELS,
   PROJECT_TYPE_KEYS,
-  normalizeProjectType: (v) => normalize(v, PROJECT_TYPE_KEYS, "task"),
+  normalizeProjectType: (v) => normalize(v, PROJECT_TYPE_KEYS, "session"),
   PROJECT_SERVICES,
   PROJECT_SERVICE_KEYS,
   PROJECT_SERVICE_LABELS,

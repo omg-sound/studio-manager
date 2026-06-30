@@ -8,8 +8,6 @@ const {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
-  PROJECT_TYPES,
-  PROJECT_TYPE_LABELS,
   normalizeProjectType,
 } = require("../config");
 const { config } = require("../config");
@@ -39,7 +37,7 @@ const {
   deleteTask,
   createInvoiceFromTasks,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, projectTypeBadge, listGroup, listRow } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, listGroup, listRow } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -105,20 +103,9 @@ router.get("/", requireAuth, (req, res) => {
   res.send(layout({ title: "프로젝트", user, current: "/projects", body }));
 });
 
-/** "+ 새 프로젝트" 드롭다운 — 유형 2가지를 하위 버튼처럼 노출(JS 없이 <details>). */
+/** "+ 새 프로젝트" 버튼 — 유형 구분 없이 단일 진입(모든 프로젝트가 세션 일정+곡·콘텐츠 동일). */
 function newProjectMenu() {
-  return `
-    <details class="relative inline-block text-left">
-      <summary class="btn-primary cursor-pointer list-none">+ 새 프로젝트</summary>
-      <div class="absolute right-0 z-20 mt-1 w-64 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
-        ${PROJECT_TYPES.map(
-          (t) => `<a href="/projects/new?type=${esc(t.key)}" class="block border-b border-border px-3 py-2.5 last:border-0 hover:bg-elevated">
-            <div class="text-sm font-medium">${esc(t.menuLabel || t.label)}</div>
-            <div class="text-xs text-muted">${esc(t.hint)}</div>
-          </a>`
-        ).join("")}
-      </div>
-    </details>`;
+  return `<a href="/projects/new" class="btn-primary">+ 새 프로젝트</a>`;
 }
 
 /** 프로젝트의 항목(트랙) 개수. track_titles("||" 연결)에서 파생. */
@@ -127,13 +114,12 @@ function trackCount(p) {
   return String(p.track_titles).split("||").map((s) => s.trim()).filter(Boolean).length;
 }
 
-/** 목록 행(listGroup 안 listRow): 제목+유형배지 / 메타(아티스트·클라이언트) / 곡수 — 우측 금액·D-day(tabular). */
+/** 목록 행(listGroup 안 listRow): 제목 / 메타(아티스트·클라이언트) / 곡수 — 우측 금액·D-day(tabular). */
 function projectListRow(p) {
   const metaLine = [p.artist, p.client_name, p.manager_name].filter(Boolean).join(" · ") || "정보 미정";
   const n = trackCount(p);
-  const typeBadge = p.project_type ? projectTypeBadge(p.project_type) : "";
   const left = `
-    <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(p.title)}</span>${typeBadge}</div>
+    <div class="truncate font-semibold">${esc(p.title)}</div>
     <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
     <div class="mt-0.5 text-xs text-muted">${n ? `곡·콘텐츠 ${n}` : "곡·콘텐츠 미정"}</div>`;
   const amount = projectAmount(p)
@@ -143,10 +129,9 @@ function projectListRow(p) {
   return listRow({ href: `/projects/${p.id}`, left, right: `${amount}${dueLine}` });
 }
 
-// ── 새 프로젝트 폼(관리자) ──
+// ── 새 프로젝트 폼(관리자) — 유형 구분 없음(모든 신규=세션 취급) ──
 router.get("/new", requireEditor, (req, res) => {
-  const type = normalizeProjectType(req.query.type);
-  res.send(layout({ title: "새 프로젝트", user: req.user, current: "/projects", body: projectForm({ project_type: type }) }));
+  res.send(layout({ title: "새 프로젝트", user: req.user, current: "/projects", body: projectForm() }));
 });
 
 // ── 생성(관리자) ──
@@ -211,15 +196,12 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     ? projectMetaCard({ ...p, ...(formState || {}) }, err)
     : projectMetaReadonly(p);
 
-  const isSession = p.project_type === "session";
-  const isTask = p.project_type === "task";
-  const typeLabel = PROJECT_TYPE_LABELS[p.project_type] || "";
-  const desc = [typeLabel, p.artist || p.client_name].filter(Boolean).join(" · ") || "프로젝트";
+  const desc = p.artist || p.client_name || "프로젝트";
 
-  // ── 탭: 프로젝트 / 세션 일정(작업형 제외) / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
-  // 메타 카드는 '프로젝트' 탭(첫 탭·기본). 작업형(task)만 세션 일정 탭을 숨긴다. 세션형·레거시(NULL)는 노출.
+  // ── 탭: 프로젝트 / 세션 일정 / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
+  // 메타 카드는 '프로젝트' 탭(첫 탭·기본). 유형 구분 없이 모든 프로젝트가 세션 일정 탭을 가진다.
   const tabs = [{ key: "project", label: "프로젝트" }];
-  if (!isTask) tabs.push({ key: "sessions", label: "세션 일정" });
+  tabs.push({ key: "sessions", label: "세션 일정" });
   tabs.push({ key: "tracks", label: "곡 · 콘텐츠" });
   if (editable) tabs.push({ key: "deliverables", label: "자료 전달" }); // 자료 전달은 편집자(치프·스태프)만, 대표 제외
   if (showInvoice) tabs.push({ key: "invoice", label: "청구" });
@@ -250,7 +232,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   } else {
     const rateItems = editable ? listRateItems() : [];
     const sessionBundle2 = listSessionsForProject(req.user, p.id);
-    tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems, expand: true });
+    tabContent = sessionsSection({ project: p, rows: sessionBundle2 ? sessionBundle2.rows : [], isAdmin: editable, managers, rateItems });
   }
 
   const errorModal = req.query.error === "session_invoiced" ? sessionInvoicedModal(p.id) : "";
@@ -337,16 +319,16 @@ router.post("/:id", requireEditor, (req, res) => {
     const p = getProjectForUser(req.user, id);
     return renderProjectDetail(req, res, p, { ...b, id }, "프로젝트 명을 입력하세요.");
   }
+  // project_type은 UPDATE에서 제외 → 기존 DB 값 보존(유형 구분은 UI에서 제거, 레거시 컬럼은 건드리지 않음).
   db()
     .prepare(
-      `UPDATE projects SET title=@title, project_type=@project_type, artist=@artist, artist_company=@artist_company,
+      `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
        production_company=@production_company, client_id=@client_id, manager_id=@manager_id,
        due_date=@due_date, memo=@memo WHERE id=@id`
     )
     .run({
       id,
       title,
-      project_type: normalizeProjectType(b.project_type),
       artist: String(b.artist || "").trim() || null,
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
@@ -451,21 +433,16 @@ router.post("/:id/invoices/from-tasks", requireInvoice, (req, res) => {
 function projectForm(p = {}, err = "") {
   const e = err || p._err || "";
   const action = "/projects";
-  const type = p.project_type === "session" ? "session" : "task";
-  const typeLabel = PROJECT_TYPE_LABELS[type] || "프로젝트";
-  const typeHint = type === "session"
-    ? "클라이언트 방문·예약으로 세션을 잡고, 진행되면 곡·콘텐츠를 채웁니다."
-    : "예약 없이 곡·콘텐츠를 등록하고 튠·믹스·마스터링 작업을 추가합니다.";
   return `
-    ${pageHeader({ title: `새 프로젝트 · ${typeLabel}`, desc: typeHint })}
+    ${pageHeader({ title: "새 프로젝트" })}
     <form method="post" action="${action}" class="card space-y-3">
-      <input type="hidden" name="project_type" value="${esc(type)}" />
+      <input type="hidden" name="project_type" value="session" />
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div>
         <label class="label">프로젝트 명</label>
-        <input class="input" name="title" value="${esc(p.title || "")}" placeholder="${type === "session" ? "예: OOO 세션 (가제)" : "예: OOO 1집 - 타이틀곡"}" required />
+        <input class="input" name="title" value="${esc(p.title || "")}" placeholder="예: OOO 세션 (가제)" required />
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-3 sm:grid-cols-3">
         <div>
           <label class="label">아티스트</label>
           <input class="input" name="artist" value="${esc(p.artist || "")}" list="dl-artists" autocomplete="off" />
@@ -474,14 +451,12 @@ function projectForm(p = {}, err = "") {
           <label class="label">소속사/레이블</label>
           <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" list="dl-companies" autocomplete="off" />
         </div>
-      </div>
-      <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">제작사</label>
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
-        ${payerField(p)}
       </div>
+      ${payerField(p)}
       <div>
         <label class="label">담당자</label>
         ${managerSelect(p.manager_id)}
@@ -516,7 +491,7 @@ function projectEditForm(p = {}, err = "") {
           <input class="input" name="artist" value="${esc(p.artist || "")}" list="dl-artists" autocomplete="off" />
         </div>
       </div>
-      <div class="grid gap-3 sm:grid-cols-3">
+      <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">소속사/레이블</label>
           <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" list="dl-companies" autocomplete="off" />
@@ -525,24 +500,15 @@ function projectEditForm(p = {}, err = "") {
           <label class="label">제작사</label>
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
-        ${payerField(p)}
       </div>
+      ${payerField(p)}
       <div>
         <label class="label">담당자</label>
         ${managerSelect(p.manager_id)}
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
-          <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
-        </div>
-        <div>
-          <label class="label">프로젝트 유형</label>
-          <select name="project_type" class="input">
-            <option value="session" ${p.project_type === "session" ? "selected" : ""}>세션 — 클라이언트 방문·예약</option>
-            <option value="task" ${(p.project_type === "task" || !p.project_type) ? "selected" : ""}>작업 — 예약 없이 후반작업만</option>
-          </select>
-        </div>
+      <div>
+        <label class="label">마감일 <span class="font-normal text-muted">(선택)</span></label>
+        <input class="input" type="date" name="due_date" value="${esc(p.due_date || "")}" />
       </div>
       <div>
         <label class="label">메모</label>
@@ -614,8 +580,7 @@ function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId =
   const list = tracks.length
     ? tracks.map((track) => trackCard(track, { isAdmin, managers, expandTaskId })).join("")
     : emptyState("등록된 곡·콘텐츠가 없습니다.");
-  const isSession = project && project.project_type === "session";
-  const hint = isSession && isAdmin
+  const hint = isAdmin
     ? `<p class="text-xs text-muted">세션(예약·실시간 작업)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 한 세션에 여러 곡을 넣을 수 있고, 각 곡은 단계별로 이어집니다.</p>`
     : "";
   return `
