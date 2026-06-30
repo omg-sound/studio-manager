@@ -264,7 +264,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 9. **한글 쿼리스트링 인코딩**: curl로 `?kind=아티스트` 같은 한글 쿼리를 **인코딩 없이** 보내면 서버가 다른
    문자열로 받아 필터가 빈 결과(코드 버그 아님). 검증 시 `--data-urlencode` 또는 `-G --data-urlencode` 사용.
 10. **메인터넌스는 브라우저 헤더로 E2E**: curl이 아니라 Sec-Fetch-Site·Origin·multipart 헤더로 폼 제출까지 검증할 것.
-11. **웹훅 SSRF**: 알림 웹훅 URL을 그대로 fetch하면 내부망 공격 가능. `notify.js`에서 DNS 해석 후 사설IP 대역(`10.`, `172.16-31.`, `192.168.`, `127.`, `::1`) 차단 후 전송.
+11. **웹훅 SSRF**: 알림 웹훅 URL을 그대로 fetch하면 내부망 공격 가능. `notify.js`에서 DNS 해석 후 사설IP 대역(`10.`, `172.16-31.`, `192.168.`, `127.`, `169.254.`, `::1`, fc00::/7, fe80::/10) 차단 후 전송. **IPv4-mapped IPv6(`::ffff:127.0.0.1`)는 `::ffff:` 제거 후 IPv4 패턴 재검사로 매핑 우회 차단**. OAuth 콜백은 `verified_email=false` 계정 거부.
 12. **로고 업로드 매직바이트 검증**: Content-Type 헤더만 믿으면 안 됨. PNG(`\x89PNG`)·JPEG(`\xFF\xD8\xFF`) 매직바이트를 서버에서 확인 후 거부.
 13. **Tailwind opacity.12 미등록**: `badge-*`(`bg-*/12` 같은 불투명도 변형 클래스)를 Tailwind 커스텀 색과 함께 쓸 때 opacity 스케일에 `12`가 없으면 CSS 빌드에서 제거된다. `tailwind.config.js`의 `theme.extend.opacity`에 `'12': '0.12'` 추가.
 
