@@ -25,7 +25,7 @@ router.get("/", requireAuth, (req, res) => {
   const statCard = (label, value, sub = "") => `
     <div class="card border-l-2 [border-left-color:rgb(var(--color-primary))]">
       <div class="text-sm text-muted">${esc(label)}</div>
-      <div class="mt-1 font-display text-xl font-bold tabular">${esc(String(value))}</div>
+      <div class="mt-1 font-display text-lg font-bold tabular">${esc(String(value))}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 
@@ -50,7 +50,7 @@ router.get("/", requireAuth, (req, res) => {
   const moneyCard = (label, amount, danger = false, sub = "") => `
     <div class="card border-l-2 ${danger ? "[border-left-color:rgb(var(--color-danger))]" : "[border-left-color:rgb(var(--color-success))]"}">
       <div class="text-sm text-muted">${esc(label)}</div>
-      <div class="mt-1 font-display text-xl font-bold tabular ${danger && amount > 0 ? "text-danger" : ""}">${formatKRW(amount)}</div>
+      <div class="mt-1 font-display text-lg font-bold tabular ${danger && amount > 0 ? "text-danger" : ""}">${formatKRW(amount)}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 
@@ -71,7 +71,7 @@ router.get("/", requireAuth, (req, res) => {
   cardItems.push(statCard("프로젝트", s.total));
   if (s.isChief) cardItems.push(statCard("클라이언트", s.clients));
   if (!s.canInvoice) cardItems.push(statCard("임박한 마감", s.upcoming.length));
-  const cols = cardItems.length >= 4 ? "sm:grid-cols-4" : cardItems.length === 3 ? "sm:grid-cols-3" : "";
+  const cols = cardItems.length >= 4 ? "lg:grid-cols-4" : cardItems.length === 3 ? "lg:grid-cols-3" : "";
   const cards = `<div class="grid grid-cols-2 gap-3 ${cols}">${cardItems.join("")}</div>`;
 
   const sessionList = weekSessions.length

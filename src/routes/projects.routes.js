@@ -624,8 +624,8 @@ function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId =
         <h2 class="font-display text-base font-semibold">곡 · 콘텐츠</h2>
       </div>
       ${hint}
-      ${isAdmin ? trackCreateForm(project) : ""}
       <div class="space-y-3">${list}</div>
+      ${isAdmin ? `<div class="border-t border-border pt-4"><div class="mb-2 text-sm font-medium text-muted">곡·콘텐츠 추가</div>${trackCreateForm(project)}</div>` : ""}
     </section>`;
 }
 
