@@ -83,7 +83,7 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
            <button class="btn-primary btn-sm" name="full" value="1">완납 처리</button>
          </form>
          <div class="flex gap-2">
-           <a href="/invoices/${inv.id}/edit" class="btn-ghost btn-sm">수정</a>
+           <a href="/invoices/${inv.id}/edit?return=${encodeURIComponent(returnTo)}" class="btn-ghost btn-sm">수정</a>
            <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요?">
              <input type="hidden" name="return" value="${ret}" />
              <button class="btn-ghost btn-sm text-danger">삭제</button>

@@ -30,14 +30,22 @@ const { notifyInvoiceIssued } = require("../notify");
 
 const router = express.Router();
 
+/** 내부 절대경로면 그대로, 아니면 null (open-redirect 차단: `//`·`/\` 거부, safeNext와 동일 규칙). */
+function safePath(v) {
+  return typeof v === "string" && /^\/(?![/\\])/.test(v) ? v : null;
+}
+
 /**
- * 변경 후 복귀 경로 결정: 폼이 보낸 return(프로젝트 청구 탭 펼침 복귀)이 안전한 내부 경로면 그쪽, 아니면 기본(청구 상세).
- * 내부 절대경로만 허용(`//`·`/\` open-redirect 차단, safeNext와 동일 규칙). flash는 기존 쿼리 유무에 맞춰 합친다.
+ * 변경 후 복귀 경로: 폼이 보낸 return(프로젝트 청구 탭)이 안전하면 그쪽, 아니면 fallback(청구 상세).
+ * extra(예: {open: newId})를 쿼리에 덧붙이고 flash로 마무리. 프로젝트 청구 탭 인라인 경험 복귀용.
  */
-function returnTo(req, fallback, flash) {
-  const v = req.body && req.body.return;
-  const safe = typeof v === "string" && /^\/(?![/\\])/.test(v) ? v : fallback;
-  return safe + (safe.includes("?") ? "&" : "?") + "flash=" + flash;
+function returnTo(req, fallback, flash, extra) {
+  let path = safePath(req.body && req.body.return) || fallback;
+  const params = Object.assign({}, extra, { flash });
+  for (const [k, val] of Object.entries(params)) {
+    path += (path.includes("?") ? "&" : "?") + k + "=" + encodeURIComponent(val);
+  }
+  return path;
 }
 
 function projectOptions() {
@@ -140,21 +148,22 @@ router.get("/", requireBilling, (req, res) => {
 
 // ── 새 청구(관리자) ──
 router.get("/new", requireBilling, (req, res) => {
-  const prefill = req.query.projectId ? { project_id: Number(req.query.projectId) } : {};
-  res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm(prefill) }));
+  const projectId = req.query.projectId ? Number(req.query.projectId) : null;
+  const prefill = projectId ? { project_id: projectId } : {};
+  const ret = projectId ? `/projects/${projectId}?tab=invoice` : ""; // 프로젝트에서 왔으면 그 청구 탭으로 복귀
+  res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm(prefill, false, "", ret) }));
 });
 
 router.post("/", requireBilling, (req, res) => {
   const b = req.body;
+  const ret = safePath(b.return) || ""; // 프로젝트 청구 탭에서 온 복귀 경로(있으면 생성 후 그쪽으로 + 사이드바 프로젝트 유지)
+  const reErr = (msg) => res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm({ ...b, _err: msg }, false, "", ret) }));
   const title = String(b.title || "").trim();
-  if (!title) return res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm({ ...b, _err: "제목을 입력하세요." }) }));
-
+  if (!title) return reErr("제목을 입력하세요.");
   const refs = resolveInvoiceRefs(b);
-  if (refs.error) {
-    return res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm({ ...b, _err: refs.error }) }));
-  }
+  if (refs.error) return reErr(refs.error);
   const amount = parseMoney(b.amount);
-  if (amount <= 0) return res.send(layout({ title: "새 청구", user: req.user, current: "/invoices", body: invoiceForm({ ...b, _err: "청구 금액을 입력하세요." }) }));
+  if (amount <= 0) return reErr("청구 금액을 입력하세요.");
   const status = normalizeInvoiceStatus(b.status);
   // 입금완료로 만들면 입금액=총액 자동
   const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
@@ -178,7 +187,8 @@ router.post("/", requireBilling, (req, res) => {
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
-  res.redirect(`/invoices/${info.lastInsertRowid}?flash=created`);
+  const id = info.lastInsertRowid;
+  res.redirect(returnTo(req, `/invoices/${id}`, "created", { open: id }));
 });
 
 // ── 상세 ──
@@ -295,7 +305,8 @@ function invoiceItemsCard(items) {
 router.get("/:id/edit", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm(inv, true) }));
+  const ret = safePath(req.query.return) || ""; // 프로젝트 청구 탭에서 진입 시 복귀 경로(사이드바도 프로젝트 유지)
+  res.send(layout({ title: "청구 수정", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm(inv, true, "", ret) }));
 });
 
 router.post("/:id", requireBilling, (req, res) => {
@@ -303,18 +314,18 @@ router.post("/:id", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT id, status, client_id FROM invoices WHERE id = ?").get(id);
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
+  const ret = safePath(b.return) || ""; // 프로젝트 청구 탭에서 진입 시 복귀 경로 유지(에러 재표시·저장 후 모두 프로젝트로)
+  const reErr = (msg) => res.send(layout({ title: "청구 수정", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm({ ...b, id }, true, msg, ret) }));
   const title = String(b.title || "").trim();
-  if (!title) return res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm({ ...b, id }, true, "제목을 입력하세요.") }));
+  if (!title) return reErr("제목을 입력하세요.");
   const refs = resolveInvoiceRefs(b);
-  if (refs.error) {
-    return res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm({ ...b, id, _err: refs.error }, true) }));
-  }
+  if (refs.error) return reErr(refs.error);
   // 발행 후 청구처 잠금: 발행/입금완료 인보이스는 청구처(client_id) 변경을 차단(매출 추적 정합). 미발행은 자유 변경.
   if ((inv.status === "발행" || inv.status === "입금완료") && (refs.clientId || null) !== (inv.client_id || null)) {
     return res.status(409).send(errorPage({ code: 409, title: "청구처를 변경할 수 없습니다", message: "발행된 청구의 청구처는 변경할 수 없습니다. 매출 추적 정합을 위해 미발행 상태에서만 변경하세요.", user: req.user }));
   }
   const amount = parseMoney(b.amount);
-  if (amount <= 0) return res.send(layout({ title: "청구 수정", user: req.user, current: "/invoices", body: invoiceForm({ ...b, id, _err: "청구 금액을 입력하세요." }, true) }));
+  if (amount <= 0) return reErr("청구 금액을 입력하세요.");
   const status = normalizeInvoiceStatus(b.status);
   const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
   const discount = parseMoney(b.discount_amount);
@@ -337,7 +348,7 @@ router.post("/:id", requireBilling, (req, res) => {
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
     });
-  res.redirect(`/invoices/${id}?flash=saved`);
+  res.redirect(returnTo(req, `/invoices/${id}`, "saved"));
 });
 
 // ── 입금 처리(관리자) ──
@@ -396,7 +407,7 @@ router.post("/:id/delete", requireBilling, (req, res) => {
 });
 
 // ── 폼 ──
-function invoiceForm(inv = {}, isEdit = false, err = "") {
+function invoiceForm(inv = {}, isEdit = false, err = "", returnPath = "") {
   const e = err || inv._err || "";
   const action = isEdit ? `/invoices/${inv.id}` : "/invoices";
   const clients = clientOptions();
@@ -422,8 +433,9 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
       <p class="mt-1 text-xs text-muted">클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.</p>
     </div>`;
   return `
-    ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구" })}
+    ${pageHeader({ title: isEdit ? "청구 수정" : "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
     <form method="post" action="${action}" class="card space-y-4">
+      ${returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : ""}
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       ${!isEdit ? `<p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>` : ""}
       <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
@@ -452,7 +464,7 @@ function invoiceForm(inv = {}, isEdit = false, err = "") {
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(inv.memo || "")}</textarea></div>
       <div class="flex gap-2">
         <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
-        <a href="${isEdit ? `/invoices/${inv.id}` : "/invoices"}" class="btn-ghost">취소</a>
+        <a href="${returnPath || (isEdit ? `/invoices/${inv.id}` : "/invoices")}" class="btn-ghost">취소</a>
       </div>
     </form>`;
 }
