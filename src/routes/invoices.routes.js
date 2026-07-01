@@ -208,7 +208,6 @@ router.get("/:id", requireBilling, (req, res) => {
   const bal = balanceOf(inv);
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
-  const issued = inv.status === "발행" || inv.status === "입금완료";
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
   // 청구처 정보(대표자·사업자번호·담당자 연락처) — 청구처가 클라이언트일 때
   const payerClient = inv.client_id ? getClient(inv.client_id) : null;

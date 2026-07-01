@@ -75,7 +75,6 @@ function invoiceBadge(inv) {
  */
 function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } = {}) {
   const bal = balanceOf(inv);
-  const issued = inv.status === "발행" || inv.status === "입금완료";
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행(미발행 초안도 견적서·내역서·거래명세서)
   const ret = esc(returnTo);
 

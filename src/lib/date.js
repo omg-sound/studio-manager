@@ -53,6 +53,12 @@ function formatYmdShort(s) {
   return `${m}월 ${d}일`;
 }
 
+/** 'HH:MM' 검증 → 그대로(아니면 null). 시간 입력 정규화 단일 출처. */
+function cleanTime(v) {
+  const s = String(v || "").trim();
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : null;
+}
+
 /** 'HH:MM' → 자정 기준 분(유효하지 않으면 null). 시간 유틸 단일 출처. */
 function timeToMin(hhmm) {
   const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(hhmm || ""));
@@ -68,4 +74,4 @@ function minutesBetween(start, end) {
   return e - s;
 }
 
-module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, timeToMin, minutesBetween };
+module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, cleanTime, timeToMin, minutesBetween };

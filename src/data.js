@@ -8,7 +8,8 @@
 
 const crypto = require("crypto");
 const { db, getState, setState } = require("./db");
-const { todayYmd, isValidYmd, formatYmdShort, timeToMin, minutesBetween } = require("./lib/date");
+const { todayYmd, isValidYmd, formatYmdShort, cleanTime, timeToMin, minutesBetween } = require("./lib/date");
+const studio = require("./data/studio"); // 스튜디오 설정 도메인(분리 모듈) — 아래에서 재export
 const { parseMoney } = require("./lib/forms");
 const { splitKoreanName } = require("./lib/korean-name");
 const { canInvoice, canBill, isChief, canEdit } = require("./auth");
@@ -20,15 +21,9 @@ const {
   normalizeSessionStatus,
   normalizeRecordingCategory,
   normalizeClientKind,
-  timeSlots,
-  SESSION_START_SLOTS,
 } = require("./config");
 
-/** 'HH:MM' 검증(아니면 null). */
-function cleanTime(v) {
-  const s = String(v || "").trim();
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(s) ? s : null;
-}
+// cleanTime('HH:MM' 검증)은 lib/date로 이전(공유 헬퍼). 위 import 참조.
 
 // ── 인보이스 금액/상태 파생(플레이북2 §4 payStatus/balanceOf) ──
 
@@ -1135,70 +1130,7 @@ function nextInvoiceNumber(issueDate) {
   return prefix + String((Number.isFinite(last) ? last : 0) + 1).padStart(3, "0");
 }
 
-// ── 공급자(스튜디오) 세금정보 — admin_state 평문(비밀 아님, studio_location과 동급) ──
-const STUDIO_INFO_KEYS = ["studio_biz_name", "studio_biz_no", "studio_owner_name", "studio_address", "studio_biz_type", "studio_biz_item", "studio_tel"];
-function getStudioInfo() {
-  const out = {};
-  for (const k of STUDIO_INFO_KEYS) out[k] = getState(k) || "";
-  return out;
-}
-function setStudioInfo(body = {}) {
-  for (const k of STUDIO_INFO_KEYS) setState(k, String(body[k] || "").trim() || null);
-}
-
-/** 거래명세서 로고 — base64 data URI(admin_state.studio_logo). 없으면 null. */
-function getStudioLogo() {
-  return getState("studio_logo") || null;
-}
-function setStudioLogo(dataUri) {
-  setState("studio_logo", dataUri ? String(dataUri) : null);
-}
-
-// ── 스튜디오 운영시간(예약 그리드 범위) — admin_state 평문. 환경설정에서 조정(UI는 다른 레인) ──
-const DEFAULT_STUDIO_HOURS = { start: "14:00", end: "18:30" }; // 기존 SESSION_START_SLOTS와 동일 기본값
-
-/** 예약 그리드 시작/종료 시각('HH:MM'). 미설정/무효면 기본값. */
-function getStudioHours() {
-  return {
-    start: cleanTime(getState("studio_hours_start")) || DEFAULT_STUDIO_HOURS.start,
-    end: cleanTime(getState("studio_hours_end")) || DEFAULT_STUDIO_HOURS.end,
-  };
-}
-
-/** 운영시간 저장(형식 검증만; 무효값은 null로 → 기본값 폴백). */
-function setStudioHours(start, end) {
-  setState("studio_hours_start", cleanTime(start) || null);
-  setState("studio_hours_end", cleanTime(end) || null);
-}
-
-// ── 기본 세션 시간(분) — 녹음 외 세션(믹싱·마스터링·기타)의 소요시간 슬라이더 기본값 ──
-const DEFAULT_PRO_MINUTES = 210; // 3시간 30분
-/** 녹음 외 세션의 기본 소요시간(분). 미설정/무효면 210(3시간 30분). */
-function getProMinutes() {
-  const v = parseInt(getState("studio_pro_minutes"), 10);
-  return Number.isFinite(v) && v > 0 ? v : DEFAULT_PRO_MINUTES;
-}
-/** 기본 세션 시간 저장(분 단위 정수, 무효면 null→기본값 폴백). */
-function setProMinutes(mins) {
-  const n = parseInt(mins, 10);
-  setState("studio_pro_minutes", Number.isFinite(n) && n > 0 ? String(n) : null);
-}
-
-/** 기본 예약 담당자(이름) — 세션 폼에서 예약 담당자 기본 선택. 미설정이면 null. */
-function getDefaultBooker() {
-  return getState("default_booker") || null;
-}
-function setDefaultBooker(name) {
-  setState("default_booker", String(name || "").trim() || null);
-}
-
-/** 운영시간 기반 30분 시작 슬롯 배열(예약 그리드). 무효/역전 범위면 기본 그리드(SESSION_START_SLOTS). */
-function studioStartSlots() {
-  const { start, end } = getStudioHours();
-  const sm = timeToMin(start), em = timeToMin(end);
-  if (sm == null || em == null || em < sm) return [...SESSION_START_SLOTS];
-  return timeSlots(sm, em);
-}
+// ── 스튜디오(공급자) 설정 도메인은 src/data/studio.js로 분리(도메인 모듈화 착수). 아래 module.exports에서 `...studio`로 재export. ──
 
 /** 발행/입금완료로 전이 시 채번 보장(수동 발행분도 INV-YYYYMM-### 부여). 거래명세서에 번호 필수. */
 function ensureInvoiceNumber(inv) {
@@ -1698,6 +1630,8 @@ function findSessionConflict({ date, start, end, excludeId = null, room = null }
 }
 
 function assertNoSessionConflict(f, excludeId) {
+  // 취소된 세션은 룸을 점유하지 않으므로 겹침 검사 제외(점유 슬롯에도 취소 세션 기록·다른 활성 세션과의 오탐 차단 허용).
+  if (f.status === "취소") return;
   const conflict = findSessionConflict({ date: f.session_date, start: f.start_time, end: f.end_time, excludeId, room: f.room_id });
   if (conflict) {
     const err = new Error("SESSION_TIME_CONFLICT");
@@ -2088,17 +2022,7 @@ module.exports = {
   isOverdue,
   listInvoices,
   getInvoiceForUser,
-  getStudioInfo,
-  setStudioInfo,
-  getStudioLogo,
-  setStudioLogo,
-  getStudioHours,
-  setStudioHours,
-  getProMinutes,
-  setProMinutes,
-  getDefaultBooker,
-  setDefaultBooker,
-  studioStartSlots,
+  ...studio, // 스튜디오 설정 도메인 재export(src/data/studio.js): getStudioInfo/setStudioInfo·getStudioLogo/setStudioLogo·getStudioHours/setStudioHours·getProMinutes/setProMinutes·getDefaultBooker/setDefaultBooker·studioStartSlots
   ensureInvoiceNumber,
   invoiceStats,
   listInvoicesForProject,

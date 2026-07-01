@@ -20,7 +20,7 @@
 > - **상세 = 바로 편집**: 연락처·클라이언트 상세가 곧 인라인 편집 화면('정보 수정' 폐기, `embedded`). 연락처 소속 이력 각 행 편집·'회사' 입력→소속 자동 반영. 클라이언트 상세 순서=청구·결제(탭)→상세정보→첨부→삭제, 담당자 콤보에 전화 표시, **통장사본 폐기**(사업자등록증만), **목록 필터+스크롤 복원**(`?from=`+sessionStorage).
 > - **녹음 단가 Pro 블록 과금**: 3.5h(1Pro)마다 묶어 계산(10.5h=3Pro=90만), 슬라이더 0~14h·프리셋 1~4Pro.
 > - **구글 캘린더 진단**: 연동 실패 사유 로깅 + 설정 자동연동 켜짐/꺼짐 배지('사용 안 함'=연동 끔).
-> - 시작 시간 '직접입력' 인라인 전환·전화칸 자동완성 끔·'제작사→제작사/운영사'. 테스트 `node:test` 38개.
+> - 시작 시간 '직접입력' 인라인 전환·전화칸 자동완성 끔·'제작사→제작사/운영사'. 테스트 `node:test` 40개 + **GitHub Actions CI**(Node 20/22: `npm test`+`build:css`).
 
 ---
 
@@ -107,7 +107,8 @@ src/
   config.js              env 검증(fail-fast) · 역할/상태/작업종류 상수 · normalize
   db.js                  스키마 · 멱등 마이그레이션 · AES-256-GCM 암호화
   auth.js                JWT 세션 · 권한 술어/미들웨어 · Google OAuth(논스+쿠키 대조) · 화이트리스트
-  data.js                데이터 헬퍼(전 직원 전체 열람, 청구는 canInvoice 분기). listRooms/createRoom/deleteRoom. sessionAmountsByProject. **getStudioHours/setStudioHours/studioStartSlots**(운영시간 인프라)
+  data.js                데이터 헬퍼(전 직원 전체 열람, 청구는 canInvoice 분기). listRooms/createRoom/deleteRoom. sessionAmountsByProject. 스튜디오 설정은 data/studio.js 재export
+  data/studio.js         스튜디오(공급자) 설정 도메인(분리 착수 1차): getStudioInfo/getStudioLogo/**getStudioHours/setStudioHours/studioStartSlots**/getProMinutes/getDefaultBooker(운영시간·PDF 세금정보·기본값)
   notify.js              웹훅 알림(SSRF 방어: DNS→사설IP 차단, fail-safe)
   views.js               레이아웃 · **사이드바 그룹화**(운영/청구/관리, 권한별 NAV) · flashBanner · tabBar/filterChips/projectTypeBadge/**listGroup/listRow/emptyState** 헬퍼 · **테마 토글**
   views.invoices.js      청구 행/배지/섹션
@@ -171,11 +172,12 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 4. (선택) 알림 Gmail 어댑터(현재 웹훅만; `notify.js` 어댑터 슬롯).
 5. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
 6. (선택) 자료 다중 업로드·백업 오프사이트 전송.
-7. (미완, L) **data.js 모듈 분리** — 헬퍼 함수 증가로 단일 파일 부담; 향후 도메인별 분리 검토.
+7. (착수, L) **data.js 모듈 분리** — 1차: 스튜디오 설정→`src/data/studio.js`(재export 허브). 청구·세션·연락처 도메인도 동일 패턴 점진 이관.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: **연락처 표시명 제거·전화 010-####-#### 정규화·치프 역할 전환**(본인 잠금·최소 1치프), **청구서 할인**(정액+정률·공급가 차감 후 VAT 재계산·선택 항목 동적 공급가·거래명세서 할인 라인) + **외주/하우스 담당자↔연락처 양방향 연동**(자동 노출·전화 양방향·외주 이메일 양방향·하우스 이메일 잠금)·매출 아이콘 수정, **클라이언트 첨부 서류**(사업자등록증·통장사본 드래그앤드롭·매직바이트·치프 인증 다운로드), **연락처 확장 + Google People API 양방향 동기화**(성·이름·호칭·별명·회사·직책·부서; push+수동 'Google 동기화' 버튼·삭제 양방향·fail-safe·cron 제거), **세션·담당자·매출 개선**(담당 디렉터·룸 기본 A·예약담당자 기본값·외주단가 조건부·하우스/외주 정보수정·매출 메뉴·연락처 tel 링크), **프로젝트 폼 개선**(마감일 제거·고객측 담당자 정보표시·목록 외 이름→새 연락처 자동생성·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개**[node:test]·`/audit` 진단 프롬프트), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드 제거·UX·notify 일원화), **청구처 청구시점 이동·용어 통일(청구처/담당 엔지니어/고객측 담당자)·프로젝트 유형 폐기·연락처(담당자) 도메인**.
-> **직전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12), 백엔드 정리(resolveEndTime·0원 가드·죽은코드·parseMoney/timeToMin·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·청구 진입점·클라이언트 검색·대시보드).
+> **완료(이번 세션)**: **v1.0 릴리스 위생 점검(/audit Top5)** — 버전 0.1.0→1.0.0·description 현행화, **GitHub Actions CI 신설**(Node 20/22: `npm test`+`build:css`), 죽은 코드 제거(미사용 `issued`+2축 분리 후 죽은 `status==="입금완료"` 비교), **세션 겹침 검사 '취소' 예외**(취소 세션 룸 미점유·회귀 테스트 2건→총 40개), **data.js 모듈 분리 1차**(스튜디오 설정→`src/data/studio.js` 재export 허브·`cleanTime`→`lib/date` 공유).
+> **직전 완료**: **연락처 표시명 제거·전화 010-####-#### 정규화·치프 역할 전환**(본인 잠금·최소 1치프), **청구서 할인**(정액+정률·공급가 차감 후 VAT 재계산·선택 항목 동적 공급가·거래명세서 할인 라인) + **외주/하우스 담당자↔연락처 양방향 연동**(자동 노출·전화 양방향·외주 이메일 양방향·하우스 이메일 잠금)·매출 아이콘 수정, **클라이언트 첨부 서류**(사업자등록증·통장사본 드래그앤드롭·매직바이트·치프 인증 다운로드), **연락처 확장 + Google People API 양방향 동기화**(성·이름·호칭·별명·회사·직책·부서; push+수동 'Google 동기화' 버튼·삭제 양방향·fail-safe·cron 제거), **세션·담당자·매출 개선**(담당 디렉터·룸 기본 A·예약담당자 기본값·외주단가 조건부·하우스/외주 정보수정·매출 메뉴·연락처 tel 링크), **프로젝트 폼 개선**(마감일 제거·고객측 담당자 정보표시·목록 외 이름→새 연락처 자동생성·body limit·0원 단가 가드), **/audit 진단 후속**(수동 청구 VAT 역산·세션 겹침 전 타입·from-tasks 에러 정합 + **금전 핵심 테스트 24개**[node:test]·`/audit` 진단 프롬프트), **전방위 점검(ultrawork)**(세션 시간유실·발행알림 누락·삭제가드·죽은코드 제거·UX·notify 일원화), **청구처 청구시점 이동·용어 통일(청구처/담당 엔지니어/고객측 담당자)·프로젝트 유형 폐기·연락처(담당자) 도메인**.
+> **그 이전 완료**: 디자인 기반(Pretendard·쿨톤 info색·사이드바 그룹화·테마 토글·listGroup/listRow/emptyState·opacity.12), 백엔드 정리(resolveEndTime·0원 가드·죽은코드·parseMoney/timeToMin·운영시간 인프라), 라운드2 UX(세션폼 조건부 단가·완료1클릭·검색·운영시간 슬롯·청구 진입점·클라이언트 검색·대시보드).
 > **이전 완료**: 다중 룸(룸별 겹침·FreeBusy 폐기·룸 CRUD), 외주 지급단가(`worker_rate`·`engineer_id`·정산), 청구 완료요건 통일, 정합보수(세션잠금·삭제가드·발행알림·채번원자화), 보안 하드닝(CSRF·OAuth 논스·SSRF·매직바이트), UX(대시보드 세션카드·마감일·유형변경·곡일괄·청구검색·견적서·세션액합산), UI 공통 헬퍼(tabBar·filterChips·projectTypeBadge·badge·AA대비), 외주 관리 일원화.
 > **더 이전 완료**: Render 실배포·OAuth, 세션 UX(그리드·슬라이더·캘린더 뷰·청구잠금), 녹음 세션 직접 청구, 클라이언트 자동 등록·상세, 외주 작업자 메뉴, 탭 그룹화, 작업 종류 카탈로그, 거래명세서 PDF, 알림 채널(웹훅).
 

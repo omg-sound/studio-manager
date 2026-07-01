@@ -1,8 +1,8 @@
 {
   "name": "omg-studios-manager",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "녹음/믹싱 스튜디오 프로젝트·자료 전달·청구 관리 (1인 운영 + 클라이언트 열람)",
+  "description": "녹음/믹싱 스튜디오 프로젝트·세션 일정·자료 전달·청구 관리 내부 웹앱 (3역할: 대표/치프/스태프)",
   "license": "UNLICENSED",
   "type": "commonjs",
   "engines": {
