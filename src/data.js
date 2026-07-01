@@ -189,6 +189,19 @@ function artistClientForContact(contactId) {
   return db().prepare("SELECT id, name FROM clients WHERE source_contact_id = ? AND kind = '아티스트'").get(Number(contactId)) || null;
 }
 
+/** 이름으로 연락처(사람) 찾기 — 정확히 일치하면 재사용, 없으면 새 연락처 생성(한국식 성·이름 자동 분리). 대표자 연락처 연동 등에 사용. */
+function resolveContactByName(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const ex = db().prepare("SELECT id FROM contacts WHERE name = ? ORDER BY id LIMIT 1").get(n);
+  return ex ? ex.id : createContact({ name: n });
+}
+
+/** 이 연락처를 대표자로 둔 클라이언트들(양방향 표시용 — 연락처 상세에서 '대표 클라이언트'). */
+function clientsWithOwnerContact(contactId) {
+  return db().prepare("SELECT id, name, kind FROM clients WHERE owner_contact_id = ? ORDER BY name").all(Number(contactId));
+}
+
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
   const where = [];
   if (!includeInactive) where.push("active = 1");
@@ -1928,6 +1941,8 @@ module.exports = {
   ensureClientFromContact,
   syncArtistClientForContact,
   artistClientForContact,
+  resolveContactByName,
+  clientsWithOwnerContact,
   listProjectManagers,
   listContacts,
   getContact,

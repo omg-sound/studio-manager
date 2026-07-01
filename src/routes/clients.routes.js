@@ -12,7 +12,7 @@ const {
   listClients, clientKindCounts, getClient, getContact, listProjectsForClient,
   listInvoicesForClientEntity, listContactsForClient,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  contactOptions, createContact, addAffiliation,
+  contactOptions, createContact, addAffiliation, listContacts, resolveContactByName, clientsWithOwnerContact,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -130,17 +130,17 @@ router.get("/", (req, res) => {
 
 // ── 새 클라이언트 ──
 router.get("/new", (req, res) => {
-  res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}) }));
+  res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({})) }));
 });
 
 router.post("/", (req, res) => {
   const b = req.body;
   const name = String(b.name || "").trim();
-  if (!name) return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }) }));
+  if (!name) return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({})) }));
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 사업자등록번호·대표자·주소가 없음
   const info = db()
-    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, address, cash_receipt_no, group_name) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@address,@cash_receipt_no,@group_name)")
+    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, owner_contact_id, address, cash_receipt_no, group_name, agency_name) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@owner_contact_id,@address,@cash_receipt_no,@group_name,@agency_name)")
     .run({
       name,
       kind,
@@ -149,9 +149,11 @@ router.post("/", (req, res) => {
       memo: String(b.memo || "").trim() || null,
       biz_no: artist ? null : formatBizNo(b.biz_no),
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
+      owner_contact_id: artist ? null : (String(b.owner_name || "").trim() ? resolveContactByName(b.owner_name) : null), // 대표자 → 연락처 연동
       address: artist ? null : String(b.address || "").trim() || null,
       cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
       group_name: artist ? String(b.group_name || "").trim() || null : null, // 소속그룹(아티스트만)
+      agency_name: artist ? String(b.agency_name || "").trim() || null : null, // 소속사(아티스트만, 소속그룹과 별개)
     });
   linkClientContact(info.lastInsertRowid, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect("/clients?flash=created#c" + info.lastInsertRowid);
@@ -163,7 +165,7 @@ router.get("/:id/edit", (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const files = listClientFiles(c.id);
   const fileErr = String(req.query.ferr || "").trim();
-  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, true) }));
+  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, true, listContacts({})) }));
 });
 
 router.post("/:id", (req, res) => {
@@ -174,12 +176,12 @@ router.post("/:id", (req, res) => {
   const name = String(b.name || "").trim();
   if (!name) {
     const files = listClientFiles(id);
-    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true) }));
+    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({})) }));
   }
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
   db()
-    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, address=@address, cash_receipt_no=@cash_receipt_no, group_name=@group_name WHERE id=@id")
+    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, owner_contact_id=@owner_contact_id, address=@address, cash_receipt_no=@cash_receipt_no, group_name=@group_name, agency_name=@agency_name WHERE id=@id")
     .run({
       id,
       name,
@@ -189,9 +191,11 @@ router.post("/:id", (req, res) => {
       memo: String(b.memo || "").trim() || null,
       biz_no: artist ? null : formatBizNo(b.biz_no),
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
+      owner_contact_id: artist ? null : (String(b.owner_name || "").trim() ? resolveContactByName(b.owner_name) : null), // 대표자 → 연락처 연동
       address: artist ? null : String(b.address || "").trim() || null,
       cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
       group_name: artist ? String(b.group_name || "").trim() || null : null, // 소속그룹(아티스트만)
+      agency_name: artist ? String(b.agency_name || "").trim() || null : null, // 소속사(아티스트만)
     });
   linkClientContact(id, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect(`/clients/${id}?flash=saved`); // 수정 후 그 클라이언트 상세로 복귀(목록 아님)
@@ -338,8 +342,9 @@ router.get("/:id", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : ""), back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
+    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
     ${(() => { const lc = c.source_contact_id ? getContact(c.source_contact_id) : null; return lc ? `<div class="mb-4 text-sm"><span class="text-muted">연동 연락처</span> <a href="/contacts/${lc.id}" class="text-primary hover:underline">${esc(lc.name)} ↗</a></div>` : ""; })()}
+    ${(() => { const oc = c.owner_contact_id ? getContact(c.owner_contact_id) : null; return oc ? `<div class="mb-4 text-sm"><span class="text-muted">대표자</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : (c.owner_name ? `<div class="mb-4 text-sm"><span class="text-muted">대표자</span> ${esc(c.owner_name)}</div>` : ""); })()}
     <div class="mb-4">
       <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
       ${contactsSection}
@@ -439,7 +444,7 @@ function linkClientContact(clientId, body) {
   if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false) {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = []) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   const isArtist = (c.kind || CLIENT_KINDS[0]) === "아티스트"; // 개인 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
@@ -460,14 +465,23 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       <div data-client-tax class="space-y-4"${isArtist ? " hidden" : ""}>
         <div class="grid gap-3 sm:grid-cols-2">
           <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
-          <div><label class="label">대표자</label><input class="input" name="owner_name" value="${esc(c.owner_name || "")}" /></div>
+          <div><label class="label">대표자 <span class="font-normal text-muted text-xs">(연락처 연동)</span></label>
+            <input class="input" name="owner_name" value="${esc(c.owner_name || "")}" list="client-owner-contacts" autocomplete="off" placeholder="이름 — 목록에서 선택하거나 새 이름" />
+            <datalist id="client-owner-contacts">${contacts.map((ct) => `<option value="${esc(ct.name)}"></option>`).join("")}</datalist>
+          </div>
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
       </div>
       <div data-client-cash${isArtist ? "" : " hidden"} class="space-y-4">
-        <div>
-          <label class="label">소속그룹 <span class="font-normal text-muted text-xs">(속한 그룹·소속사·팀 — 있으면)</span></label>
-          <input class="input" name="group_name" value="${esc(c.group_name || "")}" placeholder="예: 소속 그룹·소속사명" />
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="label">소속그룹 <span class="font-normal text-muted text-xs">(속한 그룹·팀 — 있으면)</span></label>
+            <input class="input" name="group_name" value="${esc(c.group_name || "")}" placeholder="예: 소속 그룹·팀명" />
+          </div>
+          <div>
+            <label class="label">소속사 <span class="font-normal text-muted text-xs">(소속사·레이블 — 있으면)</span></label>
+            <input class="input" name="agency_name" value="${esc(c.agency_name || "")}" placeholder="예: 소속사·레이블명" />
+          </div>
         </div>
         <div>
           <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(개인 — 사업자등록증 없는 경우)</span></label>

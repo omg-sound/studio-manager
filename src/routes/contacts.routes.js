@@ -19,6 +19,7 @@ const {
   listClients,
   syncArtistClientForContact,
   artistClientForContact,
+  clientsWithOwnerContact,
   getManagerByContactId,
   classifyContact,
   syncContactToManager,
@@ -238,10 +239,12 @@ router.get("/:id", (req, res) => {
       }</div>`
     : "";
   const artistClient = artistClientForContact(c.id); // 아티스트명으로 연동된 아티스트 클라이언트(양방향 링크)
+  const ownerClients = clientsWithOwnerContact(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
   const infoCard = `
     <div class="card mb-6 space-y-2">
       ${nameDetail && nameDetail !== c.name ? `<div class="text-sm"><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : ""}
       ${c.nickname ? `<div class="text-sm"><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${artistClient ? ` · <a href="/clients/${artistClient.id}" class="text-primary hover:underline">클라이언트 ↗</a>` : ""}</div>` : ""}
+      ${ownerClients.length ? `<div class="text-sm"><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : ""}
       ${c.company ? `<div class="text-sm"><span class="text-muted">회사</span> ${esc(c.company)}</div>` : ""}
       ${c.job_title ? `<div class="text-sm"><span class="text-muted">직책</span> ${esc(c.job_title)}${c.department ? " · " + esc(c.department) : ""}</div>` : c.department ? `<div class="text-sm"><span class="text-muted">부서</span> ${esc(c.department)}</div>` : ""}
       <div class="text-sm"><span class="text-muted">휴대전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
