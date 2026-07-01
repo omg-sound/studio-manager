@@ -708,11 +708,18 @@
     function highlight(on) {
       if (display) display.style.boxShadow = on ? "0 0 0 2px var(--color-primary, currentColor)" : "";
     }
+    // 파일 선택/드롭 즉시 업로드 폼 자동 제출(별도 '업로드' 클릭 불필요 — 자동 저장). requestSubmit 미지원 시 submit 폴백.
+    function autoSubmit() {
+      var form = zone.closest("form");
+      if (!form || !(input.files && input.files.length)) return;
+      if (label) label.textContent = (input.files[0].name || "") + " · 업로드 중…";
+      if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    }
     zone.addEventListener("dragover", function (e) { e.preventDefault(); highlight(true); });
     zone.addEventListener("dragenter", function (e) { e.preventDefault(); highlight(true); });
     zone.addEventListener("dragleave", function () { highlight(false); });
 
-    // 드롭: input.files에 할당 + 파일명 표시(DataTransfer API, 현대 브라우저)
+    // 드롭: input.files에 할당 + 파일명 표시(DataTransfer API, 현대 브라우저) + 자동 업로드
     zone.addEventListener("drop", function (e) {
       e.preventDefault();
       highlight(false);
@@ -724,11 +731,15 @@
         input.files = dt.files;
       } catch (_e) { /* DataTransfer 미지원 환경에서는 파일명 표시만 */ }
       if (label) label.textContent = droppedFiles[0].name;
+      autoSubmit(); // 드롭 즉시 업로드
     });
 
-    // 파일 선택(클릭) 후 파일명 표시
+    // 파일 선택(클릭) 후 파일명 표시 + 자동 업로드
     input.addEventListener("change", function () {
-      if (input.files && input.files[0] && label) label.textContent = input.files[0].name;
+      if (input.files && input.files[0]) {
+        if (label) label.textContent = input.files[0].name;
+        autoSubmit();
+      }
     });
   });
 })();
