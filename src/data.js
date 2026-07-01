@@ -380,6 +380,13 @@ function endAffiliation(affId, endedOn) {
   db().prepare("UPDATE contact_affiliations SET ended_on = ? WHERE id = ?").run(blankToNull(endedOn) || todayYmd(), Number(affId));
 }
 
+/** 소속 이력 행 수정(회사·직함·기간·메모). ended_on을 비우면 현재 소속으로. */
+function updateAffiliation(affId, { client_id, title, started_on, ended_on, memo } = {}) {
+  db().prepare(
+    "UPDATE contact_affiliations SET client_id = ?, title = ?, started_on = ?, ended_on = ?, memo = ? WHERE id = ?"
+  ).run(client_id ? Number(client_id) : null, blankToNull(title), blankToNull(started_on), blankToNull(ended_on), blankToNull(memo), Number(affId));
+}
+
 function deleteAffiliation(affId) {
   db().prepare("DELETE FROM contact_affiliations WHERE id = ?").run(Number(affId));
 }
@@ -2022,6 +2029,7 @@ module.exports = {
   addAffiliation,
   syncCompanyAffiliation,
   endAffiliation,
+  updateAffiliation,
   deleteAffiliation,
   contactOptions,
   listContactsForClient,

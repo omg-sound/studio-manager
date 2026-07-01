@@ -14,6 +14,7 @@ const {
   addAffiliation,
   syncCompanyAffiliation,
   endAffiliation,
+  updateAffiliation,
   deleteAffiliation,
   listProjectsForContact,
   listSessionsForContact,
@@ -26,7 +27,7 @@ const {
   syncContactToManager,
 } = require("../data");
 const people = require("../people");
-const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge, tabBar } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge, tabBar, detailsChevron } = require("../views");
 
 const router = express.Router();
 
@@ -212,6 +213,19 @@ router.post("/:id/affiliations/:aid/end", (req, res) => {
   res.redirect(`/contacts/${Number(req.params.id)}?flash=saved`);
 });
 
+// 소속 이력 행 수정(회사·직함·기간·메모). ended_on 비우면 현재 소속.
+router.post("/:id/affiliations/:aid", (req, res) => {
+  const b = req.body;
+  updateAffiliation(Number(req.params.aid), {
+    client_id: b.client_id || null,
+    title: b.title,
+    started_on: b.started_on,
+    ended_on: b.ended_on,
+    memo: b.memo,
+  });
+  res.redirect(`/contacts/${Number(req.params.id)}?flash=saved`);
+});
+
 router.post("/:id/affiliations/:aid/delete", (req, res) => {
   deleteAffiliation(Number(req.params.aid));
   res.redirect(`/contacts/${Number(req.params.id)}?flash=deleted`);
@@ -240,7 +254,7 @@ router.get("/:id", (req, res) => {
   const ownerClients = clientsWithOwnerContact(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
   const cur = currentAffiliation(c.id); // 현재 소속 — 회사칸 기본값(담당자로만 등록돼 company 텍스트가 비어 있던 경우 반영)
   // 상세로 들어오면 바로 수정 가능한 화면 — 읽기전용 카드+'정보 수정' 버튼 대신 인라인 편집 폼(변경 시 하이라이트 저장).
-  const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager);
+  const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true);
   const derivedBits = [
     nameDetail && nameDetail !== c.name ? `<div><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : "",
     c.nickname ? `<div><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${artistClient ? ` · <a href="/clients/${artistClient.id}" class="text-primary hover:underline">클라이언트 ↗</a>` : ""}</div>` : "",
@@ -263,16 +277,43 @@ router.get("/:id", (req, res) => {
           const badge = isCurrent ? `<span class="badge badge-success">현재</span>` : `<span class="badge badge-neutral">종료</span>`;
           const company = a.client_name || "무소속";
           const period = `${a.started_on ? esc(a.started_on) : "?"} ~ ${a.ended_on ? esc(a.ended_on) : "현재"}`;
-          return `<div class="card flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2">${badge}<span class="font-semibold">${esc(company)}</span>${a.title ? `<span class="text-sm text-muted">${esc(a.title)}</span>` : ""}</div>
-              <div class="mt-0.5 text-xs text-muted">${period}</div>
-              ${a.memo ? `<div class="mt-1 text-sm">${esc(a.memo)}</div>` : ""}
-            </div>
-            <div class="flex shrink-0 gap-1">
-              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end"><button class="btn-ghost btn-xs" type="submit">종료</button></form>` : ""}
+          // 각 소속 행을 펼치면(details) 회사·직함·기간·메모를 직접 수정(dirty 저장). 종료·삭제도 그 안에.
+          const editForm = `
+            <form method="post" action="/contacts/${c.id}/affiliations/${a.id}" class="mt-2 space-y-2 border-t border-border pt-2" data-dirty-form>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label class="label mb-0.5 text-xs">소속 회사</label>
+                  <select name="client_id" class="input py-1.5 text-sm">
+                    <option value="">무소속</option>
+                    ${clients.map((cl) => `<option value="${cl.id}" ${String(a.client_id || "") === String(cl.id) ? "selected" : ""}>${esc(cl.name)}${cl.kind ? " (" + esc(cl.kind) + ")" : ""}</option>`).join("")}
+                  </select>
+                </div>
+                <div><label class="label mb-0.5 text-xs">직함</label><input class="input py-1.5 text-sm" name="title" value="${esc(a.title || "")}" placeholder="예: A&amp;R · 매니저" /></div>
+                <div><label class="label mb-0.5 text-xs">시작일</label><input class="input py-1.5 text-sm" type="date" name="started_on" value="${esc(a.started_on || "")}" /></div>
+                <div><label class="label mb-0.5 text-xs">종료일 <span class="font-normal text-muted">(비우면 현재)</span></label><input class="input py-1.5 text-sm" type="date" name="ended_on" value="${esc(a.ended_on || "")}" /></div>
+              </div>
+              <div><label class="label mb-0.5 text-xs">메모</label><input class="input py-1.5 text-sm" name="memo" value="${esc(a.memo || "")}" /></div>
+              <div class="flex items-center gap-2">
+                <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>저장</button>
+                <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
+              </div>
+            </form>
+            <div class="mt-2 flex gap-1 border-t border-border pt-2">
+              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end"><button class="btn-ghost btn-xs" type="submit">종료 처리</button></form>` : ""}
               <form method="post" action="/contacts/${c.id}/affiliations/${a.id}/delete" data-confirm="이 소속 이력을 삭제할까요?"><button class="btn-ghost btn-xs text-danger" type="submit">삭제</button></form>
-            </div>
+            </div>`;
+          return `<div class="card">
+            <details class="group">
+              <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">${badge}<span class="font-semibold">${esc(company)}</span>${a.title ? `<span class="text-sm text-muted">${esc(a.title)}</span>` : ""}</div>
+                  <div class="mt-0.5 text-xs text-muted">${period}</div>
+                  ${a.memo ? `<div class="mt-1 text-sm">${esc(a.memo)}</div>` : ""}
+                </div>
+                <span class="shrink-0 text-xs text-muted hover:text-fg">${detailsChevron()}</span>
+              </summary>
+              ${editForm}
+            </details>
           </div>`;
         })
         .join("")}</div>`
@@ -332,7 +373,7 @@ router.get("/:id", (req, res) => {
 });
 
 // ── 폼(추가/수정 공용) ──
-function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
+function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false) {
   const e = c._err || "";
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
   const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
@@ -362,8 +403,9 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
           : `<span class="badge badge-neutral">외주 작업자</span> <strong>${esc(manager.name)}</strong> 연동 연락처 — 전화·이메일이 양방향으로 동기화됩니다.`}
       </div>`
     : "";
+  // embedded=상세 페이지에 인라인으로 들어갈 때 — 페이지 헤더(연락처 수정/상세 back) 생략(상단 이름 헤더가 이미 있음).
   return `
-    ${pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
+    ${embedded ? "" : pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
     <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       ${managerBanner}
