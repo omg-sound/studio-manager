@@ -1129,9 +1129,14 @@ function invoiceAmountsFromSupply(supply, discount, vatIncluded = true) {
   return { discount: d, taxable, tax, total };
 }
 
-function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true, taskAmounts = {}, sessionAmounts = {} } = {}) {
+/**
+ * 청구 초안 계산(읽기 전용, 쓰기 없음) — 청구서 생성과 미리보기 PDF가 공유.
+ * 선택 작업/세션 + 폼 입력 금액 → 라인아이템·공급가·할인·VAT·총액·청구처 계산. 반환: null(권한 없음) 또는 draft 객체.
+ */
+function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true, taskAmounts = {}, sessionAmounts = {} } = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project || !canBill(user)) return null;
+  const d = db();
   const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
   const selectedSessions = Array.isArray(sessionIds) ? sessionIds.map(Number).filter(Boolean) : [];
   if (!selectedTasks.length && !selectedSessions.length) throw new Error("TASK_IDS_REQUIRED");
@@ -1139,66 +1144,69 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
   let tasks = [];
   if (selectedTasks.length) {
     const placeholders = selectedTasks.map(() => "?").join(",");
-    tasks = db()
+    tasks = d
       .prepare(
-        `SELECT t.*, tr.title AS track_title, tr.content_type, tr.project_id
+        `SELECT t.*, tr.title AS track_title, tr.artist AS track_artist, tr.content_type, tr.project_id
          FROM track_tasks t
          JOIN project_tracks tr ON tr.id = t.track_id
-         WHERE tr.project_id = ?
-           AND t.is_invoiced = 0
-           AND t.id IN (${placeholders})
+         WHERE tr.project_id = ? AND t.is_invoiced = 0 AND t.id IN (${placeholders})
          ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
       )
       .all(project.id, ...selectedTasks);
     if (tasks.length !== selectedTasks.length) throw new Error("TASK_NOT_BILLABLE");
   }
-  // 금액은 청구 탭에서 확정: 청구 폼에서 입력한 작업별 금액으로 total_price를 덮어쓴다(미입력 시 기존값=종류 기본단가). 0원은 청구 불가.
   tasks = tasks.map((t) => {
     const raw = taskAmounts[t.id] != null ? taskAmounts[t.id] : taskAmounts[String(t.id)];
     const amt = raw != null && String(raw).trim() !== "" ? parseWon(raw) : (t.total_price || 0);
     return { ...t, unit_price: amt, total_price: amt };
   });
-  // 0원 항목 허용(클라이언트에서 '0원으로 청구?' 확인 후 제출) — 무료/서비스 항목 청구 가능.
 
-  // 녹음 세션 직접 청구분: 청구 가능(녹음+단가+시간)·미청구·미전환만 허용. 금액은 단가표로 재산정(스냅샷).
   let billSessions = [];
   if (selectedSessions.length) {
     const placeholders = selectedSessions.map(() => "?").join(",");
-    const rawSessions = db()
+    const rawSessions = d
       .prepare(
         `SELECT s.* FROM sessions s
-         WHERE s.project_id = ?
-           AND s.status = '완료' AND s.session_type = '녹음'
+         WHERE s.project_id = ? AND s.status = '완료' AND s.session_type = '녹음'
            AND s.rate_item_id IS NOT NULL AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
            AND s.id IN (${placeholders})
            AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
            AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)`
       )
       .all(project.id, ...selectedSessions);
-    billSessions = rawSessions
-      .map((s) => ({ session: s, calc: sessionRateAmount(s) }))
-      .filter((x) => x.calc && x.calc.amount > 0);
+    billSessions = rawSessions.map((s) => ({ session: s, calc: sessionRateAmount(s) })).filter((x) => x.calc && x.calc.amount > 0);
     if (billSessions.length !== selectedSessions.length) throw new Error("TASK_NOT_BILLABLE");
-    // 금액 확정: 청구 폼에서 입력/조정한 세션 금액으로 덮어쓴다(작업과 동일 — 미입력 시 단가표 산정액). 0원은 청구 불가.
     billSessions = billSessions.map((x) => {
       const raw = sessionAmounts[x.session.id] != null ? sessionAmounts[x.session.id] : sessionAmounts[String(x.session.id)];
       const amount = raw != null && String(raw).trim() !== "" ? parseWon(raw) : x.calc.amount;
       return { ...x, amount };
     });
-    // 0원 세션 항목도 허용(작업과 동일 — 클라이언트 확인 후 제출).
   }
 
-  const d = db();
-  const subtotal =
-    tasks.reduce((sum, task) => sum + (task.total_price || 0), 0) +
-    billSessions.reduce((sum, x) => sum + x.amount, 0);
+  const subtotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0) + billSessions.reduce((s, x) => s + x.amount, 0);
   const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0, vatIncluded);
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
-  const invoiceNumber = nextInvoiceNumber(issued);
   const resolvedClientId = (clientId ? Number(clientId) : null) || project.client_id || null;
-  if (resolvedClientId && !d.prepare("SELECT 1 FROM clients WHERE id = ?").get(resolvedClientId)) throw new Error("CLIENT_NOT_FOUND"); // 잘못된 청구처 id → FK 롤백 500 대신 친절한 400
+  if (resolvedClientId && !d.prepare("SELECT 1 FROM clients WHERE id = ?").get(resolvedClientId)) throw new Error("CLIENT_NOT_FOUND");
 
+  // 라인아이템(청구서·PDF 공용). 작업=곡명 - 종류, 세션=녹음 세션 라인.
+  const items = [];
+  for (const t of tasks) {
+    items.push({ task_id: t.id, session_id: null, track_title: t.track_title, task_type: t.task_type, description: `${t.track_title} - ${taskTypeLabel(t.task_type)}`, quantity: t.quantity, unit_price: t.unit_price, amount: t.total_price });
+  }
+  for (const { session, calc, amount } of billSessions) {
+    const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
+    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `녹음 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`, quantity: 1, unit_price: amount, amount });
+  }
+  return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedClientId };
+}
+
+function createInvoiceFromTasks(user, opts = {}) {
+  const draft = computeInvoiceDraft(user, opts);
+  if (!draft) return null;
+  const d = db();
+  const invoiceNumber = nextInvoiceNumber(draft.issued);
   d.exec("BEGIN IMMEDIATE;");
   try {
     const info = d
@@ -1208,39 +1216,26 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
          VALUES (@project_id, @client_id, @title, @invoice_number, @amount, @tax_amount, @discount_amount, 0, '발행', @issued_date, @due_date, @memo)`
       )
       .run({
-        project_id: project.id,
-        client_id: resolvedClientId,
-        title: invoiceTitle,
+        project_id: draft.project.id,
+        client_id: draft.resolvedClientId,
+        title: draft.invoiceTitle,
         invoice_number: invoiceNumber,
-        amount: total,
-        tax_amount: tax,
-        discount_amount: discountAmt,
-        issued_date: issued,
-        due_date: dueDate || null,
+        amount: draft.total,
+        tax_amount: draft.tax,
+        discount_amount: draft.discountAmt,
+        issued_date: draft.issued,
+        due_date: draft.dueDate,
         memo: "완료된 미청구 작업에서 자동 생성",
       });
     const invoiceId = info.lastInsertRowid;
     const insertItem = d.prepare(
-      `INSERT INTO invoice_items
-       (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount)
+      `INSERT INTO invoice_items (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ?, unit_price = ?, total_price = ? WHERE id = ?");
-    for (const task of tasks) {
-      const taskLabel = taskTypeLabel(task.task_type);
-      const description = `${task.track_title} - ${taskLabel}`;
-      insertItem.run(
-        invoiceId, task.id, null,
-        task.track_title, task.task_type, description,
-        task.quantity, task.unit_price, task.total_price
-      );
-      markTask.run(invoiceId, task.unit_price, task.total_price, task.id); // 청구 시 확정 금액을 작업에도 반영(매출·스냅샷 일치)
-    }
-    // 녹음 세션 직접 청구 라인: 곡·콘텐츠 없이 invoice_items에 스냅샷(session_id로 잠김). quantity=1·unit_price=amount.
-    for (const { session, calc, amount } of billSessions) {
-      const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
-      const description = `녹음 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`;
-      insertItem.run(invoiceId, null, session.id, null, null, description, 1, amount, amount); // 금액은 폼 입력값(미입력 시 단가표 산정액)
+    for (const it of draft.items) {
+      insertItem.run(invoiceId, it.task_id, it.session_id, it.track_title, it.task_type, it.description, it.quantity, it.unit_price, it.amount);
+      if (it.task_id) markTask.run(invoiceId, it.unit_price, it.amount, it.task_id); // 청구 시 확정 금액을 작업에도 반영
     }
     d.exec("COMMIT;");
     return getInvoiceForUser(user, invoiceId);
@@ -1248,6 +1243,30 @@ function createInvoiceFromTasks(user, { projectId, taskIds, sessionIds, clientId
     d.exec("ROLLBACK;");
     throw e;
   }
+}
+
+/**
+ * 청구서 생성 전 미리보기 PDF용 데이터(견적서·내역서·거래명세서) — 쓰기 없음. 선택 항목·금액을 그대로 문서화.
+ * 반환: { client, invoice(미발행·번호 없음), items } 또는 null.
+ */
+function invoiceDraftForPdf(user, opts = {}) {
+  const draft = computeInvoiceDraft(user, opts);
+  if (!draft) return null;
+  const client = draft.resolvedClientId ? getClient(draft.resolvedClientId) : null;
+  const invoice = {
+    title: draft.invoiceTitle,
+    invoice_number: null, // 미발행(초안) — 채번 전
+    amount: draft.total,
+    tax_amount: draft.tax,
+    discount_amount: draft.discountAmt,
+    paid_amount: 0,
+    status: "미발행",
+    issued_date: draft.issued,
+    due_date: draft.dueDate,
+    client_id: draft.resolvedClientId,
+    client_name: client ? client.name : "",
+  };
+  return { project: draft.project, client: client || { name: "" }, invoice, items: draft.items };
 }
 
 /**
@@ -1935,6 +1954,7 @@ module.exports = {
   listInvoiceItemsForInvoice,
   invoiceAmountsFromSupply,
   createInvoiceFromTasks,
+  invoiceDraftForPdf,
   deleteInvoice,
   dashboardStats,
   listDeliverablesForProject,

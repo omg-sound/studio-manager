@@ -8,8 +8,11 @@ const {
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
   normalizeProjectType,
+  normalizeDocType,
 } = require("../config");
 const { config } = require("../config");
+const { renderInvoicePdf } = require("../invoice-pdf");
+const { asyncHandler } = require("../lib/async");
 const {
   listProjects,
   distinctProjectFields,
@@ -39,10 +42,13 @@ const {
   setTaskAmount,
   deleteTask,
   createInvoiceFromTasks,
+  invoiceDraftForPdf,
   createContact,
   getClient,
   getClientFile,
   listContactsForClient,
+  getStudioInfo,
+  getStudioLogo,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, listGroup, listRow } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
@@ -508,6 +514,39 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
     return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message: known[e.message], user: req.user }));
   }
 });
+
+// 청구서 생성 전 미리보기 PDF 발행(견적서·내역서·거래명세서) — 청구서 레코드를 만들지 않고 선택 항목·금액을 그대로 문서화.
+// 계산서(세금계산서) 발행이 필요할 때 '선택 항목으로 청구 생성'을 눌러 인보이스를 만든다(발행=확정).
+router.post("/:id/invoices/preview.pdf", requireBilling, asyncHandler(async (req, res) => {
+  const b = req.body;
+  let draft;
+  try {
+    draft = invoiceDraftForPdf(req.user, {
+      projectId: Number(req.params.id),
+      taskIds: toArray(b.task_id),
+      sessionIds: toArray(b.session_id),
+      clientId: b.client_id ? Number(b.client_id) : (b.payer_contact_id ? ensureClientFromContact(Number(b.payer_contact_id)) : null),
+      title: b.title,
+      issueDate: cleanYmd(b.issued_date),
+      dueDate: cleanYmd(b.due_date),
+      discount: parseMoney(b.discount_amount),
+      vatIncluded: b.vat_included != null,
+      taskAmounts: extractAmountMap(b, "task_amount"),
+      sessionAmounts: extractAmountMap(b, "session_amount"),
+    });
+  } catch (e) {
+    const known = { TASK_IDS_REQUIRED: "문서로 만들 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다." };
+    if (!known[e.message]) throw e;
+    return res.status(400).send(errorPage({ code: 400, title: "문서 오류", message: known[e.message], user: req.user }));
+  }
+  if (!draft) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const docType = normalizeDocType(req.query.type);
+  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client: draft.client, invoice: draft.invoice, items: draft.items, docType });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((draft.invoice.title || docType) + ".pdf")}`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
+}));
 
 // ── 폼 렌더 ──
 function projectForm(p = {}, err = "") {
@@ -981,8 +1020,16 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <input class="input py-1.5 text-sm" type="date" name="due_date" />
           </div>
         </div>
-        <p class="mb-2 text-xs text-muted">생성하면 바로 <span class="font-medium text-fg">발행</span>됩니다. 발행 후에는 청구처를 바꿀 수 없어요(미발행 상태에서만 변경).</p>
-        <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성</button>
+        <div class="mb-2">
+          <div class="mb-1 text-xs text-muted">문서 발행 <span class="font-normal">— 청구서를 만들지 않고 선택 항목으로 PDF만</span></div>
+          <div class="grid grid-cols-3 gap-2">
+            <button class="btn-ghost btn-sm" type="submit" formaction="/projects/${project.id}/invoices/preview.pdf?type=${encodeURIComponent("견적서")}" formtarget="_blank">견적서</button>
+            <button class="btn-ghost btn-sm" type="submit" formaction="/projects/${project.id}/invoices/preview.pdf?type=${encodeURIComponent("내역서")}" formtarget="_blank">내역서</button>
+            <button class="btn-ghost btn-sm" type="submit" formaction="/projects/${project.id}/invoices/preview.pdf?type=${encodeURIComponent("거래명세서")}" formtarget="_blank">거래명세서</button>
+          </div>
+        </div>
+        <p class="mb-2 text-xs text-muted"><span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).</p>
+        <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성 (계산서 발행)</button>
       </div>
     </form>`;
 }
