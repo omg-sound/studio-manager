@@ -527,7 +527,7 @@ function projectForm(p = {}, err = "") {
         ${contactCombo(p.contact_id)}
       </div>
       <div>
-        <label class="label">담당 엔지니어</label>
+        <label class="label">프로젝트 매니저</label>
         ${managerSelect(p.manager_id)}
       </div>
       <div>
@@ -572,7 +572,7 @@ function projectEditForm(p = {}, err = "") {
         ${contactCombo(p.contact_id)}
       </div>
       <div>
-        <label class="label">담당 엔지니어</label>
+        <label class="label">프로젝트 매니저</label>
         ${managerSelect(p.manager_id)}
       </div>
       <div>
@@ -648,7 +648,7 @@ function managerSelect(selectedId) {
   const opts = listProjectManagers();
   return `
     <select name="manager_id" class="input">
-      <option value="">담당 엔지니어 미지정</option>
+      <option value="">프로젝트 매니저 미지정</option>
       ${opts.map((m) => `<option value="${m.id}" ${Number(selectedId) === m.id ? "selected" : ""}>${esc(m.name)}</option>`).join("")}
     </select>`;
 }

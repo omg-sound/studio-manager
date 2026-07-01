@@ -119,10 +119,12 @@ function eventTimes(date, start, end) {
   return { start: { date }, end: { date: dt.toISOString().slice(0, 10) } };
 }
 
-function eventBody({ title, location, description, date, start, end }) {
+function eventBody({ title, location, description, date, start, end, attendees }) {
   const body = Object.assign({ summary: title || "스튜디오 세션" }, eventTimes(date, start, end));
   if (location) body.location = location;
   if (description) body.description = description;
+  // 참석자(프로젝트 매니저·예약담당자·담당엔지니어 이메일). 초대 메일은 안 보냄(캘린더 이벤트에만 표시) — sendUpdates 미지정(기본 none).
+  if (Array.isArray(attendees) && attendees.length) body.attendees = attendees.map((email) => ({ email }));
   return body;
 }
 

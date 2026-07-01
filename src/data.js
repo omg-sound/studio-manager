@@ -1454,6 +1454,21 @@ function setSessionDirectors(sessionId, ids) {
   d.prepare("UPDATE sessions SET director_contact_id = ? WHERE id = ?").run(ids[0] || null, sessionId);
 }
 
+/** 세션 캘린더 참석자 이메일 — 프로젝트 매니저(project.manager_id)·예약담당자(booker_name)·담당엔지니어(engineer_name)의 이메일(중복·빈값 제거). */
+function sessionAttendeeEmails(session, project) {
+  const d = db();
+  const emails = new Set();
+  const add = (row) => {
+    const e = row && row.email ? String(row.email).trim() : "";
+    if (e && /^\S+@\S+\.\S+$/.test(e)) emails.add(e);
+  };
+  const byName = d.prepare("SELECT email FROM project_managers WHERE name = ? AND email IS NOT NULL AND TRIM(email) <> '' LIMIT 1");
+  if (project && project.manager_id) add(d.prepare("SELECT email FROM project_managers WHERE id = ?").get(project.manager_id));
+  if (session.booker_name) add(byName.get(session.booker_name));
+  if (session.engineer_name) add(byName.get(session.engineer_name));
+  return [...emails];
+}
+
 /** 세션의 담당 디렉터(연락처) 목록. */
 function listSessionDirectors(sessionId) {
   return db()
@@ -1934,6 +1949,7 @@ module.exports = {
   listInvoicesForProject,
   listSessionsForProject,
   listSessionDirectors,
+  sessionAttendeeEmails,
   getSessionForUser,
   createSession,
   updateSession,

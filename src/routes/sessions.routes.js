@@ -17,6 +17,7 @@ const {
   setSessionEventId,
   deleteSession,
   busySessionSlots,
+  sessionAttendeeEmails,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, detailsChevron } = require("../views");
@@ -38,7 +39,8 @@ function eventInputForSession(session, project) {
     session.memo ? `메모: ${session.memo}` : "",
     config.baseUrl ? `${config.baseUrl}/projects/${session.project_id}` : "",
   ].filter(Boolean).join("\n");
-  return { title, location: calendar.getStudioLocation(), description, date: session.session_date, start: session.start_time, end: session.end_time };
+  const attendees = sessionAttendeeEmails(session, project); // 프로젝트 매니저·예약담당자·담당엔지니어 이메일(참석자)
+  return { title, location: calendar.getStudioLocation(), description, attendees, date: session.session_date, start: session.start_time, end: session.end_time };
 }
 
 /** 세션 저장 후 구글 캘린더 일정 동기화(생성/수정/삭제). 미연동/오류는 조용히 무시(fail-safe). */
