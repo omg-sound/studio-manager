@@ -9,7 +9,7 @@ const { db } = require("../db");
 const { requireChief, requireEditor, isChief } = require("../auth");
 const { CLIENT_KINDS, normalizeClientKind } = require("../config");
 const {
-  listClients, clientKindCounts, getClient, listProjectsForClient,
+  listClients, clientKindCounts, getClient, getContact, listProjectsForClient,
   listInvoicesForClientEntity, listContactsForClient,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
   contactOptions, createContact, addAffiliation,
@@ -339,6 +339,7 @@ router.get("/:id", (req, res) => {
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : ""), back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
+    ${(() => { const lc = c.source_contact_id ? getContact(c.source_contact_id) : null; return lc ? `<div class="mb-4 text-sm"><span class="text-muted">연동 연락처</span> <a href="/contacts/${lc.id}" class="text-primary hover:underline">${esc(lc.name)} ↗</a></div>` : ""; })()}
     <div class="mb-4">
       <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
       ${contactsSection}

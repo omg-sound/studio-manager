@@ -17,6 +17,8 @@ const {
   listProjectsForContact,
   listSessionsForContact,
   listClients,
+  syncArtistClientForContact,
+  artistClientForContact,
   getManagerByContactId,
   classifyContact,
   syncContactToManager,
@@ -118,6 +120,7 @@ router.post("/", async (req, res) => {
     if (b.client_id || (b.title && String(b.title).trim())) {
       addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
     }
+    syncArtistClientForContact(id); // 아티스트명 입력 시 아티스트 클라이언트 등록·연동
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
       const contact = getContact(id);
@@ -158,6 +161,7 @@ router.post("/:id", async (req, res) => {
     });
     // 담당자(project_managers) 동기화: 전화(항상) + 이메일(외주만)
     syncContactToManager(id);
+    syncArtistClientForContact(id); // 아티스트명 변경 시 아티스트 클라이언트 이름·연락처 동기화
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
       const updated = getContact(id);
@@ -233,10 +237,11 @@ router.get("/:id", (req, res) => {
           : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
       }</div>`
     : "";
+  const artistClient = artistClientForContact(c.id); // 아티스트명으로 연동된 아티스트 클라이언트(양방향 링크)
   const infoCard = `
     <div class="card mb-6 space-y-2">
       ${nameDetail && nameDetail !== c.name ? `<div class="text-sm"><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : ""}
-      ${c.nickname ? `<div class="text-sm"><span class="text-muted">아티스트명</span> ${esc(c.nickname)}</div>` : ""}
+      ${c.nickname ? `<div class="text-sm"><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${artistClient ? ` · <a href="/clients/${artistClient.id}" class="text-primary hover:underline">클라이언트 ↗</a>` : ""}</div>` : ""}
       ${c.company ? `<div class="text-sm"><span class="text-muted">회사</span> ${esc(c.company)}</div>` : ""}
       ${c.job_title ? `<div class="text-sm"><span class="text-muted">직책</span> ${esc(c.job_title)}${c.department ? " · " + esc(c.department) : ""}</div>` : c.department ? `<div class="text-sm"><span class="text-muted">부서</span> ${esc(c.department)}</div>` : ""}
       <div class="text-sm"><span class="text-muted">휴대전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
@@ -369,7 +374,10 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
           <div><label class="label">이름</label><input class="input" name="given_name" value="${esc(c.given_name || "")}" placeholder="예: 지훈" /></div>
           <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
         </div>
-        <div class="sm:max-w-xs"><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · Google 별명으로 동기화)</span></label><input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명" /></div>
+        <div class="sm:max-w-xs"><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 클라이언트로 등록·연동)</span></label>
+          <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
+          <datalist id="contact-artist-clients">${clients.filter((cl) => cl.kind === "아티스트").map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
+        </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
         <div><label class="label">회사</label><input class="input" name="company" value="${esc(c.company || "")}" placeholder="소속 회사명 · 클라이언트에서 검색" list="contact-company-clients" autocomplete="off" />

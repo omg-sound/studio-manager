@@ -155,7 +155,7 @@ function ensureClientFromContact(contactId) {
   const id = Number(contactId);
   const c = db().prepare("SELECT id, name, phone, email FROM contacts WHERE id = ?").get(id);
   if (!c || !String(c.name || "").trim()) return null;
-  const existing = db().prepare("SELECT id FROM clients WHERE source_contact_id = ?").get(id);
+  const existing = db().prepare("SELECT id FROM clients WHERE source_contact_id = ? AND kind = '기타'").get(id); // 아티스트 링크와 분리(kind별)
   if (existing) {
     db().prepare("UPDATE clients SET phone = ?, email = ? WHERE id = ?").run(c.phone || null, c.email || null, existing.id); // 재사용 시 연락처의 최신 전화·이메일 반영
     return existing.id;
@@ -164,6 +164,29 @@ function ensureClientFromContact(contactId) {
     .prepare("INSERT INTO clients (name, kind, phone, email, source_contact_id) VALUES (?, '기타', ?, ?, ?)")
     .run(c.name, c.phone || null, c.email || null, id);
   return info.lastInsertRowid;
+}
+
+/** 연락처의 아티스트명(nickname)을 아티스트 클라이언트로 등록·동기화(양방향 연동, source_contact_id로 매핑). 아티스트명 없으면 새로 만들지 않음(기존 링크는 유지). 반환: client id | null. */
+function syncArtistClientForContact(contactId) {
+  const id = Number(contactId);
+  const c = db().prepare("SELECT id, nickname, phone, email FROM contacts WHERE id = ?").get(id);
+  if (!c) return null;
+  const artist = String(c.nickname || "").trim();
+  const existing = db().prepare("SELECT id FROM clients WHERE source_contact_id = ? AND kind = '아티스트'").get(id);
+  if (!artist) return existing ? existing.id : null; // 아티스트명 비면 생성 안 함
+  if (existing) {
+    db().prepare("UPDATE clients SET name = ?, phone = ?, email = ? WHERE id = ?").run(artist, c.phone || null, c.email || null, existing.id); // 이름·연락처 동기화
+    return existing.id;
+  }
+  const info = db()
+    .prepare("INSERT INTO clients (name, kind, phone, email, source_contact_id) VALUES (?, '아티스트', ?, ?, ?)")
+    .run(artist, c.phone || null, c.email || null, id);
+  return info.lastInsertRowid;
+}
+
+/** 연락처에 연동된 아티스트 클라이언트(있으면). 연락처 상세에서 링크 표시용. */
+function artistClientForContact(contactId) {
+  return db().prepare("SELECT id, name FROM clients WHERE source_contact_id = ? AND kind = '아티스트'").get(Number(contactId)) || null;
 }
 
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
@@ -1903,6 +1926,8 @@ module.exports = {
   clientOptions,
   ensureClientsFromProject,
   ensureClientFromContact,
+  syncArtistClientForContact,
+  artistClientForContact,
   listProjectManagers,
   listContacts,
   getContact,
