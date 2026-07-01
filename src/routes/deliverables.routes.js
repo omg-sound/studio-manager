@@ -114,6 +114,7 @@ router.post("/projects/:pid/deliverables", requireEditor, upload.single("file"),
       filePath: req.file.path,
       name: originalName,
       mimeType: req.file.mimetype,
+      folder: "deliverables", // 자료 전달은 omg-studios-manager/deliverables 아래로
     });
     const makeLink = b.make_link === "on" || b.make_link === "1";
     db()

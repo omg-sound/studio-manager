@@ -51,25 +51,49 @@ function driveClient() {
 const fs = require("fs");
 
 const STATE_ROOT_FOLDER = STATE_FOLDER_PREFIX + "root";
-const ROOT_FOLDER_NAME = "OMG Studios Deliverables";
+const STATE_ROOT_RENAMED = "drive_root_renamed_omg_v1"; // 루트 폴더명 1회 변경 게이트(구 'OMG Studios Deliverables' → omg-studios-manager)
+const ROOT_FOLDER_NAME = "omg-studios-manager";
 
-/** 루트 폴더를 lazy 생성하고 folder_id를 admin_state에 캐시(플레이북1 §2.2). */
+/** 루트 폴더(omg-studios-manager)를 lazy 생성·캐시. 기존 폴더가 있으면 재사용(이름이 바뀌었으면 1회 rename). */
 async function ensureFolder() {
-  const cached = getState(STATE_ROOT_FOLDER);
-  if (cached) return cached;
   const drive = driveClient();
+  const cached = getState(STATE_ROOT_FOLDER);
+  if (cached) {
+    if (!getState(STATE_ROOT_RENAMED)) {
+      // 기존 루트를 새 이름으로 1회 변경(파일·하위폴더 그대로 유지, ID 불변). 실패해도 업로드 비차단.
+      try { await drive.files.update({ fileId: cached, requestBody: { name: ROOT_FOLDER_NAME } }); } catch (_e) {}
+      setState(STATE_ROOT_RENAMED, "done");
+    }
+    return cached;
+  }
   const { data } = await drive.files.create({
     requestBody: { name: ROOT_FOLDER_NAME, mimeType: "application/vnd.google-apps.folder" },
     fields: "id",
   });
   setState(STATE_ROOT_FOLDER, data.id);
+  setState(STATE_ROOT_RENAMED, "done"); // 신규 생성은 이미 새 이름
   return data.id;
 }
 
-/** 로컬 파일 → Drive 업로드(스트리밍). drive fileId 반환. */
-async function uploadFile({ filePath, name, mimeType }) {
+/** 루트 아래 하위 폴더(이름별)를 lazy 생성·캐시. 반환 folder id. */
+async function ensureSubfolder(name) {
+  const key = STATE_FOLDER_PREFIX + "sub_" + name;
+  const cached = getState(key);
+  if (cached) return cached;
   const drive = driveClient();
-  const parent = await ensureFolder();
+  const root = await ensureFolder();
+  const { data } = await drive.files.create({
+    requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [root] },
+    fields: "id",
+  });
+  setState(key, data.id);
+  return data.id;
+}
+
+/** 로컬 파일 → Drive 업로드(스트리밍). folder(하위 폴더명) 지정 시 그 아래, 없으면 루트. drive fileId 반환. */
+async function uploadFile({ filePath, name, mimeType, folder }) {
+  const drive = driveClient();
+  const parent = folder ? await ensureSubfolder(folder) : await ensureFolder();
   const { data } = await drive.files.create({
     requestBody: { name, parents: [parent] },
     media: { mimeType: mimeType || "application/octet-stream", body: fs.createReadStream(filePath) },
@@ -124,6 +148,7 @@ module.exports = {
   isLinked,
   driveClient,
   ensureFolder,
+  ensureSubfolder,
   getFolderId,
   getFileMeta,
   checkFolder,

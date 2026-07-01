@@ -284,7 +284,7 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
 
   const originalName = decodeName(req.file.originalname);
   try {
-    const { backend, fileId } = await storage.put({ filePath: req.file.path, name: originalName, mimeType: detectedMime });
+    const { backend, fileId } = await storage.put({ filePath: req.file.path, name: originalName, mimeType: detectedMime, folder: fileKindLabel(kind) }); // 사업자등록증·통장사본 하위 폴더로
     // 기존 같은 kind 파일을 교체하는 경우 이전 파일 스토리지 정리
     const old = upsertClientFile(id, kind, { storage_backend: backend, file_id: fileId, file_name: originalName, mime_type: detectedMime, file_size: req.file.size });
     if (old) await storage.remove(old.storage_backend, old.file_id);

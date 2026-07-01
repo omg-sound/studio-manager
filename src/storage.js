@@ -31,9 +31,9 @@ function activeBackend() {
  * 임시 업로드 파일을 영구 스토리지로 이동.
  * @returns {Promise<{backend:'drive'|'local', fileId:string}>}
  */
-async function put({ filePath, name, mimeType }) {
+async function put({ filePath, name, mimeType, folder }) {
   if (drive.isLinked()) {
-    const fileId = await drive.uploadFile({ filePath, name, mimeType });
+    const fileId = await drive.uploadFile({ filePath, name, mimeType, folder }); // folder=하위 폴더명(사업자등록증·통장사본·deliverables). 미지정 시 루트.
     return { backend: "drive", fileId };
   }
   // 로컬: 랜덤 id로 이동(원본 파일명은 DB에 별도 보관)

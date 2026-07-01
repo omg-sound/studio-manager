@@ -286,7 +286,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 - 프로덕션: Google OAuth 로그인·`/healthz`·일일 백업 cron 트리거 통과.
 - **구글 캘린더 자동 연동**: 코드·fail-safe 검증 완료. 실제 동작은 사용자 사전작업(GCP Calendar API 활성화 +
   치프 재로그인(scope `calendar`) + `/settings`에서 캘린더 선택 + 기본 장소 입력) 후 확인.
-- **Drive 저장**: 최소 권한 `drive.file`로 앱 전용 폴더에만 저장(연동 시 storage.put이 drive, 미연동 시 local). `/settings` 환경설정 '자료 저장(구글 Drive)' 섹션에 연동 상태 + **로컬→Drive 이관 버튼**(`/settings/migrate-drive`·`storage-migrate.js`: client_files·deliverables local행을 Drive 업로드 후 로컬 삭제·파일별 격리). 사용자 선택=앱 전용 폴더 자동 생성(Option A 전체권한 미채택).
+- **Drive 저장**: 최소 권한 `drive.file`로 앱 전용 폴더에만 저장(연동 시 storage.put이 drive, 미연동 시 local). `/settings` 환경설정 '자료 저장(구글 Drive)' 섹션에 연동 상태 + **로컬→Drive 이관 버튼**(`/settings/migrate-drive`·`storage-migrate.js`: client_files·deliverables local행을 Drive 업로드 후 로컬 삭제·파일별 격리). 사용자 선택=앱 전용 폴더 자동 생성(Option A 전체권한 미채택). **폴더 구조**: 루트 `omg-studios-manager`(구 'OMG Studios Deliverables'에서 1회 rename) 아래 하위 폴더 `사업자등록증`·`통장사본`(클라이언트 첨부, kind 라벨별)·`deliverables`(자료 전달) — `drive.ensureSubfolder`/`storage.put({folder})`.
 - **디자인·UX(라운드2)**: build:css exit 0, 폰트 로드·사이드바 그룹·테마 토글·조건부 녹음 단가·예정 완료1클릭·운영시간 그리드·검색·클라이언트 검색 E2E — 페이지 200 + 라이트 테마 시각 확인 통과.
 
 ## 다음 단계 TODO
