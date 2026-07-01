@@ -693,7 +693,7 @@ function userRow(u, currentUser, chief = true) {
         <summary class="cursor-pointer text-xs text-muted hover:text-fg">정보 수정 (이름 · 전화)</summary>
         <form method="post" action="/settings/users/${u.id}/edit" class="mt-2 grid gap-2 sm:grid-cols-2">
           <input class="input py-1.5 text-sm" name="name" value="${esc(u.name || "")}" placeholder="이름 (표시명)" />
-          <input class="input py-1.5 text-sm" name="phone" value="${esc(u.mgr_phone || "")}" placeholder="전화" />
+          <input class="input py-1.5 text-sm" name="phone" autocomplete="off" value="${esc(u.mgr_phone || "")}" placeholder="전화" />
           <button class="btn-primary btn-sm sm:col-span-2" type="submit">저장</button>
         </form>
       </details>` : ""}

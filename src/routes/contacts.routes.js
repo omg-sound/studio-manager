@@ -387,7 +387,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
         <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">휴대전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" placeholder="010-0000-0000" /></div>
+        <div><label class="label">휴대전화</label><input class="input" name="phone" autocomplete="off" value="${esc(c.phone || "")}" placeholder="010-0000-0000" /></div>
         <div>
           <label class="label">이메일${isHouseEngineer ? ` <span class="font-normal text-muted">(로그인 계정)</span>` : ""}</label>
           <input class="input${isHouseEngineer ? " opacity-60 cursor-not-allowed" : ""}" type="email" name="email" value="${esc(c.email || "")}"${isHouseEngineer ? ' readonly aria-readonly="true"' : ""} />

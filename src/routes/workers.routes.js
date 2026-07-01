@@ -34,7 +34,7 @@ router.get("/", requireEditor, (req, res) => {
       <div class="grid gap-2 sm:grid-cols-3">
         <input class="input py-1.5 text-sm" name="name" placeholder="이름 (작업 담당자 표시명)" required />
         <input class="input py-1.5 text-sm" name="email" placeholder="이메일(선택)" />
-        <input class="input py-1.5 text-sm" name="phone" placeholder="전화(선택)" />
+        <input class="input py-1.5 text-sm" name="phone" autocomplete="off" placeholder="전화(선택)" />
       </div>
       <button class="btn-primary btn-sm" type="submit">추가</button>
     </form>`;
@@ -148,7 +148,7 @@ router.get("/:id", requireEditor, (req, res) => {
         <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3">
           <input class="input py-1.5 text-sm" name="name" value="${esc(w.name || "")}" placeholder="이름" required />
           <input class="input py-1.5 text-sm" name="email" value="${esc(w.email || "")}" placeholder="이메일" />
-          <input class="input py-1.5 text-sm" name="phone" value="${esc(w.phone || "")}" placeholder="전화" />
+          <input class="input py-1.5 text-sm" name="phone" autocomplete="off" value="${esc(w.phone || "")}" placeholder="전화" />
           <button class="btn-primary btn-sm sm:col-span-3" type="submit">저장</button>
         </form>
       </details>`
