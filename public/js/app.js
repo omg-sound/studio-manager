@@ -466,6 +466,21 @@
   });
 })();
 
+// 사업자등록번호 입력칸([name="biz_no"]): 숫자만 입력해도 ###-##-##### 서식 자동 삽입.
+(function () {
+  "use strict";
+  function fmt(v) {
+    var d = String(v).replace(/\D/g, "").slice(0, 10);
+    if (d.length < 4) return d;
+    if (d.length < 6) return d.slice(0, 3) + "-" + d.slice(3);
+    return d.slice(0, 3) + "-" + d.slice(3, 5) + "-" + d.slice(5);
+  }
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.name === "biz_no") e.target.value = fmt(e.target.value);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="biz_no"]'), function (el) { if (el.value) el.value = fmt(el.value); });
+})();
+
 // 청구 폼 작업 금액 즉시 저장: task_amount_<id> 변경(포커스 이탈) 시 해당 작업 total_price에 바로 반영(초안 아님 → 목록·기본값 반영).
 (function () {
   "use strict";

@@ -16,4 +16,13 @@ function cleanYmd(v) {
   return isValidYmd(s) ? s : null;
 }
 
-module.exports = { parseMoney, cleanYmd };
+/** 사업자등록번호: 숫자 10자리면 ###-##-##### 서식, 그 외(자릿수 다름)는 입력 보존(trim). 빈값→null. */
+function formatBizNo(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (!s) return null;
+  const d = s.replace(/\D/g, "");
+  if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
+  return s; // 자릿수가 안 맞으면 원본 보존(부분 입력·해외 등)
+}
+
+module.exports = { parseMoney, cleanYmd, formatBizNo };

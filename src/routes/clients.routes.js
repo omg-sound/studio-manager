@@ -16,6 +16,7 @@ const {
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
+const { formatBizNo } = require("../lib/forms");
 const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
@@ -146,7 +147,7 @@ router.post("/", (req, res) => {
       phone: String(b.phone || "").trim() || null,
       email: String(b.email || "").trim().toLowerCase() || null,
       memo: String(b.memo || "").trim() || null,
-      biz_no: artist ? null : String(b.biz_no || "").trim() || null,
+      biz_no: artist ? null : formatBizNo(b.biz_no),
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
       cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
@@ -185,7 +186,7 @@ router.post("/:id", (req, res) => {
       phone: String(b.phone || "").trim() || null,
       email: String(b.email || "").trim().toLowerCase() || null,
       memo: String(b.memo || "").trim() || null,
-      biz_no: artist ? null : String(b.biz_no || "").trim() || null,
+      biz_no: artist ? null : formatBizNo(b.biz_no),
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
       cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
