@@ -15,7 +15,7 @@
     "start": "node src/server.js",
     "dev": "npm run build:css && node src/server.js",
     "seed": "node src/seed.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
