@@ -652,10 +652,20 @@ function deleteRateItem(id) {
 function computeRatePrice(item, minutes) {
   if (!item) return 0;
   const m = Math.max(0, Number(minutes) || 0);
-  if (item.base_minutes <= 0 || m <= item.base_minutes) return item.base_price;
-  const unit = item.extra_minutes > 0 ? item.extra_minutes : 60;
-  const units = Math.ceil((m - item.base_minutes) / unit);
-  return item.base_price + units * item.extra_price;
+  const baseMin = item.base_minutes;
+  // 정액(base_minutes=0) 또는 1Pro(기준시간) 이내 → 기본가.
+  if (baseMin <= 0 || m <= baseMin) return item.base_price;
+  // 기준시간(1Pro)마다 묶어서 계산: 완전한 Pro 블록은 각각 기본가(base_price),
+  // 마지막 1Pro 미만 자투리만 추가요금(extra_minutes 단위 올림)으로 과금.
+  // 예) 1Pro=210분·30만 / 초과 60분·10만 → 630분(3Pro)=90만, 240분=1Pro+30분=40만.
+  const fullPros = Math.floor(m / baseMin);
+  const remainder = m - fullPros * baseMin;
+  let price = fullPros * item.base_price;
+  if (remainder > 0) {
+    const unit = item.extra_minutes > 0 ? item.extra_minutes : 60;
+    price += Math.ceil(remainder / unit) * item.extra_price;
+  }
+  return price;
 }
 
 // ── 작업 종류 카탈로그(task_types) — config.TASK_TYPES 시드, DB가 단일 진실원천 ──
@@ -1471,7 +1481,7 @@ function addMinutesToHHMM(hhmm, mins) {
 /**
  * 종료시간 결정: 소요시간(custom_hours)이 있으면 시작+길이로 계산, 없으면 입력된 end_time 사용.
  * 폼은 항상 duration_mode=custom + custom_hours를 전송한다(슬라이더/프리셋이 custom_hours를 채움).
- * custom_hours는 12시간(720분) 상한으로 클램프 — addMinutesToHHMM의 %1440 감김으로 종료시각이 왜곡되지 않게.
+ * custom_hours는 14시간(840분·4Pro) 상한으로 클램프 — addMinutesToHHMM의 %1440 감김으로 종료시각이 왜곡되지 않게.
  */
 function resolveEndTime(input, start) {
   if (!start || String(input.duration_mode || "") !== "custom") {
@@ -1479,7 +1489,7 @@ function resolveEndTime(input, start) {
   }
   const hours = parseFloat(input.custom_hours);
   if (!(hours > 0)) return cleanTime(input.end_time);
-  const mins = Math.min(Math.round(hours * 60), 720); // 상한 12시간
+  const mins = Math.min(Math.round(hours * 60), 840); // 상한 14시간(4Pro)
   return addMinutesToHHMM(start, mins);
 }
 

@@ -121,7 +121,7 @@
   var sessionTypeSel = form.querySelector('select[name="session_type"]');
   var roomSel = form.querySelector('select[name="room_id"]');
   var showWhenRec = form.querySelectorAll('[data-show-when="rec"]');
-  var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 720 : 720;
+  var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 840 : 840;
   var busy = {};
 
   var durGroup = form.querySelector("[data-duration-group]");
@@ -244,12 +244,13 @@
     if (slider) slider.value = Math.min(durationMinutes(), SLIDER_MAX);
     refreshDuration();
   });
-  // 1Pro/2Pro 프리셋 → 기준시간×1/×2로 슬라이더·직접입력 채움.
+  // 1~4Pro 프리셋 → 기준시간(1Pro)×N으로 슬라이더·직접입력 채움("pro3"→base×3).
   Array.prototype.forEach.call(presets, function (b) {
     b.addEventListener("click", function () {
       var base = baseMinutes();
       if (base <= 0) return;
-      setDuration(b.getAttribute("data-duration-preset") === "pro2" ? base * 2 : base);
+      var mult = parseInt(String(b.getAttribute("data-duration-preset") || "pro1").replace("pro", ""), 10) || 1;
+      setDuration(base * mult);
     });
   });
   // 그리드 '직접입력' 버튼 → 시간 입력칸 펼치고 포커스(텍스트로 HH:MM 입력).

@@ -75,7 +75,7 @@ function startSlotGrid(current) {
 }
 
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
-// 소요 시간 = 슬라이더(30분 단위·0~12시간)가 주 입력. 아래 1Pro/2Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
+// 소요 시간 = 슬라이더(30분 단위·0~14시간)가 주 입력. 아래 1~4Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
 // 전송값은 custom_hours + duration_mode=custom(hidden) → 서버 resolveEndTime이 그대로 산정(슬라이더 자체는 미전송 UI).
 // minutesBetween은 ../lib/date 공용 유틸을 사용한다(중복 정의 제거).
 function durationButtons(initMinutes = 0) {
@@ -85,13 +85,13 @@ function durationButtons(initMinutes = 0) {
     `<button type="button" class="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="${val}">${label}</button>`;
   return `
     <div data-duration-group data-pro-default="${getProMinutes()}">
-      <input type="range" min="0" max="720" step="30" value="${Math.min(m, 720)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
+      <input type="range" min="0" max="840" step="30" value="${Math.min(m, 840)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
       <div class="mt-1 flex items-center justify-between text-xs">
         <span class="font-medium text-primary" data-duration-label>설정 안 함</span>
-        <span class="text-muted">0 ~ 12시간 · 30분 단위</span>
+        <span class="text-muted">0 ~ 14시간 · 30분 단위</span>
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-1.5">
-        <span class="flex gap-1.5" data-show-when="rec">${presetBtn("pro1", "1Pro")}${presetBtn("pro2", "2Pro")}</span>
+        <span class="flex gap-1.5" data-show-when="rec">${presetBtn("pro1", "1Pro")}${presetBtn("pro2", "2Pro")}${presetBtn("pro3", "3Pro")}${presetBtn("pro4", "4Pro")}</span>
         <span class="ml-auto flex items-center gap-1.5">
           <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" value="${hours}" data-custom-hours />
           <span class="text-xs text-muted">시간</span>

@@ -35,7 +35,7 @@
   `세션 종류` = `session_type`(녹음/믹싱/마스터링/기타). 추가·편집 폼에서 동일 의미(이전 라벨 혼동 정리).
 - 예약 폼=버튼 UX: 시작 시간 그리드(**운영시간 기반 동적 생성** — `studioStartSlots`가 `admin_state.studio_hours` 읽음; 예약된 슬롯 회색, **선택=테두리 강조**). 그리드 밖은 '직접입력' →
   **텍스트 직접입력**(HH:MM; 숫자만 입력하면 콜론 자동 삽입 `1425`→`14:25`, `pattern`+서버 `cleanTime` 검증). (이전의 '녹음 종류 미선택 시 시작 시간 비활성' 필수 게이트는 세션 종류 가변화로 **미사용** — 대신 세션 종류=녹음일 때만 녹음 단가 항목 select 노출로 대체. `rateSelectGrouped`의 `required`/`data-rate-required` 인터페이스 보존.)
-- 소요시간 **슬라이더**(30분 단위·최대 12시간) + 아래 `[1Pro][2Pro][직접입력]` 프리셋(슬라이더와 양방향 동기화). 종료는 서버가 시작+길이로 계산(`custom_hours`+`duration_mode=custom`, 1Pro=녹음 종류 기준시간).
+- 소요시간 **슬라이더**(30분 단위·최대 14시간=4Pro) + 아래 `[1Pro][2Pro][3Pro][4Pro][직접입력]` 프리셋(슬라이더와 양방향 동기화). 종료는 서버가 시작+길이로 계산(`custom_hours`+`duration_mode=custom`, 1Pro=녹음 종류 기준시간).
   폼 인터랙션은 `public/js/app.js`(CSP: 인라인 0).
 - **다중 룸**: `rooms` 테이블 + `sessions.room_id`. 세션 폼에 룸 select(**첫 룸=A룸 기본 선택, '룸 미지정'은 맨 아래 옵션**). 겹침 검사를 `IFNULL(room_id,0)`으로 룸별 판정 — **같은 룸만 충돌, 다른 룸은 동시간 병렬 허용**(레거시 NULL끼리는 가상 룸 0으로 처리). 룸 CRUD는 `/settings` 환경설정 탭(`POST /settings/rooms`, `/:id/delete`). 기본 '메인 룸' 1회 시드.
 - **겹침 차단**: **앱 DB 룸별 겹침이 정식 차단**(409) — **모든 세션 종류(녹음·믹싱·마스터링·기타)가 룸을 점유**(같은 룸·같은 시간 더블부킹 방지, `findSessionConflict`/`busySessionSlots` session_type 무관). 구글 FreeBusy 하드차단은 **비활성화** — 단일 캘린더로는 룸 구분 불가(캘린더 일정 자동 생성/수정/삭제 동기화는 유지).
@@ -197,8 +197,10 @@
 - `project_service_items(key UNIQUE, label, active, created_at)` — 레거시(구 services JSON 라벨 호환). **관리 UI·시드 폐기**(작업 종류 카탈로그가 대체), 테이블만 잔존.
 - `rate_items(name, category[스튜디오 녹음|로케이션 녹음], base_minutes, base_price, extra_minutes, extra_price, active)` —
   **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 세션 폼의 '녹음 종류'에 분류별 optgroup으로
-  묶여 표시된다. 기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
-  (`base_minutes=0`이면 정액). `computeRatePrice(item, minutes)`가 산정. 관리 메뉴에서 치프가 CRUD.
+  묶여 표시된다. **기준시간(1Pro)마다 묶어서 과금** — 완전한 Pro 블록은 각각 `base_price`, 마지막 1Pro 미만
+  자투리만 `extra_minutes` 단위 올림으로 `extra_price`(`base_minutes=0`이면 정액). 예) 1Pro=210분·30만/초과 60분·10만
+  → 630분(3Pro)=90만·240분(1Pro+30분)=40만. `computeRatePrice(item, minutes)`가 산정(2026-07-01 수정: 이전엔 1Pro
+  초과분 전부를 시간당 추가요금으로 매겨 3Pro가 100만이 되던 버그). 관리 메뉴에서 치프가 CRUD.
 - `project_tracks(project_id→projects CASCADE, title, artist?, content_type[Music|Video_Post], created_at)` —
   프로젝트 하위 곡·콘텐츠. **`artist`=곡별 아티스트**(한 프로젝트에 여러 아티스트 가능 — 곡·콘텐츠 추가/수정 폼에서 입력, 미입력 시 프로젝트 아티스트; 트랙 헤더에 표시). `content_type` 상수·정규화(`config.js`)는 있으나 **현재 UI 미노출 → 전부 Music**, 영상 구분은 향후 확장용.
 - `track_tasks(track_id→project_tracks CASCADE, task_type, billing_type[Time_Charge|Fixed_Per_Track],
