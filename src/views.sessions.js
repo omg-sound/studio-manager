@@ -304,7 +304,14 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
         <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
       </div>
       <div class="space-y-2">${list}</div>
-      ${isAdmin ? `<div class="border-t border-border pt-3"><div class="mb-2 text-sm font-medium text-muted">새 세션 추가</div>${sessionCreateForm(project, managers, rateItems, roomList, defaultBooker)}</div>` : ""}
+      ${isAdmin
+        ? rows.length
+          ? `<details class="group border-t border-border pt-3">
+               <summary class="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">${detailsChevron()} 새 세션 추가</summary>
+               <div class="mt-2">${sessionCreateForm(project, managers, rateItems, roomList, defaultBooker)}</div>
+             </details>`
+          : `<div class="border-t border-border pt-3"><div class="mb-2 text-sm font-medium text-muted">새 세션 추가</div>${sessionCreateForm(project, managers, rateItems, roomList, defaultBooker)}</div>`
+        : ""}
     </section>`;
 }
 

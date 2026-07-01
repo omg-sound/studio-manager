@@ -918,7 +918,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         ${clientCombo(project.client_id)}
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
-      <div class="rounded-lg border border-border bg-surface px-3">${taskList}${sessionList}</div>
+      <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>
       ${hasPending ? `<p class="mt-1.5 text-xs text-muted">미완료(대기·진행중) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.</p>` : ""}
       <div class="mt-3 space-y-2">
         <div>

@@ -27,9 +27,10 @@ const calendar = require("../calendar");
 
 const router = express.Router();
 
-/** 세션+프로젝트 → 구글 캘린더 일정 입력(제목=제작사·아티스트, 장소=관리 기본값). */
+/** 세션+프로젝트 → 구글 캘린더 일정 입력(제목=제작사·아티스트, 제작사 없으면 레이블(소속사)·아티스트, 장소=관리 기본값). */
 function eventInputForSession(session, project) {
-  const title = [project.production_company, project.artist].filter(Boolean).join(" · ") || project.title || "스튜디오 세션";
+  const company = project.production_company || project.artist_company; // 제작사 우선, 없으면 레이블(레이블 자체 제작분)
+  const title = [company, project.artist].filter(Boolean).join(" · ") || project.title || "스튜디오 세션";
   const description = [
     session.session_type ? `종류: ${session.session_type}` : "",
     session.booker_name ? `예약: ${session.booker_name}` : "",
