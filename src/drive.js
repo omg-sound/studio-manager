@@ -54,18 +54,28 @@ const STATE_ROOT_FOLDER = STATE_FOLDER_PREFIX + "root";
 const STATE_ROOT_RENAMED = "drive_root_renamed_omg_v1"; // 루트 폴더명 1회 변경 게이트(구 'OMG Studios Deliverables' → omg-studios-manager)
 const ROOT_FOLDER_NAME = "omg-studios-manager";
 
-/** 루트 폴더(omg-studios-manager)를 lazy 생성·캐시. 기존 폴더가 있으면 재사용(이름이 바뀌었으면 1회 rename). */
+/** 캐시된 폴더 id가 실재하고 휴지통이 아니면 true. 조회 실패(404 등)·휴지통이면 false. */
+async function folderAlive(drive, id) {
+  try {
+    const { data } = await drive.files.get({ fileId: id, fields: "id,trashed" });
+    return !data.trashed;
+  } catch (_e) {
+    return false;
+  }
+}
+
+/** 루트 폴더(omg-studios-manager)를 lazy 생성·캐시. 캐시가 삭제/휴지통이면 무효화 후 재생성(고아 캐시로 업로드가 무한 실패/유실되던 것 방지). */
 async function ensureFolder() {
   const drive = driveClient();
   const cached = getState(STATE_ROOT_FOLDER);
-  if (cached) {
+  if (cached && (await folderAlive(drive, cached))) {
     if (!getState(STATE_ROOT_RENAMED)) {
-      // 기존 루트를 새 이름으로 1회 변경(파일·하위폴더 그대로 유지, ID 불변). 실패해도 업로드 비차단.
       try { await drive.files.update({ fileId: cached, requestBody: { name: ROOT_FOLDER_NAME } }); } catch (_e) {}
       setState(STATE_ROOT_RENAMED, "done");
     }
     return cached;
   }
+  if (cached) setState(STATE_ROOT_FOLDER, null); // 무효(삭제/휴지통) 캐시 폐기
   const { data } = await drive.files.create({
     requestBody: { name: ROOT_FOLDER_NAME, mimeType: "application/vnd.google-apps.folder" },
     fields: "id",
@@ -75,12 +85,12 @@ async function ensureFolder() {
   return data.id;
 }
 
-/** 루트 아래 하위 폴더(이름별)를 lazy 생성·캐시. 반환 folder id. */
+/** 루트 아래 하위 폴더(이름별)를 lazy 생성·캐시. 캐시가 삭제/휴지통이면 재생성(자가치유). 반환 folder id. */
 async function ensureSubfolder(name) {
   const key = STATE_FOLDER_PREFIX + "sub_" + name;
-  const cached = getState(key);
-  if (cached) return cached;
   const drive = driveClient();
+  const cached = getState(key);
+  if (cached && (await folderAlive(drive, cached))) return cached;
   const root = await ensureFolder();
   const { data } = await drive.files.create({
     requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [root] },
@@ -107,6 +117,7 @@ async function streamFile(fileId, res) {
   const drive = driveClient();
   const resp = await drive.files.get({ fileId, alt: "media" }, { responseType: "stream" });
   await new Promise((resolve, reject) => {
+    res.on("close", () => { try { resp.data.destroy(); } catch (_e) {} }); // 클라이언트 중단 시 업스트림 파괴(FD/소켓 누수 방지) — 로컬 스트림과 동일
     resp.data.on("end", resolve).on("error", reject).pipe(res);
   });
 }

@@ -57,11 +57,18 @@ function backupDatabase({ keep = KEEP_BACKUPS } = {}) {
  * 로컬 저장 백엔드의 실제 파일 바이트는 DB 백업에 안 들어가므로 별도 스냅샷(우발적 삭제·교체 복구용).
  * Drive 저장분은 Drive 자체가 원본이라 로컬 폴더가 비어 있으면 skip. keep개(일)만 보존.
  */
-function backupUploads({ keep = KEEP_BACKUPS } = {}) {
+const KEEP_UPLOAD_SNAPSHOTS = 3; // 첨부 스냅샷은 소수만 보존(디스크 보호). DB 백업은 14일 유지.
+const MAX_UPLOADS_SNAPSHOT_BYTES = 300 * 1024 * 1024; // 업로드 합계가 이보다 크면 스냅샷 생략(1GB 디스크 포화→DB 백업 실패 연쇄 방지)
+
+function backupUploads({ keep = KEEP_UPLOAD_SNAPSHOTS } = {}) {
   const src = config.uploadsDir;
   if (!fs.existsSync(src)) return { skipped: true, reason: "no-uploads-dir" };
   const files = fs.readdirSync(src).filter((f) => fs.statSync(path.join(src, f)).isFile());
   if (!files.length) return { skipped: true, reason: "empty" };
+  let sizeBytes = 0;
+  for (const f of files) { try { sizeBytes += fs.statSync(path.join(src, f)).size; } catch (_e) {} }
+  // 대용량(예: 200MB 자료 파일 다수)이면 14벌 대신 스냅샷 자체를 생략 — 디스크를 지켜 DB 백업(내구성 핵심)을 보호.
+  if (sizeBytes > MAX_UPLOADS_SNAPSHOT_BYTES) return { skipped: true, reason: "too-large", sizeBytes, fileCount: files.length };
   const dir = backupDir();
   fs.mkdirSync(dir, { recursive: true });
   const stamp = todayYmd();
@@ -69,8 +76,6 @@ function backupUploads({ keep = KEEP_BACKUPS } = {}) {
   fs.rmSync(dest, { recursive: true, force: true }); // 같은 날 재실행 시 최신본으로 갱신
   fs.cpSync(src, dest, { recursive: true });
   const pruned = pruneOldUploadSnapshots(dir, keep);
-  let sizeBytes = 0;
-  for (const f of files) { try { sizeBytes += fs.statSync(path.join(src, f)).size; } catch (_e) {} }
   return { dest, fileCount: files.length, sizeBytes, pruned };
 }
 

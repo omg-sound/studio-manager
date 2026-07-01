@@ -157,7 +157,8 @@ function buildSvg({ studio, client, invoice, items, logo, docType }) {
     sy += 44;
     return r;
   };
-  if (discountAmt > 0) {
+  if (discountAmt > 0 && lineTotal > 0) {
+    // 라인아이템이 있는 청구(from-tasks)에서만 할인 레이아웃 — 수동 인보이스(lineTotal=0, 할인은 표시용)는 소계/VAT/합계로 폴백해 과세표준·VAT·합계 불일치 방지.
     const taxable = supply - discountAmt;
     svg += sumRow("소계(공급가)", won(supply));
     svg += sumRow("할인", "- " + won(discountAmt), false, "#16a34a");

@@ -23,8 +23,7 @@ const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
 
-// 모든 클라이언트 라우트는 치프 전용
-router.use(requireEditor); // 목록·상세·편집·첨부 서류 모두 편집자(치프·스태프). 매출만 별도 제한(revenue).
+router.use(requireEditor); // 클라이언트 전 라우트(목록·상세·편집·첨부 서류) 편집자(치프·스태프). 매출만 별도 제한(revenue).
 
 // 첨부 서류 업로드: 디스크 스토리지(메모리 금지 — OOM 방지, 플레이북 §3-2), 10MB 제한
 const upload = multer({
@@ -495,7 +494,7 @@ function linkClientContact(clientId, body) {
   if (!contactId) {
     const name = String(body.contact_name || "").trim();
     if (!name) return;
-    contactId = createContact({ name });
+    contactId = resolveContactByName(name); // 이름으로 기존 연락처 재사용 후 없으면 생성 — 자동저장 blur마다 중복 생성되던 것 방지
   }
   if (!contactId) return;
   const already = db()

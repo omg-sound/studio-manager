@@ -126,11 +126,11 @@ app.use("/projects", projectRoutes); // requireAuth(열람) — 내부 도구: �
 app.use("/", deliverableRoutes); // /deliverables, /projects/:pid/deliverables, 공개 /d/:token
 app.use("/invoices", invoiceRoutes); // requireInvoice (치프/대표)
 app.use("/", sessionRoutes); // /sessions (일정) + 세션 CRUD
-app.use("/clients", clientRoutes); // requireEditor(목록·상세·기본편집=치프·스태프), 첨부 서류만 requireChief
+app.use("/clients", clientRoutes); // requireEditor(목록·상세·편집·첨부 서류 모두 치프·스태프)
 app.use("/contacts", contactRoutes); // requireEditor (클라이언트 측 담당자 마스터 + 소속 이력)
-app.use("/workers", workerRoutes); // requireChief (외주 작업자 + 정산)
-app.use("/revenue", revenueRoutes); // requireInvoice (담당 엔지니어별 매출, 대표·치프)
-app.use("/settings", settingsRoutes); // requireChief
+app.use("/workers", workerRoutes); // requireEditor (외주 작업자 열람·마스터·정산 모두 치프·스태프)
+app.use("/revenue", revenueRoutes); // requireInvoice (담당 엔지니어별 매출, 대표·치프 — 스태프 제외)
+app.use("/settings", settingsRoutes); // requireEditor(환경설정·컨텐츠=치프·스태프), 로그인 계정 관리(/users*)만 requireChief
 
 // 정적 자산(css/js)만 — 보호 대상 HTML은 여기 없음
 app.use(

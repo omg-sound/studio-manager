@@ -61,7 +61,7 @@
   "use strict";
   document.addEventListener("change", function (e) {
     var field = e.target.closest && e.target.closest("[data-autosubmit]");
-    if (field && field.form) field.form.submit();
+    if (field && field.form) { if (field.form.requestSubmit) field.form.requestSubmit(); else field.form.submit(); } // requestSubmit: submit 이벤트 발화(콤마정리·드래프트 핸들러 동작)
   });
 
   document.addEventListener("click", function (e) {
@@ -324,6 +324,7 @@
   // 제출 직전 콤마 제거(capture 단계에서 먼저 정리; 서버 parseWon도 방어하지만 amount 등 안전).
   document.addEventListener("submit", function (e) {
     if (!e.target || !e.target.querySelectorAll) return;
+    if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return; // 미리보기 PDF(새 탭) 제출은 현재 폼값을 건드리지 않음(콤마 유지)
     Array.prototype.forEach.call(e.target.querySelectorAll("input"), function (el) {
       if (isMoney(el)) el.value = String(el.value).replace(/[^\d]/g, "");
     });
@@ -457,6 +458,7 @@
   }
   // 3) 제출: 0원 항목 확인 → 통과 시 드래프트 정리
   form.addEventListener("submit", function (e) {
+    if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return; // 미리보기 PDF 제출은 드래프트·확인 건너뜀(청구 생성만 정리)
     var hasZero = false;
     Array.prototype.forEach.call(form.querySelectorAll('input[type="checkbox"][data-line-amount]'), function (cb) {
       if (cb.checked && !(lineVal(cb) > 0)) hasZero = true;

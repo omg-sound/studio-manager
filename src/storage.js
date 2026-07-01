@@ -33,8 +33,13 @@ function activeBackend() {
  */
 async function put({ filePath, name, mimeType, folder }) {
   if (drive.isLinked()) {
-    const fileId = await drive.uploadFile({ filePath, name, mimeType, folder }); // folder=하위 폴더명(사업자등록증·통장사본·deliverables). 미지정 시 루트.
-    return { backend: "drive", fileId };
+    try {
+      const fileId = await drive.uploadFile({ filePath, name, mimeType, folder }); // folder=하위 폴더명(사업자등록증·통장사본·deliverables). 미지정 시 루트.
+      return { backend: "drive", fileId };
+    } catch (e) {
+      // Drive 오류(토큰 만료·API 비활성·폴더 삭제 등) 시 파일 유실 방지 — 로컬로 폴백(추후 '로컬→Drive 이관'으로 재이관 가능).
+      console.error("[storage.put] Drive 업로드 실패 → 로컬 폴백:", (e && e.message) || e);
+    }
   }
   // 로컬: 랜덤 id로 이동(원본 파일명은 DB에 별도 보관)
   const id = crypto.randomBytes(16).toString("hex");

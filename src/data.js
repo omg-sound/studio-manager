@@ -157,7 +157,7 @@ function ensureClientFromContact(contactId) {
   if (!c || !String(c.name || "").trim()) return null;
   const existing = db().prepare("SELECT id FROM clients WHERE source_contact_id = ? AND kind = '기타'").get(id); // 아티스트 링크와 분리(kind별)
   if (existing) {
-    db().prepare("UPDATE clients SET phone = ?, email = ? WHERE id = ?").run(c.phone || null, c.email || null, existing.id); // 재사용 시 연락처의 최신 전화·이메일 반영
+    db().prepare("UPDATE clients SET name = ?, phone = ?, email = ? WHERE id = ?").run(c.name, c.phone || null, c.email || null, existing.id); // 재사용 시 연락처의 최신 이름·전화·이메일 반영(리네임 반영)
     return existing.id;
   }
   const info = db()
@@ -211,7 +211,8 @@ function listArtistsForAgency(companyId) {
 function resolveCompanyByName(name) {
   const n = String(name || "").trim();
   if (!n) return null;
-  const ex = db().prepare("SELECT id FROM clients WHERE name = ? AND kind <> '아티스트' ORDER BY id LIMIT 1").get(n);
+  // 실제 업체(소속사/제작사)만 매칭 — '기타' 담당자 셸 클라이언트(ensureClientFromContact 생성)에 잘못 연결되지 않게.
+  const ex = db().prepare("SELECT id FROM clients WHERE name = ? AND kind IN ('소속사/레이블','제작사') ORDER BY id LIMIT 1").get(n);
   return ex ? ex.id : null;
 }
 
@@ -956,10 +957,10 @@ function updateTask(user, taskId, input = {}) {
   const task = getTaskForUser(user, taskId);
   if (!task) return null;
   if (task.is_invoiced) throw new Error("TASK_LOCKED");
-  // 금액은 청구 탭에서 확정 — 곡·콘텐츠 탭엔 금액 칸 없음. 수정 시 종류 기본단가 자동 적용(입력값 있으면 우선).
+  // 금액은 청구 탭에서 확정 — 곡·콘텐츠 탭엔 금액 칸 없음. 입력값 있으면 우선, 없으면 확정 금액(total_price>0) 보존, 그것도 0이면 종류 기본단가.
   const taskType = normalizeTaskTypeDb(input.task_type);
   const hasPrice = input.unit_price != null && String(input.unit_price).trim() !== "";
-  const unitPrice = hasPrice ? parseWon(input.unit_price) : taskTypeUnitPrice(taskType);
+  const unitPrice = hasPrice ? parseWon(input.unit_price) : (task.total_price > 0 ? task.total_price : taskTypeUnitPrice(taskType)); // 자동저장(상태·담당만 변경) 시 확정 금액 리셋 방지
   const eng = resolveTaskEngineer(input);
   db()
     .prepare(
@@ -1581,18 +1582,19 @@ function busySessionSlots(date, slots, { excludeId = null, room } = {}) {
   }
   const rows = db()
     .prepare(
-      `SELECT start_time, end_time FROM sessions
-       WHERE session_date = @date AND status <> '취소'
+      `SELECT session_date, start_time, end_time FROM sessions
+       WHERE session_date IN (date(@date, '-1 day'), @date, date(@date, '+1 day')) AND status <> '취소'
          AND start_time IS NOT NULL AND end_time IS NOT NULL AND id <> @excludeId ${roomClause}`
     )
     .all(params);
   const ranges = rows
     .map((r) => {
+      const off = dayOffsetMin(r.session_date, date); // 야간 세션이 인접일로 넘어가므로 절대 분축으로 정규화
       const s = timeToMin(r.start_time);
       let e = timeToMin(r.end_time);
       if (s == null || e == null) return null;
       if (e <= s) e += 1440;
-      return [s, e];
+      return [s + off, e + off];
     })
     .filter(Boolean);
   if (!ranges.length) return [];
@@ -1617,29 +1619,39 @@ function sessionRateAmount(session) {
  * 시간(시작·종료)이 둘 다 있어야 검사한다(미정이면 null). 반열린구간[start,end) 겹침 + 야간(자정 넘김) 처리.
  * room 비교는 IFNULL(room_id,0) — 레거시/미지정(NULL)끼리는 같은 가상룸으로 충돌, 다른 룸이면 병렬 허용.
  */
+/** 두 'YYYY-MM-DD' 날짜 차이를 분(minute)으로. 기준일 자정 대비 오프셋(예: 전날=-1440, 다음날=+1440). 무효 시 0. */
+function dayOffsetMin(rowDate, baseDate) {
+  const a = Date.parse(rowDate + "T00:00:00Z"), b = Date.parse(baseDate + "T00:00:00Z");
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.round((a - b) / 86400000) * 1440;
+}
+
 function findSessionConflict({ date, start, end, excludeId = null, room = null }) {
   const s = timeToMin(start);
   let e = timeToMin(end);
   if (!isValidYmd(date) || s == null || e == null) return null;
-  if (e <= s) e += 1440; // end<=start면 야간(자정 넘김)
+  if (e <= s) e += 1440; // end<=start면 야간(자정 넘김) — 최대 12시간이라 다음날 아침까지만 넘어감
   const roomKey = Number(room) || 0;
+  // 전날 야간분이 오늘 아침으로, 오늘 야간분이 다음날 아침으로 넘어갈 수 있으므로 D-1·D·D+1을 함께 조회해 절대 분축으로 비교.
   const rows = db()
     .prepare(
       `SELECT s.*, p.title AS project_title, rm.name AS room_name FROM sessions s
        JOIN projects p ON p.id = s.project_id
        LEFT JOIN rooms rm ON rm.id = s.room_id
-       WHERE s.session_date = ? AND s.status <> '취소'
+       WHERE s.session_date IN (date(?, '-1 day'), ?, date(?, '+1 day')) AND s.status <> '취소'
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
          AND IFNULL(s.room_id, 0) = ?
          AND s.id <> ?
-       ORDER BY s.start_time`
+       ORDER BY s.session_date, s.start_time`
     )
-    .all(date, roomKey, excludeId == null ? -1 : excludeId);
+    .all(date, date, date, roomKey, excludeId == null ? -1 : excludeId);
   for (const r of rows) {
-    const bs = timeToMin(r.start_time);
+    const off = dayOffsetMin(r.session_date, date); // 그 세션이 속한 날의 기준일 대비 오프셋(-1440|0|+1440)
+    let bs = timeToMin(r.start_time);
     let be = timeToMin(r.end_time);
     if (bs == null || be == null) continue;
     if (be <= bs) be += 1440;
+    bs += off; be += off; // 기준일 자정 절대축으로 이동
     if (s < be && bs < e) return r; // 겹침
   }
   return null;

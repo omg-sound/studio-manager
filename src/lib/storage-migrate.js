@@ -27,12 +27,15 @@ function localFileCount() { return fileCountByBackend("local"); }
 /** Drive 저장 파일 수. */
 function driveFileCount() { return fileCountByBackend("drive"); }
 
+const KIND_FOLDER = { biz_license: "사업자등록증", bankbook: "통장사본" }; // client_files kind → Drive 하위 폴더명(새 업로드와 일치)
+
 async function migrateLocalFilesToDrive() {
   if (!drive.isLinked()) return { ok: false, error: "DRIVE_NOT_LINKED" };
   const rows = [];
   for (const t of LOCAL_TABLES) {
     try {
-      db().prepare(`SELECT id, file_id, file_name, mime_type FROM ${t} WHERE storage_backend='local'`).all().forEach((r) => rows.push({ ...r, tbl: t }));
+      const cols = t === "client_files" ? "id, file_id, file_name, mime_type, kind" : "id, file_id, file_name, mime_type";
+      db().prepare(`SELECT ${cols} FROM ${t} WHERE storage_backend='local'`).all().forEach((r) => rows.push({ ...r, tbl: t }));
     } catch (_e) { /* 테이블 없으면 skip */ }
   }
   let migrated = 0;
@@ -41,7 +44,8 @@ async function migrateLocalFilesToDrive() {
     const local = storage.localPath(r.file_id);
     try {
       if (!fs.existsSync(local)) { failed.push({ id: r.id, tbl: r.tbl, reason: "missing-local" }); continue; }
-      const driveId = await drive.uploadFile({ filePath: local, name: r.file_name || r.file_id, mimeType: r.mime_type || "application/octet-stream" });
+      const folder = r.tbl === "deliverables" ? "deliverables" : (KIND_FOLDER[r.kind] || null); // 새 업로드와 같은 하위 폴더로 이관
+      const driveId = await drive.uploadFile({ filePath: local, name: r.file_name || r.file_id, mimeType: r.mime_type || "application/octet-stream", folder });
       db().prepare(`UPDATE ${r.tbl} SET storage_backend='drive', file_id=? WHERE id=?`).run(driveId, r.id);
       try { fs.unlinkSync(local); } catch (_e) { /* 로컬 삭제 실패는 비치명적(중복 보관) */ }
       migrated++;

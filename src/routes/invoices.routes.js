@@ -192,6 +192,11 @@ router.post("/", requireBilling, (req, res) => {
       memo: String(b.memo || "").trim() || null,
     });
   const id = info.lastInsertRowid;
+  // 수동 인보이스가 발행 상태로 생성되면 채번 보장 + 발행 알림(from-tasks·상태전이 경로와 일원화). 미발행이면 스킵.
+  if (status === "발행" || taxStatus === "계산서 발행" || taxStatus === "입금완료") {
+    ensureInvoiceNumber(db().prepare("SELECT * FROM invoices WHERE id = ?").get(id));
+    notifyInvoiceIssued(getInvoiceForUser(req.user, id));
+  }
   res.redirect(returnTo(req, `/invoices/${id}`, "created", { open: id }));
 });
 
@@ -367,8 +372,9 @@ router.post("/:id/tax-status", requireBilling, (req, res) => {
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tax = normalizeTaxStatus(req.body.tax_status);
   let paid = inv.paid_amount;
-  if (tax === "입금완료") paid = inv.amount;            // 입금완료 선택 → 완납(입금액=총액)
-  else if (inv.tax_status === "입금완료") paid = 0;      // 입금완료에서 벗어남 → 완납 취소(입금액 0)
+  if (tax === "입금완료") paid = inv.amount; // 입금완료 선택 → 완납(입금액=총액)
+  // 입금완료에서 다른 계산서 상태로 옮겨도 입금액은 보존한다(문서 단계 변경이 실제 입금 기록을 지우면 안 됨).
+  // 완납 취소가 필요하면 '입금 처리'의 입력액 0/완납 취소로 명시 조정한다.
   const d = db();
   d.exec("BEGIN IMMEDIATE");
   try {

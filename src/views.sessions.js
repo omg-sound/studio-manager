@@ -144,7 +144,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
        <p class="mt-1 text-xs text-muted">청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)</p>`;
   // 담당 디렉터 — 다대다(여러 명). 각 행이 contactCombo(data-contact-combo, app.js 위임 처리). '디렉터 추가'로 행 복제(template).
   const allContacts = contactOptions();
-  const dlId = "dl-session-directors";
+  const dlId = "dl-session-directors-" + (s && s.id ? s.id : "new"); // 폼별 유니크 — 한 페이지에 여러 세션 편집 폼이 있어도 datalist id 중복 방지
   const dirRow = (d) => `
         <div class="mt-1 flex items-center gap-2" data-contact-combo data-director-row>
           <input type="hidden" name="director_contact_id" value="${d ? d.id : ""}" data-contact-id />
