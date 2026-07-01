@@ -52,6 +52,38 @@ function backupDatabase({ keep = KEEP_BACKUPS } = {}) {
   return { file, sizeBytes, pruned };
 }
 
+/**
+ * 첨부 파일(uploads) 폴더를 날짜별 스냅샷으로 백업(DB와 같은 백업 디렉터리에 uploads-YYYY-MM-DD/).
+ * 로컬 저장 백엔드의 실제 파일 바이트는 DB 백업에 안 들어가므로 별도 스냅샷(우발적 삭제·교체 복구용).
+ * Drive 저장분은 Drive 자체가 원본이라 로컬 폴더가 비어 있으면 skip. keep개(일)만 보존.
+ */
+function backupUploads({ keep = KEEP_BACKUPS } = {}) {
+  const src = config.uploadsDir;
+  if (!fs.existsSync(src)) return { skipped: true, reason: "no-uploads-dir" };
+  const files = fs.readdirSync(src).filter((f) => fs.statSync(path.join(src, f)).isFile());
+  if (!files.length) return { skipped: true, reason: "empty" };
+  const dir = backupDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = todayYmd();
+  const dest = path.join(dir, `uploads-${stamp}`);
+  fs.rmSync(dest, { recursive: true, force: true }); // 같은 날 재실행 시 최신본으로 갱신
+  fs.cpSync(src, dest, { recursive: true });
+  const pruned = pruneOldUploadSnapshots(dir, keep);
+  let sizeBytes = 0;
+  for (const f of files) { try { sizeBytes += fs.statSync(path.join(src, f)).size; } catch (_e) {} }
+  return { dest, fileCount: files.length, sizeBytes, pruned };
+}
+
+/** uploads-YYYY-MM-DD 스냅샷 디렉터리를 사전식 정렬해 최근 keep개만 남기고 제거. */
+function pruneOldUploadSnapshots(dir, keep) {
+  let names;
+  try { names = fs.readdirSync(dir); } catch (_e) { return []; }
+  const all = names.filter((f) => /^uploads-\d{4}-\d{2}-\d{2}$/.test(f)).sort();
+  const remove = all.slice(0, Math.max(0, all.length - keep));
+  for (const f of remove) { try { fs.rmSync(path.join(dir, f), { recursive: true, force: true }); } catch (_e) {} }
+  return remove;
+}
+
 /** app-YYYY-MM-DD.db 파일명을 사전식(=시간순) 정렬해 최근 keep개만 남기고 오래된 것 제거. */
 function pruneOldBackups(dir, keep) {
   let names;
@@ -86,6 +118,14 @@ function runDailyMaintenance(opts = {}) {
   } catch (e) {
     backupError = e && e.message ? e.message : String(e);
   }
+  // 첨부 파일 스냅샷(DB 백업과 별개·격리). 실패해도 DB 백업/연체엔 영향 없음.
+  let uploadsBackup = null;
+  let uploadsBackupError = null;
+  try {
+    uploadsBackup = backupUploads(opts);
+  } catch (e) {
+    uploadsBackupError = e && e.message ? e.message : String(e);
+  }
   let overdue = null;
   let overdueError = null;
   try {
@@ -105,14 +145,16 @@ function runDailyMaintenance(opts = {}) {
       })),
     });
   }
-  return { ok: !backupError, ranAt, backup, backupError, overdue, overdueError };
+  return { ok: !backupError, ranAt, backup, backupError, uploadsBackup, uploadsBackupError, overdue, overdueError };
 }
 
 module.exports = {
   runDailyMaintenance,
   overdueSummary,
   backupDatabase,
+  backupUploads,
   pruneOldBackups,
+  pruneOldUploadSnapshots,
   backupDir,
   KEEP_BACKUPS,
 };
