@@ -175,7 +175,7 @@
 - `users(email, role[owner|chief|staff], name, google_sub?, active, client_id?[레거시], password_hash?[레거시])` —
   `active=0`이면 로그인 차단(화이트리스트 제거). 마이그레이션에서 기존 `admin`→`chief` 자동 승계.
   `password_hash`/`client_id`는 구 모델 잔재 컬럼(미사용). **`name`은 기존값 보존**(치프가 `/settings`에서 수정한 한글 이름이 Google 프로필 영문 이름에 매 로그인 덮어쓰이지 않게; `users.name` 빈 경우만 Google 이름). 이름 수정 시 `project_managers.name`·`track_tasks.engineer_name`(작업 스냅샷)도 동기화.
-- `clients(name, kind[아티스트|소속사/레이블|제작사|기타], phone?, email?[세금계산서 발행 이메일], memo?, biz_no?, owner_name?, owner_contact_id?[대표자↔연락처 양방향 연동], address?, cash_receipt_no?[개인/아티스트 현금영수증 — 사업자등록증 없는 경우], group_name?[소속그룹·아티스트], agency_name?[소속사·아티스트, 소속그룹과 별개], source_contact_id?[담당자→청구처('기타')·아티스트명→아티스트 클라이언트 변환 출처 contact, 동명이인 분리])` —
+- `clients(name, kind[아티스트|소속사/레이블|제작사|기타], phone?, email?[세금계산서 발행 이메일], memo?, biz_no?, owner_name?, owner_contact_id?[대표자↔연락처 양방향 연동], address?, cash_receipt_no?[개인/아티스트 현금영수증 — 사업자등록증 없는 경우], group_name?[소속그룹·아티스트], agency_name?[소속사·아티스트 텍스트], agency_client_id?[아티스트→소속 업체 클라이언트 링크·업체 상세 소속 아티스트], roles?[업체 역할 다중 CSV: 소속사·제작사 겸업], source_contact_id?[담당자→청구처('기타')·아티스트명→아티스트 클라이언트 변환 출처 contact, 동명이인 분리])` —
   UI상 **클라이언트**(통칭). 프로젝트의 아티스트·소속사/레이블·제작사가 저장 시 분류별로 자동 등록되고
   (`ensureClientsFromProject`), 그중 하나가 인보이스의 **청구처(공급받는 자)** 역할로 선택된다(`client_id`, 청구 생성 폼에서 결정). 프로젝트의 `client_id`는 자동 파생 기본값.
   `biz_no`(사업자등록번호)·`owner_name`(대표자)·`address`(사업장 주소)는 세금계산서용 상세정보.

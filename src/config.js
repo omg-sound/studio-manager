@@ -108,6 +108,7 @@ const PROJECT_SERVICES = [
 // 단가표(녹음 종류) 분류 — 녹음 세션 폼에서 이 분류로 묶어 보여준다.
 const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
 const CLIENT_KINDS = ["아티스트", "소속사/레이블", "제작사", "기타"];
+const COMPANY_ROLES = ["소속사/레이블", "제작사"]; // 업체 역할 다중(겸업: 소속사가 제작도 함). CSV로 clients.roles에 저장
 const DELIVERABLE_KINDS = ["녹음본", "튠본", "믹스", "스템", "마스터", "레퍼런스", "기타"];
 // 청구서(bill) 발행 상태 — 계산서·입금 진행과 별개 축(2026-07-01 분리).
 const INVOICE_STATUSES = ["미발행", "발행"];
@@ -210,6 +211,7 @@ module.exports = {
   PROJECT_SERVICE_KEYS,
   PROJECT_SERVICE_LABELS,
   CLIENT_KINDS,
+  COMPANY_ROLES,
   DELIVERABLE_KINDS,
   INVOICE_STATUSES,
   INVOICE_STATUS_LABELS,

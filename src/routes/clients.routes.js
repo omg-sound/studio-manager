@@ -7,12 +7,13 @@ const express = require("express");
 const multer = require("multer");
 const { db } = require("../db");
 const { requireChief, requireEditor, isChief } = require("../auth");
-const { CLIENT_KINDS, normalizeClientKind } = require("../config");
+const { CLIENT_KINDS, COMPANY_ROLES, normalizeClientKind } = require("../config");
 const {
   listClients, clientKindCounts, getClient, getContact, listProjectsForClient,
   listInvoicesForClientEntity, listContactsForClient,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
   contactOptions, createContact, addAffiliation, listContacts, resolveContactByName, clientsWithOwnerContact,
+  listArtistsForAgency, resolveCompanyByName,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -68,6 +69,19 @@ function fileKindLabel(key) {
   return f ? f.label : key;
 }
 
+/** 폼에서 업체 역할(CSV) 추출: 아티스트면 null, 아니면 체크된 roles(유효값만) 또는 kind 폴백. */
+function companyRolesFrom(b, kind, artist) {
+  if (artist) return null;
+  const checked = [].concat(b.roles || []).filter((r) => COMPANY_ROLES.includes(r));
+  if (checked.length) return checked.join(",");
+  return COMPANY_ROLES.includes(kind) ? kind : null; // 체크 없으면 kind 폴백('기타'는 null)
+}
+/** 업체 역할 배열(roles CSV 우선, 없으면 kind 폴백). 배지 표시용. */
+function clientRoleList(c) {
+  const r = String(c.roles || "").split(",").map((x) => x.trim()).filter(Boolean);
+  return r.length ? r : (c.kind && c.kind !== "아티스트" ? [c.kind] : []);
+}
+
 // ── 목록(서브메뉴 = 업체/아티스트 우선 분리 + 업체 내 분류 · 이름 검색) ──
 router.get("/", (req, res) => {
   const COMPANY_KINDS = ["소속사/레이블", "제작사", "기타"]; // 업체 = 아티스트가 아닌 분류
@@ -78,7 +92,7 @@ router.get("/", (req, res) => {
 
   let rows = listClients({});
   if (group === "artist") rows = rows.filter((c) => c.kind === "아티스트");
-  else if (group === "company") rows = rows.filter((c) => c.kind !== "아티스트" && (!activeKind || c.kind === activeKind));
+  else if (group === "company") rows = rows.filter((c) => c.kind !== "아티스트" && (!activeKind || clientRoleList(c).includes(activeKind) || c.kind === activeKind)); // 겸업: 역할(roles)로 매칭
 
   const counts = clientKindCounts();
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -126,7 +140,8 @@ router.get("/", (req, res) => {
     ? listGroup({
         rows: displayed.map((c) => {
           const taxLine = [c.biz_no ? "사업자 " + esc(c.biz_no) : "", c.owner_name ? "대표 " + esc(c.owner_name) : ""].filter(Boolean).join(" · ");
-          const left = `<div class="flex items-center gap-2"><span class="badge-neutral">${esc(c.kind)}</span><span class="font-semibold">${esc(c.name)}</span></div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
+          const badges = c.kind === "아티스트" ? `<span class="badge-neutral">아티스트</span>` : (clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(r)}</span>`).join(" ") : `<span class="badge-neutral">${esc(c.kind)}</span>`);
+          const left = `<div class="flex items-center gap-2">${badges}<span class="font-semibold">${esc(c.name)}</span></div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
           const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
           return listRow({ href: `/clients/${c.id}`, left, right });
         }),
@@ -152,20 +167,23 @@ router.get("/", (req, res) => {
 
 // ── 새 클라이언트 ──
 router.get("/new", (req, res) => {
-  res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({})) }));
+  res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), listClients({}).filter((x) => x.kind !== "아티스트")) }));
 });
 
 router.post("/", (req, res) => {
   const b = req.body;
   const name = String(b.name || "").trim();
-  if (!name) return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({})) }));
+  if (!name) return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), listClients({}).filter((x) => x.kind !== "아티스트")) }));
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 사업자등록번호·대표자·주소가 없음
+  const roles = companyRolesFrom(b, kind, artist);
   const info = db()
-    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, owner_contact_id, address, cash_receipt_no, group_name, agency_name) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@owner_contact_id,@address,@cash_receipt_no,@group_name,@agency_name)")
+    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, owner_contact_id, address, cash_receipt_no, group_name, agency_name, roles, agency_client_id) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@owner_contact_id,@address,@cash_receipt_no,@group_name,@agency_name,@roles,@agency_client_id)")
     .run({
       name,
       kind,
+      roles,
+      agency_client_id: artist ? (String(b.agency_name || "").trim() ? resolveCompanyByName(b.agency_name) : null) : null, // 아티스트 소속 업체 링크
       phone: String(b.phone || "").trim() || null,
       email: String(b.email || "").trim().toLowerCase() || null,
       memo: String(b.memo || "").trim() || null,
@@ -187,7 +205,7 @@ router.get("/:id/edit", (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const files = listClientFiles(c.id);
   const fileErr = String(req.query.ferr || "").trim();
-  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, true, listContacts({})) }));
+  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, true, listContacts({}), listClients({}).filter((x) => x.kind !== "아티스트")) }));
 });
 
 router.post("/:id", (req, res) => {
@@ -200,16 +218,19 @@ router.post("/:id", (req, res) => {
   if (!name) {
     if (isFetch) return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     const files = listClientFiles(id);
-    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({})) }));
+    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({}), listClients({}).filter((x) => x.kind !== "아티스트")) }));
   }
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
+  const roles = companyRolesFrom(b, kind, artist);
   db()
-    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, owner_contact_id=@owner_contact_id, address=@address, cash_receipt_no=@cash_receipt_no, group_name=@group_name, agency_name=@agency_name WHERE id=@id")
+    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, owner_contact_id=@owner_contact_id, address=@address, cash_receipt_no=@cash_receipt_no, group_name=@group_name, agency_name=@agency_name, roles=@roles, agency_client_id=@agency_client_id WHERE id=@id")
     .run({
       id,
       name,
       kind,
+      roles,
+      agency_client_id: artist ? (String(b.agency_name || "").trim() ? resolveCompanyByName(b.agency_name) : null) : null, // 아티스트 소속 업체 링크
       phone: String(b.phone || "").trim() || null,
       email: String(b.email || "").trim().toLowerCase() || null,
       memo: String(b.memo || "").trim() || null,
@@ -355,6 +376,18 @@ router.get("/:id", (req, res) => {
       })
     : `<p class="text-sm text-muted">등록된 담당자 연락처가 없습니다.</p>`;
 
+  // 업체(비아티스트): 소속 아티스트 목록. 아티스트: 소속 업체 링크(양방향).
+  const roster = c.kind !== "아티스트" ? listArtistsForAgency(c.id) : [];
+  const rosterSection = c.kind !== "아티스트" && roster.length
+    ? `<div class="mb-4">
+        <h3 class="mb-2 text-sm font-medium text-muted">소속 아티스트</h3>
+        ${listGroup({ rows: roster.map((a) => listRow({ href: `/clients/${a.id}`, left: `<span class="font-medium">${esc(a.name)}</span>` })) })}
+      </div>`
+    : "";
+  const agencyLink = c.kind === "아티스트" && c.agency_client_id
+    ? `<div class="mb-4 text-sm"><span class="text-muted">소속사</span> <a href="/clients/${c.agency_client_id}" class="text-primary hover:underline">${esc((getClient(c.agency_client_id) || {}).name || c.agency_name || "업체")} ↗</a></div>`
+    : "";
+
   // 첨부 서류 열람 링크(있으면만 표시, 공개 URL 없음)
   const filesSection = files.length
     ? `<div class="mb-4">
@@ -370,10 +403,12 @@ router.get("/:id", (req, res) => {
     ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
     ${(() => { const lc = c.source_contact_id ? getContact(c.source_contact_id) : null; return lc ? `<div class="mb-4 text-sm"><span class="text-muted">연동 연락처</span> <a href="/contacts/${lc.id}" class="text-primary hover:underline">${esc(lc.name)} ↗</a></div>` : ""; })()}
     ${(() => { const oc = c.owner_contact_id ? getContact(c.owner_contact_id) : null; return oc ? `<div class="mb-4 text-sm"><span class="text-muted">대표자</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : (c.owner_name ? `<div class="mb-4 text-sm"><span class="text-muted">대표자</span> ${esc(c.owner_name)}</div>` : ""); })()}
+    ${agencyLink}
     <div class="mb-4">
       <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
       ${contactsSection}
     </div>
+    ${rosterSection}
     ${filesSection}
     ${tabBarHtml}
     ${content}`;
@@ -469,7 +504,7 @@ function linkClientContact(clientId, body) {
   if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = []) {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = []) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   const isArtist = (c.kind || CLIENT_KINDS[0]) === "아티스트"; // 개인 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
@@ -488,6 +523,12 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         </select>
       </div>
       <div data-client-tax class="space-y-4"${isArtist ? " hidden" : ""}>
+        <div>
+          <label class="label">역할 <span class="font-normal text-muted text-xs">(겸업 가능 — 복수 선택)</span></label>
+          <div class="flex flex-wrap gap-4">
+            ${COMPANY_ROLES.map((r) => `<label class="flex items-center gap-1.5 text-sm"><input type="checkbox" name="roles" value="${esc(r)}" ${clientRoleList(c).includes(r) ? "checked" : ""} /> ${esc(r)}</label>`).join("")}
+          </div>
+        </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
           <div><label class="label">대표자 <span class="font-normal text-muted text-xs">(연락처 연동)</span></label>
@@ -504,8 +545,9 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
             <input class="input" name="group_name" value="${esc(c.group_name || "")}" placeholder="예: 소속 그룹·팀명" />
           </div>
           <div>
-            <label class="label">소속사 <span class="font-normal text-muted text-xs">(소속사·레이블 — 있으면)</span></label>
-            <input class="input" name="agency_name" value="${esc(c.agency_name || "")}" placeholder="예: 소속사·레이블명" />
+            <label class="label">소속사 <span class="font-normal text-muted text-xs">(소속사·레이블 — 업체와 연동)</span></label>
+            <input class="input" name="agency_name" value="${esc(c.agency_name || "")}" list="client-agency-companies" autocomplete="off" placeholder="예: 소속사·레이블명 · 업체 선택" />
+            <datalist id="client-agency-companies">${companies.map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
           </div>
         </div>
         <div>

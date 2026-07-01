@@ -202,6 +202,19 @@ function clientsWithOwnerContact(contactId) {
   return db().prepare("SELECT id, name, kind FROM clients WHERE owner_contact_id = ? ORDER BY name").all(Number(contactId));
 }
 
+/** 업체(소속사·제작사)에 소속된 아티스트 클라이언트 목록(업체 상세 '소속 아티스트'). */
+function listArtistsForAgency(companyId) {
+  return db().prepare("SELECT id, name FROM clients WHERE agency_client_id = ? AND kind = '아티스트' ORDER BY name").all(Number(companyId));
+}
+
+/** 이름으로 업체(비아티스트) 클라이언트 찾기 — 정확 일치 재사용, 없으면 null(자동 생성 안 함). 아티스트 소속 업체 링크용. */
+function resolveCompanyByName(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const ex = db().prepare("SELECT id FROM clients WHERE name = ? AND kind <> '아티스트' ORDER BY id LIMIT 1").get(n);
+  return ex ? ex.id : null;
+}
+
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
   const where = [];
   if (!includeInactive) where.push("active = 1");
@@ -1943,6 +1956,8 @@ module.exports = {
   artistClientForContact,
   resolveContactByName,
   clientsWithOwnerContact,
+  listArtistsForAgency,
+  resolveCompanyByName,
   listProjectManagers,
   listContacts,
   getContact,
