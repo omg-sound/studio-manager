@@ -219,7 +219,7 @@ function driveStorageSection() {
 async function studioCalendarSection() {
   const title = `<div>
       <h2 class="font-display text-lg font-semibold">스튜디오 캘린더 (구글)</h2>
-      <p class="mt-1 text-xs text-muted">선택한 캘린더에 이미 잡힌 일정과 겹치면 녹음·믹싱 세션 예약을 막습니다. 일정 제목은 읽지 않고 바쁜 시간대만 확인합니다. <span class="text-muted">스튜디오 전용 캘린더를 권장</span>합니다(개인 일정이 섞이면 그 시간도 막힙니다).</p>
+      <p class="mt-1 text-xs text-muted"><span class="text-fg font-medium">세션을 예약하면 이 캘린더에 일정이 자동 생성·수정·삭제됩니다.</span> <span class="text-warning font-medium">'사용 안 함'으로 두면 캘린더 자동 연동이 꺼집니다</span> — 구글 캘린더로 넘기려면 반드시 스튜디오 캘린더를 선택하세요. <span class="text-muted">스튜디오 전용 캘린더를 권장</span>합니다(개인 일정과 섞이지 않게).</p>
     </div>`;
   let inner;
   if (!config.googleConfigured) {
@@ -232,9 +232,12 @@ async function studioCalendarSection() {
     if (calendars.length === 0) {
       inner = `<p class="text-sm text-muted">캘린더 목록을 불러오지 못했습니다. 캘린더 읽기 권한이 없을 수 있습니다 — <a class="text-primary hover:underline" href="/auth/google">구글 계정 재연동</a>으로 권한을 다시 허용하세요.</p>`;
     } else {
-      inner = `<form method="post" action="/settings/studio-calendar" class="flex gap-2">
+      const statusBadge = current
+        ? `<p class="mb-2 text-sm text-success">✓ 자동 연동 켜짐 — 새 세션이 이 캘린더에 자동 등록됩니다.</p>`
+        : `<p class="mb-2 text-sm text-warning">⚠ 자동 연동 꺼짐 — 아래에서 스튜디오 캘린더를 선택해야 구글 캘린더로 넘어갑니다.</p>`;
+      inner = `${statusBadge}<form method="post" action="/settings/studio-calendar" class="flex gap-2">
           <select class="input" name="calendar_id">
-            <option value="">사용 안 함 (외부 캘린더 겹침 검사 끔)</option>
+            <option value="" ${current ? "" : "selected"}>사용 안 함 (캘린더 자동 연동 끔)</option>
             ${calendars.map((c) => `<option value="${esc(c.id)}" ${c.id === current ? "selected" : ""}>${esc(c.summary)}${c.primary ? " · 기본" : ""}</option>`).join("")}
           </select>
           <button class="btn-primary shrink-0" type="submit">저장</button>

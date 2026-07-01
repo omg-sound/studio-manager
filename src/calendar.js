@@ -128,15 +128,30 @@ function eventBody({ title, location, description, date, start, end, attendees }
   return body;
 }
 
+// 연동이 안 됐거나 실패한 이유를 로그로 남긴다(연동은 여전히 fail-safe라 예약은 안 막힌다).
+// "왜 캘린더로 안 넘어갔나"를 Render 로그에서 바로 확인할 수 있게 하는 진단용.
+function skipReason(cal, calId, date) {
+  if (!config.googleConfigured) return "googleConfigured=false(OAuth 미설정)";
+  if (!getRefreshToken()) return "refresh_token 없음(Drive/Calendar 미연동 — 치프 재로그인 필요)";
+  if (!cal) return "calendarClient null";
+  if (!calId) return "studio_calendar_id 미선택(/settings 환경설정에서 스튜디오 캘린더 선택 필요)";
+  if (!RE_DATE.test(date)) return `날짜 형식 오류(${date})`;
+  return "";
+}
+
 /** 스튜디오 캘린더에 일정 생성 → event id. 미연동/오류면 null(예약 자체는 막지 않음). */
 async function createEvent(input = {}) {
   const cal = calendarClient();
   const calId = getStudioCalendarId();
-  if (!cal || !calId || !RE_DATE.test(input.date)) return null;
+  if (!cal || !calId || !RE_DATE.test(input.date)) {
+    console.warn(`[calendar] createEvent 스킵 — ${skipReason(cal, calId, input.date)}`);
+    return null;
+  }
   try {
     const { data } = await cal.events.insert({ calendarId: calId, requestBody: eventBody(input) });
     return data.id || null;
-  } catch (_e) {
+  } catch (e) {
+    console.error(`[calendar] createEvent 실패 — code=${e && e.code} status=${e && e.status} msg=${e && e.message}`);
     return null;
   }
 }
@@ -145,13 +160,17 @@ async function createEvent(input = {}) {
 async function updateEvent(eventId, input = {}) {
   const cal = calendarClient();
   const calId = getStudioCalendarId();
-  if (!cal || !calId || !RE_DATE.test(input.date)) return null;
+  if (!cal || !calId || !RE_DATE.test(input.date)) {
+    console.warn(`[calendar] updateEvent 스킵 — ${skipReason(cal, calId, input.date)}`);
+    return null;
+  }
   if (!eventId) return createEvent(input); // 연동 후 처음 수정되는 옛 세션 → 새로 생성
   try {
     await cal.events.patch({ calendarId: calId, eventId, requestBody: eventBody(input) });
     return eventId;
   } catch (e) {
     if (e && e.code === 404) return createEvent(input); // 외부에서 지워졌으면 재생성
+    console.error(`[calendar] updateEvent 실패 — code=${e && e.code} status=${e && e.status} msg=${e && e.message}`);
     return eventId; // 기타 오류는 기존 id 유지(fail-safe)
   }
 }
@@ -164,7 +183,8 @@ async function deleteEvent(eventId) {
   try {
     await cal.events.delete({ calendarId: calId, eventId });
     return true;
-  } catch (_e) {
+  } catch (e) {
+    if (e && e.code !== 404 && e && e.code !== 410) console.error(`[calendar] deleteEvent 실패 — code=${e && e.code} msg=${e && e.message}`);
     return false;
   }
 }
