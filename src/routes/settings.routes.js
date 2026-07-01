@@ -725,7 +725,7 @@ function rateItemRow(r) {
       </div>
       <details class="group mt-2 border-t border-border pt-2">
         <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
-        <form method="post" action="/settings/rate-items/${r.id}" class="mt-2 space-y-2">
+        <form method="post" action="/settings/rate-items/${r.id}" class="mt-2 space-y-2" data-dirty-form>
           <div class="grid gap-2 sm:grid-cols-2">
             <input class="input py-1.5 text-sm" name="name" value="${esc(r.name)}" required />
             <select class="input py-1.5 text-sm" name="category">
@@ -738,7 +738,10 @@ function rateItemRow(r) {
             <div><label class="label mb-0.5 text-xs">초과 단위(시간)</label><input class="input py-1.5 text-sm" name="extra_hours" inputmode="decimal" value="${esc(String(extraHours))}" /></div>
             <div><label class="label mb-0.5 text-xs">초과 단가(원)</label><input class="input py-1.5 text-sm" name="extra_price" inputmode="numeric" value="${esc(String(r.extra_price || ""))}" /></div>
           </div>
-          <button class="btn-primary btn-xs" type="submit">저장</button>
+          <div class="flex items-center gap-2">
+            <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>저장</button>
+            <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
+          </div>
         </form>
         <form method="post" action="/settings/rate-items/${r.id}/delete" data-confirm="이 단가 항목을 삭제할까요?" class="mt-2">
           <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
@@ -764,7 +767,7 @@ function taskTypeRow(t) {
       </div>
       <details class="group mt-2 border-t border-border pt-2">
         <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
-        <form method="post" action="/settings/task-types/${t.id}" class="mt-2 space-y-2" data-autosave-form>
+        <form method="post" action="/settings/task-types/${t.id}" class="mt-2 space-y-2" data-dirty-form>
           <input class="input py-1.5 text-sm w-full" name="label" value="${esc(t.label)}" required />
           <div class="grid gap-2 sm:grid-cols-2">
             <select class="input py-1.5 text-sm" name="billing_type">
@@ -773,8 +776,10 @@ function taskTypeRow(t) {
             <input class="input py-1.5 text-sm" name="unit_price" inputmode="numeric" value="${esc(String(t.unit_price || ""))}" placeholder="기본 단가(원)" />
           </div>
           <label class="flex items-center gap-2 text-sm text-muted"><input type="checkbox" name="is_quick" value="1" ${t.is_quick ? "checked" : ""} /> 빠른 추가 노출</label>
-          <div class="text-xs text-muted" data-save-state aria-live="polite"></div>
-          <noscript><button class="btn-primary btn-xs" type="submit">저장</button></noscript>
+          <div class="flex items-center gap-2">
+            <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>저장</button>
+            <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
+          </div>
         </form>
         <form method="post" action="/settings/task-types/${t.id}/delete" data-confirm="'${esc(t.label)}' 작업 종류를 삭제할까요? 이 종류로 만든 기존 작업은 유지되지만 종류명이 코드값으로 표시됩니다." class="mt-2">
           <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
