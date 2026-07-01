@@ -135,7 +135,7 @@ router.get("/:id/edit", (req, res) => {
   const c = getContact(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const linkedManager = getManagerByContactId(c.id);
-  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(c, true, [], linkedManager) }));
+  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(c, true, listClients({}), linkedManager) }));
 });
 
 router.post("/:id", async (req, res) => {
@@ -169,7 +169,7 @@ router.post("/:id", async (req, res) => {
     } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=saved`);
   } catch (_e) {
-    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, [], linkedManager) }));
+    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager) }));
   }
 });
 
@@ -370,7 +370,9 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
         <div class="sm:max-w-xs"><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · Google 별명으로 동기화)</span></label><input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명" /></div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
-        <div><label class="label">회사</label><input class="input" name="company" value="${esc(c.company || "")}" placeholder="소속 회사명" /></div>
+        <div><label class="label">회사</label><input class="input" name="company" value="${esc(c.company || "")}" placeholder="소속 회사명 · 클라이언트에서 검색" list="contact-company-clients" autocomplete="off" />
+          <datalist id="contact-company-clients">${clients.map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
+        </div>
         <div><label class="label">직책</label><input class="input" name="job_title" value="${esc(c.job_title || "")}" placeholder="예: 대표 · 팀장" /></div>
         <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
       </div>

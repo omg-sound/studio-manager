@@ -223,13 +223,19 @@ function resolveContactName({ name, honorific, family_name, given_name, nickname
 
 function createContact({ name, phone, email, memo, family_name, given_name, honorific, nickname, company, job_title, department } = {}) {
   const n = resolveContactName({ name, honorific, family_name, given_name, nickname });
+  // 성·이름을 명시하지 않았고 표시명(이름)이 있으면 한국식으로 자동 분리(프로젝트 담당자 콤보 등 이름만으로 자동생성되는 연락처 보강).
+  let fam = blankToNull(family_name), giv = blankToNull(given_name);
+  if (!fam && !giv) {
+    const s = splitKoreanName(String(name || "").trim());
+    if (s.family) { fam = s.family; giv = s.given || null; }
+  }
   return db().prepare(
     `INSERT INTO contacts (name, phone, email, memo, family_name, given_name, honorific, nickname, company, job_title, department)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     n,
     formatPhone(phone), blankToNull(email), blankToNull(memo),
-    blankToNull(family_name), blankToNull(given_name), blankToNull(honorific),
+    fam, giv, blankToNull(honorific),
     blankToNull(nickname), blankToNull(company), blankToNull(job_title), blankToNull(department)
   ).lastInsertRowid;
 }
