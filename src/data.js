@@ -766,7 +766,8 @@ function sessionAmountsByProject(projectIds) {
          AND s.session_type = '녹음'
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
-         AND s.status <> '취소'`
+         AND s.status <> '취소'
+         AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)`
     )
     .all(...projectIds);
   const sums = {};
@@ -795,7 +796,7 @@ function listProjects(_user, { q } = {}) {
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        LEFT JOIN task_types tt ON tt.key = t.task_type
-       WHERE tr.project_id = p.id) AS task_total
+       WHERE tr.project_id = p.id AND t.is_invoiced = 0) AS task_total
     FROM projects p
     LEFT JOIN clients c ON c.id = p.client_id
     LEFT JOIN project_managers m ON m.id = p.manager_id
@@ -826,7 +827,7 @@ function getProjectForUser(user, id) {
        LEFT JOIN (
          SELECT tr.project_id, COALESCE(SUM(COALESCE(NULLIF(t.total_price, 0), tt.unit_price, 0)), 0) AS task_total
          FROM project_tracks tr
-         LEFT JOIN track_tasks t ON t.track_id = tr.id
+         LEFT JOIN track_tasks t ON t.track_id = tr.id AND t.is_invoiced = 0
          LEFT JOIN task_types tt ON tt.key = t.task_type
          GROUP BY tr.project_id
        ) task_sum ON task_sum.project_id = p.id
@@ -1482,11 +1483,12 @@ function resolveEndTime(input, start) {
   return addMinutesToHHMM(start, mins);
 }
 
-/** 활성 룸 id 집합에 있으면 그대로, 없거나 비어 있으면 null로. */
+/** 실재하는 룸 id면 그대로, 없거나(삭제됨) 비어 있으면 null로. 비활성 룸도 유지 —
+ *  세션 편집 시 기존에 배정된 룸이 (비활성이라는 이유로) 사일런트하게 '미지정'으로 바뀌던 것 방지. */
 function validRoomId(raw) {
   const id = Number(raw) || null;
   if (!id) return null;
-  return listRooms().some((r) => r.id === id) ? id : null;
+  return listRooms({ includeInactive: true }).some((r) => r.id === id) ? id : null;
 }
 
 function sessionFields(input) {
@@ -1673,14 +1675,25 @@ function createSession(user, projectId, input = {}) {
   const directorIds = resolveDirectorIds(input);
   f.director_contact_id = directorIds[0] || null; // 레거시 컬럼=첫 디렉터
   assertNoSessionConflict(f, null);
-  const info = db()
-    .prepare(
-      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_contact_id, memo)
-       VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_contact_id, @memo)`
-    )
-    .run({ project_id: project.id, ...f });
-  setSessionDirectors(info.lastInsertRowid, directorIds); // 다대다 디렉터 저장
-  return db().prepare("SELECT * FROM sessions WHERE id = ?").get(info.lastInsertRowid);
+  // 세션 행 + 다대다 디렉터를 한 트랜잭션으로 — 중간 실패 시 반쪽 세션(디렉터 없는)이 남지 않게.
+  const d = db();
+  let newId;
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    const info = d
+      .prepare(
+        `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_contact_id, memo)
+         VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_contact_id, @memo)`
+      )
+      .run({ project_id: project.id, ...f });
+    newId = info.lastInsertRowid;
+    setSessionDirectors(newId, directorIds); // 다대다 디렉터 저장
+    d.exec("COMMIT;");
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
+  return d.prepare("SELECT * FROM sessions WHERE id = ?").get(newId);
 }
 
 function updateSession(user, sessionId, input = {}) {
@@ -1691,15 +1704,24 @@ function updateSession(user, sessionId, input = {}) {
   const directorIds = resolveDirectorIds(input);
   f.director_contact_id = directorIds[0] || null; // 레거시 컬럼=첫 디렉터
   assertNoSessionConflict(f, s.id);
-  db()
-    .prepare(
-      `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
-       end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
-       rate_item_id=@rate_item_id, room_id=@room_id, director_contact_id=@director_contact_id, memo=@memo WHERE id=@id`
-    )
-    .run({ id: s.id, ...f });
-  setSessionDirectors(s.id, directorIds); // 다대다 디렉터 교체
-  return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
+  // UPDATE + 디렉터 교체를 한 트랜잭션으로(디렉터만 지워지고 세션은 옛값으로 남는 반쪽 갱신 방지).
+  const d = db();
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    d
+      .prepare(
+        `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
+         end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
+         rate_item_id=@rate_item_id, room_id=@room_id, director_contact_id=@director_contact_id, memo=@memo WHERE id=@id`
+      )
+      .run({ id: s.id, ...f });
+    setSessionDirectors(s.id, directorIds); // 다대다 디렉터 교체
+    d.exec("COMMIT;");
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
+  return { ...d.prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
 }
 
 /** 세션에 자동 생성한 구글 캘린더 일정 id 저장(null이면 해제). */

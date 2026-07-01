@@ -155,7 +155,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
         </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
   const directorField = `
-    <div class="mt-2">
+    <div class="mt-2" data-director-wrap>
       <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자, 여러 명 가능 · 선택)</span></label>
       <div data-director-list>
         ${(currentDirectors.length ? currentDirectors : [null]).map((d) => dirRow(d)).join("")}

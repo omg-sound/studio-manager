@@ -68,25 +68,29 @@
     var btn = e.target.closest && e.target.closest("[data-copy]");
     if (!btn) return;
     var text = btn.getAttribute("data-copy");
+    var orig = btn.textContent;
     function flash() {
-      var old = btn.textContent;
       btn.textContent = "복사됨";
-      setTimeout(function () {
-        btn.textContent = old;
-      }, 1200);
+      setTimeout(function () { btn.textContent = orig; }, 1200);
     }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(flash, function () {});
-    } else {
+    function legacyCopy() {
       var t = document.createElement("textarea");
       t.value = text;
+      t.style.position = "fixed";
+      t.style.opacity = "0";
       document.body.appendChild(t);
       t.select();
-      try {
-        document.execCommand("copy");
-        flash();
-      } catch (err) {}
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (err) {}
       document.body.removeChild(t);
+      if (ok) flash();
+      else { btn.textContent = "복사 실패"; setTimeout(function () { btn.textContent = orig; }, 1500); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      // async clipboard 실패(권한·비보안 컨텍스트) 시 조용히 넘어가지 않고 레거시 복사로 폴백.
+      navigator.clipboard.writeText(text).then(flash, legacyCopy);
+    } else {
+      legacyCopy();
     }
   });
 
@@ -443,16 +447,28 @@
     if (inp) return parseInt(String(inp.value).replace(/[^\d]/g, "") || "0", 10) || 0;
     return parseInt(cb.getAttribute("data-line-amount") || "0", 10) || 0;
   }
-  // 1) 드래프트 복원(+ input 디스패치로 콤마 포맷·미리보기 갱신)
+  var TTL_MS = 7 * 24 * 60 * 60 * 1000; // 초안 7일 만료 — 오래 방치된 금액이 되살아나 잘못 청구되는 것 방지
+  function purgeDraft() {
+    if (!prefix) return;
+    Array.prototype.forEach.call(inputs, function (inp) { try { localStorage.removeItem(prefix + inp.name); } catch (_e) {} });
+    try { localStorage.removeItem(prefix + "__ts"); } catch (_e) {}
+  }
+  // 1) 드래프트 복원(+ input 디스패치로 콤마 포맷·미리보기 갱신). 단, TTL 지난 초안은 폐기하고 복원 생략.
   if (prefix) {
-    Array.prototype.forEach.call(inputs, function (inp) {
-      try { var v = localStorage.getItem(prefix + inp.name); if (v != null && v !== "") inp.value = v; } catch (e) {}
-    });
-    Array.prototype.forEach.call(inputs, function (inp) { inp.dispatchEvent(new Event("input", { bubbles: true })); });
-    // 2) 입력 시 저장(순수 숫자)
+    var savedTs = 0;
+    try { savedTs = parseInt(localStorage.getItem(prefix + "__ts") || "0", 10) || 0; } catch (e) {}
+    if (savedTs && Date.now() - savedTs > TTL_MS) {
+      purgeDraft();
+    } else {
+      Array.prototype.forEach.call(inputs, function (inp) {
+        try { var v = localStorage.getItem(prefix + inp.name); if (v != null && v !== "") inp.value = v; } catch (e) {}
+      });
+      Array.prototype.forEach.call(inputs, function (inp) { inp.dispatchEvent(new Event("input", { bubbles: true })); });
+    }
+    // 2) 입력 시 저장(순수 숫자) + 타임스탬프 갱신
     form.addEventListener("input", function (e) {
       if (e.target && e.target.getAttribute && e.target.getAttribute("data-line-input") != null) {
-        try { localStorage.setItem(prefix + e.target.name, String(e.target.value).replace(/[^\d]/g, "")); } catch (e2) {}
+        try { localStorage.setItem(prefix + e.target.name, String(e.target.value).replace(/[^\d]/g, "")); localStorage.setItem(prefix + "__ts", String(Date.now())); } catch (e2) {}
       }
     });
   }
@@ -464,7 +480,7 @@
       if (cb.checked && !(lineVal(cb) > 0)) hasZero = true;
     });
     if (hasZero && !window.confirm("금액이 0원인 청구 항목이 있습니다. 0원으로 청구할까요?")) { e.preventDefault(); return; }
-    if (prefix) Array.prototype.forEach.call(inputs, function (inp) { try { localStorage.removeItem(prefix + inp.name); } catch (_e) {} });
+    purgeDraft();
   });
 })();
 
@@ -584,23 +600,25 @@
 (function () {
   "use strict";
   document.addEventListener("click", function (e) {
+    // 안정 앵커: [data-director-wrap] 기준으로 list·template를 찾음(마크업 중첩이 바뀌어도 안전).
     var addBtn = e.target.closest && e.target.closest("[data-director-add]");
     if (addBtn) {
-      var wrap = addBtn.parentNode;
-      var list = wrap.querySelector("[data-director-list]");
-      var tpl = wrap.querySelector("[data-director-template]");
+      var wrap = addBtn.closest("[data-director-wrap]");
+      var list = wrap && wrap.querySelector("[data-director-list]");
+      var tpl = wrap && wrap.querySelector("[data-director-template]");
       if (list && tpl && tpl.content) { list.appendChild(tpl.content.cloneNode(true)); var last = list.lastElementChild; var inp = last && last.querySelector("[data-contact-search]"); if (inp) inp.focus(); }
       return;
     }
     var rmBtn = e.target.closest && e.target.closest("[data-director-remove]");
     if (rmBtn) {
+      var wrap2 = rmBtn.closest("[data-director-wrap]");
+      var list2 = wrap2 && wrap2.querySelector("[data-director-list]");
       var row = rmBtn.closest("[data-director-row]");
-      var container = row && row.parentNode;
-      if (row) row.parentNode.removeChild(row);
+      if (row && row.parentNode) row.parentNode.removeChild(row);
       // 마지막 행까지 지우면 빈 행 하나 남겨 계속 추가 가능하게
-      if (container && !container.querySelector("[data-director-row]")) {
-        var t = container.parentNode.querySelector("[data-director-template]");
-        if (t && t.content) container.appendChild(t.content.cloneNode(true));
+      if (list2 && !list2.querySelector("[data-director-row]")) {
+        var t = wrap2.querySelector("[data-director-template]");
+        if (t && t.content) list2.appendChild(t.content.cloneNode(true));
       }
     }
   });
