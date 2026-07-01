@@ -202,7 +202,7 @@ router.get("/:id", requireBilling, (req, res) => {
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
   const issued = inv.status === "발행" || inv.status === "입금완료";
-  const pdfTypes = issued ? DOC_TYPES : ["견적서"]; // 미발행은 견적서 PDF만 허용(라우트 가드와 일치)
+  const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
   // 청구처 정보(대표자·사업자번호·담당자 연락처) — 청구처가 클라이언트일 때
   const payerClient = inv.client_id ? getClient(inv.client_id) : null;
   const payerCard = payerClient
@@ -256,7 +256,7 @@ router.get("/:id", requireBilling, (req, res) => {
     ${payerCard}
     <div class="mt-3 flex flex-wrap items-center gap-1.5">
         <span class="text-xs text-muted">PDF 발행:</span>
-        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(issued ? t : t + " PDF")}</a>`).join("")}
+        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
       </div>
     ${invoiceItemsCard(items)}
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
@@ -270,10 +270,7 @@ router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) =
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const docType = normalizeDocType(req.query.type);
   inv = ensureInvoiceNumber(inv); // 수동 발행분도 채번 보장(발행/입금완료 한정, 내부 가드 있음)
-  // 견적서는 미발행 상태에서도 PDF 허용. 거래명세서·내역서는 발행/입금완료만.
-  if (inv.status !== "발행" && inv.status !== "입금완료" && docType !== "견적서") {
-    return res.status(400).send(errorPage({ code: 400, title: "발행된 청구만 명세서를 만들 수 있습니다", message: "먼저 청구를 '발행' 상태로 전환하세요.", user: req.user }));
-  }
+  // 3종 문서(견적서·내역서·거래명세서) 모두 상태 무관 발행 허용 — 참고용 문서라 미발행 초안에서도 뽑을 수 있게(사용자 요청).
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
   const client = inv.client_id ? getClient(inv.client_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
