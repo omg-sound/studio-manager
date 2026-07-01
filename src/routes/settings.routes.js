@@ -72,7 +72,7 @@ router.get("/", requireEditor, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = (await studioCalendarSection()) + driveStorageSection() + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 자료저장(Drive) + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 알림
+  else tabContent = (await studioCalendarSection()) + driveStorageSection() + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + alertWebhookSection(isChief(req.user)); // 환경설정 — 캘린더 + 자료저장(Drive) + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 알림
 
   const body = `
     ${flashBanner(req.query)}
@@ -375,12 +375,20 @@ function studioInfoSection() {
 }
 
 /** 알림 채널(웹훅) — 연체·청구 발행·자료 공유 팀 알림. URL은 암호화 저장. */
-function alertWebhookSection() {
+function alertWebhookSection(chief = true) {
   const url = alerts.getConfiguredWebhook();
   const envNote = alerts.envWebhookActive()
     ? `<p class="mt-1 text-xs text-warning">환경변수 ALERT_WEBHOOK가 설정되어 우선 적용됩니다(아래 입력값은 무시).</p>`
     : "";
   const canTest = url || alerts.envWebhookActive();
+  // 웹훅 URL은 조직 보안 설정(알림이 외부로 나감) → 치프 전용. 스태프는 현재 설정 상태만 열람.
+  const controls = chief
+    ? `<form method="post" action="/settings/alert-webhook" class="flex gap-2">
+        <input class="input py-1.5 text-sm" name="webhook_url" value="${esc(url)}" placeholder="https://hooks.slack.com/services/..." />
+        <button class="btn-primary shrink-0 btn-sm" type="submit">저장</button>
+      </form>
+      ${canTest ? `<form method="post" action="/settings/alert-webhook/test"><button class="btn-ghost btn-sm" type="submit">테스트 알림 보내기</button></form>` : ""}`
+    : `<p class="text-sm text-muted">${url || alerts.envWebhookActive() ? "알림 웹훅이 설정되어 있습니다." : "알림 웹훅 미설정."} 변경은 <span class="text-fg">치프 엔지니어</span>만 가능합니다(알림이 외부로 전송되는 보안 설정).</p>`;
   return `
     <section class="card space-y-4">
       <div>
@@ -388,11 +396,7 @@ function alertWebhookSection() {
         <p class="mt-1 text-xs text-muted">연체·청구 발행·자료 공유 시 Slack/Discord 등으로 팀 알림을 보냅니다. Incoming Webhook URL을 넣으세요(비우면 알림 끔). 저장 시 암호화됩니다.</p>
         ${envNote}
       </div>
-      <form method="post" action="/settings/alert-webhook" class="flex gap-2">
-        <input class="input py-1.5 text-sm" name="webhook_url" value="${esc(url)}" placeholder="https://hooks.slack.com/services/..." />
-        <button class="btn-primary shrink-0 btn-sm" type="submit">저장</button>
-      </form>
-      ${canTest ? `<form method="post" action="/settings/alert-webhook/test"><button class="btn-ghost btn-sm" type="submit">테스트 알림 보내기</button></form>` : ""}
+      ${controls}
     </section>`;
 }
 
@@ -493,12 +497,12 @@ router.post("/studio-info", requireEditor, (req, res) => {
 });
 
 // ── 알림 웹훅 설정/테스트 ──
-router.post("/alert-webhook", requireEditor, (req, res) => {
+router.post("/alert-webhook", requireChief, (req, res) => {
   alerts.setWebhookUrl(req.body.webhook_url); // 암호화 저장(또는 비우면 해제)
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
-router.post("/alert-webhook/test", requireEditor, asyncHandler(async (req, res) => {
+router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) => {
   await alerts.notify({ type: "test", title: "[테스트] OMG Studios 알림", text: "알림 채널이 정상 연결되었습니다." });
   res.redirect("/settings?tab=settings&flash=tested");
 }));
