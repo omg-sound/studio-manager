@@ -386,30 +386,37 @@ router.get("/:id", (req, res) => {
     ? `<div class="mb-4 text-sm"><span class="text-muted">소속사</span> <a href="/clients/${c.agency_client_id}" class="text-primary hover:underline">${esc((getClient(c.agency_client_id) || {}).name || c.agency_name || "업체")} ↗</a></div>`
     : "";
 
-  // 상세로 들어오면 바로 편집 — '정보 수정' 버튼 폐기, 인라인 편집 폼(dirty 저장·첨부 서류·삭제 포함).
+  // 상세로 들어오면 바로 편집 — '정보 수정' 버튼 폐기, 인라인 편집 폼(dirty 저장). 첨부·삭제는 분리 배치.
   const companies = listClients({}).filter((x) => x.kind !== "아티스트");
   const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
   // 폼의 대표자/담당자 datalist는 전체 연락처가 필요(상세의 contacts는 이 클라이언트 소속만이라 별도).
-  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true);
+  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false); // withExtras=false — 첨부·삭제 제외
   const crossRefs = [
     (() => { const lc = c.source_contact_id ? getContact(c.source_contact_id) : null; return lc ? `<div><span class="text-muted">연동 연락처</span> <a href="/contacts/${lc.id}" class="text-primary hover:underline">${esc(lc.name)} ↗</a></div>` : ""; })(),
     (() => { const oc = c.owner_contact_id ? getContact(c.owner_contact_id) : null; return oc ? `<div><span class="text-muted">대표자 연락처</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : ""; })(),
   ].filter(Boolean).join("");
   const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
+  const filesBlock = clientFilesBlock(c, files, fileErr); // 자체 '첨부 서류' 헤딩 포함
+  const deleteForm = `
+    <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-4">
+      <button class="btn-ghost text-danger btn-sm" type="submit">클라이언트 삭제</button>
+    </form>`;
 
+  // 섹션 순서(사용자 지정): ① 프로젝트/청구·결제 → ② 상세 정보(편집 폼) → ③ 담당자 연락처 → ④ 첨부 서류 → 삭제
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: "/clients", label: "클라이언트" } })}
+    ${tabBarHtml}
+    ${content}
+    <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">상세 정보</h3>
     ${editCard}
     ${crossRefBlock}
     ${agencyLink ? `<div class="mt-3">${agencyLink}</div>` : ""}
     ${rosterSection}
-    <div class="mb-4 mt-4">
-      <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
-      ${contactsSection}
-    </div>
-    ${tabBarHtml}
-    ${content}`;
+    <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">담당자 연락처</h3>
+    ${contactsSection}
+    <div class="mt-6">${filesBlock}</div>
+    ${deleteForm}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
 });
 
@@ -502,7 +509,7 @@ function linkClientContact(clientId, body) {
   if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false) {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   const isArtist = (c.kind || CLIENT_KINDS[0]) === "아티스트"; // 개인 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
@@ -566,11 +573,19 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
           : `<button class="btn-primary" type="submit">추가</button><a href="/clients" class="btn-ghost">취소</a>`}
       </div>
     </form>
-    ${isEdit && canFiles ? `<div data-client-files${isArtist ? " hidden" : ""}>${clientFileSection(c, fileMap, fileErr)}</div>` : ""}
-    ${isEdit ? `
+    ${withExtras && isEdit && canFiles ? `<div data-client-files${isArtist ? " hidden" : ""}>${clientFileSection(c, fileMap, fileErr)}</div>` : ""}
+    ${withExtras && isEdit ? `
     <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
       <button class="btn-ghost text-danger" type="submit">클라이언트 삭제</button>
     </form>` : ""}`;
+}
+
+/** 첨부 서류 카드(상세에서 분리 배치용). 아티스트면 숨김 토글. */
+function clientFilesBlock(c, files, fileErr) {
+  const fileMap = {};
+  files.forEach((f) => { fileMap[f.kind] = f; });
+  const isArtist = (c.kind || CLIENT_KINDS[0]) === "아티스트";
+  return `<div data-client-files${isArtist ? " hidden" : ""}>${clientFileSection(c, fileMap, fileErr)}</div>`;
 }
 
 module.exports = router;
