@@ -525,12 +525,14 @@
   "use strict";
   var kindSel = document.querySelector("[data-client-kind]");
   var tax = document.querySelector("[data-client-tax]");
-  var cash = document.querySelector("[data-client-cash]"); // 개인(아티스트)=현금영수증 정보(세금정보와 반대로 표시)
+  var cash = document.querySelector("[data-client-cash]"); // 개인(아티스트)=현금영수증·소속그룹(세금정보와 반대로 표시)
+  var filesBox = document.querySelector("[data-client-files]"); // 아티스트는 첨부 서류(사업자등록증·통장사본) 불필요 → 숨김
   if (!kindSel || !tax) return;
   function sync() {
     var isArtist = kindSel.value === "아티스트";
     tax.hidden = isArtist;
     if (cash) cash.hidden = !isArtist;
+    if (filesBox) filesBox.hidden = isArtist;
   }
   kindSel.addEventListener("change", sync);
   sync();

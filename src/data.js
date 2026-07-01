@@ -1232,7 +1232,7 @@ function createInvoiceFromTasks(user, opts = {}) {
         discount_amount: draft.discountAmt,
         issued_date: draft.issued,
         due_date: draft.dueDate,
-        memo: "완료된 미청구 작업에서 자동 생성",
+        memo: null, // 자동 메모 제거(사용자 요청) — 필요 시 수동 인보이스에서 입력
       });
     const invoiceId = info.lastInsertRowid;
     const insertItem = d.prepare(

@@ -298,6 +298,7 @@ function init() {
   addColumn("clients", "address", "TEXT");     // 사업장 주소
   addColumn("clients", "source_contact_id", "INTEGER"); // 담당자(연락처)를 청구처로 변환 시 출처 contact — 동명이인 병합 방지
   addColumn("clients", "cash_receipt_no", "TEXT"); // 현금영수증 발급번호(개인/아티스트 — 사업자등록증 없는 경우. 휴대폰 번호 또는 현금영수증 카드번호)
+  addColumn("clients", "group_name", "TEXT"); // 소속그룹(아티스트가 속한 그룹·소속사·팀 등. 자유 텍스트)
   // 거래처 외부 열람(client) 폐기 → 잔여 client 계정은 비활성화(로그인 차단).
   try {
     d.exec("UPDATE users SET active = 0 WHERE role = 'client'");

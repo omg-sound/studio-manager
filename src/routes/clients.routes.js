@@ -140,7 +140,7 @@ router.post("/", (req, res) => {
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 사업자등록번호·대표자·주소가 없음
   const info = db()
-    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, address, cash_receipt_no) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@address,@cash_receipt_no)")
+    .prepare("INSERT INTO clients (name, kind, phone, email, memo, biz_no, owner_name, address, cash_receipt_no, group_name) VALUES (@name,@kind,@phone,@email,@memo,@biz_no,@owner_name,@address,@cash_receipt_no,@group_name)")
     .run({
       name,
       kind,
@@ -151,6 +151,7 @@ router.post("/", (req, res) => {
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
       cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
+      group_name: artist ? String(b.group_name || "").trim() || null : null, // 소속그룹(아티스트만)
     });
   linkClientContact(info.lastInsertRowid, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect("/clients?flash=created#c" + info.lastInsertRowid);
@@ -178,7 +179,7 @@ router.post("/:id", (req, res) => {
   const kind = normalizeClientKind(b.kind);
   const artist = kind === "아티스트"; // 아티스트(개인)는 세금정보 없음
   db()
-    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, address=@address, cash_receipt_no=@cash_receipt_no WHERE id=@id")
+    .prepare("UPDATE clients SET name=@name, kind=@kind, phone=@phone, email=@email, memo=@memo, biz_no=@biz_no, owner_name=@owner_name, address=@address, cash_receipt_no=@cash_receipt_no, group_name=@group_name WHERE id=@id")
     .run({
       id,
       name,
@@ -190,6 +191,7 @@ router.post("/:id", (req, res) => {
       owner_name: artist ? null : String(b.owner_name || "").trim() || null,
       address: artist ? null : String(b.address || "").trim() || null,
       cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
+      group_name: artist ? String(b.group_name || "").trim() || null : null, // 소속그룹(아티스트만)
     });
   linkClientContact(id, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   res.redirect(`/clients/${id}?flash=saved`); // 수정 후 그 클라이언트 상세로 복귀(목록 아님)
@@ -336,7 +338,7 @@ router.get("/:id", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: c.name, desc: c.kind, back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
+    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : ""), back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
     <div class="mb-4">
       <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
       ${contactsSection}
@@ -461,9 +463,15 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
       </div>
-      <div data-client-cash${isArtist ? "" : " hidden"}>
-        <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(개인 — 사업자등록증 없는 경우)</span></label>
-        <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
+      <div data-client-cash${isArtist ? "" : " hidden"} class="space-y-4">
+        <div>
+          <label class="label">소속그룹 <span class="font-normal text-muted text-xs">(속한 그룹·소속사·팀 — 있으면)</span></label>
+          <input class="input" name="group_name" value="${esc(c.group_name || "")}" placeholder="예: 소속 그룹·소속사명" />
+        </div>
+        <div>
+          <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(개인 — 사업자등록증 없는 경우)</span></label>
+          <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
+        </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">세금계산서 발행 이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" placeholder="계산서 받을 이메일" /></div>
@@ -476,7 +484,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         <a href="${isEdit && c.id ? `/clients/${c.id}` : "/clients"}" class="btn-ghost">취소</a>
       </div>
     </form>
-    ${isEdit && canFiles ? clientFileSection(c, fileMap, fileErr) : ""}
+    ${isEdit && canFiles ? `<div data-client-files${isArtist ? " hidden" : ""}>${clientFileSection(c, fileMap, fileErr)}</div>` : ""}
     ${isEdit ? `
     <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
       <button class="btn-ghost text-danger" type="submit">클라이언트 삭제</button>
