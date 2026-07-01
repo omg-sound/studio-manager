@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireChief, syncUserToManager, findUserById } = require("../auth");
+const { requireChief, requireEditor, isChief, syncUserToManager, findUserById } = require("../auth");
 const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
 const {
   listProjectManagers,
@@ -63,7 +63,7 @@ const SETTINGS_TABS = [
   { key: "settings", label: "환경설정" },
 ];
 
-router.get("/", requireChief, asyncHandler(async (req, res) => {
+router.get("/", requireEditor, asyncHandler(async (req, res) => {
   const tab = SETTINGS_TABS.some((t) => t.key === req.query.tab) ? req.query.tab : "people";
   const tabBar = `<div class="mb-4 flex gap-1 overflow-x-auto border-b border-border">
       ${SETTINGS_TABS.map((t) => `<a href="/settings?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
@@ -85,15 +85,11 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
 
 /** 담당자 탭: 하우스 엔지니어 목록 + 외주 작업자 메뉴 안내. */
 function peopleTab(currentUser) {
+  const chief = isChief(currentUser); // 로그인 계정 관리(추가·역할변경·삭제)는 치프 전용 — 스태프는 열람만(권한 상승 방지)
   const users = listUsers();
-  const userRows = users.length ? users.map((u) => userRow(u, currentUser)).join("") : emptyState("등록된 사용자가 없습니다.");
-  return `
-      <section class="card space-y-4">
-        <div>
-          <h2 class="font-display text-lg font-semibold">하우스 엔지니어 <span class="text-sm font-normal text-muted">(로그인 계정)</span></h2>
-          <p class="mt-1 text-xs text-muted">등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.</p>
-        </div>
-        <form method="post" action="/settings/users" class="space-y-2">
+  const userRows = users.length ? users.map((u) => userRow(u, currentUser, chief)).join("") : emptyState("등록된 사용자가 없습니다.");
+  const addForm = chief
+    ? `<form method="post" action="/settings/users" class="space-y-2">
           <div class="grid gap-2 sm:grid-cols-2">
             <input class="input" name="name" placeholder="이름 (작업 담당자 표시명)" />
             <input class="input" type="email" name="email" placeholder="Google 이메일" required />
@@ -104,7 +100,15 @@ function peopleTab(currentUser) {
             </select>
             <button class="btn-primary shrink-0" type="submit">엔지니어 추가</button>
           </div>
-        </form>
+        </form>`
+    : `<p class="rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted">로그인 계정 추가·역할 변경·삭제는 <span class="text-fg">치프 엔지니어</span>만 할 수 있습니다(열람만 가능).</p>`;
+  return `
+      <section class="card space-y-4">
+        <div>
+          <h2 class="font-display text-lg font-semibold">하우스 엔지니어 <span class="text-sm font-normal text-muted">(로그인 계정)</span></h2>
+          <p class="mt-1 text-xs text-muted">등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.</p>
+        </div>
+        ${addForm}
         <div class="space-y-2">${userRows}</div>
       </section>
 
@@ -401,7 +405,7 @@ function checkMagicBytes(buf, mime) {
 }
 
 // ── 거래명세서 로고 업로드/삭제(base64 data URI, admin_state) ──
-router.post("/studio-logo", requireChief, logoUpload.single("logo"), (req, res) => {
+router.post("/studio-logo", requireEditor, logoUpload.single("logo"), (req, res) => {
   const f = req.file;
   if (f && f.buffer && f.buffer.length) {
     const mime = f.mimetype || "";
@@ -411,12 +415,12 @@ router.post("/studio-logo", requireChief, logoUpload.single("logo"), (req, res) 
   }
   res.redirect("/settings?tab=settings&flash=saved");
 });
-router.post("/default-booker", requireChief, (req, res) => {
+router.post("/default-booker", requireEditor, (req, res) => {
   setDefaultBooker(req.body.default_booker);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 // Drive 저장 폴더 점검 — 실제 Drive API로 폴더 존재 확인 + 바로가기 링크. 없으면 생성.
-router.get("/drive-check", requireChief, asyncHandler(async (req, res) => {
+router.get("/drive-check", requireEditor, asyncHandler(async (req, res) => {
   if (!drive.isLinked()) return res.redirect("/settings?tab=settings&flash=drive_unlinked");
   const driveN = driveFileCount();
   let card;
@@ -445,56 +449,56 @@ router.get("/drive-check", requireChief, asyncHandler(async (req, res) => {
 }));
 
 // 로컬 저장 파일(client_files·deliverables)을 Google Drive로 이관. Drive 연동 필요.
-router.post("/migrate-drive", requireChief, asyncHandler(async (req, res) => {
+router.post("/migrate-drive", requireEditor, asyncHandler(async (req, res) => {
   const r = await migrateLocalFilesToDrive();
   if (!r.ok) return res.redirect("/settings?tab=settings&flash=drive_unlinked");
   // 결과는 섹션 재렌더(남은 로컬 수)로 확인. 실패분이 있으면 로그.
   if (r.failed.length) console.warn("[migrate-drive] failed:", JSON.stringify(r.failed));
   res.redirect(`/settings?tab=settings&flash=${r.failed.length ? "drive_partial" : "drive_done"}`);
 }));
-router.post("/studio-logo/delete", requireChief, (req, res) => {
+router.post("/studio-logo/delete", requireEditor, (req, res) => {
   setStudioLogo(null);
   res.redirect("/settings?tab=settings&flash=deleted");
 });
 
 // ── 스튜디오 캘린더 선택 저장 ──
-router.post("/studio-calendar", requireChief, (req, res) => {
+router.post("/studio-calendar", requireEditor, (req, res) => {
   calendar.setStudioCalendarId(req.body.calendar_id);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 예약 일정 기본 장소 저장 ──
-router.post("/studio-location", requireChief, (req, res) => {
+router.post("/studio-location", requireEditor, (req, res) => {
   calendar.setStudioLocation(req.body.studio_location);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 기본 1Pro 시간(분) 저장 — 시간 입력 → 분 변환 ──
-router.post("/pro-minutes", requireChief, (req, res) => {
+router.post("/pro-minutes", requireEditor, (req, res) => {
   const hours = parseFloat(req.body.pro_hours);
   setProMinutes(Number.isFinite(hours) && hours > 0 ? Math.round(hours * 60) : null);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 운영시간(예약 그리드 범위) 저장 ──
-router.post("/studio-hours", requireChief, (req, res) => {
+router.post("/studio-hours", requireEditor, (req, res) => {
   setStudioHours(req.body.hours_start, req.body.hours_end);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 공급자(스튜디오) 세금정보 저장 — 거래명세서 PDF용. 평문 admin_state ──
-router.post("/studio-info", requireChief, (req, res) => {
+router.post("/studio-info", requireEditor, (req, res) => {
   setStudioInfo(req.body);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 알림 웹훅 설정/테스트 ──
-router.post("/alert-webhook", requireChief, (req, res) => {
+router.post("/alert-webhook", requireEditor, (req, res) => {
   alerts.setWebhookUrl(req.body.webhook_url); // 암호화 저장(또는 비우면 해제)
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
-router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) => {
+router.post("/alert-webhook/test", requireEditor, asyncHandler(async (req, res) => {
   await alerts.notify({ type: "test", title: "[테스트] OMG Studios 알림", text: "알림 채널이 정상 연결되었습니다." });
   res.redirect("/settings?tab=settings&flash=tested");
 }));
@@ -579,7 +583,7 @@ router.post("/users/:id/edit", requireChief, (req, res) => {
 });
 
 // ── 단가표(과금 항목) 관리 ──
-router.post("/rate-items", requireChief, (req, res) => {
+router.post("/rate-items", requireEditor, (req, res) => {
   try {
     createRateItem(req.body);
   } catch (e) {
@@ -588,7 +592,7 @@ router.post("/rate-items", requireChief, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/rate-items/:id", requireChief, (req, res) => {
+router.post("/rate-items/:id", requireEditor, (req, res) => {
   try {
     updateRateItem(Number(req.params.id), req.body);
   } catch (e) {
@@ -597,13 +601,13 @@ router.post("/rate-items/:id", requireChief, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/rate-items/:id/delete", requireChief, (req, res) => {
+router.post("/rate-items/:id/delete", requireEditor, (req, res) => {
   deleteRateItem(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
 });
 
 // ── 룸(스튜디오 공간) 관리(추가·삭제) ──
-router.post("/rooms", requireChief, (req, res) => {
+router.post("/rooms", requireEditor, (req, res) => {
   try {
     createRoom(req.body);
   } catch (e) {
@@ -612,13 +616,13 @@ router.post("/rooms", requireChief, (req, res) => {
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
-router.post("/rooms/:id/delete", requireChief, (req, res) => {
+router.post("/rooms/:id/delete", requireEditor, (req, res) => {
   deleteRoom(Number(req.params.id)); // 참조 세션 room_id → NULL 후 행 삭제(data.deleteRoom)
   res.redirect("/settings?tab=settings&flash=deleted");
 });
 
 // ── 작업 종류 카탈로그 관리(삭제-only) ──
-router.post("/task-types", requireChief, (req, res) => {
+router.post("/task-types", requireEditor, (req, res) => {
   try {
     createTaskType(req.body);
   } catch (e) {
@@ -627,7 +631,7 @@ router.post("/task-types", requireChief, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/task-types/:id", requireChief, (req, res) => {
+router.post("/task-types/:id", requireEditor, (req, res) => {
   const isFetch = req.get("X-Requested-With") === "fetch"; // 자동저장(AJAX)
   try {
     updateTaskType(Number(req.params.id), req.body);
@@ -639,12 +643,12 @@ router.post("/task-types/:id", requireChief, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/task-types/:id/delete", requireChief, (req, res) => {
+router.post("/task-types/:id/delete", requireEditor, (req, res) => {
   deleteTaskType(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
 });
 
-function userRow(u, currentUser) {
+function userRow(u, currentUser, chief = true) {
   const isSelf = u.id === currentUser.id;
   const delLocked = isBootstrapChief(u) || isSelf; // 삭제·비활성: 기본 치프·본인 보호(락아웃 방지). 역할 변경은 본인만 잠금.
   const status = !u.active
@@ -652,14 +656,14 @@ function userRow(u, currentUser) {
     : u.google_sub
       ? `<span class="badge bg-success/10 text-success">활성</span>`
       : `<span class="badge bg-warning/10 text-warning">초대됨(미로그인)</span>`;
-  const roleControl = isSelf
-    ? `<span class="badge bg-bg text-muted">${esc(ROLE_LABELS[u.role] || u.role)}</span>`
+  const roleControl = (!chief || isSelf)
+    ? `<span class="badge bg-bg text-muted">${esc(ROLE_LABELS[u.role] || u.role)}</span>` // 스태프 또는 본인 — 역할 변경 불가(배지만)
     : `<form method="post" action="/settings/users/${u.id}/role">
          <select class="input py-1 text-xs" name="role" data-autosubmit>
            ${ROLES.map((r) => `<option value="${esc(r)}" ${r === u.role ? "selected" : ""}>${esc(ROLE_LABELS[r] || r)}</option>`).join("")}
          </select>
        </form>`;
-  const del = delLocked
+  const del = (!chief || delLocked)
     ? ""
     : `<form method="post" action="/settings/users/${u.id}/delete" data-confirm="${esc(u.name || u.email)} 계정을 삭제할까요? 로그인 화이트리스트와 작업 담당자에서 제거됩니다.">
          <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
@@ -678,14 +682,14 @@ function userRow(u, currentUser) {
           ${del}
         </div>
       </div>
-      <details class="mt-2">
+      ${chief ? `<details class="mt-2">
         <summary class="cursor-pointer text-xs text-muted hover:text-fg">정보 수정 (이름 · 전화)</summary>
         <form method="post" action="/settings/users/${u.id}/edit" class="mt-2 grid gap-2 sm:grid-cols-2">
           <input class="input py-1.5 text-sm" name="name" value="${esc(u.name || "")}" placeholder="이름 (표시명)" />
           <input class="input py-1.5 text-sm" name="phone" value="${esc(u.mgr_phone || "")}" placeholder="전화" />
           <button class="btn-primary btn-sm sm:col-span-2" type="submit">저장</button>
         </form>
-      </details>
+      </details>` : ""}
     </div>`;
 }
 

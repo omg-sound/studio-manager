@@ -24,7 +24,7 @@ const { invoiceRow } = require("../views.invoices");
 const router = express.Router();
 
 // 모든 클라이언트 라우트는 치프 전용
-router.use(requireEditor); // 목록·상세·기본정보 편집=치프·스태프. 첨부 서류(민감 금융정보) 라우트만 requireChief 개별 적용.
+router.use(requireEditor); // 목록·상세·편집·첨부 서류 모두 편집자(치프·스태프). 매출만 별도 제한(revenue).
 
 // 첨부 서류 업로드: 디스크 스토리지(메모리 금지 — OOM 방지, 플레이북 §3-2), 10MB 제한
 const upload = multer({

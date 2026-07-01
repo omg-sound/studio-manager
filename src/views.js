@@ -127,9 +127,9 @@ const NAV = [
   { href: "/invoices", label: "청구", key: "invoices", access: "billing", group: "billing" },
   { href: "/contacts", label: "연락처", key: "contacts", access: "editor", group: "manage" },
   { href: "/clients", label: "클라이언트", key: "clients", access: "editor", group: "manage" },
-  { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
+  { href: "/workers", label: "외주 작업자", key: "workers", access: "editor", group: "billing" },
   { href: "/revenue", label: "매출", key: "revenue", access: "invoice", group: "billing" },
-  { href: "/settings", label: "관리", key: "settings", access: "chief", group: "manage" },
+  { href: "/settings", label: "관리", key: "settings", access: "editor", group: "manage" },
 ];
 
 // 사이드바 그룹 순서·소제목. navItemsFor 결과를 group 키로 묶어 렌더(빈 그룹은 자동 생략).
