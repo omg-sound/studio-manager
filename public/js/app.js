@@ -481,6 +481,31 @@
   Array.prototype.forEach.call(document.querySelectorAll('input[name="biz_no"]'), function (el) { if (el.value) el.value = fmt(el.value); });
 })();
 
+// 휴대전화/전화 입력칸([name="phone"]): 숫자만 입력해도 010-####-#### 서식 자동 삽입(서버 formatPhone과 일치).
+// 02(서울) 지역번호는 02-###-####/02-####-####, 그 외 3자리 국번은 ###-###-####(10자리)·###-####-####(11자리).
+(function () {
+  "use strict";
+  function fmtPhone(v) {
+    var d = String(v).replace(/\D/g, "");
+    if (d.indexOf("02") === 0) { // 서울 지역번호(2자리 국번)
+      d = d.slice(0, 10);
+      if (d.length <= 2) return d;
+      if (d.length <= 5) return d.slice(0, 2) + "-" + d.slice(2);
+      if (d.length <= 9) return d.slice(0, 2) + "-" + d.slice(2, d.length - 4) + "-" + d.slice(d.length - 4);
+      return d.slice(0, 2) + "-" + d.slice(2, 6) + "-" + d.slice(6);
+    }
+    d = d.slice(0, 11); // 휴대폰/그 외(3자리 국번)
+    if (d.length < 4) return d;
+    if (d.length < 7) return d.slice(0, 3) + "-" + d.slice(3);
+    if (d.length <= 10) return d.slice(0, 3) + "-" + d.slice(3, 6) + "-" + d.slice(6); // 10자리: 3-3-4
+    return d.slice(0, 3) + "-" + d.slice(3, 7) + "-" + d.slice(7); // 11자리: 3-4-4
+  }
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.name === "phone") e.target.value = fmtPhone(e.target.value);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="phone"]'), function (el) { if (el.value) el.value = fmtPhone(el.value); });
+})();
+
 // 청구 폼 작업 금액 즉시 저장: task_amount_<id> 변경(포커스 이탈) 시 해당 작업 total_price에 바로 반영(초안 아님 → 목록·기본값 반영).
 (function () {
   "use strict";

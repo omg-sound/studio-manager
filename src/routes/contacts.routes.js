@@ -135,7 +135,9 @@ router.get("/:id/edit", (req, res) => {
   const c = getContact(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const linkedManager = getManagerByContactId(c.id);
-  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(c, true, listClients({}), linkedManager) }));
+  const cur = currentAffiliation(c.id); // 현재 소속(클라이언트)을 회사칸 기본값으로 — 클라이언트 담당자로 등록 시 소속 이력만 있고 company 텍스트는 비어 있던 것 반영
+  const cc = { ...c, company: c.company || (cur && cur.client_name) || "" };
+  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(cc, true, listClients({}), linkedManager) }));
 });
 
 router.post("/:id", async (req, res) => {
