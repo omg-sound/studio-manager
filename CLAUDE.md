@@ -278,6 +278,8 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 12. **로고 업로드 매직바이트 검증**: Content-Type 헤더만 믿으면 안 됨. PNG(`\x89PNG`)·JPEG(`\xFF\xD8\xFF`) 매직바이트를 서버에서 확인 후 거부.
 13. **Tailwind opacity.12 미등록**: `badge-*`(`bg-*/12` 같은 불투명도 변형 클래스)를 Tailwind 커스텀 색과 함께 쓸 때 opacity 스케일에 `12`가 없으면 CSS 빌드에서 제거된다. `tailwind.config.js`의 `theme.extend.opacity`에 `'12': '0.12'` 추가.
 14. **AJAX 폼 전송은 `URLSearchParams`(urlencoded)로**: 서버 미들웨어가 `express.urlencoded`+`express.json`만 등록(multipart 파서 없음, multer는 파일 업로드 전용 라우트만). `fetch(url, { body: new FormData(form) })`는 **multipart/form-data**로 나가 파싱되지 않고 **req.body가 빈 객체** → 라우트가 기본값으로 저장(작업 자동저장이 작업 종류·담당을 기본값으로 덮어쓰던 근본 원인). 자동저장·AJAX POST는 `new URLSearchParams(); fd.forEach((v,k)=>p.append(k,v))`로 변환해 보낼 것.
+15. **CI `node --test`의 `**` 글롭은 Node 22+ 전용**: `node --test "test/**/*.test.js"`는 Node 20에서 글롭을 확장하지 못해 "Could not find …" 로 **테스트 0개 실패**(로컬 최신 Node에선 통과해 안 보임). 셸이 확장하는 `node --test test/*.test.js`로 고정(현 플랫 `test/` 구조 기준 결정적 40개). 향후 중첩 디렉터리 도입 시 재검토.
+16. **CI 잔여 deprecation 경고(DEP0040 punycode·DEP0169 url.parse)는 `actions/setup-node` 자체 발**: 로그상 `Use Node.js`/`Post Use Node.js` 단계에서만 나오고 `Install/Run tests/Build CSS`엔 없음 → 우리 앱 코드·의존성이 아니라 **액션 번들 코드(러너 Node 24)** 가 냄. `setup-node@v5`(최신)라 우리 쪽 업그레이드로 못 없앰 = **upstream 이슈**. 빌드는 success(무해 annotation). **의도적으로 그대로 둠**(2026-07-01 결정) — `NODE_NO_WARNINGS=1` 전역 억제는 우리 코드의 실제 경고까지 가리므로 채택 안 함. setup-node 상위 수정 시 자연 소멸.
 
 ## 검증 상태
 
