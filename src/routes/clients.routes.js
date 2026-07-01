@@ -192,7 +192,7 @@ router.post("/:id", (req, res) => {
       cash_receipt_no: artist ? String(b.cash_receipt_no || "").trim() || null : null, // 개인만 현금영수증 정보
     });
   linkClientContact(id, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
-  res.redirect("/clients?flash=saved#c" + id);
+  res.redirect(`/clients/${id}?flash=saved`); // 수정 후 그 클라이언트 상세로 복귀(목록 아님)
 });
 
 // ── 삭제(강제: 연결된 프로젝트·청구서·사용자의 client_id는 SET NULL으로 자동 해제) ──
@@ -473,7 +473,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       <div class="flex gap-2">
         <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
-        <a href="/clients" class="btn-ghost">취소</a>
+        <a href="${isEdit && c.id ? `/clients/${c.id}` : "/clients"}" class="btn-ghost">취소</a>
       </div>
     </form>
     ${isEdit && canFiles ? clientFileSection(c, fileMap, fileErr) : ""}
