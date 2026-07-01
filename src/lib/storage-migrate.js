@@ -14,14 +14,18 @@ const storage = require("../storage");
 
 const LOCAL_TABLES = ["client_files", "deliverables"]; // storage_backend/file_id 컬럼을 가진 테이블(고정 상수 — SQL 주입 아님)
 
-/** 로컬 저장 파일 수(테이블별). 상태 표시용. */
-function localFileCount() {
+/** 저장 백엔드별 파일 수(상태·점검 표시용). backend='local'|'drive'. */
+function fileCountByBackend(backend) {
   let n = 0;
   for (const t of LOCAL_TABLES) {
-    try { n += db().prepare(`SELECT COUNT(*) c FROM ${t} WHERE storage_backend='local'`).get().c; } catch (_e) {}
+    try { n += db().prepare(`SELECT COUNT(*) c FROM ${t} WHERE storage_backend=?`).get(backend).c; } catch (_e) {}
   }
   return n;
 }
+/** 로컬 저장 파일 수(테이블별). 상태 표시용. */
+function localFileCount() { return fileCountByBackend("local"); }
+/** Drive 저장 파일 수. */
+function driveFileCount() { return fileCountByBackend("drive"); }
 
 async function migrateLocalFilesToDrive() {
   if (!drive.isLinked()) return { ok: false, error: "DRIVE_NOT_LINKED" };
@@ -48,4 +52,4 @@ async function migrateLocalFilesToDrive() {
   return { ok: true, total: rows.length, migrated, failed };
 }
 
-module.exports = { migrateLocalFilesToDrive, localFileCount, LOCAL_TABLES };
+module.exports = { migrateLocalFilesToDrive, localFileCount, driveFileCount, fileCountByBackend, LOCAL_TABLES };

@@ -36,7 +36,7 @@ const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChev
 const { asyncHandler } = require("../lib/async");
 const multer = require("multer");
 const drive = require("../drive");
-const { migrateLocalFilesToDrive, localFileCount } = require("../lib/storage-migrate");
+const { migrateLocalFilesToDrive, localFileCount, driveFileCount } = require("../lib/storage-migrate");
 
 // 로고 업로드(작은 이미지) — 메모리 버퍼로 받아 base64 data URI로 저장. 2MB 제한.
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -193,17 +193,21 @@ function driveStorageSection() {
   } else {
     status = `<p class="text-sm text-muted"><span class="badge badge-warning">미연동</span> 지금은 파일이 <span class="font-medium">서버 로컬 디스크</span>에 저장됩니다. <a class="text-primary hover:underline" href="/auth/google">구글 계정 연동</a> 후 Drive 저장이 켜집니다.</p>`;
   }
+  const driveN = linked ? driveFileCount() : 0;
   const migrate = linked && localN > 0
     ? `<form method="post" action="/settings/migrate-drive" data-confirm="로컬에 저장된 파일 ${localN}개를 Google Drive로 이관할까요? 업로드 성공 시 로컬 원본은 삭제됩니다."><button class="btn-primary btn-sm" type="submit">로컬 파일 ${localN}개 → Drive 이관</button></form>`
     : linked
-      ? `<p class="text-xs text-muted">로컬에 남은 파일이 없습니다(모두 Drive 저장).</p>`
+      ? `<p class="text-xs text-muted">로컬에 남은 파일이 없습니다 · Drive 저장 ${driveN}개.</p>`
       : "";
+  const check = linked
+    ? `<div class="border-t border-border pt-2"><a class="btn-ghost btn-sm" href="/settings/drive-check">Drive 폴더 점검 · 바로가기</a></div>`
+    : "";
   return `<section class="card mt-3 space-y-2">
     <div>
       <h2 class="font-display text-lg font-semibold">자료 저장 (구글 Drive)</h2>
       <p class="mt-1 text-xs text-muted">첨부 서류·자료 전달 파일의 실제 저장 위치. 최소 권한(<code>drive.file</code>)으로 앱이 만든 전용 폴더에만 접근합니다. 그 폴더를 원하는 위치로 옮기거나 공유해 쓰실 수 있습니다.</p>
     </div>
-    ${status}${migrate}
+    ${status}${migrate}${check}
   </section>`;
 }
 
@@ -411,6 +415,35 @@ router.post("/default-booker", requireChief, (req, res) => {
   setDefaultBooker(req.body.default_booker);
   res.redirect("/settings?tab=settings&flash=saved");
 });
+// Drive 저장 폴더 점검 — 실제 Drive API로 폴더 존재 확인 + 바로가기 링크. 없으면 생성.
+router.get("/drive-check", requireChief, asyncHandler(async (req, res) => {
+  if (!drive.isLinked()) return res.redirect("/settings?tab=settings&flash=drive_unlinked");
+  const driveN = driveFileCount();
+  let card;
+  try {
+    const f = await drive.checkFolder(); // 폴더 없으면 생성 후 메타 반환
+    const link = f.webViewLink
+      ? `<a href="${esc(f.webViewLink)}" target="_blank" rel="noopener" class="text-primary hover:underline">Drive에서 폴더 열기 ↗</a>`
+      : `<span class="text-muted">링크 없음(폴더 ID: ${esc(f.id)})</span>`;
+    card = `<div class="card space-y-2">
+      <div class="flex items-center gap-2"><span class="badge badge-success">폴더 확인됨</span>${f.created ? '<span class="badge badge-info">방금 생성</span>' : ""}${f.trashed ? '<span class="badge badge-error">휴지통</span>' : ""}</div>
+      <div class="text-sm"><span class="text-muted">폴더명</span> <span class="font-medium">${esc(f.name)}</span></div>
+      <div class="text-sm"><span class="text-muted">폴더 ID</span> <code class="text-xs">${esc(f.id)}</code></div>
+      <div class="text-sm"><span class="text-muted">Drive 저장 파일</span> ${driveN}개</div>
+      <div class="pt-1">${link}</div>
+      ${f.trashed ? '<p class="text-xs text-danger">⚠️ 폴더가 휴지통에 있습니다 — Drive에서 복원하세요.</p>' : ""}
+    </div>`;
+  } catch (e) {
+    card = `<div class="card space-y-2"><span class="badge badge-error">점검 실패</span>
+      <p class="text-sm text-muted">Drive 폴더를 확인하지 못했습니다: ${esc((e && e.message) || String(e))}</p>
+      <p class="text-xs text-muted">Drive 권한이 만료됐을 수 있습니다 — <a class="text-primary hover:underline" href="/auth/google">구글 계정 재연동</a> 후 다시 시도하세요.</p></div>`;
+  }
+  const body = `
+    ${pageHeader({ title: "Drive 폴더 점검", desc: "첨부·자료 파일이 저장되는 실제 Google Drive 폴더", back: { href: "/settings?tab=settings", label: "관리" } })}
+    ${card}`;
+  res.send(layout({ title: "Drive 폴더 점검", user: req.user, current: "/settings", body }));
+}));
+
 // 로컬 저장 파일(client_files·deliverables)을 Google Drive로 이관. Drive 연동 필요.
 router.post("/migrate-drive", requireChief, asyncHandler(async (req, res) => {
   const r = await migrateLocalFilesToDrive();

@@ -92,6 +92,29 @@ async function deleteFile(fileId) {
   await drive.files.delete({ fileId });
 }
 
+/** 캐시된 폴더 id(첫 업로드 전이면 null). 점검용 — 생성은 안 함. */
+function getFolderId() {
+  return getState(STATE_ROOT_FOLDER) || null;
+}
+
+/** Drive 파일/폴더 메타(존재 확인·바로가기 링크). 없으면(404 등) 예외. */
+async function getFileMeta(fileId) {
+  const drive = driveClient();
+  const { data } = await drive.files.get({ fileId, fields: "id,name,webViewLink,mimeType,trashed,createdTime" });
+  return data;
+}
+
+/**
+ * 저장 폴더 점검: 폴더가 있으면 그대로, 없으면 생성 후 메타(id·name·webViewLink) 반환.
+ * 반환: { id, name, webViewLink, created(신규생성 여부) } 또는 미연동 시 예외.
+ */
+async function checkFolder() {
+  const before = getFolderId();
+  const id = await ensureFolder(); // 캐시 있으면 그대로, 없으면 생성
+  const meta = await getFileMeta(id);
+  return { id: meta.id, name: meta.name, webViewLink: meta.webViewLink || null, trashed: !!meta.trashed, created: !before };
+}
+
 module.exports = {
   DriveNotLinkedError,
   STATE_REFRESH_TOKEN,
@@ -101,6 +124,9 @@ module.exports = {
   isLinked,
   driveClient,
   ensureFolder,
+  getFolderId,
+  getFileMeta,
+  checkFolder,
   uploadFile,
   streamFile,
   deleteFile,
