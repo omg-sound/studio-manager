@@ -259,6 +259,15 @@ function init() {
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 세션 담당 디렉터(다대다) — 한 세션에 고객측 디렉터 여러 명. 단일 sessions.director_contact_id는 레거시 보존.
+    CREATE TABLE IF NOT EXISTS session_directors (
+      session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (session_id, contact_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_session_directors_contact ON session_directors(contact_id);
     CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
     CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
@@ -441,6 +450,15 @@ function init() {
       insUserContact.run(u.name, family || null, given || null, u.email || null, u.id);
     }
     setState("user_contacts_backfill_v1", "done");
+  }
+
+  // 기존 단일 담당 디렉터(sessions.director_contact_id)를 다대다 테이블(session_directors)로 1회 복사. 멱등(중복 무시).
+  if (!getState("session_directors_backfill_v1")) {
+    d.prepare(
+      `INSERT OR IGNORE INTO session_directors (session_id, contact_id)
+       SELECT id, director_contact_id FROM sessions WHERE director_contact_id IS NOT NULL`
+    ).run();
+    setState("session_directors_backfill_v1", "done");
   }
 
   // 기존 연락처 중 성·이름이 둘 다 비어있는 행을 표시명(name)으로 1회 백필(splitKoreanName).

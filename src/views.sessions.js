@@ -5,7 +5,7 @@
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions } = require("./data");
+const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, listSessionDirectors } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -142,24 +142,30 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
          ${engineerField}
        </div>
        <p class="mt-1 text-xs text-muted">청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)</p>`;
-  // 담당 디렉터 콤보 — 프로젝트의 contactCombo와 동일 패턴(data-contact-combo/search/id/info).
-  // app.js [data-contact-combo] IIFE가 동일 속성으로 동기화 처리하므로 app.js 수정 불필요.
+  // 담당 디렉터 — 다대다(여러 명). 각 행이 contactCombo(data-contact-combo, app.js 위임 처리). '디렉터 추가'로 행 복제(template).
   const allContacts = contactOptions();
-  const dirSel = s.director_contact_id ? allContacts.find((o) => o.id === Number(s.director_contact_id)) : null;
+  const dlId = "dl-session-directors";
+  const dirRow = (d) => `
+        <div class="mt-1 flex items-center gap-2" data-contact-combo data-director-row>
+          <input type="hidden" name="director_contact_id" value="${d ? d.id : ""}" data-contact-id />
+          <input class="input flex-1 py-1.5 text-sm" type="text" name="director_name" list="${dlId}"
+            data-contact-search autocomplete="off" placeholder="이름 입력 — 선택 또는 새 이름"
+            value="${d ? esc(d.name) : ""}" aria-label="담당 디렉터 검색" />
+          <button type="button" class="btn-ghost btn-xs shrink-0 text-danger" data-director-remove aria-label="디렉터 제거">✕</button>
+        </div>`;
+  const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
   const directorField = `
     <div class="mt-2">
-      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자, 선택)</span></label>
-      <div data-contact-combo>
-        <input type="hidden" name="director_contact_id" value="${dirSel ? dirSel.id : ""}" data-contact-id />
-        <input class="input py-1.5 text-sm" type="text" name="director_name" list="dl-session-directors"
-          data-contact-search autocomplete="off" placeholder="이름 입력 — 목록에서 선택하거나 새 이름"
-          value="${dirSel ? esc(dirSel.name) : ""}" aria-label="담당 디렉터 검색" />
-        <datalist id="dl-session-directors">
-          ${allContacts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
-        </datalist>
-        <div class="mt-1 hidden text-sm text-muted" data-contact-info></div>
-        <p class="mt-0.5 text-xs text-muted">목록에 없는 이름을 입력하면 저장 시 새 연락처로 등록됩니다. 비워 두면 미연결.</p>
+      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자, 여러 명 가능 · 선택)</span></label>
+      <div data-director-list>
+        ${(currentDirectors.length ? currentDirectors : [null]).map((d) => dirRow(d)).join("")}
       </div>
+      <template data-director-template>${dirRow(null)}</template>
+      <button type="button" class="btn-ghost btn-xs mt-1" data-director-add>+ 디렉터 추가</button>
+      <datalist id="${dlId}">
+        ${allContacts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
+      </datalist>
+      <p class="mt-0.5 text-xs text-muted">목록에 없는 이름을 입력하면 저장 시 새 연락처로 등록됩니다. 비워 둔 행은 무시됩니다.</p>
     </div>`;
   return `
     <div class="grid gap-2 sm:grid-cols-3">
@@ -202,9 +208,11 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
     ? `<span class="badge-info">${esc(s.status)}</span>`
     : `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
+  const directors = listSessionDirectors(s.id);
   const people = [
     s.booker_name ? `예약 ${esc(s.booker_name)}` : "",
     s.engineer_name ? `엔지니어 ${esc(s.engineer_name)}` : "",
+    directors.length ? `디렉터 ${directors.map((d) => esc(d.name)).join(", ")}` : "",
   ].filter(Boolean).join(" · ") || "담당자 미정";
   const sub = [
     showProject && s.project_title ? `<a href="/projects/${s.project_id}" class="text-primary hover:underline">${esc(s.project_title)}</a>` : "",

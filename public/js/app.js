@@ -478,51 +478,69 @@
   sync();
 })();
 
-// 검색형 콤보박스(실결제자·클라이언트 담당자): <input list> 검색값 ↔ hidden id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정(아니면 미지정).
-// [data-client-combo](client_id)·[data-contact-combo](contact_id) 둘 다 같은 로직으로 처리(셀렉터 OR).
+// 검색형 콤보박스(실결제자·클라이언트/세션 디렉터 담당자): <input list> 검색값 ↔ hidden id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정.
+// 위임(delegation)으로 처리 → 동적으로 추가되는 행(세션 디렉터 '+추가')도 자동 동작.
 (function () {
   "use strict";
-  var combos = document.querySelectorAll("[data-client-combo], [data-contact-combo]");
-  if (!combos.length) return;
-  Array.prototype.forEach.call(combos, function (wrap) {
+  function syncCombo(wrap) {
     var search = wrap.querySelector("[data-client-search], [data-contact-search]");
     var hidden = wrap.querySelector("[data-client-id], [data-contact-id]");
     var listEl = search ? document.getElementById(search.getAttribute("list")) : null;
-    var info = wrap.querySelector("[data-contact-info]"); // 고객측 담당자 콤보에만 있음(전화·이메일·소속 표시)
-    var payerContact = wrap.querySelector("[data-payer-contact-id]"); // 청구처 콤보에만(담당자를 청구처로 선택 시 contact_id)
+    var info = wrap.querySelector("[data-contact-info]"); // 고객측 담당자 콤보에만(전화·이메일·소속 표시)
+    var payerContact = wrap.querySelector("[data-payer-contact-id]"); // 청구처 콤보에만
     if (!search || !hidden || !listEl) return;
-    function sync() {
-      var v = search.value.trim();
-      var id = "", contactId = "", matched = null;
-      for (var i = 0; i < listEl.options.length; i++) {
-        if (listEl.options[i].value === v) { matched = listEl.options[i]; id = matched.getAttribute("data-id") || ""; contactId = matched.getAttribute("data-contact-id") || ""; break; }
-      }
-      hidden.value = id;
-      if (payerContact) payerContact.value = contactId;
-      if (info) {
-        while (info.firstChild) info.removeChild(info.firstChild); // CSP-safe: innerHTML 대신 노드 생성
-        if (matched) {
-          var ph = matched.getAttribute("data-phone");
-          var em = matched.getAttribute("data-email");
-          var cl = matched.getAttribute("data-client");
-          var nodes = [];
-          if (ph) { var an = document.createElement("a"); an.href = "tel:" + ph.replace(/[^0-9+]/g, ""); an.textContent = "☎ " + ph; an.className = "font-medium text-info"; nodes.push(an); }
-          if (em) { var ae = document.createElement("a"); ae.href = "mailto:" + em; ae.textContent = "✉ " + em; ae.className = "text-info"; nodes.push(ae); }
-          if (cl) { var sp = document.createElement("span"); sp.textContent = "소속: " + cl; nodes.push(sp); }
-          nodes.forEach(function (node, idx) { if (idx > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(node); });
-          info.classList.toggle("hidden", nodes.length === 0);
-        } else if (v) {
-          info.textContent = "목록에 없는 이름 — 저장 시 새 연락처로 등록됩니다.";
-          info.classList.remove("hidden");
-        } else {
-          info.classList.add("hidden");
-        }
+    var v = search.value.trim();
+    var id = "", contactId = "", matched = null;
+    for (var i = 0; i < listEl.options.length; i++) {
+      if (listEl.options[i].value === v) { matched = listEl.options[i]; id = matched.getAttribute("data-id") || ""; contactId = matched.getAttribute("data-contact-id") || ""; break; }
+    }
+    hidden.value = id;
+    if (payerContact) payerContact.value = contactId;
+    if (info) {
+      while (info.firstChild) info.removeChild(info.firstChild); // CSP-safe
+      if (matched) {
+        var ph = matched.getAttribute("data-phone"), em = matched.getAttribute("data-email"), cl = matched.getAttribute("data-client");
+        var nodes = [];
+        if (ph) { var an = document.createElement("a"); an.href = "tel:" + ph.replace(/[^0-9+]/g, ""); an.textContent = "☎ " + ph; an.className = "font-medium text-info"; nodes.push(an); }
+        if (em) { var ae = document.createElement("a"); ae.href = "mailto:" + em; ae.textContent = "✉ " + em; ae.className = "text-info"; nodes.push(ae); }
+        if (cl) { var sp = document.createElement("span"); sp.textContent = "소속: " + cl; nodes.push(sp); }
+        nodes.forEach(function (node, idx) { if (idx > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(node); });
+        info.classList.toggle("hidden", nodes.length === 0);
+      } else if (v) { info.textContent = "목록에 없는 이름 — 저장 시 새 연락처로 등록됩니다."; info.classList.remove("hidden"); }
+      else { info.classList.add("hidden"); }
+    }
+  }
+  function comboOf(el) { return el && el.closest ? el.closest("[data-client-combo], [data-contact-combo]") : null; }
+  function isSearch(el) { return el && el.matches && el.matches("[data-client-search], [data-contact-search]"); }
+  document.addEventListener("input", function (e) { if (isSearch(e.target)) { var w = comboOf(e.target); if (w) syncCombo(w); } });
+  document.addEventListener("change", function (e) { if (isSearch(e.target)) { var w = comboOf(e.target); if (w) syncCombo(w); } });
+  document.addEventListener("blur", function (e) { if (isSearch(e.target)) { var w = comboOf(e.target); if (w) syncCombo(w); } }, true); // blur는 캡처
+  Array.prototype.forEach.call(document.querySelectorAll("[data-client-combo], [data-contact-combo]"), syncCombo); // 초기값 표시
+})();
+
+// 세션 담당 디렉터 반복 입력([data-director-list]): '+ 디렉터 추가'로 행 복제(template), '✕'로 제거.
+(function () {
+  "use strict";
+  document.addEventListener("click", function (e) {
+    var addBtn = e.target.closest && e.target.closest("[data-director-add]");
+    if (addBtn) {
+      var wrap = addBtn.parentNode;
+      var list = wrap.querySelector("[data-director-list]");
+      var tpl = wrap.querySelector("[data-director-template]");
+      if (list && tpl && tpl.content) { list.appendChild(tpl.content.cloneNode(true)); var last = list.lastElementChild; var inp = last && last.querySelector("[data-contact-search]"); if (inp) inp.focus(); }
+      return;
+    }
+    var rmBtn = e.target.closest && e.target.closest("[data-director-remove]");
+    if (rmBtn) {
+      var row = rmBtn.closest("[data-director-row]");
+      var container = row && row.parentNode;
+      if (row) row.parentNode.removeChild(row);
+      // 마지막 행까지 지우면 빈 행 하나 남겨 계속 추가 가능하게
+      if (container && !container.querySelector("[data-director-row]")) {
+        var t = container.parentNode.querySelector("[data-director-template]");
+        if (t && t.content) container.appendChild(t.content.cloneNode(true));
       }
     }
-    search.addEventListener("input", sync);
-    search.addEventListener("change", sync);
-    search.addEventListener("blur", sync);
-    sync(); // 초기 로드 시 기존 선택값 정보 표시
   });
 })();
 

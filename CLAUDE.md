@@ -29,7 +29,7 @@
 - **곡 일괄 추가**: 줄바꿈으로 여러 곡명 한 번에 추가.
 
 ### 세션 일정(예약)
-- 프로젝트 하위 세션 CRUD + 사이드바 `/sessions`(**목록/캘린더 뷰 전환** `?view=`; 목록=다가오는/지난, 캘린더=월 그리드 `?month=YYYY-MM`, `monthCalendar`/`sessionsForMonth`). 예약 담당자·담당 엔지니어 별개(담당자 마스터 select; **예약 담당자 '미지정' 옵션 제거 — 환경설정 기본 예약담당자 자동 선택**, `admin_state.default_booker`). **담당 디렉터**=고객측 연락처 콤보(고객측 담당자와 동일 — 이름 입력·목록 선택, 목록 외 이름 저장 시 새 연락처 자동 생성, `sessions.director_contact_id`); 연락처 상세에 '참여 세션' 기록.
+- 프로젝트 하위 세션 CRUD + 사이드바 `/sessions`(**목록/캘린더 뷰 전환** `?view=`; 목록=다가오는/지난, 캘린더=월 그리드 `?month=YYYY-MM`, `monthCalendar`/`sessionsForMonth`). 예약 담당자·담당 엔지니어 별개(담당자 마스터 select; **예약 담당자 '미지정' 옵션 제거 — 환경설정 기본 예약담당자 자동 선택**, `admin_state.default_booker`). **담당 디렉터 다대다(여러 명)**=고객측 연락처 콤보 반복 입력(`session_directors(session_id, contact_id)` 조인 테이블; 폼은 '+디렉터 추가'로 행 복제[template]·'✕'로 제거, app.js 콤보는 **위임 처리**라 동적 행도 자동 동작; 각 행 이름 입력·목록 선택, 목록 외 이름은 같은 이름 재사용 후 없으면 새 연락처 생성 `resolveDirectorIds`). 레거시 `sessions.director_contact_id`는 첫 디렉터로 동기화 보존. 연락처 상세 '참여 세션'은 조인+레거시 모두 조회(`listSessionsForContact`), `classifyContact` 디렉터 배지도 동일.
 - **폼 레이아웃(추가·편집 완전 통일)**: 추가·편집 모두 `sessionBookingFields`(날짜·예약·상태 / 세션종류·**녹음 단가 항목**(세션 종류=녹음일 때만 노출)·엔지니어·**룸** / **시작 그리드+직접입력** / **소요 슬라이더**). 편집 폼은 기존 시간으로 슬라이더 초기화(`minutesBetween`), 저장 시 시작+소요로 종료 산정. `app.js`가 `[data-session-form]`을 **폼별로 초기화(멀티폼)**. **세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능**. 세션 저장 버튼도 추가 버튼처럼 full.
 - **용어 통일**: `녹음 종류` = **단가표 항목**(`rate_item_id`, 스튜디오/로케이션 분류 optgroup, `rateSelectGrouped`).
   `세션 종류` = `session_type`(녹음/믹싱/마스터링/기타). 추가·편집 폼에서 동일 의미(이전 라벨 혼동 정리).
@@ -213,7 +213,8 @@
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,
   start_time?, end_time? "HH:MM", booker_name?, engineer_name?, status[예정|완료|취소], memo,
-  rate_item_id?→rate_items SET NULL, room_id?→rooms SET NULL, director_contact_id?(→contacts, 담당 디렉터·연락처 콤보), gcal_event_id?)` — 스튜디오 일정.
+  rate_item_id?→rate_items SET NULL, room_id?→rooms SET NULL, director_contact_id?(→contacts, 담당 디렉터 **레거시**·다대다는 `session_directors`), gcal_event_id?)` — 스튜디오 일정.
+- `session_directors(session_id→sessions CASCADE, contact_id→contacts CASCADE, PRIMARY KEY(session_id, contact_id))` — **세션 담당 디렉터 다대다**(한 세션에 고객측 디렉터 여러 명). `sessions.director_contact_id`(첫 디렉터)는 레거시 동기화 보존. `setSessionDirectors`/`listSessionDirectors`/`resolveDirectorIds`, 기존 단일 디렉터는 `session_directors_backfill_v1`로 1회 복사.
   `booker_name`(예약 담당자)·`engineer_name`(담당 엔지니어)은 둘 다 담당자 마스터에서 선택(별개 역할).
   `rate_item_id`는 녹음 세션 시간제 자동 산정용 단가표 연결. `room_id`는 룸별 겹침 검사 단위(IFNULL 0으로 가상룸 처리). `gcal_event_id`는 자동 생성한 구글 캘린더 일정 id(수정·삭제 추적).
 - `admin_state(key, value)` — drive folder_id·refresh token(암호화)·테마 캐시·`studio_calendar_id`(스튜디오 캘린더)·`studio_location`(기본 장소)·**`studio_hours`**(운영시간 JSON·예약 그리드 시작슬롯 소스)·`studio_biz_*`(공급자 세금정보, 거래명세서 PDF용, 평문)·`studio_logo`(거래명세서 로고, base64 data URI)·`alert_webhook_url`(알림 웹훅, 암호화)·**`default_booker`**(기본 예약 담당자 이름, 세션 폼 기본 선택).

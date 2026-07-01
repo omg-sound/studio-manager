@@ -335,13 +335,15 @@ function listProjectsForContact(contactId) {
 
 /** 연락처가 담당 디렉터로 지정된 세션(연락처 상세 '참여 세션' 섹션용). 최근순. */
 function listSessionsForContact(contactId) {
+  // 다대다(session_directors) + 레거시(director_contact_id) 모두 포함해 참여 세션 조회.
   return db().prepare(
     `SELECT s.*, p.title AS project_title
        FROM sessions s
        JOIN projects p ON p.id = s.project_id
-      WHERE s.director_contact_id = ?
+      WHERE s.director_contact_id = @cid
+         OR EXISTS (SELECT 1 FROM session_directors sd WHERE sd.session_id = s.id AND sd.contact_id = @cid)
       ORDER BY s.session_date DESC, s.start_time DESC, s.id DESC`
-  ).all(Number(contactId));
+  ).all({ cid: Number(contactId) });
 }
 
 // ── 담당자(project_managers) ↔ 연락처(contacts) 연동 ──
@@ -384,7 +386,9 @@ function classifyContact(contactId, aff) {
       if (a && a.client_id) badges.push({ label: "고객측 담당자", cls: "badge-success" });
     }
   }
-  const director = db().prepare("SELECT 1 FROM sessions WHERE director_contact_id = ? LIMIT 1").get(id);
+  const director = db()
+    .prepare("SELECT 1 FROM sessions WHERE director_contact_id = @cid UNION SELECT 1 FROM session_directors WHERE contact_id = @cid LIMIT 1")
+    .get({ cid: id });
   if (director) badges.push({ label: "디렉터", cls: "badge-warning" });
   if (!badges.length) badges.push({ label: "지인·기타", cls: "badge-neutral" });
   return badges;
@@ -1403,12 +1407,7 @@ function sessionFields(input) {
   // 직접입력(그리드 밖 시간)이 있으면 우선, 없으면 그리드에서 고른 시작.
   const start = cleanTime(input.start_time_custom) || cleanTime(input.start_time);
   const rateItemId = Number(input.rate_item_id) || null;
-  // 담당 디렉터(클라이언트 측 연락처): director_contact_id(목록 선택) 우선, 없고 director_name(새 이름) 있으면 새 연락처 생성.
-  let directorContactId = Number(input.director_contact_id) || null;
-  if (!directorContactId) {
-    const dirName = String(input.director_name || "").trim();
-    if (dirName) directorContactId = createContact({ name: dirName });
-  }
+  // 담당 디렉터는 다대다(session_directors)로 별도 처리 — 여기선 레거시 컬럼 자리만 null(caller가 첫 디렉터로 채움).
   return {
     session_type: normalizeSessionType(input.session_type),
     session_date: date,
@@ -1419,9 +1418,50 @@ function sessionFields(input) {
     status: normalizeSessionStatus(input.status),
     rate_item_id: rateItemId,
     room_id: validRoomId(input.room_id), // 활성 룸 검증 — 없거나 삭제된 id는 null
-    director_contact_id: directorContactId,
+    director_contact_id: null,
     memo: String(input.memo || "").trim() || null,
   };
+}
+
+/** 세션 담당 디렉터(다대다): director_contact_id[](목록 선택) + director_name[](새/입력 이름)을 연락처 id 배열로 해석(중복 제거).
+ *  id 우선, 없으면 같은 이름 연락처 재사용, 그래도 없으면 새로 생성. */
+function resolveDirectorIds(input) {
+  const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
+  const ids = asArr(input.director_contact_id);
+  const names = asArr(input.director_name);
+  const n = Math.max(ids.length, names.length);
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < n; i++) {
+    let cid = Number(ids[i]) || null;
+    if (!cid) {
+      const nm = String(names[i] || "").trim();
+      if (!nm) continue;
+      const existing = db().prepare("SELECT id FROM contacts WHERE name = ? LIMIT 1").get(nm);
+      cid = existing ? existing.id : createContact({ name: nm });
+    }
+    if (cid && !seen.has(cid)) { seen.add(cid); out.push(cid); }
+  }
+  return out;
+}
+
+/** 세션의 담당 디렉터 목록을 통째로 교체(다대다). 레거시 sessions.director_contact_id도 첫 디렉터로 동기화. */
+function setSessionDirectors(sessionId, ids) {
+  const d = db();
+  d.prepare("DELETE FROM session_directors WHERE session_id = ?").run(sessionId);
+  const ins = d.prepare("INSERT OR IGNORE INTO session_directors (session_id, contact_id) VALUES (?, ?)");
+  for (const cid of ids) ins.run(sessionId, cid);
+  d.prepare("UPDATE sessions SET director_contact_id = ? WHERE id = ?").run(ids[0] || null, sessionId);
+}
+
+/** 세션의 담당 디렉터(연락처) 목록. */
+function listSessionDirectors(sessionId) {
+  return db()
+    .prepare(
+      `SELECT ct.* FROM session_directors sd JOIN contacts ct ON ct.id = sd.contact_id
+       WHERE sd.session_id = ? ORDER BY sd.created_at, ct.name COLLATE NOCASE`
+    )
+    .all(Number(sessionId));
 }
 
 /**
@@ -1516,6 +1556,8 @@ function createSession(user, projectId, input = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
   const f = sessionFields(input);
+  const directorIds = resolveDirectorIds(input);
+  f.director_contact_id = directorIds[0] || null; // 레거시 컬럼=첫 디렉터
   assertNoSessionConflict(f, null);
   const info = db()
     .prepare(
@@ -1523,6 +1565,7 @@ function createSession(user, projectId, input = {}) {
        VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_contact_id, @memo)`
     )
     .run({ project_id: project.id, ...f });
+  setSessionDirectors(info.lastInsertRowid, directorIds); // 다대다 디렉터 저장
   return db().prepare("SELECT * FROM sessions WHERE id = ?").get(info.lastInsertRowid);
 }
 
@@ -1531,6 +1574,8 @@ function updateSession(user, sessionId, input = {}) {
   if (!s) return null;
   if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED");
   const f = sessionFields(input);
+  const directorIds = resolveDirectorIds(input);
+  f.director_contact_id = directorIds[0] || null; // 레거시 컬럼=첫 디렉터
   assertNoSessionConflict(f, s.id);
   db()
     .prepare(
@@ -1539,6 +1584,7 @@ function updateSession(user, sessionId, input = {}) {
        rate_item_id=@rate_item_id, room_id=@room_id, director_contact_id=@director_contact_id, memo=@memo WHERE id=@id`
     )
     .run({ id: s.id, ...f });
+  setSessionDirectors(s.id, directorIds); // 다대다 디렉터 교체
   return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
 }
 
@@ -1887,6 +1933,7 @@ module.exports = {
   invoiceStats,
   listInvoicesForProject,
   listSessionsForProject,
+  listSessionDirectors,
   getSessionForUser,
   createSession,
   updateSession,
