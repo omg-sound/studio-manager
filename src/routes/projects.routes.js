@@ -36,6 +36,7 @@ const {
   deleteTrack,
   createTask,
   updateTask,
+  setTaskAmount,
   deleteTask,
   createInvoiceFromTasks,
   createContact,
@@ -443,6 +444,18 @@ router.post("/tasks/:taskId", requireEditor, (req, res) => {
     res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
     if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "수정 불가", message: "이미 청구된 작업은 수정할 수 없습니다.", user: req.user }));
+    throw e;
+  }
+});
+
+// 청구 폼에서 입력한 작업 금액을 즉시 작업에 저장(AJAX) — 초안이 아니라 바로 기록되어 목록·청구 폼 기본값에 반영.
+router.post("/tasks/:taskId/amount", requireEditor, (req, res) => {
+  try {
+    const task = setTaskAmount(req.user, Number(req.params.taskId), parseMoney(req.body.amount));
+    if (!task) return res.status(404).json({ ok: false });
+    return res.json({ ok: true, amount: task.total_price });
+  } catch (e) {
+    if (e.message === "TASK_LOCKED") return res.status(400).json({ ok: false, error: "이미 청구된 작업은 금액을 바꿀 수 없습니다." });
     throw e;
   }
 });

@@ -466,6 +466,20 @@
   });
 })();
 
+// 청구 폼 작업 금액 즉시 저장: task_amount_<id> 변경(포커스 이탈) 시 해당 작업 total_price에 바로 반영(초안 아님 → 목록·기본값 반영).
+(function () {
+  "use strict";
+  document.addEventListener("change", function (e) {
+    var el = e.target;
+    if (!el || !el.name) return;
+    var m = /^task_amount_(\d+)$/.exec(el.name);
+    if (!m) return;
+    var body = new URLSearchParams();
+    body.append("amount", String(el.value).replace(/[^\d]/g, ""));
+    fetch("/projects/tasks/" + m[1] + "/amount", { method: "POST", body: body, headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" }).catch(function () {});
+  });
+})();
+
 // 클라이언트 폼: 아티스트(개인)는 사업자등록번호·대표자·주소가 없으므로 분류=아티스트면 세금정보 숨김.
 (function () {
   "use strict";
