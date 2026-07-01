@@ -199,12 +199,11 @@ router.post("/", (req, res) => {
 });
 
 // ── 수정 ──
+// 이제 상세(GET /:id)가 인라인 편집 화면 — 옛 편집 경로는 상세로 리다이렉트(첨부 오류 ferr 보존, 북마크 호환).
 router.get("/:id/edit", (req, res) => {
-  const c = getClient(Number(req.params.id));
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const files = listClientFiles(c.id);
-  const fileErr = String(req.query.ferr || "").trim();
-  res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm(c, true, files, fileErr, true, listContacts({}), listClients({}).filter((x) => x.kind !== "아티스트")) }));
+  const id = Number(req.params.id);
+  const ferr = String(req.query.ferr || "").trim();
+  res.redirect(`/clients/${id}${ferr ? "?ferr=" + encodeURIComponent(ferr) : ""}`);
 });
 
 router.post("/:id", (req, res) => {
@@ -268,17 +267,17 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
   }
   if (!FILE_KINDS.find((k) => k.key === kind)) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
-    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("알 수 없는 서류 종류입니다.")}`);
+    return res.redirect(`/clients/${id}?ferr=${encodeURIComponent("알 수 없는 서류 종류입니다.")}`);
   }
   if (!req.file) {
-    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("파일을 선택하세요.")}`);
+    return res.redirect(`/clients/${id}?ferr=${encodeURIComponent("파일을 선택하세요.")}`);
   }
 
   // 매직바이트 검증: Content-Type 헤더를 신뢰하지 않고 파일 첫 바이트로 직접 확인
   const detectedMime = detectMimeFromFile(req.file.path);
   if (!detectedMime) {
     fs.promises.unlink(req.file.path).catch(() => {});
-    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("PNG, JPG, PDF 파일만 업로드할 수 있습니다.")}`);
+    return res.redirect(`/clients/${id}?ferr=${encodeURIComponent("PNG, JPG, PDF 파일만 업로드할 수 있습니다.")}`);
   }
 
   const originalName = decodeName(req.file.originalname);
@@ -287,10 +286,10 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
     // 기존 같은 kind 파일을 교체하는 경우 이전 파일 스토리지 정리
     const old = upsertClientFile(id, kind, { storage_backend: backend, file_id: fileId, file_name: originalName, mime_type: detectedMime, file_size: req.file.size });
     if (old) await storage.remove(old.storage_backend, old.file_id);
-    res.redirect(`/clients/${id}/edit?flash=saved`);
+    res.redirect(`/clients/${id}?flash=saved`);
   } catch (e) {
     console.error("[client file upload]", e);
-    res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("업로드에 실패했습니다.")}`);
+    res.redirect(`/clients/${id}?ferr=${encodeURIComponent("업로드에 실패했습니다.")}`);
   } finally {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
   }
@@ -321,10 +320,10 @@ router.get("/:id/files/:kind/raw", requireEditor, asyncHandler(async (req, res) 
 router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
-  if (!FILE_KINDS.find((k) => k.key === kind)) return res.redirect(`/clients/${id}/edit`);
+  if (!FILE_KINDS.find((k) => k.key === kind)) return res.redirect(`/clients/${id}`);
   const old = deleteClientFile(id, kind);
   if (old) await storage.remove(old.storage_backend, old.file_id);
-  res.redirect(`/clients/${id}/edit?flash=deleted`);
+  res.redirect(`/clients/${id}?flash=deleted`);
 }));
 
 // ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리 + 첨부 서류 링크) ──
@@ -387,28 +386,28 @@ router.get("/:id", (req, res) => {
     ? `<div class="mb-4 text-sm"><span class="text-muted">소속사</span> <a href="/clients/${c.agency_client_id}" class="text-primary hover:underline">${esc((getClient(c.agency_client_id) || {}).name || c.agency_name || "업체")} ↗</a></div>`
     : "";
 
-  // 첨부 서류 열람 링크(있으면만 표시, 공개 URL 없음)
-  const filesSection = files.length
-    ? `<div class="mb-4">
-        <h3 class="mb-2 text-sm font-medium text-muted">첨부 서류</h3>
-        <div class="flex flex-wrap gap-2">
-          ${files.map((f) => `<a href="/clients/${c.id}/files/${f.kind}/raw" target="_blank" rel="noopener" class="btn-ghost btn-sm">${esc(fileKindLabel(f.kind))} 보기</a>`).join("")}
-        </div>
-      </div>`
-    : "";
+  // 상세로 들어오면 바로 편집 — '정보 수정' 버튼 폐기, 인라인 편집 폼(dirty 저장·첨부 서류·삭제 포함).
+  const companies = listClients({}).filter((x) => x.kind !== "아티스트");
+  const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
+  // 폼의 대표자/담당자 datalist는 전체 연락처가 필요(상세의 contacts는 이 클라이언트 소속만이라 별도).
+  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true);
+  const crossRefs = [
+    (() => { const lc = c.source_contact_id ? getContact(c.source_contact_id) : null; return lc ? `<div><span class="text-muted">연동 연락처</span> <a href="/contacts/${lc.id}" class="text-primary hover:underline">${esc(lc.name)} ↗</a></div>` : ""; })(),
+    (() => { const oc = c.owner_contact_id ? getContact(c.owner_contact_id) : null; return oc ? `<div><span class="text-muted">대표자 연락처</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : ""; })(),
+  ].filter(Boolean).join("");
+  const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: "/clients", label: "클라이언트" }, action: `<a href="/clients/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>` })}
-    ${(() => { const lc = c.source_contact_id ? getContact(c.source_contact_id) : null; return lc ? `<div class="mb-4 text-sm"><span class="text-muted">연동 연락처</span> <a href="/contacts/${lc.id}" class="text-primary hover:underline">${esc(lc.name)} ↗</a></div>` : ""; })()}
-    ${(() => { const oc = c.owner_contact_id ? getContact(c.owner_contact_id) : null; return oc ? `<div class="mb-4 text-sm"><span class="text-muted">대표자</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : (c.owner_name ? `<div class="mb-4 text-sm"><span class="text-muted">대표자</span> ${esc(c.owner_name)}</div>` : ""); })()}
-    ${agencyLink}
-    <div class="mb-4">
+    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: "/clients", label: "클라이언트" } })}
+    ${editCard}
+    ${crossRefBlock}
+    ${agencyLink ? `<div class="mt-3">${agencyLink}</div>` : ""}
+    ${rosterSection}
+    <div class="mb-4 mt-4">
       <h3 class="mb-2 text-sm font-medium text-muted">담당자 연락처</h3>
       ${contactsSection}
     </div>
-    ${rosterSection}
-    ${filesSection}
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
@@ -503,15 +502,16 @@ function linkClientContact(clientId, body) {
   if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = []) {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   const isArtist = (c.kind || CLIENT_KINDS[0]) === "아티스트"; // 개인 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
   const fileMap = {};
   files.forEach((f) => { fileMap[f.kind] = f; });
 
+  // embedded=상세 페이지에 인라인으로 넣을 때 — 폼 자체 pageHeader(클라이언트 수정/상세 back) 생략(상단 이름 헤더가 이미 있음).
   return `
-    ${pageHeader({ title: isEdit ? "클라이언트 수정" : "새 클라이언트", desc: "분류 · 연락처 · 세금계산서 정보(청구처가 될 경우)", back: isEdit && c.id ? { href: `/clients/${c.id}`, label: "클라이언트 상세" } : { href: "/clients", label: "클라이언트" } })}
+    ${embedded ? "" : pageHeader({ title: isEdit ? "클라이언트 수정" : "새 클라이언트", desc: "분류 · 연락처 · 세금계산서 정보(청구처가 될 경우)", back: isEdit && c.id ? { href: `/clients/${c.id}`, label: "클라이언트 상세" } : { href: "/clients", label: "클라이언트" } })}
     <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div><label class="label">상호(이름)</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
