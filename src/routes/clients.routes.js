@@ -68,37 +68,58 @@ function fileKindLabel(key) {
   return f ? f.label : key;
 }
 
-// ── 목록(탭 = 분류 필터 + 이름 검색) ──
+// ── 목록(서브메뉴 = 업체/아티스트 우선 분리 + 업체 내 분류 · 이름 검색) ──
 router.get("/", (req, res) => {
-  const TAB_KINDS = ["아티스트", "소속사/레이블", "제작사"]; // "기타"는 전체에만 포함
-  const activeKind = TAB_KINDS.includes(req.query.kind) ? req.query.kind : "";
+  const COMPANY_KINDS = ["소속사/레이블", "제작사", "기타"]; // 업체 = 아티스트가 아닌 분류
+  // 1차: 업체(company) / 아티스트(artist). 2차(업체 내): 분류 필터.
+  const group = req.query.group === "artist" ? "artist" : req.query.group === "company" ? "company" : "";
+  const activeKind = group === "company" && COMPANY_KINDS.includes(req.query.kind) ? req.query.kind : "";
   const q = String(req.query.q || "").trim();
-  const rows = listClients(activeKind ? { kind: activeKind } : {});
+
+  let rows = listClients({});
+  if (group === "artist") rows = rows.filter((c) => c.kind === "아티스트");
+  else if (group === "company") rows = rows.filter((c) => c.kind !== "아티스트" && (!activeKind || c.kind === activeKind));
+
   const counts = clientKindCounts();
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const artistCount = counts["아티스트"] || 0;
+  const companyCount = total - artistCount;
 
   // 라우트 레벨 이름 필터(data.js 수정 없이)
   const ql = q.toLowerCase();
   const displayed = q ? rows.filter((c) => c.name.toLowerCase().includes(ql)) : rows;
 
-  const kindChips = filterChips({
-    chips: [{ key: "", label: `전체목록 ${total}` }, ...TAB_KINDS.map((k) => ({ key: k, label: `${k} ${counts[k] || 0}` }))],
-    activeKey: activeKind,
-    hrefFn: (key) => {
-      const base = key ? "/clients?kind=" + encodeURIComponent(key) : "/clients";
-      return q ? base + "&q=" + encodeURIComponent(q) : base;
-    },
+  const qs = (params) => {
+    const p = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
+    if (q) p.push("q=" + encodeURIComponent(q));
+    return p.length ? "/clients?" + p.join("&") : "/clients";
+  };
+  // 1차 서브메뉴(업체/아티스트)
+  const groupChips = filterChips({
+    chips: [{ key: "", label: `전체 ${total}` }, { key: "company", label: `업체 ${companyCount}` }, { key: "artist", label: `아티스트 ${artistCount}` }],
+    activeKey: group,
+    hrefFn: (key) => qs({ group: key }),
   });
+  // 2차(업체 선택 시 분류 세부 필터)
+  const kindChips = group === "company"
+    ? `<div class="mb-4">${filterChips({
+        chips: [{ key: "", label: "전체 업체" }, ...COMPANY_KINDS.map((k) => ({ key: k, label: `${k} ${counts[k] || 0}` }))],
+        activeKey: activeKind,
+        hrefFn: (key) => qs({ group: "company", kind: key }),
+      })}</div>`
+    : "";
 
   const searchBar = `
     <form method="get" action="/clients" class="mb-4 flex gap-2">
+      ${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}
       ${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}
       <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
 
+  const clearQHref = group === "company" && activeKind ? `/clients?group=company&kind=${encodeURIComponent(activeKind)}` : group ? `/clients?group=${group}` : "/clients";
   const resultNote = q
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${displayed.length}건 · <a href="/clients${activeKind ? "?kind=" + encodeURIComponent(activeKind) : ""}" class="text-primary hover:underline">전체 보기</a></div>`
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${displayed.length}건 · <a href="${clearQHref}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
   const list = displayed.length
@@ -112,7 +133,7 @@ router.get("/", (req, res) => {
       })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
-      : emptyState(activeKind ? esc(activeKind) + " 분류의 클라이언트가 없습니다." : "클라이언트가 없습니다.", {
+      : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "company" ? (activeKind ? esc(activeKind) + " 분류의 업체가 없습니다." : "업체가 없습니다.") : "클라이언트가 없습니다.", {
           card: true,
           icon: "clients",
           cta: { href: "/clients/new", label: "+ 새 클라이언트" },
@@ -120,9 +141,10 @@ router.get("/", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "클라이언트", desc: "아티스트 · 소속사/레이블 · 제작사 (프로젝트에서 자동 등록). 청구처가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
-    ${searchBar}
+    ${pageHeader({ title: "클라이언트", desc: "업체(소속사·제작사) · 아티스트 (프로젝트에서 자동 등록). 청구처가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
+    <div class="mb-3">${groupChips}</div>
     ${kindChips}
+    ${searchBar}
     ${resultNote}
     ${list}`;
   res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body }));
