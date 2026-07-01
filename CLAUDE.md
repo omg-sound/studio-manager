@@ -319,7 +319,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 > - **클라이언트 UX** — 상세 섹션 순서(청구·결제 최상단→상세정보→첨부→삭제)·담당자 콤보에 전화 표시·**통장사본 폐기**(사업자등록증만)·**목록 필터+스크롤 위치 복원**(`?from=` 백링크 + sessionStorage 스크롤).
 > - **기타** — 시작 시간 '직접입력' 인라인 전환·전화칸 자동완성 끔·**'제작사'→'제작사/운영사'** 표기.
 >
-> **품질**: `node:test` 40개(채번·VAT·Pro 단가·세션 겹침 야간교차·**세션 취소 겹침 제외**·권한) + 브라우저 E2E(dirty 저장·필터/스크롤 복원 등) + **GitHub Actions CI**(`.github/workflows/ci.yml` — Node 20/22 매트릭스: `npm test`+`build:css`). 프로덕션 라이브(Render web + cron). 직전까지의 상세 이력(전수조사·보안 하드닝·다중 룸·청구 재편·연락처 도메인·Google 동기화 등)은 git 로그 참조.
+> **품질**: `node:test` 40개(채번·VAT·Pro 단가·세션 겹침 야간교차·**세션 취소 겹침 제외**·권한) + 브라우저 E2E(dirty 저장·필터/스크롤 복원 등) + **GitHub Actions CI**(`.github/workflows/ci.yml` — Node 20/22 매트릭스: `npm test`+`build:css`; `checkout@v5`·`setup-node@v5`). **test 스크립트는 `node --test test/*.test.js`**(셸 확장) — `**` 글롭은 Node 22+ 전용이라 Node 20 CI에서 파일 미발견으로 실패 → 셸 확장 형태로 고정. 프로덕션 라이브(Render web + cron). 직전까지의 상세 이력(전수조사·보안 하드닝·다중 룸·청구 재편·연락처 도메인·Google 동기화 등)은 git 로그 참조.
 
 ### v1.0 릴리스 위생 점검 후속(2026-07-01, /audit Top5)
 - **버전 정정** `package.json` 0.1.0→**1.0.0**·description 현행화(3역할 내부도구). **CI 파이프라인 신설**(위 품질 참조). **죽은 코드 제거**(청구 상세·인라인의 미사용 `issued` + 2축 분리 후 죽은 `status==="입금완료"` 비교, `invoices.routes`/`views.invoices`). **세션 겹침 검사에 '취소' 예외**(`assertNoSessionConflict` — 취소 세션은 룸 미점유, 점유 슬롯에도 기록 가능·회귀 테스트 2건). **data.js 모듈 분리 착수**(스튜디오 설정 → `src/data/studio.js`, `cleanTime`→`lib/date` 공유). 상세는 TODO 9 참조.
