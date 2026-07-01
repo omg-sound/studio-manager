@@ -308,7 +308,7 @@ function projectMetaReadonly(p) {
   const { left, amount } = projectMetaLine(p);
   const extra = [
     p.artist_company ? `소속사 ${esc(p.artist_company)}` : "",
-    p.production_company ? `제작사 ${esc(p.production_company)}` : "",
+    p.production_company ? `제작사/운영사 ${esc(p.production_company)}` : "",
   ].filter(Boolean).join(" · ");
   return `
     <div class="card">
@@ -571,7 +571,7 @@ function projectForm(p = {}, err = "") {
           <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" list="dl-companies" autocomplete="off" />
         </div>
         <div>
-          <label class="label">제작사</label>
+          <label class="label">제작사/운영사</label>
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
       </div>
@@ -616,7 +616,7 @@ function projectEditForm(p = {}, err = "") {
           <input class="input" name="artist_company" value="${esc(p.artist_company || "")}" list="dl-companies" autocomplete="off" />
         </div>
         <div>
-          <label class="label">제작사</label>
+          <label class="label">제작사/운영사</label>
           <input class="input" name="production_company" value="${esc(p.production_company || "")}" list="dl-productions" autocomplete="off" />
         </div>
       </div>
@@ -634,8 +634,8 @@ function projectEditForm(p = {}, err = "") {
       </div>
       ${projectFieldDatalists()}
       <div class="flex items-center justify-end gap-3">
-        <span class="text-xs text-muted" data-save-state aria-live="polite"></span>
-        <noscript><button class="btn-primary" type="submit">저장</button></noscript>
+        <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
+        <button type="submit" class="btn-primary transition" data-project-save>저장</button>
       </div>
     </form>`;
 }

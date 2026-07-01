@@ -688,9 +688,8 @@
   }
   // el.form: 폼 내부 요소뿐 아니라 form= 속성으로 연결된 헤더 상태 select도 그 폼을 가리킨다.
   function taskFormOf(el) { var f = el && el.form; return f && f.hasAttribute && f.hasAttribute("data-task-form") ? f : null; }
-  // 자동저장 폼: 작업 폼 + 프로젝트 메타 폼. 프로젝트 폼은 input(키 입력)마다 저장하지 않고 change(포커스 이탈/선택)에서만 저장
-  // — 부분 입력값으로 클라이언트/연락처 마스터가 중복 생성되는 것을 막기 위함.
-  function anyAutoFormOf(el) { var f = el && el.form; return f && f.hasAttribute && (f.hasAttribute("data-task-form") || f.hasAttribute("data-project-form") || f.hasAttribute("data-autosave-form")) ? f : null; }
+  // 자동저장 폼: 작업 폼 + 기타 autosave 폼. (프로젝트 메타 폼은 명시적 저장 버튼 사용 — 아래 별도 IIFE)
+  function anyAutoFormOf(el) { var f = el && el.form; return f && f.hasAttribute && (f.hasAttribute("data-task-form") || f.hasAttribute("data-autosave-form")) ? f : null; }
   document.addEventListener("input", function (e) {
     var f = taskFormOf(e.target); // 작업 폼만 input 디바운스 저장(프로젝트 폼 제외)
     if (f) schedule(f, false);
@@ -698,6 +697,41 @@
   document.addEventListener("change", function (e) {
     var f = anyAutoFormOf(e.target);
     if (f) schedule(f, true); // change=blur(입력 확정)이므로 즉시 저장 — 디바운스 대기 중 페이지 이탈로 저장 유실되던 것 방지
+  });
+})();
+
+// 프로젝트 메타 폼([data-project-form]): 명시적 저장 버튼 + 변경 감지.
+// 변경이 없으면 저장 버튼이 흐리게(비활성), 변경이 생기면 강조(하이라이트 링)로 저장을 유도.
+(function () {
+  "use strict";
+  var forms = document.querySelectorAll("[data-project-form]");
+  Array.prototype.forEach.call(forms, function (form) {
+    var btn = form.querySelector("[data-project-save]");
+    if (!btn) return;
+    var hint = form.querySelector("[data-dirty-hint]");
+    function snapshot() {
+      var p = [];
+      // 콤보의 hidden id까지 포함해 모든 name 필드를 직렬화(DOM 순서 = 안정적).
+      Array.prototype.forEach.call(form.querySelectorAll("input[name], select[name], textarea[name]"), function (el) {
+        if (el.type === "checkbox" || el.type === "radio") { if (el.checked) p.push(el.name + "=" + el.value); }
+        else p.push(el.name + "=" + el.value);
+      });
+      return p.join("&");
+    }
+    var initial = snapshot();
+    var HILITE = ["ring-2", "ring-primary", "ring-offset-2"];
+    function refresh() {
+      var dirty = snapshot() !== initial;
+      btn.disabled = !dirty;
+      btn.classList.toggle("opacity-40", !dirty);
+      HILITE.forEach(function (c) { btn.classList.toggle(c, dirty); });
+      if (hint) hint.hidden = !dirty;
+    }
+    form.addEventListener("input", refresh);
+    form.addEventListener("change", refresh);
+    // 콤보가 hidden id를 input 이벤트 이후 비동기로 갱신할 수 있어 한 틱 뒤 재확인.
+    form.addEventListener("input", function () { setTimeout(refresh, 0); });
+    refresh();
   });
 })();
 
