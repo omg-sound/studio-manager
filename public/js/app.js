@@ -779,3 +779,24 @@
     });
   });
 })();
+
+// 클라이언트 목록: 상세 갔다 돌아오면 스크롤 위치 복원(필터는 서버 ?from= 로 백링크에 유지).
+// 상세 링크 클릭 시 현재 목록 URL+스크롤을 저장하고, 같은 URL로 목록이 다시 로드되면 스크롤 복원.
+(function () {
+  "use strict";
+  if (!/^\/clients\/?$/.test(location.pathname)) return;
+  var KEY = "clientsScroll";
+  var here = location.pathname + location.search;
+  try {
+    var raw = sessionStorage.getItem(KEY);
+    if (raw) {
+      var o = JSON.parse(raw);
+      if (o && o.url === here) window.scrollTo(0, o.y || 0);
+      sessionStorage.removeItem(KEY);
+    }
+  } catch (e) {}
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="/clients/"]');
+    if (a) { try { sessionStorage.setItem(KEY, JSON.stringify({ url: here, y: window.scrollY })); } catch (_e) {} }
+  });
+})();

@@ -135,6 +135,9 @@ router.get("/", (req, res) => {
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${displayed.length}건 · <a href="${clearQHref}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
+  // 상세로 넘어갈 때 현재 필터를 from으로 전달 → 상세의 '← 클라이언트' 백링크가 같은 필터로 복귀.
+  const fromQ = [group ? `group=${encodeURIComponent(group)}` : "", activeKind ? `kind=${encodeURIComponent(activeKind)}` : "", q ? `q=${encodeURIComponent(q)}` : ""].filter(Boolean).join("&");
+  const fromParam = fromQ ? `?from=${encodeURIComponent(fromQ)}` : "";
   const list = displayed.length
     ? listGroup({
         rows: displayed.map((c) => {
@@ -142,7 +145,7 @@ router.get("/", (req, res) => {
           const badges = c.kind === "아티스트" ? `<span class="badge-neutral">아티스트</span>` : (clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(r)}</span>`).join(" ") : `<span class="badge-neutral">${esc(c.kind)}</span>`);
           const left = `<div class="flex items-center gap-2">${badges}<span class="font-semibold">${esc(c.name)}</span></div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
           const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
-          return listRow({ href: `/clients/${c.id}`, left, right });
+          return listRow({ href: `/clients/${c.id}${fromParam}`, left, right });
         }),
       })
     : q
@@ -334,6 +337,9 @@ router.get("/:id", (req, res) => {
   const projects = listProjectsForClient(c);
   const invoices = listInvoicesForClientEntity(c);
   const files = listClientFiles(c.id);
+  // 목록에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만 허용).
+  const from = String(req.query.from || "");
+  const clientsBackHref = from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/clients";
   const tabBarHtml = tabBar({
     tabs: [{ key: "projects", label: `프로젝트 ${projects.length}` }, { key: "invoices", label: `청구·결제 ${invoices.length}` }],
     activeKey: tab,
@@ -392,7 +398,7 @@ router.get("/:id", (req, res) => {
   // 섹션 순서(사용자 지정): ① 프로젝트/청구·결제 → ② 상세 정보(편집 폼) → ③ 담당자 연락처 → ④ 첨부 서류 → 삭제
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: "/clients", label: "클라이언트" } })}
+    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: clientsBackHref, label: "클라이언트" } })}
     ${tabBarHtml}
     ${content}
     <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">상세 정보</h3>
