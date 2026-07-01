@@ -2,7 +2,7 @@
 
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
-const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, DOC_TYPES } = require("./config");
+const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, DOC_TYPES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, listRow } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel } = require("./lib/date");
@@ -40,19 +40,31 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   return `<div class="card mt-3"><div class="text-sm">${inner}</div></div>`;
 }
 
-/** 표시용 상태(연체/부분납 파생 반영). */
+/** 계산서·입금 축 표시 라벨(연체/부분납 파생 반영). */
 function displayStatus(inv) {
   if (isOverdue(inv)) return "연체";
-  if (inv.status === "발행" && payStatusOf(inv) === "부분납") return "부분납";
-  return inv.status;
+  if ((inv.paid_amount || 0) > 0 && balanceOf(inv) > 0) return "부분납";
+  return inv.tax_status || "계산서 미발행";
 }
 
-function invoiceBadge(inv) {
-  const label = displayStatus(inv);
-  // 발행=badge-info(쿨톤), 나머지는 config 매핑
-  if (label === "발행") return `<span class="badge-info">${esc(label)}</span>`;
+/** 청구서(bill) 발행 배지 — 청구서 미발행 / 청구서 발행. */
+function billBadge(inv) {
+  const label = INVOICE_STATUS_LABELS[inv.status] || inv.status || "청구서 미발행";
   const cls = INVOICE_STATUS_BADGE[label] || "bg-muted/10 text-muted";
   return `<span class="badge ${cls}">${esc(label)}</span>`;
+}
+
+/** 계산서·입금 배지 — 계산서 미발행 / 계산서 발행 / 입금완료(+연체·부분납 파생). */
+function taxBadge(inv) {
+  const label = displayStatus(inv);
+  if (label === "계산서 발행") return `<span class="badge-info">${esc(label)}</span>`;
+  const cls = INVOICE_STATUS_BADGE[label] || "bg-muted/10 text-muted";
+  return `<span class="badge ${cls}">${esc(label)}</span>`;
+}
+
+/** 행/헤더 배지 — 청구서 축 + 계산서·입금 축을 함께 표시. */
+function invoiceBadge(inv) {
+  return `${billBadge(inv)} ${taxBadge(inv)}`;
 }
 
 /**
@@ -99,13 +111,24 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
 
   const adminControls = isAdmin
     ? `<div class="space-y-2 border-t border-border pt-2">
-         <form method="post" action="/invoices/${inv.id}/status" class="flex items-center gap-2">
-           <input type="hidden" name="return" value="${ret}" />
-           <select name="status" class="input max-w-[10rem] py-1.5 text-sm" data-autosubmit>
-             ${INVOICE_STATUSES.map((s) => `<option ${s === inv.status ? "selected" : ""}>${esc(s)}</option>`).join("")}
-           </select>
-           <noscript><button class="btn-ghost btn-sm">상태 변경</button></noscript>
-         </form>
+         <div class="flex flex-wrap items-end gap-3">
+           <form method="post" action="/invoices/${inv.id}/status">
+             <input type="hidden" name="return" value="${ret}" />
+             <label class="label mb-0.5 text-xs">청구서 상태</label>
+             <select name="status" class="input max-w-[10rem] py-1.5 text-sm" data-autosubmit>
+               ${INVOICE_STATUSES.map((s) => `<option value="${esc(s)}" ${s === inv.status ? "selected" : ""}>${esc(INVOICE_STATUS_LABELS[s] || s)}</option>`).join("")}
+             </select>
+             <noscript><button class="btn-ghost btn-sm">변경</button></noscript>
+           </form>
+           <form method="post" action="/invoices/${inv.id}/tax-status">
+             <input type="hidden" name="return" value="${ret}" />
+             <label class="label mb-0.5 text-xs">계산서 · 입금</label>
+             <select name="tax_status" class="input max-w-[10rem] py-1.5 text-sm" data-autosubmit>
+               ${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || "계산서 미발행") ? "selected" : ""}>${esc(s)}</option>`).join("")}
+             </select>
+             <noscript><button class="btn-ghost btn-sm">변경</button></noscript>
+           </form>
+         </div>
          <form method="post" action="/invoices/${inv.id}/pay" class="space-y-1">
            <input type="hidden" name="return" value="${ret}" />
            <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
@@ -147,14 +170,12 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
   const dueLine = inv.due_date
     ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}`
     : "마감 미정";
-  // 발행+잔금일 때만 '미수', 완납이면 '완납', 미발행(견적)은 표시 안 함
+  // 완납(입금완료 또는 잔금 0+입금 있음)이면 '완납', 청구서 발행+잔금이면 '미수'. 배지가 상태를 이미 보여줘 미발행 텍스트는 생략.
   let balLine = "";
-  if (inv.status === "입금완료" || (bal <= 0 && inv.status !== "미발행")) {
+  if (inv.tax_status === "입금완료" || (bal <= 0 && (inv.paid_amount || 0) > 0)) {
     balLine = `<div class="text-xs text-muted">완납</div>`;
   } else if (inv.status === "발행" && bal > 0) {
     balLine = `<div class="tabular text-xs text-danger">미수 ${formatKRW(bal)}</div>`;
-  } else if (inv.status === "미발행") {
-    balLine = `<div class="text-xs text-muted">미발행</div>`;
   }
 
   if (compact) {

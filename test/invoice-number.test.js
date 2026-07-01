@@ -16,13 +16,13 @@ const { ensureInvoiceNumber } = require("../src/data");
 init();
 
 /** invoice_number 없는 인보이스 한 건 시드 후 행 객체 반환. */
-function seedInvoice({ status = "발행", issued = "2026-06-15" } = {}) {
+function seedInvoice({ status = "발행", taxStatus = "계산서 미발행", issued = "2026-06-15" } = {}) {
   const info = db()
     .prepare(
-      `INSERT INTO invoices (title, amount, tax_amount, paid_amount, status, issued_date)
-       VALUES (?, 0, 0, 0, ?, ?)`
+      `INSERT INTO invoices (title, amount, tax_amount, paid_amount, status, tax_status, issued_date)
+       VALUES (?, 0, 0, 0, ?, ?, ?)`
     )
-    .run("청구", status, issued);
+    .run("청구", status, taxStatus, issued);
   return db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(info.lastInsertRowid));
 }
 
@@ -58,8 +58,8 @@ test("중복 없음: 같은 달 다건 채번이 모두 유일", () => {
   assert.strictEqual(new Set(rows).size, 5, "채번된 번호에 중복이 없어야 한다");
 });
 
-test("가드: 미발행 상태는 채번하지 않는다(invoice_number=null 유지)", () => {
-  const inv = ensureInvoiceNumber(seedInvoice({ status: "미발행", issued: "2026-10-01" }));
+test("가드: 청구서 미발행 + 계산서 미발행이면 채번하지 않는다(invoice_number=null 유지)", () => {
+  const inv = ensureInvoiceNumber(seedInvoice({ status: "미발행", taxStatus: "계산서 미발행", issued: "2026-10-01" }));
   assert.strictEqual(inv.invoice_number, null);
 });
 
@@ -71,7 +71,7 @@ test("가드: 이미 번호가 있으면 그대로 반환(재채번 안 함)", (
   assert.strictEqual(twice.invoice_number, "INV-202611-001");
 });
 
-test("입금완료 상태도 채번 대상", () => {
-  const inv = ensureInvoiceNumber(seedInvoice({ status: "입금완료", issued: "2026-12-24" }));
+test("계산서 입금완료면 청구서 미발행이어도 채번 대상", () => {
+  const inv = ensureInvoiceNumber(seedInvoice({ status: "미발행", taxStatus: "입금완료", issued: "2026-12-24" }));
   assert.strictEqual(inv.invoice_number, "INV-202612-001");
 });

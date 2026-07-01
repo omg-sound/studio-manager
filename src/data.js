@@ -1114,7 +1114,8 @@ function studioStartSlots() {
 /** 발행/입금완료로 전이 시 채번 보장(수동 발행분도 INV-YYYYMM-### 부여). 거래명세서에 번호 필수. */
 function ensureInvoiceNumber(inv) {
   if (!inv || inv.invoice_number) return inv;
-  if (inv.status !== "발행" && inv.status !== "입금완료") return inv;
+  // 청구서 발행 또는 계산서 발행/입금완료 — 어느 축이든 '발행됨'이면 채번(거래명세서/계산서 번호 필수).
+  if (inv.status !== "발행" && inv.tax_status !== "계산서 발행" && inv.tax_status !== "입금완료") return inv;
   const number = nextInvoiceNumber(inv.issued_date || todayYmd());
   db().prepare("UPDATE invoices SET invoice_number=? WHERE id=?").run(number, inv.id);
   return { ...inv, invoice_number: number };
@@ -1319,7 +1320,7 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
   const where = [];
   const params = {};
   if (status) {
-    where.push("i.status = @status");
+    where.push(status === "입금완료" ? "i.tax_status = @status" : "i.status = @status"); // 입금완료는 계산서·입금 축(tax_status)
     params.status = status;
   }
   if (clientId) {

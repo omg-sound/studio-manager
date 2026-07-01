@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireBilling, canBill } = require("../auth");
-const { INVOICE_STATUSES, normalizeInvoiceStatus, normalizeDocType, DOC_TYPES } = require("../config");
+const { INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, normalizeInvoiceStatus, normalizeTaxStatus, normalizeDocType, DOC_TYPES } = require("../config");
 const {
   clientOptions,
   contactOptions,
@@ -82,7 +82,7 @@ router.get("/", requireBilling, (req, res) => {
   let rows;
   if (admin) {
     if (f === "연체") rows = listInvoices(user, { overdue: true });
-    else if (INVOICE_STATUSES.includes(f)) rows = listInvoices(user, { status: f });
+    else if (INVOICE_STATUSES.includes(f) || f === "입금완료") rows = listInvoices(user, { status: f }); // 입금완료=계산서·입금 축 필터
     else rows = listInvoices(user, {});
   } else {
     rows = listInvoices(user, {});
@@ -166,15 +166,16 @@ router.post("/", requireBilling, (req, res) => {
   if (refs.error) return reErr(refs.error);
   const amount = parseMoney(b.amount);
   if (amount <= 0) return reErr("청구 금액을 입력하세요.");
-  const status = normalizeInvoiceStatus(b.status);
-  // 입금완료로 만들면 입금액=총액 자동
-  const paid = status === "입금완료" ? amount : parseMoney(b.paid_amount);
+  const status = normalizeInvoiceStatus(b.status); // 청구서 축: 미발행 | 발행
+  const taxStatus = normalizeTaxStatus(b.tax_status); // 계산서·입금 축
+  // 계산서·입금이 입금완료면 입금액=총액 자동
+  const paid = taxStatus === "입금완료" ? amount : parseMoney(b.paid_amount);
 
   const discount = parseMoney(b.discount_amount);
   const info = db()
     .prepare(
-      `INSERT INTO invoices (project_id, client_id, title, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
-       VALUES (@project_id,@client_id,@title,@amount,@tax,@discount,@paid,@status,@issued_date,@due_date,@memo)`
+      `INSERT INTO invoices (project_id, client_id, title, amount, tax_amount, discount_amount, paid_amount, status, tax_status, issued_date, due_date, memo)
+       VALUES (@project_id,@client_id,@title,@amount,@tax,@discount,@paid,@status,@tax_status,@issued_date,@due_date,@memo)`
     )
     .run({
       project_id: refs.projectId,
@@ -185,6 +186,7 @@ router.post("/", requireBilling, (req, res) => {
       discount,
       paid,
       status,
+      tax_status: taxStatus,
       issued_date: cleanYmd(b.issued_date),
       due_date: cleanYmd(b.due_date),
       memo: String(b.memo || "").trim() || null,
@@ -216,12 +218,22 @@ router.get("/:id", requireBilling, (req, res) => {
     ? `
     <div class="card mt-3 space-y-3">
       <h2 class="text-sm font-semibold">상태 · 입금 처리</h2>
-      <form method="post" action="/invoices/${inv.id}/status" class="flex items-center gap-2">
-        <select name="status" class="input max-w-[10rem]" data-autosubmit>
-          ${INVOICE_STATUSES.map((s) => `<option ${s === inv.status ? "selected" : ""}>${esc(s)}</option>`).join("")}
-        </select>
-        <noscript><button class="btn-ghost">상태 변경</button></noscript>
-      </form>
+      <div class="flex flex-wrap items-end gap-3">
+        <form method="post" action="/invoices/${inv.id}/status">
+          <label class="label mb-0.5 text-xs">청구서 상태</label>
+          <select name="status" class="input max-w-[10rem]" data-autosubmit>
+            ${INVOICE_STATUSES.map((s) => `<option value="${esc(s)}" ${s === inv.status ? "selected" : ""}>${esc(INVOICE_STATUS_LABELS[s] || s)}</option>`).join("")}
+          </select>
+          <noscript><button class="btn-ghost">변경</button></noscript>
+        </form>
+        <form method="post" action="/invoices/${inv.id}/tax-status">
+          <label class="label mb-0.5 text-xs">계산서 · 입금</label>
+          <select name="tax_status" class="input max-w-[10rem]" data-autosubmit>
+            ${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || "계산서 미발행") ? "selected" : ""}>${esc(s)}</option>`).join("")}
+          </select>
+          <noscript><button class="btn-ghost">변경</button></noscript>
+        </form>
+      </div>
       <form method="post" action="/invoices/${inv.id}/pay" class="space-y-1">
         <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
         <div class="flex items-stretch gap-2">
@@ -308,51 +320,65 @@ function invoiceItemsCard(items) {
 
 // ── 수정 라우트 없음: 발행=확정 원칙. 발행된 청구의 내용 변경은 삭제(POST /:id/delete) 후 다시 발행한다. ──
 
-// ── 입금 처리(관리자) ──
+// ── 입금 처리(관리자) ── 계산서·입금 축(tax_status)만 조정. 청구서 발행 상태(status)는 건드리지 않는다.
 router.post("/:id/pay", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const paid = req.body.full === "1" ? inv.amount : parseMoney(req.body.paid_amount);
-  // 입금액에 따라 상태 자동 보정: 전액→입금완료, 일부>0→발행(미발행이면 발행 승격).
-  // 입금액이 총액 미만이면 입금완료로 남지 않도록 발행으로 강등(부분 환불·완납 취소 정합성).
-  let status = inv.status;
-  if (inv.amount > 0 && paid >= inv.amount) status = "입금완료";
-  else if (paid > 0) status = inv.status === "미발행" ? "발행" : inv.status === "입금완료" ? "발행" : inv.status;
-  else status = inv.status === "입금완료" ? "발행" : inv.status; // paid=0 완납 취소 시 발행으로
-  // 채번 원자화: status UPDATE + invoice_number 채번을 BEGIN IMMEDIATE로 묶어 부분 실패 방지.
+  // 완납이면 계산서·입금 축을 입금완료로. 미완납인데 기존이 입금완료면 계산서 발행으로 강등(완납 취소 정합성). 그 외는 유지.
+  let tax = inv.tax_status;
+  if (inv.amount > 0 && paid >= inv.amount) tax = "입금완료";
+  else if (inv.tax_status === "입금완료") tax = "계산서 발행";
   const d = db();
   d.exec("BEGIN IMMEDIATE");
   try {
-    d.prepare("UPDATE invoices SET paid_amount=?, status=? WHERE id=?").run(paid, status, inv.id);
-    ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 승격 시 채번 보장
+    d.prepare("UPDATE invoices SET paid_amount=?, tax_status=? WHERE id=?").run(paid, tax, inv.id);
+    ensureInvoiceNumber({ ...inv, tax_status: tax }); // 입금완료/계산서 발행이면 채번 보장
     d.exec("COMMIT");
   } catch (e) {
     try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
     throw e;
   }
-  if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(getInvoiceForUser(req.user, inv.id)); // 미발행→발행/입금완료 첫 전이 시 1회 알림
   res.redirect(returnTo(req, `/invoices/${inv.id}`, "paid"));
 });
 
-// ── 상태 변경(관리자) ──
+// ── 청구서 상태 변경(관리자) ── 미발행 ↔ 발행. 계산서·입금과 독립.
 router.post("/:id/status", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const status = normalizeInvoiceStatus(req.body.status);
-  // 입금완료로 변경 시 입금액=총액 자동. 입금완료→다른 상태 강등 시 입금액 0 리셋(완납 모순 방지, /pay 보정 규칙과 일관).
-  const paid = status === "입금완료" ? inv.amount : inv.status === "입금완료" ? 0 : inv.paid_amount;
-  // 채번 원자화: status UPDATE + invoice_number 채번을 BEGIN IMMEDIATE로 묶어 부분 실패 방지.
+  const status = normalizeInvoiceStatus(req.body.status); // 미발행 | 발행
   const d = db();
   d.exec("BEGIN IMMEDIATE");
   try {
-    d.prepare("UPDATE invoices SET status=?, paid_amount=? WHERE id=?").run(status, paid, inv.id);
-    ensureInvoiceNumber({ ...inv, status }); // 발행/입금완료로 전이 시 채번 보장
+    d.prepare("UPDATE invoices SET status=? WHERE id=?").run(status, inv.id);
+    ensureInvoiceNumber({ ...inv, status }); // 청구서 발행 시 채번 보장
     d.exec("COMMIT");
   } catch (e) {
     try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
     throw e;
   }
-  if (inv.status === "미발행" && status !== "미발행") notifyInvoiceIssued(getInvoiceForUser(req.user, inv.id)); // 미발행→발행/입금완료 첫 전이 시 1회 알림
+  if (inv.status === "미발행" && status === "발행") notifyInvoiceIssued(getInvoiceForUser(req.user, inv.id)); // 청구서 미발행→발행 첫 전이 알림
+  res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
+});
+
+// ── 계산서·입금 상태 변경(관리자) ── 계산서 미발행 → 계산서 발행 → 입금완료(자유 선택). 입금완료 선택=완납, 벗어나면 입금액 0.
+router.post("/:id/tax-status", requireBilling, (req, res) => {
+  const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const tax = normalizeTaxStatus(req.body.tax_status);
+  let paid = inv.paid_amount;
+  if (tax === "입금완료") paid = inv.amount;            // 입금완료 선택 → 완납(입금액=총액)
+  else if (inv.tax_status === "입금완료") paid = 0;      // 입금완료에서 벗어남 → 완납 취소(입금액 0)
+  const d = db();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare("UPDATE invoices SET tax_status=?, paid_amount=? WHERE id=?").run(tax, paid, inv.id);
+    ensureInvoiceNumber({ ...inv, tax_status: tax }); // 계산서 발행/입금완료면 채번 보장
+    d.exec("COMMIT");
+  } catch (e) {
+    try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
+    throw e;
+  }
   res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
 });
 
@@ -393,7 +419,10 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
   const retHidden = returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : "";
   const errBox = e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : "";
   const payField = `<div class="grid gap-3 sm:grid-cols-2"><div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div></div>`;
-  const statusField = `<div><label class="label">상태</label><select name="status" class="input">${INVOICE_STATUSES.map((s) => `<option ${s === (inv.status || INVOICE_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></div>`;
+  const statusField = `<div class="grid gap-3 sm:grid-cols-2">
+      <div><label class="label">청구서 상태</label><select name="status" class="input">${INVOICE_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.status || INVOICE_STATUSES[0]) ? "selected" : ""}>${esc(INVOICE_STATUS_LABELS[s] || s)}</option>`).join("")}</select></div>
+      <div><label class="label">계산서 · 입금</label><select name="tax_status" class="input">${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || TAX_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></div>
+    </div>`;
   const fields = `
       <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
       <div><label class="label">프로젝트</label>${projSelect}</div>

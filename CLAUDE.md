@@ -208,8 +208,8 @@
 - `deliverables(project_id→projects ON DELETE CASCADE, title, version, kind, storage_backend[drive|local],
   file_id, file_name, file_size, mime_type, access_token?, expires_at?, download_count, revoked, note)`
 - `invoices(project_id?→projects SET NULL, client_id?→clients SET NULL, title, amount, paid_amount,
-  invoice_number?, tax_amount, discount_amount, status[미발행|발행|입금완료], issued_date?, due_date?, memo)` —
-  돈=정수(원), 연체·부분납은 코드 파생. `amount`는 VAT 포함 총액. `discount_amount`=청구서 할인(공급가에서 차감, `invoiceAmountsFromSupply`로 과세표준·VAT 재계산; from-tasks 주 경로).
+  invoice_number?, tax_amount, discount_amount, status[미발행|발행], tax_status[계산서 미발행|계산서 발행|입금완료], issued_date?, due_date?, memo)` —
+  돈=정수(원), 연체·부분납은 코드 파생. `amount`는 VAT 포함 총액. **상태 2축 분리(2026-07-01)**: `status`=청구서 발행 축(미발행/발행), `tax_status`=계산서·입금 축(계산서 미발행/계산서 발행/입금완료). 두 축 독립(자유 선택). `입금완료` 선택=완납(입금액=총액), 벗어나면 입금액 0. 마이그레이션: 기존 `status='입금완료'`→`status='발행'`+`tax_status='입금완료'`. 채번은 어느 축이든 발행되면(청구서 발행 또는 계산서 발행/입금완료). `discount_amount`=청구서 할인(공급가에서 차감, `invoiceAmountsFromSupply`로 과세표준·VAT 재계산; from-tasks 주 경로).
 - `invoice_items(invoice_id→invoices CASCADE, task_id?→track_tasks SET NULL, session_id?→sessions SET NULL, track_title, task_type,
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,

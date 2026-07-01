@@ -109,7 +109,11 @@ const PROJECT_SERVICES = [
 const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
 const CLIENT_KINDS = ["아티스트", "소속사/레이블", "제작사", "기타"];
 const DELIVERABLE_KINDS = ["녹음본", "튠본", "믹스", "스템", "마스터", "레퍼런스", "기타"];
-const INVOICE_STATUSES = ["미발행", "발행", "입금완료"];
+// 청구서(bill) 발행 상태 — 계산서·입금 진행과 별개 축(2026-07-01 분리).
+const INVOICE_STATUSES = ["미발행", "발행"];
+const INVOICE_STATUS_LABELS = { 미발행: "청구서 미발행", 발행: "청구서 발행" };
+// 계산서(세금계산서)·입금 상태 — 청구서 발행과 독립적으로 진행(자유 선택). '입금완료'는 완납 처리와 연동.
+const TAX_STATUSES = ["계산서 미발행", "계산서 발행", "입금완료"];
 // 청구 PDF 문서 제목 — 발행 시 골라서(내용 동일, 제목·일부 문구만 분기).
 const DOC_TYPES = ["견적서", "내역서", "거래명세서"];
 const TRACK_CONTENT_TYPES = ["Music", "Video_Post"];
@@ -174,7 +178,11 @@ const TASK_STATUS_BADGE = {
 // 인보이스 상태 배지 색. '연체'는 코드에서 파생(별도 상태 아님).
 const INVOICE_STATUS_BADGE = {
   미발행: "bg-muted/10 text-muted",
+  "청구서 미발행": "bg-muted/10 text-muted",
   발행: "bg-primary/10 text-primary",
+  "청구서 발행": "bg-primary/10 text-primary",
+  "계산서 미발행": "bg-muted/10 text-muted",
+  "계산서 발행": "bg-info/10 text-info",
   입금완료: "bg-success/10 text-success",
   연체: "bg-danger/10 text-danger",
   부분납: "bg-warning/10 text-warning",
@@ -204,6 +212,9 @@ module.exports = {
   CLIENT_KINDS,
   DELIVERABLE_KINDS,
   INVOICE_STATUSES,
+  INVOICE_STATUS_LABELS,
+  TAX_STATUSES,
+  normalizeTaxStatus: (v) => normalize(v, TAX_STATUSES, "계산서 미발행"),
   DOC_TYPES,
   normalizeDocType: (v) => normalize(v, DOC_TYPES, "거래명세서"),
   INVOICE_STATUS_BADGE,

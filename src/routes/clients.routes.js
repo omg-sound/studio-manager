@@ -199,7 +199,7 @@ router.post("/:id", (req, res) => {
 // 단, 발행/입금완료 인보이스가 있으면 청구처 보존을 위해 삭제 거부
 router.post("/:id/delete", (req, res) => {
   const id = Number(req.params.id);
-  const active = db().prepare("SELECT 1 FROM invoices WHERE client_id=? AND status IN ('발행','입금완료') LIMIT 1").get(id);
+  const active = db().prepare("SELECT 1 FROM invoices WHERE client_id=? AND (status='발행' OR tax_status IN ('계산서 발행','입금완료')) LIMIT 1").get(id); // 청구서 발행 또는 계산서·입금 진행분이면 청구처 보존
   if (active) return res.status(409).send(errorPage({ code: 409, title: "청구처로 발행된 청구가 있어 삭제할 수 없습니다", message: "발행·입금완료된 청구의 청구처입니다. 관련 청구를 먼저 정리하세요(매출 추적 보존).", user: req.user }));
   db().prepare("DELETE FROM clients WHERE id = ?").run(id);
   res.redirect("/clients?flash=deleted");

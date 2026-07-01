@@ -327,6 +327,7 @@ function init() {
   addColumn("invoices", "invoice_number", "TEXT");
   addColumn("invoices", "tax_amount", "INTEGER NOT NULL DEFAULT 0");
   addColumn("invoices", "discount_amount", "INTEGER NOT NULL DEFAULT 0"); // 청구 전체 할인(원). 0=할인 없음.
+  addColumn("invoices", "tax_status", "TEXT NOT NULL DEFAULT '계산서 미발행'"); // 계산서·입금 상태(청구서 발행과 별개 축): 계산서 미발행 | 계산서 발행 | 입금완료
   addColumn("rate_items", "category", "TEXT NOT NULL DEFAULT '스튜디오 녹음'"); // 단가표(녹음 종류) 분류: 스튜디오 녹음 | 로케이션 녹음
   addColumn("sessions", "rate_item_id", "INTEGER REFERENCES rate_items(id) ON DELETE SET NULL"); // 녹음 세션 시간제 단가표 연결
   addColumn("project_managers", "user_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL"); // 하우스 엔지니어(로그인 사용자)와 링크. null=외주 작업자
@@ -380,6 +381,12 @@ function init() {
     backfillProjectServices();
     backfillLegacyServicesToTracks();
     setState("legacy_backfill_v1", "done");
+  }
+  // 청구 상태 2축 분리(2026-07-01): 기존 status='입금완료' → 청구서 발행 + 계산서 입금완료로 이관. 1회 게이트(멱등).
+  if (!getState("invoice_tax_status_split_v1")) {
+    d.prepare("UPDATE invoices SET tax_status='입금완료' WHERE status='입금완료'").run(); // 계산서 축에 입금완료 이관(먼저)
+    d.prepare("UPDATE invoices SET status='발행' WHERE status='입금완료'").run();          // 청구서 축은 발행으로 축소
+    setState("invoice_tax_status_split_v1", "done");
   }
   // 기존 프로젝트의 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 1회 백필. 이후는 프로젝트 저장 시 자동 등록.
   if (!getState("project_clients_backfill_v1")) {
