@@ -643,7 +643,7 @@
   function taskFormOf(el) { var f = el && el.form; return f && f.hasAttribute && f.hasAttribute("data-task-form") ? f : null; }
   // 자동저장 폼: 작업 폼 + 프로젝트 메타 폼. 프로젝트 폼은 input(키 입력)마다 저장하지 않고 change(포커스 이탈/선택)에서만 저장
   // — 부분 입력값으로 클라이언트/연락처 마스터가 중복 생성되는 것을 막기 위함.
-  function anyAutoFormOf(el) { var f = el && el.form; return f && f.hasAttribute && (f.hasAttribute("data-task-form") || f.hasAttribute("data-project-form")) ? f : null; }
+  function anyAutoFormOf(el) { var f = el && el.form; return f && f.hasAttribute && (f.hasAttribute("data-task-form") || f.hasAttribute("data-project-form") || f.hasAttribute("data-autosave-form")) ? f : null; }
   document.addEventListener("input", function (e) {
     var f = taskFormOf(e.target); // 작업 폼만 input 디바운스 저장(프로젝트 폼 제외)
     if (f) schedule(f, false);
