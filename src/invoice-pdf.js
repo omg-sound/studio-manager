@@ -110,7 +110,8 @@ function buildSvg({ studio, client, invoice, items, logo, docType }) {
     hy += 30;
   }
   if (logo) {
-    svg += `<image href="${svgEsc(logo)}" x="${right - 280}" y="185" width="280" height="130" preserveAspectRatio="xMaxYMin meet" />`;
+    // 로고를 타이틀(거래명세서)과 같은 높이로 — 우측 상단, 타이틀 상단선에 맞춰 정렬(YMin 앵커).
+    svg += `<image href="${svgEsc(logo)}" x="${right - 280}" y="78" width="280" height="130" preserveAspectRatio="xMaxYMin meet" />`;
   }
 
   // 청구처 / 번호·발행일 박스
