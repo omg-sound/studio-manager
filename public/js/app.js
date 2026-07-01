@@ -122,11 +122,15 @@
 
   var durGroup = form.querySelector("[data-duration-group]");
   function pad(n) { return (n < 10 ? "0" : "") + n; }
-  // 1Pro 기준시간: 녹음 단가 항목 기준시간(rateSel data-minutes) 우선, 없으면(믹싱 등) 스튜디오 기본 1Pro 시간(data-pro-default).
+  // 1Pro 기준시간: 세션 종류=녹음일 때만 녹음 단가 항목 기준시간(rateSel data-minutes) 사용.
+  // 그 외(믹싱·마스터링·기타)는 녹음 단가 항목이 숨겨져도 그 값을 쓰지 않고 스튜디오 기본 1Pro 시간(data-pro-default).
   function baseMinutes() {
-    var rateBase = 0;
-    if (rateSel) { var o = rateSel.options[rateSel.selectedIndex]; rateBase = o ? parseInt(o.getAttribute("data-minutes"), 10) || 0 : 0; }
-    if (rateBase > 0) return rateBase;
+    var isRec = sessionTypeSel && sessionTypeSel.value === "녹음";
+    if (isRec && rateSel) {
+      var o = rateSel.options[rateSel.selectedIndex];
+      var rateBase = o ? parseInt(o.getAttribute("data-minutes"), 10) || 0 : 0;
+      if (rateBase > 0) return rateBase;
+    }
     return durGroup ? parseInt(durGroup.getAttribute("data-pro-default"), 10) || 0 : 0;
   }
   function checkedValue(name) {
