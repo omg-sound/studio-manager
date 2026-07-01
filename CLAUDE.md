@@ -76,6 +76,8 @@
 - **첨부 서류**(사업자등록증·통장사본): 클라이언트 수정 폼에서 **드래그앤드롭/파일선택 업로드 + 열람**(`client_files`, 종류별 1개 교체식). 매직바이트 검증(PNG/JPEG/PDF, Content-Type 무시)·10MB·치프 전용 인증 다운로드(`inline`·`no-store`·**공개 링크 없음** — 민감 금융정보). `POST /clients/:id/files/:kind`·`GET .../raw`·`.../delete`, app.js `[data-dropzone]`.
 
 ### 연락처 (클라이언트 측 담당자)
+- **상세 = 인라인 편집**(2026-07-01): 연락처 이름 클릭 → 상세가 곧 편집 화면(읽기전용 카드+'정보 수정' 버튼 폐기, `contactForm` 인라인·dirty 저장). `/:id/edit`는 상세로 리다이렉트. 파생정보(성명·아티스트명 클라이언트·대표 클라이언트·담당자 연동 배지)+삭제는 폼 아래 카드.
+- **'회사' 입력 → 소속 이력 자동 반영**(`syncCompanyAffiliation`): 연락처 저장 시 회사명으로 업체 클라이언트를 찾거나(없으면 소속사/레이블로 생성) 현재 소속이 그 업체가 아니면 이직(closeCurrent)으로 등록. 회사 비면 no-op(종료는 수동), 담당자 셸('기타'+source_contact_id)·아티스트에는 연결 안 함. 이전엔 `contacts.company` 텍스트만 저장돼 소속 이력에 안 잡히던 것(company↔affiliation 분리) 해소.
 - 클라이언트 회사와 **별개의 '사람' 마스터**(`contacts`): 레이블/제작사 직원·프리 매니저·아티스트 지인 등. 사이드바 `/contacts` 독립 메뉴(NAV `access:"editor"`, 라우트 `requireEditor` — 치프·스태프 편집, **대표 제외·메뉴 미노출**). 목록·이름/전화 검색(`?q=`)·CRUD. 메뉴 아이콘=명함(클라이언트 '여러 사람'과 구분). **필드**: 성·이름·호칭·별명·회사·직책·부서·휴대전화·이메일·메모. 표시명(`name`)은 미입력 시 호칭+성+이름(또는 별명)으로 자동 생성(`resolveContactName`).
 - **Google 연락처 양방향 동기화**(People API, **fail-safe**): 앱에서 생성/수정/삭제 시 Google에 push(`people.js`·`google_resource_name`/`etag`); **수동 'Google 동기화' 버튼**(`POST /contacts/sync`, `syncFromGoogle` syncToken 증분)으로 Google 변경(생성/수정/삭제)을 앱에 반영(**삭제 양방향**, 루프 방지=data.js 직접호출). scope `.../auth/contacts`(치프 재로그인 필요), 미연동 시 앱만 정상. 자동 cron은 사용자 요청으로 제거(수동 버튼만).
 - **소속 이력(이직 히스토리)**: `contact_affiliations` 타임라인. `ended_on IS NULL`=현재 소속(가장 최근 1건), `client_id` NULL=무소속(프리·지인). **이직**=소속 추가 시 `closeCurrent`로 기존 현재 소속을 자동 종료(`ended_on`)하고 새 소속 INSERT. 상세에 현재(`badge-success`)/종료(`badge-neutral`) 타임라인 + 추가·이직/종료/삭제 + 연결 프로젝트.

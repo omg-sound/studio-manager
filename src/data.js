@@ -355,6 +355,27 @@ function addAffiliation(contactId, { client_id, title, started_on, memo, closeCu
   ).run(cid, client_id ? Number(client_id) : null, blankToNull(title), start, blankToNull(memo)).lastInsertRowid;
 }
 
+/**
+ * 연락처 '회사' 텍스트를 소속 이력에 반영: 회사명으로 업체 클라이언트를 찾거나(없으면 소속사/레이블로 생성),
+ * 현재 소속이 그 업체가 아니면 새 소속(이직)으로 등록한다. 회사가 비면 아무것도 안 함(종료는 수동).
+ * 담당자 셸('기타' + source_contact_id)과 아티스트 클라이언트에는 연결하지 않는다.
+ */
+function syncCompanyAffiliation(contactId, companyName, title) {
+  const n = String(companyName || "").trim();
+  if (!n) return null;
+  const row = db()
+    .prepare(
+      "SELECT id FROM clients WHERE name = ? AND kind <> '아티스트' AND source_contact_id IS NULL ORDER BY (kind = '기타') ASC, id LIMIT 1"
+    )
+    .get(n);
+  const clientId = row ? row.id : db().prepare("INSERT INTO clients (name, kind) VALUES (?, '소속사/레이블')").run(n).lastInsertRowid;
+  const cur = currentAffiliation(contactId);
+  if (!cur || cur.client_id !== clientId) {
+    addAffiliation(contactId, { client_id: clientId, title, closeCurrent: true });
+  }
+  return clientId;
+}
+
 function endAffiliation(affId, endedOn) {
   db().prepare("UPDATE contact_affiliations SET ended_on = ? WHERE id = ?").run(blankToNull(endedOn) || todayYmd(), Number(affId));
 }
@@ -1999,6 +2020,7 @@ module.exports = {
   currentAffiliation,
   listAffiliations,
   addAffiliation,
+  syncCompanyAffiliation,
   endAffiliation,
   deleteAffiliation,
   contactOptions,

@@ -12,6 +12,7 @@ const {
   currentAffiliation,
   listAffiliations,
   addAffiliation,
+  syncCompanyAffiliation,
   endAffiliation,
   deleteAffiliation,
   listProjectsForContact,
@@ -121,6 +122,7 @@ router.post("/", async (req, res) => {
     if (b.client_id || (b.title && String(b.title).trim())) {
       addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
     }
+    if (!b.client_id) syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 입력 → 소속 이력 반영(업체 클라이언트 연결)
     syncArtistClientForContact(id); // 아티스트명 입력 시 아티스트 클라이언트 등록·연동
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
@@ -134,14 +136,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ── 수정 ──
+// ── 수정: 이제 상세(GET /:id)가 인라인 편집 화면이므로 옛 편집 경로는 상세로 리다이렉트(북마크 호환).
 router.get("/:id/edit", (req, res) => {
-  const c = getContact(Number(req.params.id));
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const linkedManager = getManagerByContactId(c.id);
-  const cur = currentAffiliation(c.id); // 현재 소속(클라이언트)을 회사칸 기본값으로 — 클라이언트 담당자로 등록 시 소속 이력만 있고 company 텍스트는 비어 있던 것 반영
-  const cc = { ...c, company: c.company || (cur && cur.client_name) || "" };
-  res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm(cc, true, listClients({}), linkedManager) }));
+  res.redirect(`/contacts/${Number(req.params.id)}`);
 });
 
 router.post("/:id", async (req, res) => {
@@ -160,6 +157,7 @@ router.post("/:id", async (req, res) => {
       family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
       nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
     });
+    syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 → 소속 이력 반영(현재 소속과 다르면 이직으로 등록)
     // 담당자(project_managers) 동기화: 전화(항상) + 이메일(외주만)
     syncContactToManager(id);
     syncArtistClientForContact(id); // 아티스트명 변경 시 아티스트 클라이언트 이름·연락처 동기화
@@ -240,23 +238,22 @@ router.get("/:id", (req, res) => {
     : "";
   const artistClient = artistClientForContact(c.id); // 아티스트명으로 연동된 아티스트 클라이언트(양방향 링크)
   const ownerClients = clientsWithOwnerContact(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
+  const cur = currentAffiliation(c.id); // 현재 소속 — 회사칸 기본값(담당자로만 등록돼 company 텍스트가 비어 있던 경우 반영)
+  // 상세로 들어오면 바로 수정 가능한 화면 — 읽기전용 카드+'정보 수정' 버튼 대신 인라인 편집 폼(변경 시 하이라이트 저장).
+  const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager);
+  const derivedBits = [
+    nameDetail && nameDetail !== c.name ? `<div><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : "",
+    c.nickname ? `<div><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${artistClient ? ` · <a href="/clients/${artistClient.id}" class="text-primary hover:underline">클라이언트 ↗</a>` : ""}</div>` : "",
+    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : "",
+    managerBadge,
+  ].filter(Boolean).join("");
   const infoCard = `
-    <div class="card mb-6 space-y-2">
-      ${nameDetail && nameDetail !== c.name ? `<div class="text-sm"><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : ""}
-      ${c.nickname ? `<div class="text-sm"><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${artistClient ? ` · <a href="/clients/${artistClient.id}" class="text-primary hover:underline">클라이언트 ↗</a>` : ""}</div>` : ""}
-      ${ownerClients.length ? `<div class="text-sm"><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : ""}
-      ${c.company ? `<div class="text-sm"><span class="text-muted">회사</span> ${esc(c.company)}</div>` : ""}
-      ${c.job_title ? `<div class="text-sm"><span class="text-muted">직책</span> ${esc(c.job_title)}${c.department ? " · " + esc(c.department) : ""}</div>` : c.department ? `<div class="text-sm"><span class="text-muted">부서</span> ${esc(c.department)}</div>` : ""}
-      <div class="text-sm"><span class="text-muted">휴대전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
-      <div class="text-sm"><span class="text-muted">이메일</span> ${c.email ? esc(c.email) : `<span class="text-muted">없음</span>`}${linkedManager && linkedManager.user_id != null ? ` <span class="text-xs text-muted">(로그인 계정)</span>` : ""}</div>
-      ${c.memo ? `<div class="text-sm"><span class="text-muted">메모</span> ${esc(c.memo)}</div>` : ""}
-      ${managerBadge}
-      <div class="flex gap-2 pt-1">
-        <a href="/contacts/${c.id}/edit" class="btn-ghost btn-sm">정보 수정</a>
-        <form method="post" action="/contacts/${c.id}/delete" data-confirm="${esc(c.name)} 연락처를 삭제할까요? 소속 이력도 함께 삭제됩니다.">
-          <button class="btn-ghost btn-sm text-danger" type="submit">삭제</button>
-        </form>
-      </div>
+    ${editCard}
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+      <div class="space-y-1 text-sm">${derivedBits}</div>
+      <form method="post" action="/contacts/${c.id}/delete" data-confirm="${esc(c.name)} 연락처를 삭제할까요? 소속 이력도 함께 삭제됩니다.">
+        <button class="btn-ghost btn-sm text-danger" type="submit">삭제</button>
+      </form>
     </div>`;
 
   const timeline = affs.length
