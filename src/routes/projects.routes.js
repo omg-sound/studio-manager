@@ -78,12 +78,13 @@ function toArray(value) {
   return Array.isArray(value) ? value : [value];
 }
 
-/** 고객측 담당자: contact_id(목록에서 선택) 우선, 없고 contact_name(목록 외 새 이름)만 있으면 이름으로 새 연락처 생성·연결. */
+/** 고객측 담당자: contact_id(목록에서 선택) 우선, 없고 contact_name(새 이름) 있으면 같은 이름 재사용 후 없으면 새 연락처 생성(자동저장 중복 방지). */
 function resolveContactId(b) {
   if (b.contact_id) return Number(b.contact_id);
   const name = String(b.contact_name || "").trim();
   if (!name) return null;
-  return createContact({ name });
+  const existing = db().prepare("SELECT id FROM contacts WHERE name = ? LIMIT 1").get(name);
+  return existing ? existing.id : createContact({ name });
 }
 
 // ── 목록(URL = 필터; 플레이북2 §3.7) ──
@@ -344,8 +345,10 @@ router.post("/:id", requireEditor, (req, res) => {
   const exists = db().prepare("SELECT id FROM projects WHERE id = ?").get(id);
   if (!exists) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
+  const isFetch = req.get("X-Requested-With") === "fetch"; // 자동저장(AJAX)
   const title = String(b.title || "").trim();
   if (!title) {
+    if (isFetch) return res.status(400).json({ ok: false, error: "프로젝트 명을 입력하세요." });
     const p = getProjectForUser(req.user, id);
     return renderProjectDetail(req, res, p, { ...b, id }, "프로젝트 명을 입력하세요.");
   }
@@ -369,6 +372,7 @@ router.post("/:id", requireEditor, (req, res) => {
       contact_id: resolveContactId(b),
       memo: String(b.memo || "").trim() || null,
     });
+  if (isFetch) return res.json({ ok: true });
   res.redirect(`/projects/${id}?flash=saved`);
 });
 
@@ -539,8 +543,9 @@ function projectForm(p = {}, err = "") {
 }
 
 function projectEditForm(p = {}, err = "") {
+  // 저장 버튼 없음 — 필드에서 포커스가 떠날 때(change/blur) 자동저장(app.js [data-project-form]).
   return `
-    <form method="post" action="/projects/${p.id}" class="space-y-3">
+    <form method="post" action="/projects/${p.id}" class="space-y-3" data-project-form>
       ${err ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(err)}</p>` : ""}
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
@@ -575,8 +580,9 @@ function projectEditForm(p = {}, err = "") {
         <textarea class="input" name="memo" rows="3">${esc(p.memo || "")}</textarea>
       </div>
       ${projectFieldDatalists()}
-      <div class="flex justify-end">
-        <button class="btn-primary" type="submit">저장</button>
+      <div class="flex items-center justify-end gap-3">
+        <span class="text-xs text-muted" data-save-state aria-live="polite"></span>
+        <noscript><button class="btn-primary" type="submit">저장</button></noscript>
       </div>
     </form>`;
 }

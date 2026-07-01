@@ -611,17 +611,17 @@
     else s.timer = setTimeout(function () { save(form); }, 700);
   }
   // el.form: 폼 내부 요소뿐 아니라 form= 속성으로 연결된 헤더 상태 select도 그 폼을 가리킨다.
-  function taskFormOf(el) {
-    var f = el && el.form;
-    return f && f.hasAttribute && f.hasAttribute("data-task-form") ? f : null;
-  }
+  function taskFormOf(el) { var f = el && el.form; return f && f.hasAttribute && f.hasAttribute("data-task-form") ? f : null; }
+  // 자동저장 폼: 작업 폼 + 프로젝트 메타 폼. 프로젝트 폼은 input(키 입력)마다 저장하지 않고 change(포커스 이탈/선택)에서만 저장
+  // — 부분 입력값으로 클라이언트/연락처 마스터가 중복 생성되는 것을 막기 위함.
+  function anyAutoFormOf(el) { var f = el && el.form; return f && f.hasAttribute && (f.hasAttribute("data-task-form") || f.hasAttribute("data-project-form")) ? f : null; }
   document.addEventListener("input", function (e) {
-    var f = taskFormOf(e.target);
-    if (f) schedule(f, false); // 텍스트(외주단가 등) 디바운스
+    var f = taskFormOf(e.target); // 작업 폼만 input 디바운스 저장(프로젝트 폼 제외)
+    if (f) schedule(f, false);
   });
   document.addEventListener("change", function (e) {
-    var f = taskFormOf(e.target);
-    if (f) schedule(f, e.target.tagName === "SELECT"); // select(종류·담당·상태)는 즉시 저장
+    var f = anyAutoFormOf(e.target);
+    if (f) schedule(f, e.target.tagName === "SELECT"); // select는 즉시, 텍스트(blur)는 디바운스
   });
 })();
 
