@@ -644,7 +644,7 @@
     // FormData(multipart)로 보내면 req.body가 비어 기본값으로 저장됨(자동저장이 반영 안 되던 근본 원인).
     var body = new URLSearchParams();
     new FormData(form).forEach(function (v, k) { body.append(k, v); });
-    fetch(form.getAttribute("action"), { method: "POST", body: body, headers: { "X-Requested-With": "fetch" }, signal: s.ctrl.signal })
+    fetch(form.getAttribute("action"), { method: "POST", body: body, headers: { "X-Requested-With": "fetch" }, signal: s.ctrl.signal, keepalive: true })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (j) {
         if (myId !== s.reqId) return; // 더 최신 저장이 진행 중이면 stale 응답 무시
@@ -677,7 +677,7 @@
   });
   document.addEventListener("change", function (e) {
     var f = anyAutoFormOf(e.target);
-    if (f) schedule(f, e.target.tagName === "SELECT"); // select는 즉시, 텍스트(blur)는 디바운스
+    if (f) schedule(f, true); // change=blur(입력 확정)이므로 즉시 저장 — 디바운스 대기 중 페이지 이탈로 저장 유실되던 것 방지
   });
 })();
 
