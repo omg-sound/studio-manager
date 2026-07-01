@@ -264,8 +264,11 @@ const FLASH_MESSAGES = {
   paid: "입금이 반영되었습니다.",
   tested: "테스트 알림을 보냈습니다 — 채널을 확인하세요.",
   last_chief: "치프 엔지니어는 최소 1명 있어야 합니다 — 마지막 치프는 스태프·대표로 바꿀 수 없습니다.",
+  drive_done: "로컬 파일을 Google Drive로 이관했습니다.",
+  drive_partial: "일부 파일을 Drive로 이관했습니다 — 실패분은 로컬에 남아 있습니다(로그 확인).",
+  drive_unlinked: "구글 Drive 연동이 필요합니다 — 구글 계정 연동 후 다시 시도하세요.",
 };
-const FLASH_WARN = new Set(["last_chief"]);
+const FLASH_WARN = new Set(["last_chief", "drive_partial", "drive_unlinked"]);
 function flashBanner(query) {
   const key = query && query.flash;
   const msg = FLASH_MESSAGES[key];

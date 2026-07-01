@@ -36,6 +36,7 @@ const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChev
 const { asyncHandler } = require("../lib/async");
 const multer = require("multer");
 const drive = require("../drive");
+const { migrateLocalFilesToDrive, localFileCount } = require("../lib/storage-migrate");
 
 // 로고 업로드(작은 이미지) — 메모리 버퍼로 받아 base64 data URI로 저장. 2MB 제한.
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -71,7 +72,7 @@ router.get("/", requireChief, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = (await studioCalendarSection()) + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 알림
+  else tabContent = (await studioCalendarSection()) + driveStorageSection() + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + alertWebhookSection(); // 환경설정 — 캘린더 + 자료저장(Drive) + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 알림
 
   const body = `
     ${flashBanner(req.query)}
@@ -178,6 +179,32 @@ function contentTab() {
         </form>
         <div class="space-y-2">${taskTypeRows}</div>
       </section>`;
+}
+
+/** 자료 저장(구글 Drive) 상태 + 로컬→Drive 이관. 최소 권한(drive.file)으로 앱 전용 폴더에만 저장. */
+function driveStorageSection() {
+  const linked = drive.isLinked();
+  const localN = localFileCount();
+  let status;
+  if (!config.googleConfigured) {
+    status = `<p class="text-sm text-muted">Google OAuth가 설정되지 않았습니다.</p>`;
+  } else if (linked) {
+    status = `<p class="text-sm"><span class="badge badge-success">연동됨</span> 첨부 서류·자료 전달 파일이 <span class="font-medium">Google Drive</span> 앱 전용 폴더에 저장됩니다.</p>`;
+  } else {
+    status = `<p class="text-sm text-muted"><span class="badge badge-warning">미연동</span> 지금은 파일이 <span class="font-medium">서버 로컬 디스크</span>에 저장됩니다. <a class="text-primary hover:underline" href="/auth/google">구글 계정 연동</a> 후 Drive 저장이 켜집니다.</p>`;
+  }
+  const migrate = linked && localN > 0
+    ? `<form method="post" action="/settings/migrate-drive" data-confirm="로컬에 저장된 파일 ${localN}개를 Google Drive로 이관할까요? 업로드 성공 시 로컬 원본은 삭제됩니다."><button class="btn-primary btn-sm" type="submit">로컬 파일 ${localN}개 → Drive 이관</button></form>`
+    : linked
+      ? `<p class="text-xs text-muted">로컬에 남은 파일이 없습니다(모두 Drive 저장).</p>`
+      : "";
+  return `<section class="card mt-3 space-y-2">
+    <div>
+      <h2 class="font-display text-lg font-semibold">자료 저장 (구글 Drive)</h2>
+      <p class="mt-1 text-xs text-muted">첨부 서류·자료 전달 파일의 실제 저장 위치. 최소 권한(<code>drive.file</code>)으로 앱이 만든 전용 폴더에만 접근합니다. 그 폴더를 원하는 위치로 옮기거나 공유해 쓰실 수 있습니다.</p>
+    </div>
+    ${status}${migrate}
+  </section>`;
 }
 
 /** 스튜디오 캘린더(구글) 선택 섹션 — 세션 겹침 검사 대상. */
@@ -384,6 +411,14 @@ router.post("/default-booker", requireChief, (req, res) => {
   setDefaultBooker(req.body.default_booker);
   res.redirect("/settings?tab=settings&flash=saved");
 });
+// 로컬 저장 파일(client_files·deliverables)을 Google Drive로 이관. Drive 연동 필요.
+router.post("/migrate-drive", requireChief, asyncHandler(async (req, res) => {
+  const r = await migrateLocalFilesToDrive();
+  if (!r.ok) return res.redirect("/settings?tab=settings&flash=drive_unlinked");
+  // 결과는 섹션 재렌더(남은 로컬 수)로 확인. 실패분이 있으면 로그.
+  if (r.failed.length) console.warn("[migrate-drive] failed:", JSON.stringify(r.failed));
+  res.redirect(`/settings?tab=settings&flash=${r.failed.length ? "drive_partial" : "drive_done"}`);
+}));
 router.post("/studio-logo/delete", requireChief, (req, res) => {
   setStudioLogo(null);
   res.redirect("/settings?tab=settings&flash=deleted");

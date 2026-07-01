@@ -1,0 +1,51 @@
+"use strict";
+
+/**
+ * 로컬 디스크에 저장된 첨부(client_files)·자료(deliverables) 파일을 Google Drive로 이관.
+ * - Drive 미연동이면 아무것도 안 함(에러 반환). 연동 상태(drive.file scope + refresh token) 필요.
+ * - 파일별 격리: 한 건 실패해도 나머지는 계속(실패 목록 반환). 성공 시 로컬 파일 삭제.
+ * - storage_backend='local' 행만 대상. Drive 업로드 성공 후에만 DB를 drive로 갱신(부분 실패 안전).
+ */
+
+const fs = require("fs");
+const { db } = require("../db");
+const drive = require("../drive");
+const storage = require("../storage");
+
+const LOCAL_TABLES = ["client_files", "deliverables"]; // storage_backend/file_id 컬럼을 가진 테이블(고정 상수 — SQL 주입 아님)
+
+/** 로컬 저장 파일 수(테이블별). 상태 표시용. */
+function localFileCount() {
+  let n = 0;
+  for (const t of LOCAL_TABLES) {
+    try { n += db().prepare(`SELECT COUNT(*) c FROM ${t} WHERE storage_backend='local'`).get().c; } catch (_e) {}
+  }
+  return n;
+}
+
+async function migrateLocalFilesToDrive() {
+  if (!drive.isLinked()) return { ok: false, error: "DRIVE_NOT_LINKED" };
+  const rows = [];
+  for (const t of LOCAL_TABLES) {
+    try {
+      db().prepare(`SELECT id, file_id, file_name, mime_type FROM ${t} WHERE storage_backend='local'`).all().forEach((r) => rows.push({ ...r, tbl: t }));
+    } catch (_e) { /* 테이블 없으면 skip */ }
+  }
+  let migrated = 0;
+  const failed = [];
+  for (const r of rows) {
+    const local = storage.localPath(r.file_id);
+    try {
+      if (!fs.existsSync(local)) { failed.push({ id: r.id, tbl: r.tbl, reason: "missing-local" }); continue; }
+      const driveId = await drive.uploadFile({ filePath: local, name: r.file_name || r.file_id, mimeType: r.mime_type || "application/octet-stream" });
+      db().prepare(`UPDATE ${r.tbl} SET storage_backend='drive', file_id=? WHERE id=?`).run(driveId, r.id);
+      try { fs.unlinkSync(local); } catch (_e) { /* 로컬 삭제 실패는 비치명적(중복 보관) */ }
+      migrated++;
+    } catch (e) {
+      failed.push({ id: r.id, tbl: r.tbl, reason: (e && e.message) || String(e) });
+    }
+  }
+  return { ok: true, total: rows.length, migrated, failed };
+}
+
+module.exports = { migrateLocalFilesToDrive, localFileCount, LOCAL_TABLES };
