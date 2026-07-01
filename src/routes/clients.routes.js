@@ -466,7 +466,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" /></div>
+        <div><label class="label">세금계산서 발행 이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" placeholder="계산서 받을 이메일" /></div>
         <div><label class="label">전화</label><input class="input" name="phone" value="${esc(c.phone || "")}" /></div>
       </div>
       ${clientContactCombo(c, isEdit)}
