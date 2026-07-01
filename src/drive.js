@@ -124,7 +124,8 @@ async function streamFile(fileId, res) {
 
 async function deleteFile(fileId) {
   const drive = driveClient();
-  await drive.files.delete({ fileId });
+  // 영구삭제 대신 휴지통으로 이동 — 첨부 교체·오삭제 시 30일 복구 창 확보(민감 금융서류 보호).
+  await drive.files.update({ fileId, requestBody: { trashed: true } });
 }
 
 /** 캐시된 폴더 id(첫 업로드 전이면 null). 점검용 — 생성은 안 함. */
