@@ -120,11 +120,14 @@
   var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 720 : 720;
   var busy = {};
 
+  var durGroup = form.querySelector("[data-duration-group]");
   function pad(n) { return (n < 10 ? "0" : "") + n; }
+  // 1Pro 기준시간: 녹음 단가 항목 기준시간(rateSel data-minutes) 우선, 없으면(믹싱 등) 스튜디오 기본 1Pro 시간(data-pro-default).
   function baseMinutes() {
-    if (!rateSel) return 0;
-    var o = rateSel.options[rateSel.selectedIndex];
-    return o ? parseInt(o.getAttribute("data-minutes"), 10) || 0 : 0;
+    var rateBase = 0;
+    if (rateSel) { var o = rateSel.options[rateSel.selectedIndex]; rateBase = o ? parseInt(o.getAttribute("data-minutes"), 10) || 0 : 0; }
+    if (rateBase > 0) return rateBase;
+    return durGroup ? parseInt(durGroup.getAttribute("data-pro-default"), 10) || 0 : 0;
   }
   function checkedValue(name) {
     var r = form.querySelector('input[name="' + name + '"]:checked');
@@ -218,7 +221,7 @@
   if (dateInput) dateInput.addEventListener("change", refreshAvailability);
   if (roomSel) roomSel.addEventListener("change", refreshAvailability); // 룸 변경 시 해당 룸 기준으로 가용성 재조회(날짜 변경과 동일)
   if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); });
-  if (sessionTypeSel) sessionTypeSel.addEventListener("change", syncRecFields);
+  if (sessionTypeSel) sessionTypeSel.addEventListener("change", function () { syncRecFields(); updateProAvailability(); }); // 종류 바뀌면 단가 항목 노출 + 1Pro 가용성 재계산
   // 슬라이더 드래그(30분 단위) → custom_hours 동기화.
   if (slider) slider.addEventListener("input", function () {
     var mins = parseInt(slider.value, 10) || 0;

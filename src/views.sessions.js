@@ -5,7 +5,7 @@
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, studioStartSlots, getDefaultBooker, contactOptions } = require("./data");
+const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -84,7 +84,7 @@ function durationButtons(initMinutes = 0) {
   const presetBtn = (val, label) =>
     `<button type="button" class="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="${val}">${label}</button>`;
   return `
-    <div data-duration-group>
+    <div data-duration-group data-pro-default="${getProMinutes()}">
       <input type="range" min="0" max="720" step="30" value="${Math.min(m, 720)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
       <div class="mt-1 flex items-center justify-between text-xs">
         <span class="font-medium text-primary" data-duration-label>설정 안 함</span>
@@ -177,7 +177,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
       ${startSlotGrid(s.start_time || "")}
     </div>
     <div class="mt-3">
-      <label class="label-sm">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 단가 항목 기준시간)</span></label>
+      <label class="label-sm">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 단가 기준시간 · 없으면 기본 1Pro 시간)</span></label>
       ${durationButtons(initMins)}
       <div class="mt-1.5 text-xs text-success" data-end-preview></div>
     </div>

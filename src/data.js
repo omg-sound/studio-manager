@@ -1060,6 +1060,19 @@ function setStudioHours(start, end) {
   setState("studio_hours_end", cleanTime(end) || null);
 }
 
+// ── 1Pro 기준 소요시간(분) — 녹음 단가 항목 기준시간이 없는 세션(믹싱·마스터링·기타)에서 1Pro/2Pro 버튼 기준 ──
+const DEFAULT_PRO_MINUTES = 240; // 4시간
+/** 1Pro 기본 소요시간(분). 미설정/무효면 240(4시간). */
+function getProMinutes() {
+  const v = parseInt(getState("studio_pro_minutes"), 10);
+  return Number.isFinite(v) && v > 0 ? v : DEFAULT_PRO_MINUTES;
+}
+/** 1Pro 기본 소요시간 저장(분 단위 정수, 무효면 null→기본값 폴백). */
+function setProMinutes(mins) {
+  const n = parseInt(mins, 10);
+  setState("studio_pro_minutes", Number.isFinite(n) && n > 0 ? String(n) : null);
+}
+
 /** 기본 예약 담당자(이름) — 세션 폼에서 예약 담당자 기본 선택. 미설정이면 null. */
 function getDefaultBooker() {
   return getState("default_booker") || null;
@@ -1825,6 +1838,7 @@ module.exports = {
   listTaskTypes,
   activeTaskTypes,
   taskTypeLabel,
+  taskTypeUnitPrice,
   createTaskType,
   updateTaskType,
   deleteTaskType,
@@ -1864,6 +1878,8 @@ module.exports = {
   setStudioLogo,
   getStudioHours,
   setStudioHours,
+  getProMinutes,
+  setProMinutes,
   getDefaultBooker,
   setDefaultBooker,
   studioStartSlots,
