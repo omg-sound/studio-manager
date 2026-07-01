@@ -272,9 +272,10 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
         <span class="flex shrink-0 items-center gap-2">${quickComplete}${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
-        <form method="post" action="/sessions/${s.id}" data-session-form data-session-id="${s.id}">
+        <form method="post" action="/sessions/${s.id}" data-session-form data-session-id="${s.id}" data-dirty-form>
           ${sessionBookingFields(s, managers, rateItems, rooms)}
-          <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">세션 저장</button>
+          <p class="mt-3 text-center text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</p>
+          <button class="btn-primary mt-2 w-full py-2.5 text-base transition" type="submit" data-dirty-save>세션 저장</button>
         </form>
         <div class="mt-2 flex gap-2">
           <form method="post" action="/sessions/${s.id}/status">

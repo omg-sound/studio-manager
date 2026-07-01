@@ -367,7 +367,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
     : "";
   return `
     ${pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
-    <form method="post" action="${action}" class="card space-y-4">
+    <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       ${managerBanner}
       <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
@@ -399,9 +399,10 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
       </div>
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       ${affBlock}
-      <div class="flex gap-2">
-        <button class="btn-primary" type="submit">${isEdit ? "저장" : "추가"}</button>
+      <div class="flex items-center gap-2">
+        <button class="btn-primary transition" type="submit"${isEdit ? " data-dirty-save" : ""}>${isEdit ? "저장" : "추가"}</button>
         <a href="${cancelHref}" class="btn-ghost">취소</a>
+        ${isEdit ? `<span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>` : ""}
       </div>
     </form>`;
 }

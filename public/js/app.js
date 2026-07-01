@@ -625,9 +625,10 @@
 })();
 
 // 곡·콘텐츠 작업 폼: 담당 엔지니어가 외주(data-external=1)일 때만 외주 지급단가 표시(하우스 엔지니어는 숨김).
+// (작업 폼은 이제 [data-dirty-form] — engineer_id+worker-rate가 있는 폼만 처리하고 나머지는 가드로 무시.)
 (function () {
   "use strict";
-  var forms = document.querySelectorAll("[data-task-form]");
+  var forms = document.querySelectorAll("[data-dirty-form]");
   Array.prototype.forEach.call(forms, function (form) {
     var sel = form.querySelector('select[name="engineer_id"]');
     var wrap = form.querySelector("[data-worker-rate]");
@@ -700,39 +701,50 @@
   });
 })();
 
-// 프로젝트 메타 폼([data-project-form]): 명시적 저장 버튼 + 변경 감지.
-// 변경이 없으면 저장 버튼이 흐리게(비활성), 변경이 생기면 강조(하이라이트 링)로 저장을 유도.
+// 저장 폼 공통([data-dirty-form] + [data-dirty-save]): 변경이 없으면 저장 버튼이 흐리게(비활성),
+// 변경이 생기면 강조(하이라이트 링)로 저장을 유도. [data-dirty-hint]가 있으면 '저장되지 않은 변경사항' 표시.
+// form.elements를 스냅샷 비교 → form= 속성으로 폼 밖에 연결된 컨트롤(작업 헤더 상태 select 등)도 감지.
+// 문서 위임(document)으로 처리 → 폼 밖 연결 컨트롤의 이벤트도 잡는다.
 (function () {
   "use strict";
-  var forms = document.querySelectorAll("[data-project-form]");
-  Array.prototype.forEach.call(forms, function (form) {
-    var btn = form.querySelector("[data-project-save]");
+  var HILITE = ["ring-2", "ring-primary", "ring-offset-2"];
+  var recs = [];
+  function snapshot(form) {
+    var p = [];
+    Array.prototype.forEach.call(form.elements, function (el) {
+      if (!el.name) return;
+      var t = el.type;
+      if (t === "submit" || t === "button" || t === "reset") return;
+      if (t === "checkbox" || t === "radio") { if (el.checked) p.push(el.name + "\x1f" + el.value); }
+      else p.push(el.name + "\x1f" + el.value);
+    });
+    return p.join("\x1e");
+  }
+  function refresh(rec) {
+    var dirty = snapshot(rec.form) !== rec.initial;
+    rec.btn.disabled = !dirty;
+    rec.btn.classList.toggle("opacity-40", !dirty);
+    HILITE.forEach(function (c) { rec.btn.classList.toggle(c, dirty); });
+    if (rec.hint) rec.hint.hidden = !dirty;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-dirty-form]"), function (form) {
+    var btn = form.querySelector("[data-dirty-save]");
     if (!btn) return;
-    var hint = form.querySelector("[data-dirty-hint]");
-    function snapshot() {
-      var p = [];
-      // 콤보의 hidden id까지 포함해 모든 name 필드를 직렬화(DOM 순서 = 안정적).
-      Array.prototype.forEach.call(form.querySelectorAll("input[name], select[name], textarea[name]"), function (el) {
-        if (el.type === "checkbox" || el.type === "radio") { if (el.checked) p.push(el.name + "=" + el.value); }
-        else p.push(el.name + "=" + el.value);
-      });
-      return p.join("&");
-    }
-    var initial = snapshot();
-    var HILITE = ["ring-2", "ring-primary", "ring-offset-2"];
-    function refresh() {
-      var dirty = snapshot() !== initial;
-      btn.disabled = !dirty;
-      btn.classList.toggle("opacity-40", !dirty);
-      HILITE.forEach(function (c) { btn.classList.toggle(c, dirty); });
-      if (hint) hint.hidden = !dirty;
-    }
-    form.addEventListener("input", refresh);
-    form.addEventListener("change", refresh);
-    // 콤보가 hidden id를 input 이벤트 이후 비동기로 갱신할 수 있어 한 틱 뒤 재확인.
-    form.addEventListener("input", function () { setTimeout(refresh, 0); });
-    refresh();
+    var rec = { form: form, btn: btn, hint: form.querySelector("[data-dirty-hint]"), initial: snapshot(form) };
+    recs.push(rec);
+    // 슬라이더/프리셋/콤보 등 다른 init이 값을 세팅한 뒤로 기준 스냅샷을 다시 잡는다(로드 직후 오탐 방지).
+    setTimeout(function () { rec.initial = snapshot(form); refresh(rec); }, 0);
+    refresh(rec);
   });
+  function recOf(el) { var f = el && el.form; if (!f) return null; for (var i = 0; i < recs.length; i++) if (recs[i].form === f) return recs[i]; return null; }
+  function onEvt(e) {
+    var r = recOf(e.target);
+    if (!r) return;
+    refresh(r);
+    setTimeout(function () { refresh(r); }, 0); // 콤보 hidden id 등 비동기 갱신 반영
+  }
+  document.addEventListener("input", onEvt);
+  document.addEventListener("change", onEvt);
 })();
 
 // 헤더 상태 select 등 [data-no-toggle] 요소를 클릭/조작해도 <details> 펼침이 토글되지 않게(접힌 채 상태 수정).

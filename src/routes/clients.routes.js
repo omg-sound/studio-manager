@@ -512,7 +512,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
 
   return `
     ${pageHeader({ title: isEdit ? "클라이언트 수정" : "새 클라이언트", desc: "분류 · 연락처 · 세금계산서 정보(청구처가 될 경우)", back: isEdit && c.id ? { href: `/clients/${c.id}`, label: "클라이언트 상세" } : { href: "/clients", label: "클라이언트" } })}
-    <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-autosave-form" : ""}>
+    <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <div><label class="label">상호(이름)</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
       <div>
@@ -562,7 +562,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       <div class="flex items-center gap-2">
         ${isEdit
-          ? `<a href="/clients/${c.id}" class="btn-primary">← 돌아가기</a><span class="text-xs text-muted" data-save-state aria-live="polite"></span><noscript><button class="btn-ghost" type="submit">저장</button></noscript>`
+          ? `<button class="btn-primary transition" type="submit" data-dirty-save>저장</button><a href="/clients/${c.id}" class="btn-ghost">← 돌아가기</a><span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>`
           : `<button class="btn-primary" type="submit">추가</button><a href="/clients" class="btn-ghost">취소</a>`}
       </div>
     </form>

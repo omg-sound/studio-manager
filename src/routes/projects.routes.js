@@ -596,9 +596,9 @@ function projectForm(p = {}, err = "") {
 }
 
 function projectEditForm(p = {}, err = "") {
-  // 저장 버튼 없음 — 필드에서 포커스가 떠날 때(change/blur) 자동저장(app.js [data-project-form]).
+  // 명시적 저장 버튼(변경 시 하이라이트) — app.js [data-dirty-form] 공통 처리.
   return `
-    <form method="post" action="/projects/${p.id}" class="space-y-3" data-project-form>
+    <form method="post" action="/projects/${p.id}" class="space-y-3" data-dirty-form>
       ${err ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(err)}</p>` : ""}
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
@@ -635,7 +635,7 @@ function projectEditForm(p = {}, err = "") {
       ${projectFieldDatalists()}
       <div class="flex items-center justify-end gap-3">
         <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
-        <button type="submit" class="btn-primary transition" data-project-save>저장</button>
+        <button type="submit" class="btn-primary transition" data-dirty-save>저장</button>
       </div>
     </form>`;
 }
@@ -865,9 +865,9 @@ function taskTypeOptions(current) {
 function taskEditForm(task, managers = []) {
   const legacyName = !task.engineer_id && task.engineer_name ? String(task.engineer_name) : "";
   // 상태(status) select는 헤더에 있고 form= 로 이 폼에 연결됨(접힌 채 수정). 본문엔 종류·담당·외주단가만.
-  // 저장 버튼 없음 — 변경 즉시 자동저장(app.js). JS 미동작 환경 대비 noscript 버튼만 폴백.
+  // 명시적 저장 버튼(변경 시 하이라이트) — app.js [data-dirty-form] 공통. form.elements로 헤더 상태 select 변경도 감지.
   return `
-    <form method="post" action="/projects/tasks/${task.id}" id="task-form-${task.id}" class="grid gap-2 sm:grid-cols-2" data-task-form>
+    <form method="post" action="/projects/tasks/${task.id}" id="task-form-${task.id}" class="grid gap-2 sm:grid-cols-2" data-dirty-form>
       <div>
         <label class="label mb-0.5 text-xs">작업 종류</label>
         <select class="input py-1.5 text-sm" name="task_type">${taskTypeOptions(task.task_type)}</select>
@@ -881,9 +881,9 @@ function taskEditForm(task, managers = []) {
         <input class="input py-1.5 text-sm" name="worker_rate" inputmode="numeric" placeholder="0" value="${esc(String(task.worker_rate || ""))}" />
       </div>
       ${legacyName ? `<input type="hidden" name="engineer_name" value="${esc(legacyName)}" />` : ""}
-      <div class="flex items-center justify-between sm:col-span-2">
-        <span class="text-xs text-muted" data-save-state aria-live="polite"></span>
-        <noscript><button class="btn-primary btn-xs" type="submit">작업 저장</button></noscript>
+      <div class="flex items-center justify-end gap-2 sm:col-span-2">
+        <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
+        <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>작업 저장</button>
       </div>
     </form>
     <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
