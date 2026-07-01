@@ -337,6 +337,7 @@ function init() {
   addColumn("sessions", "director_contact_id", "INTEGER"); // 담당 디렉터(클라이언트 측 연락처). FK 없음(ALTER 한계) — 연락처 삭제 시 코드가 NULL 처리.
   // room_id 컬럼은 위 addColumn으로 보장되므로 의존 인덱스는 여기서 생성(big exec 블록보다 뒤).
   d.exec("CREATE INDEX IF NOT EXISTS idx_sessions_room ON sessions(room_id);");
+  addColumn("project_tracks", "artist", "TEXT"); // 곡·콘텐츠별 아티스트(한 프로젝트에 여러 아티스트 가능). 미입력 시 프로젝트 아티스트.
   addColumn("track_tasks", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 세션에서 생성된 청구 작업 추적(레거시 전환분)
   addColumn("track_tasks", "worker_paid", "INTEGER NOT NULL DEFAULT 0"); // 외주 작업자 지급(정산) 여부
   addColumn("track_tasks", "worker_paid_date", "TEXT"); // 지급 처리일(YYYY-MM-DD)

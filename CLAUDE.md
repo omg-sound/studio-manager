@@ -196,8 +196,8 @@
   **단가표 · 녹음 종류**. `category`(`RECORDING_CATEGORIES`)로 분류, 세션 폼의 '녹음 종류'에 분류별 optgroup으로
   묶여 표시된다. 기준 시간(1Pro) 안은 `base_price`, 초과는 `extra_minutes` 단위 올림으로 `extra_price` 과금
   (`base_minutes=0`이면 정액). `computeRatePrice(item, minutes)`가 산정. 관리 메뉴에서 치프가 CRUD.
-- `project_tracks(project_id→projects CASCADE, title, content_type[Music|Video_Post], created_at)` —
-  프로젝트 하위 곡·콘텐츠. `content_type` 상수·정규화(`config.js`)는 있으나 **현재 UI 미노출 → 전부 Music**, 영상 구분은 향후 확장용.
+- `project_tracks(project_id→projects CASCADE, title, artist?, content_type[Music|Video_Post], created_at)` —
+  프로젝트 하위 곡·콘텐츠. **`artist`=곡별 아티스트**(한 프로젝트에 여러 아티스트 가능 — 곡·콘텐츠 추가/수정 폼에서 입력, 미입력 시 프로젝트 아티스트; 트랙 헤더에 표시). `content_type` 상수·정규화(`config.js`)는 있으나 **현재 UI 미노출 → 전부 Music**, 영상 구분은 향후 확장용.
 - `track_tasks(track_id→project_tracks CASCADE, task_type, billing_type[Time_Charge|Fixed_Per_Track],
   quantity, unit_price, total_price, engineer_name?, engineer_id?→project_managers SET NULL,
   worker_rate?, status[Pending|In_Progress|Completed],

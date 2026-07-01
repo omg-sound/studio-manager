@@ -384,9 +384,10 @@ router.post("/:id/tracks", requireEditor, (req, res) => {
   if (!titles.length) {
     return res.status(400).send(errorPage({ code: 400, title: "이름 필요", message: "곡·콘텐츠 이름을 입력하세요.", user: req.user }));
   }
+  const artist = String(req.body.artist || "").trim();
   let lastTrack = null;
   for (const title of titles) {
-    const track = createTrack(req.user, projectId, { title });
+    const track = createTrack(req.user, projectId, { title, artist });
     if (!track) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     lastTrack = track;
   }
@@ -673,12 +674,19 @@ function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId =
 
 function trackCreateForm(project) {
   return `
-    <form method="post" action="/projects/${project.id}/tracks" class="rounded-lg border border-border bg-bg p-3">
-      <label class="label mb-1 text-xs">곡·콘텐츠 이름 <span class="font-normal text-muted">— 여러 곡은 줄바꿈으로 구분</span></label>
-      <div class="flex gap-2">
-        <textarea class="input flex-1 py-1.5 text-sm" name="titles" rows="2" placeholder="곡명 또는 콘텐츠명&#10;한 줄에 하나씩 입력"></textarea>
-        <button class="btn-primary shrink-0 self-end px-4 py-1.5 text-sm" type="submit">추가</button>
+    <form method="post" action="/projects/${project.id}/tracks" class="rounded-lg border border-border bg-bg p-3 space-y-2">
+      <div>
+        <label class="label mb-1 text-xs">아티스트 <span class="font-normal text-muted">— 비우면 프로젝트 아티스트</span></label>
+        <input class="input py-1.5 text-sm" name="artist" list="dl-artists" autocomplete="off" value="${esc(project.artist || "")}" placeholder="이 곡·콘텐츠의 아티스트" />
       </div>
+      <div>
+        <label class="label mb-1 text-xs">곡·콘텐츠 이름 <span class="font-normal text-muted">— 여러 곡은 줄바꿈으로 구분(같은 아티스트)</span></label>
+        <div class="flex gap-2">
+          <textarea class="input flex-1 py-1.5 text-sm" name="titles" rows="2" placeholder="곡명 또는 콘텐츠명&#10;한 줄에 하나씩 입력"></textarea>
+          <button class="btn-primary shrink-0 self-end px-4 py-1.5 text-sm" type="submit">추가</button>
+        </div>
+      </div>
+      ${projectFieldDatalists()}
     </form>`;
 }
 
@@ -691,7 +699,7 @@ function trackCard(track, { isAdmin, managers = [], expandTaskId = null }) {
     <div class="rounded-lg border border-border bg-bg p-3">
       <div class="mb-2 flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-medium">${esc(track.title)}</div>
+          <div class="font-medium">${esc(track.title)}${track.artist ? `<span class="ml-1.5 text-xs font-normal text-muted">${esc(track.artist)}</span>` : ""}</div>
         </div>
         ${isAdmin ? trackEditMenu(track, hasInvoiced) : ""}
       </div>
@@ -719,9 +727,10 @@ function trackEditMenu(track, hasInvoiced) {
   return `
     <details class="group shrink-0 text-right">
       <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
-      <form method="post" action="/projects/tracks/${track.id}" class="mt-2 flex gap-2 rounded-lg border border-border bg-surface p-3 text-left">
-        <input class="input flex-1 py-1.5 text-sm" name="title" value="${esc(track.title)}" required />
-        <button class="btn-primary shrink-0 btn-xs" type="submit">저장</button>
+      <form method="post" action="/projects/tracks/${track.id}" class="mt-2 space-y-2 rounded-lg border border-border bg-surface p-3 text-left">
+        <div><label class="label mb-0.5 text-xs">아티스트</label><input class="input py-1.5 text-sm" name="artist" list="dl-artists" autocomplete="off" value="${esc(track.artist || "")}" placeholder="비우면 프로젝트 아티스트" /></div>
+        <div class="flex gap-2"><input class="input flex-1 py-1.5 text-sm" name="title" value="${esc(track.title)}" required />
+        <button class="btn-primary shrink-0 btn-xs self-end" type="submit">저장</button></div>
       </form>
       ${hasInvoiced
         ? `<p class="mt-2 text-xs text-muted">청구된 작업이 있어 삭제할 수 없습니다.</p>`

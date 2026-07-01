@@ -824,9 +824,10 @@ function createTrack(user, projectId, input = {}) {
   if (!project) return null;
   const title = String(input.title || "").trim();
   if (!title) throw new Error("TRACK_TITLE_REQUIRED");
+  const artist = String(input.artist || "").trim() || project.artist || null; // 곡별 아티스트, 미입력 시 프로젝트 아티스트
   const info = db()
-    .prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, ?, ?)")
-    .run(project.id, title, normalizeTrackContentType(input.content_type));
+    .prepare("INSERT INTO project_tracks (project_id, title, artist, content_type) VALUES (?, ?, ?, ?)")
+    .run(project.id, title, artist, normalizeTrackContentType(input.content_type));
   return db().prepare("SELECT * FROM project_tracks WHERE id = ?").get(info.lastInsertRowid);
 }
 
@@ -835,9 +836,10 @@ function updateTrack(user, trackId, input = {}) {
   if (!track) return null;
   const title = String(input.title || "").trim();
   if (!title) throw new Error("TRACK_TITLE_REQUIRED");
+  const artist = input.artist !== undefined ? (String(input.artist || "").trim() || null) : track.artist; // 폼에 아티스트 있으면 갱신
   db()
-    .prepare("UPDATE project_tracks SET title = ?, content_type = ? WHERE id = ?")
-    .run(title, normalizeTrackContentType(input.content_type), track.id);
+    .prepare("UPDATE project_tracks SET title = ?, artist = ?, content_type = ? WHERE id = ?")
+    .run(title, artist, normalizeTrackContentType(input.content_type), track.id);
   return db().prepare("SELECT * FROM project_tracks WHERE id = ?").get(track.id);
 }
 
