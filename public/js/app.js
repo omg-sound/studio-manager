@@ -122,16 +122,19 @@
 
   var durGroup = form.querySelector("[data-duration-group]");
   function pad(n) { return (n < 10 ? "0" : "") + n; }
-  // 1Pro 기준시간: 세션 종류=녹음일 때만 녹음 단가 항목 기준시간(rateSel data-minutes) 사용.
-  // 그 외(믹싱·마스터링·기타)는 녹음 단가 항목이 숨겨져도 그 값을 쓰지 않고 스튜디오 기본 1Pro 시간(data-pro-default).
+  // 1Pro/2Pro 버튼 기준시간 = 녹음 단가 항목 기준시간(rateSel data-minutes). 버튼은 녹음일 때만 노출.
   function baseMinutes() {
+    if (!rateSel) return 0;
+    var o = rateSel.options[rateSel.selectedIndex];
+    return o ? parseInt(o.getAttribute("data-minutes"), 10) || 0 : 0;
+  }
+  // 비녹음(믹싱 등) 슬라이더 기본 소요시간(분) — 스튜디오 설정(data-pro-default).
+  function proDefaultMinutes() { return durGroup ? parseInt(durGroup.getAttribute("data-pro-default"), 10) || 0 : 0; }
+  // 세션 종류별 슬라이더 기본값: 녹음=1Pro(녹음 단가 기준시간), 그 외=기본 세션 시간. 사용자가 조정해 쓴다.
+  function applyTypeDefault() {
     var isRec = sessionTypeSel && sessionTypeSel.value === "녹음";
-    if (isRec && rateSel) {
-      var o = rateSel.options[rateSel.selectedIndex];
-      var rateBase = o ? parseInt(o.getAttribute("data-minutes"), 10) || 0 : 0;
-      if (rateBase > 0) return rateBase;
-    }
-    return durGroup ? parseInt(durGroup.getAttribute("data-pro-default"), 10) || 0 : 0;
+    var def = isRec ? baseMinutes() : proDefaultMinutes();
+    if (def > 0) setDuration(def);
   }
   function checkedValue(name) {
     var r = form.querySelector('input[name="' + name + '"]:checked');
@@ -224,8 +227,8 @@
 
   if (dateInput) dateInput.addEventListener("change", refreshAvailability);
   if (roomSel) roomSel.addEventListener("change", refreshAvailability); // 룸 변경 시 해당 룸 기준으로 가용성 재조회(날짜 변경과 동일)
-  if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); });
-  if (sessionTypeSel) sessionTypeSel.addEventListener("change", function () { syncRecFields(); updateProAvailability(); }); // 종류 바뀌면 단가 항목 노출 + 1Pro 가용성 재계산
+  if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); applyTypeDefault(); updatePreview(); }); // 녹음 단가 바뀌면 슬라이더 기본=새 1Pro
+  if (sessionTypeSel) sessionTypeSel.addEventListener("change", function () { syncRecFields(); updateProAvailability(); applyTypeDefault(); }); // 종류 바뀌면 단가 항목/버튼 노출 + 슬라이더 기본값(녹음=1Pro·그 외=기본시간)
   // 슬라이더 드래그(30분 단위) → custom_hours 동기화.
   if (slider) slider.addEventListener("input", function () {
     var mins = parseInt(slider.value, 10) || 0;
@@ -271,6 +274,7 @@
   applyStartState();
   updateProAvailability();
   syncRecFields();
+  if (durationMinutes() === 0) applyTypeDefault(); // 새 세션(소요 미설정)이면 종류 기본값으로 시작(편집=저장값 유지)
   refreshDuration();
   refreshAvailability();
   }

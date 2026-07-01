@@ -91,7 +91,7 @@ function durationButtons(initMinutes = 0) {
         <span class="text-muted">0 ~ 12시간 · 30분 단위</span>
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-1.5">
-        ${presetBtn("pro1", "1Pro")}${presetBtn("pro2", "2Pro")}
+        <span class="flex gap-1.5" data-show-when="rec">${presetBtn("pro1", "1Pro")}${presetBtn("pro2", "2Pro")}</span>
         <span class="ml-auto flex items-center gap-1.5">
           <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" value="${hours}" data-custom-hours />
           <span class="text-xs text-muted">시간</span>
@@ -183,7 +183,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
       ${startSlotGrid(s.start_time || "")}
     </div>
     <div class="mt-3">
-      <label class="label-sm">소요 시간 <span class="font-normal text-muted">(1Pro = 녹음 단가 기준시간 · 없으면 기본 1Pro 시간)</span></label>
+      <label class="label-sm">소요 시간 <span class="font-normal text-muted">(녹음=1Pro 기준 · 믹싱 등은 기본 세션 시간)</span></label>
       ${durationButtons(initMins)}
       <div class="mt-1.5 text-xs text-success" data-end-preview></div>
     </div>

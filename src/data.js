@@ -1064,14 +1064,14 @@ function setStudioHours(start, end) {
   setState("studio_hours_end", cleanTime(end) || null);
 }
 
-// ── 1Pro 기준 소요시간(분) — 녹음 단가 항목 기준시간이 없는 세션(믹싱·마스터링·기타)에서 1Pro/2Pro 버튼 기준 ──
-const DEFAULT_PRO_MINUTES = 240; // 4시간
-/** 1Pro 기본 소요시간(분). 미설정/무효면 240(4시간). */
+// ── 기본 세션 시간(분) — 녹음 외 세션(믹싱·마스터링·기타)의 소요시간 슬라이더 기본값 ──
+const DEFAULT_PRO_MINUTES = 210; // 3시간 30분
+/** 녹음 외 세션의 기본 소요시간(분). 미설정/무효면 210(3시간 30분). */
 function getProMinutes() {
   const v = parseInt(getState("studio_pro_minutes"), 10);
   return Number.isFinite(v) && v > 0 ? v : DEFAULT_PRO_MINUTES;
 }
-/** 1Pro 기본 소요시간 저장(분 단위 정수, 무효면 null→기본값 폴백). */
+/** 기본 세션 시간 저장(분 단위 정수, 무효면 null→기본값 폴백). */
 function setProMinutes(mins) {
   const n = parseInt(mins, 10);
   setState("studio_pro_minutes", Number.isFinite(n) && n > 0 ? String(n) : null);

@@ -270,8 +270,8 @@ function studioHoursSection() {
       </form>
       <form method="post" action="/settings/pro-minutes" class="flex flex-wrap items-end gap-2 border-t border-border pt-4">
         <div>
-          <label class="label-sm">기본 1Pro 시간 <span class="font-normal text-muted">(녹음 단가 항목이 없는 세션[믹싱·마스터링·기타]의 1Pro·2Pro 기준)</span></label>
-          <input class="input w-28 py-1.5 text-sm" name="pro_hours" type="number" step="0.5" min="0.5" value="${esc(String(getProMinutes() / 60))}" placeholder="4" />
+          <label class="label-sm">기본 세션 시간 <span class="font-normal text-muted">(녹음 외 세션[믹싱·마스터링·기타]의 소요시간 슬라이더 기본값)</span></label>
+          <input class="input w-28 py-1.5 text-sm" name="pro_hours" type="number" step="0.5" min="0.5" value="${esc(String(getProMinutes() / 60))}" placeholder="3.5" />
         </div>
         <span class="pb-2 text-sm text-muted">시간</span>
         <button class="btn-primary btn-sm shrink-0" type="submit">저장</button>
