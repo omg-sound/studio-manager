@@ -60,7 +60,7 @@ function detectMimeFromFile(filePath) {
 /** 첨부 서류 종류 목록(화이트리스트). */
 const FILE_KINDS = [
   { key: "biz_license", label: "사업자등록증" },
-  { key: "bankbook", label: "통장사본" },
+  // 통장사본 폐기(2026-07-01): 스튜디오가 업체에 입금할 일이 없어 불필요. 과거 업로드분은 raw 열람만 가능(업로드 UI 없음).
 ];
 
 function fileKindLabel(key) {
@@ -333,7 +333,6 @@ router.get("/:id", (req, res) => {
   const tab = req.query.tab === "invoices" ? "invoices" : "projects";
   const projects = listProjectsForClient(c);
   const invoices = listInvoicesForClientEntity(c);
-  const contacts = listContactsForClient(c.id);
   const files = listClientFiles(c.id);
   const tabBarHtml = tabBar({
     tabs: [{ key: "projects", label: `프로젝트 ${projects.length}` }, { key: "invoices", label: `청구·결제 ${invoices.length}` }],
@@ -361,18 +360,6 @@ router.get("/:id", (req, res) => {
       ? `<div class="space-y-2">${projects.map((p) => clientProjectCard(p)).join("")}</div>`
       : emptyState("연결된 프로젝트가 없습니다.", { card: true });
   }
-
-  const contactsSection = contacts.length
-    ? listGroup({
-        rows: contacts.map((ct) =>
-          listRow({
-            href: `/contacts/${ct.id}`,
-            left: `<span class="font-medium">${esc(ct.name)}</span>${ct.aff_title ? `<span class="ml-1.5 text-xs text-muted">${esc(ct.aff_title)}</span>` : ""}`,
-            right: ct.phone ? `<span class="text-sm text-muted">${esc(ct.phone)}</span>` : "",
-          })
-        ),
-      })
-    : `<p class="text-sm text-muted">등록된 담당자 연락처가 없습니다.</p>`;
 
   // 업체(비아티스트): 소속 아티스트 목록. 아티스트: 소속 업체 링크(양방향).
   const roster = c.kind !== "아티스트" ? listArtistsForAgency(c.id) : [];
@@ -410,12 +397,10 @@ router.get("/:id", (req, res) => {
     ${content}
     <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">상세 정보</h3>
     ${editCard}
+    <div class="mt-3">${filesBlock}</div>
     ${crossRefBlock}
     ${agencyLink ? `<div class="mt-3">${agencyLink}</div>` : ""}
     ${rosterSection}
-    <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">담당자 연락처</h3>
-    ${contactsSection}
-    <div class="mt-6">${filesBlock}</div>
     ${deleteForm}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
 });
@@ -478,6 +463,10 @@ function clientFileSection(c, fileMap, fileErr) {
 function clientContactCombo(c, isEdit) {
   const opts = contactOptions();
   const cur = isEdit && c.id ? (listContactsForClient(c.id)[0] || null) : null;
+  // 현재 담당자의 전화·소속을 서버에서 미리 채워 로드 즉시 표시(이름 뒤에 번호). app.js가 변경 시 갱신.
+  const curInfo = cur
+    ? [cur.phone ? `☎ ${esc(cur.phone)}` : "", `소속: ${esc(c.name)}`].filter(Boolean).join(" · ")
+    : "";
   return `
     <div>
       <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 연락처에 연동)</span></label>
@@ -488,7 +477,7 @@ function clientContactCombo(c, isEdit) {
         <datalist id="dl-client-contacts">
           ${opts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
         </datalist>
-        <div class="mt-1 hidden text-sm text-muted" data-contact-info></div>
+        <div class="mt-1 text-sm text-muted${curInfo ? "" : " hidden"}" data-contact-info>${curInfo}</div>
         <p class="mt-0.5 text-xs text-muted">목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.</p>
       </div>
     </div>`;
