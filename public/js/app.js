@@ -111,7 +111,6 @@
   var grid = form.querySelector("[data-start-grid]");
   var rateSel = form.querySelector("[data-rate-select]");
   var customStart = form.querySelector("[data-custom-start]");
-  var customStartWrap = form.querySelector("[data-custom-start-wrap]");
   var customStartToggle = form.querySelector("[data-custom-start-toggle]");
   var preview = form.querySelector("[data-end-preview]");
   var slider = form.querySelector("[data-duration-slider]");
@@ -253,11 +252,11 @@
       setDuration(base * mult);
     });
   });
-  // 그리드 '직접입력' 버튼 → 시간 입력칸 펼치고 포커스(텍스트로 HH:MM 입력).
+  // 그리드 '직접입력' 버튼 → 그 자리(같은 셀)를 시간 입력칸으로 교체(버튼 숨김·입력 노출·포커스).
   if (customStartToggle) customStartToggle.addEventListener("click", function () {
-    if (customStartWrap) customStartWrap.hidden = false;
+    customStartToggle.hidden = true;
+    if (customStart) { customStart.hidden = false; customStart.focus(); }
     clearGridStart();
-    if (customStart) customStart.focus();
     updatePreview();
   });
   // 직접입력 시작 시간: 숫자만 받아 HH:MM 자동 포맷("1425"→"14:25"). 입력 시 그리드 선택 해제(서버도 직접입력 우선).
@@ -270,8 +269,8 @@
   form.addEventListener("change", function (e) {
     if (!e.target) return;
     if (e.target.name === "start_time") {
-      if (customStart) customStart.value = "";
-      if (customStartWrap) customStartWrap.hidden = true; // 그리드 고르면 직접입력 칸 닫기
+      if (customStart) { customStart.value = ""; customStart.hidden = true; } // 그리드 고르면 직접입력 칸 닫고
+      if (customStartToggle) customStartToggle.hidden = false; // '직접입력' 버튼 복원
       updatePreview();
     }
   });

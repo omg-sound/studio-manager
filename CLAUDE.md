@@ -33,8 +33,8 @@
 - **폼 레이아웃(추가·편집 완전 통일)**: 추가·편집 모두 `sessionBookingFields`(날짜·예약·상태 / 세션종류·**녹음 단가 항목**(세션 종류=녹음일 때만 노출)·엔지니어·**룸** / **시작 그리드+직접입력** / **소요 슬라이더**). 편집 폼은 기존 시간으로 슬라이더 초기화(`minutesBetween`), 저장 시 시작+소요로 종료 산정. `app.js`가 `[data-session-form]`을 **폼별로 초기화(멀티폼)**. **세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능**. 세션 저장 버튼도 추가 버튼처럼 full.
 - **용어 통일**: `녹음 종류` = **단가표 항목**(`rate_item_id`, 스튜디오/로케이션 분류 optgroup, `rateSelectGrouped`).
   `세션 종류` = `session_type`(녹음/믹싱/마스터링/기타). 추가·편집 폼에서 동일 의미(이전 라벨 혼동 정리).
-- 예약 폼=버튼 UX: 시작 시간 그리드(**운영시간 기반 동적 생성** — `studioStartSlots`가 `admin_state.studio_hours` 읽음; 예약된 슬롯 회색, **선택=테두리 강조**). 그리드 밖은 '직접입력' →
-  **텍스트 직접입력**(HH:MM; 숫자만 입력하면 콜론 자동 삽입 `1425`→`14:25`, `pattern`+서버 `cleanTime` 검증). (이전의 '녹음 종류 미선택 시 시작 시간 비활성' 필수 게이트는 세션 종류 가변화로 **미사용** — 대신 세션 종류=녹음일 때만 녹음 단가 항목 select 노출로 대체. `rateSelectGrouped`의 `required`/`data-rate-required` 인터페이스 보존.)
+- 예약 폼=버튼 UX: 시작 시간 그리드(**운영시간 기반 동적 생성** — `studioStartSlots`가 `admin_state.studio_hours` 읽음; 예약된 슬롯 회색, **선택=테두리 강조**). 그리드 밖은 '직접입력' 버튼 →
+  **버튼이 그 자리(같은 그리드 셀)에서 바로 시간 입력칸으로 전환**(별도 행 아님, `data-custom-start-cell`; 숫자만 입력하면 콜론 자동 삽입 `1425`→`14:25`, `pattern`+서버 `cleanTime` 검증; 편집 시 그리드 밖 값이면 처음부터 입력칸 노출). (이전의 '녹음 종류 미선택 시 시작 시간 비활성' 필수 게이트는 세션 종류 가변화로 **미사용** — 대신 세션 종류=녹음일 때만 녹음 단가 항목 select 노출로 대체. `rateSelectGrouped`의 `required`/`data-rate-required` 인터페이스 보존.)
 - 소요시간 **슬라이더**(30분 단위·최대 14시간=4Pro) + 아래 `[1Pro][2Pro][3Pro][4Pro][직접입력]` 프리셋(슬라이더와 양방향 동기화). 종료는 서버가 시작+길이로 계산(`custom_hours`+`duration_mode=custom`, 1Pro=녹음 종류 기준시간).
   폼 인터랙션은 `public/js/app.js`(CSP: 인라인 0).
 - **다중 룸**: `rooms` 테이블 + `sessions.room_id`. 세션 폼에 룸 select(**첫 룸=A룸 기본 선택, '룸 미지정'은 맨 아래 옵션**). 겹침 검사를 `IFNULL(room_id,0)`으로 룸별 판정 — **같은 룸만 충돌, 다른 룸은 동시간 병렬 허용**(레거시 NULL끼리는 가상 룸 0으로 처리). 룸 CRUD는 `/settings` 환경설정 탭(`POST /settings/rooms`, `/:id/delete`). 기본 '메인 룸' 1회 시드.

@@ -62,16 +62,15 @@ function startSlotGrid(current) {
         <span class="flex min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
       </label>`
   ).join("");
-  // 그리드 맨 뒤에 '직접입력' 버튼 — 클릭하면 아래 시간 입력칸을 펼친다(app.js).
-  const customBtn = `<button type="button" class="flex min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed" data-custom-start-toggle>직접입력</button>`;
-  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customBtn}</div>
-    <div class="mt-1.5 flex items-center gap-1.5" data-custom-start-wrap ${showCustom ? "" : "hidden"}>
-      <span class="text-xs text-muted">직접입력</span>
-      <input class="input w-24 py-1.5 text-sm" type="text" inputmode="numeric" name="start_time_custom" data-custom-start
-        placeholder="예: 14:25" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
-        value="${showCustom ? esc(current) : ""}" />
-      <span class="text-xs text-muted">(시:분)</span>
+  // 그리드 맨 뒤 '직접입력' 셀 — 버튼을 누르면 그 자리(같은 셀)가 바로 시간 입력칸으로 바뀐다(app.js가 토글).
+  // 콜론은 자동 삽입("1425"→"14:25"). 편집 시 그리드 밖 값이면 처음부터 입력칸을 노출.
+  const customCell = `<div data-custom-start-cell>
+      <button type="button" class="flex w-full min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed" data-custom-start-toggle ${showCustom ? "hidden" : ""}>직접입력</button>
+      <input class="input min-h-[2.5rem] w-full px-1 py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="start_time_custom" data-custom-start
+        placeholder="시:분" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
+        aria-label="시작 시간 직접입력(시:분)" value="${showCustom ? esc(current) : ""}" ${showCustom ? "" : "hidden"} />
     </div>`;
+  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customCell}</div>`;
 }
 
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
