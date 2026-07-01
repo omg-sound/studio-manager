@@ -234,7 +234,7 @@ router.get("/:id", (req, res) => {
   const infoCard = `
     <div class="card mb-6 space-y-2">
       ${nameDetail && nameDetail !== c.name ? `<div class="text-sm"><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : ""}
-      ${c.nickname ? `<div class="text-sm"><span class="text-muted">별명</span> ${esc(c.nickname)}</div>` : ""}
+      ${c.nickname ? `<div class="text-sm"><span class="text-muted">아티스트명</span> ${esc(c.nickname)}</div>` : ""}
       ${c.company ? `<div class="text-sm"><span class="text-muted">회사</span> ${esc(c.company)}</div>` : ""}
       ${c.job_title ? `<div class="text-sm"><span class="text-muted">직책</span> ${esc(c.job_title)}${c.department ? " · " + esc(c.department) : ""}</div>` : c.department ? `<div class="text-sm"><span class="text-muted">부서</span> ${esc(c.department)}</div>` : ""}
       <div class="text-sm"><span class="text-muted">휴대전화</span> ${c.phone ? esc(c.phone) : `<span class="text-muted">없음</span>`}</div>
@@ -367,7 +367,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null) {
           <div><label class="label">이름</label><input class="input" name="given_name" value="${esc(c.given_name || "")}" placeholder="예: 지훈" /></div>
           <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
         </div>
-        <div class="sm:max-w-xs"><label class="label">별명</label><input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 준, 해피" /></div>
+        <div class="sm:max-w-xs"><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · Google 별명으로 동기화)</span></label><input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명" /></div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
         <div><label class="label">회사</label><input class="input" name="company" value="${esc(c.company || "")}" placeholder="소속 회사명" /></div>
