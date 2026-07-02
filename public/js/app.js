@@ -587,6 +587,17 @@
   });
 })();
 
+// [data-menu] <details> 드롭다운(예: 새 클라이언트 유형 선택): 바깥 클릭 시 닫기(네이티브 details는 summary 재클릭 전까지 열림).
+(function () {
+  "use strict";
+  document.addEventListener("click", function (ev) {
+    var open = document.querySelectorAll("details[data-menu][open]");
+    for (var i = 0; i < open.length; i++) {
+      if (!open[i].contains(ev.target)) open[i].removeAttribute("open");
+    }
+  });
+})();
+
 // 검색형 콤보박스(실결제자·클라이언트/세션 디렉터 담당자): <input list> 검색값 ↔ hidden id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정.
 // 위임(delegation)으로 처리 → 동적으로 추가되는 행(세션 디렉터 '+추가')도 자동 동작.
 (function () {

@@ -525,6 +525,21 @@ function listContacts({ q, tab, staff } = {}) {
   return db().prepare(sql).all(...args).map(withLegacy);
 }
 
+/**
+ * 관계자(클라이언트 측 '사람' — 비아티스트): 대표·A&R·담당자·디렉터·작가 등.
+ * person·is_artist=0·비스태프(user_id null)·비외주. 클라이언트 '관계자' 탭. 상세는 연락처(/contacts/:id).
+ */
+function listAssociates({ q } = {}) {
+  const where = [
+    "p.kind = 'person'", "p.is_artist = 0", "p.user_id IS NULL",
+    "p.id NOT IN (SELECT party_id FROM project_managers WHERE user_id IS NULL AND party_id IS NOT NULL)",
+  ];
+  const args = [];
+  const term = String(q || "").trim();
+  if (term) { where.push("(p.name LIKE ? OR p.phone LIKE ?)"); args.push(`%${term}%`, `%${term}%`); }
+  return db().prepare("SELECT p.* FROM parties p WHERE " + where.join(" AND ") + " ORDER BY p.name COLLATE NOCASE").all(...args).map(withLegacy);
+}
+
 /** 클라이언트 목록 = 업체(company)·그룹·아티스트(사람 포함). kind로 좁힘(레거시 라벨/파티 kind 모두 허용). */
 function listClients({ kind } = {}) {
   if (kind === "소속사/레이블" || kind === "제작사" || kind === "company" || kind === "조직") return listParties({ kind: "company" });
@@ -722,6 +737,7 @@ module.exports = {
   listTasksForWorker,
   setTaskPayout,
   listContacts,
+  listAssociates,
   listClients,
   clientKindCounts,
   contactOptions,
