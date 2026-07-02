@@ -47,7 +47,6 @@ const {
   deleteTask,
   createInvoiceFromTasks,
   invoiceDraftForPdf,
-  createPerson,
   getClientFile,
   listPersonsForOrg,
   getStudioInfo,

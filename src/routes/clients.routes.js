@@ -6,14 +6,14 @@ const crypto = require("crypto");
 const express = require("express");
 const multer = require("multer");
 const { db } = require("../db");
-const { requireChief, requireEditor, isChief } = require("../auth");
+const { requireEditor } = require("../auth");
 const { COMPANY_ROLES } = require("../config");
 const {
-  listClients, clientKindCounts, getParty, listProjectsForParty,
+  listClients, getParty, listProjectsForParty,
   listInvoicesForParty, listPersonsForOrg,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  contactOptions, addAffiliation, listContacts, listAssociates, resolvePersonByName, orgsWithOwnerParty,
-  listArtistsForAgency, resolveCompanyByName, currentAffiliation, classifyParty,
+  contactOptions, addAffiliation, listContacts, listAssociates, resolvePersonByName,
+  listArtistsForAgency, currentAffiliation, classifyParty,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
   setPartyAgency, currentAgencyId,
@@ -21,7 +21,7 @@ const {
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow, listRowLinked, explain } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
