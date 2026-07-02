@@ -421,13 +421,19 @@ router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, r
 }));
 
 // ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리 + 첨부 서류 링크) ──
-router.get("/:id", (req, res) => {
+router.get("/:id", asyncHandler(async (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tab = req.query.tab === "invoices" ? "invoices" : "projects";
   const projects = listProjectsForParty(c);
   const invoices = listInvoicesForParty(c);
   const files = listClientFiles(c.id);
+  // 첨부 파일 실제 접근 가능 여부(깨진 링크는 '있음'으로 안 보이게). 확실한 부재(404/휴지통)만 false, 불확실은 true.
+  const fileOk = {};
+  for (const f of files) {
+    try { fileOk[f.kind] = await storage.exists(f.storage_backend, f.file_id); }
+    catch (_e) { fileOk[f.kind] = true; }
+  }
   // 목록에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만 허용).
   const from = String(req.query.from || "");
   const clientsBackHref = from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/clients";
@@ -507,7 +513,7 @@ router.get("/:id", (req, res) => {
     (() => { const oc = c.owner_party_id ? getParty(c.owner_party_id) : null; return oc ? `<div><span class="text-muted">대표자 연락처</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : ""; })(),
   ].filter(Boolean).join("");
   const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
-  const filesBlock = clientFilesBlock(c, files, fileErr); // 자체 '첨부 서류' 헤딩 포함
+  const filesBlock = clientFilesBlock(c, files, fileErr, fileOk); // 자체 '첨부 서류' 헤딩 포함 · 깨진 링크는 경고
   const deleteForm = `
     <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-4">
       <button class="btn-ghost text-danger btn-sm" type="submit">클라이언트 삭제</button>
@@ -528,7 +534,7 @@ router.get("/:id", (req, res) => {
     ${rosterSection}
     ${deleteForm}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
-});
+}));
 
 // ── 헬퍼 함수 ──
 
@@ -545,10 +551,11 @@ function clientProjectCard(p) {
 }
 
 /** 첨부 서류 업로드·교체 UI 섹션(isEdit=true일 때만 렌더). */
-function clientFileSection(c, fileMap, fileErr) {
+function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
   const rows = FILE_KINDS.map(({ key, label }) => {
     const existing = fileMap[key];
-    const existingRow = existing
+    const ok = existing && fileOk[key] !== false; // fileOk 미확인(undefined)이면 표시(기존 동작), 명시적 false(깨진 링크)만 숨김
+    const existingRow = existing && ok
       ? `<div class="mb-2 flex items-center gap-3 text-sm">
             <a href="/clients/${c.id}/files/${key}/raw" target="_blank" rel="noopener" class="font-medium text-primary hover:underline">${esc(label)} 보기</a>
             <span class="max-w-[12rem] truncate text-xs text-muted">${esc(existing.file_name)}</span>
@@ -556,7 +563,15 @@ function clientFileSection(c, fileMap, fileErr) {
               <button class="text-xs text-danger hover:underline" type="submit">삭제</button>
             </form>
           </div>`
-      : "";
+      : existing && !ok
+        ? `<div class="mb-2 flex flex-wrap items-center gap-3 text-sm">
+            <span class="text-danger">⚠️ 파일을 찾을 수 없습니다 (Drive에서 삭제/이동됨)</span>
+            <span class="max-w-[12rem] truncate text-xs text-muted">${esc(existing.file_name)}</span>
+            <form method="post" action="/clients/${c.id}/files/${key}/delete" class="inline" data-confirm="깨진 첨부 기록을 지울까요? (Drive 파일은 이미 없음)">
+              <button class="text-xs text-danger hover:underline" type="submit">기록 삭제</button>
+            </form>
+          </div>`
+        : "";
     return `
     <div>
       <label class="label">${esc(label)}</label>
@@ -565,7 +580,7 @@ function clientFileSection(c, fileMap, fileErr) {
         <div class="flex-1" data-dropzone>
           <input type="file" name="file" accept="image/png,image/jpeg,application/pdf" class="sr-only" />
           <div class="input flex cursor-pointer select-none items-center py-2 text-sm text-muted" data-dropzone-display>
-            <span data-dropzone-label>${existing ? "다른 파일로 교체" : "파일 끌어놓기 또는 클릭"}</span>
+            <span data-dropzone-label>${existing && ok ? "다른 파일로 교체" : "파일 끌어놓기 또는 클릭"}</span>
           </div>
         </div>
         <button class="btn-ghost shrink-0" type="submit">업로드</button>
@@ -700,12 +715,12 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
     </form>` : ""}`;
 }
 
-/** 첨부 서류 카드(상세에서 분리 배치용). 업체(company)만 표시(아티스트·그룹은 첨부 없음). */
-function clientFilesBlock(c, files, fileErr) {
+/** 첨부 서류 카드(상세에서 분리 배치용). 업체(company)만 표시(아티스트·그룹은 첨부 없음). fileOk=실제 접근 가능 여부(깨진 링크 경고). */
+function clientFilesBlock(c, files, fileErr, fileOk = {}) {
   if (c.kind !== "company") return "";
   const fileMap = {};
   files.forEach((f) => { fileMap[f.kind] = f; });
-  return `<div>${clientFileSection(c, fileMap, fileErr)}</div>`;
+  return `<div>${clientFileSection(c, fileMap, fileErr, fileOk)}</div>`;
 }
 
 module.exports = router;

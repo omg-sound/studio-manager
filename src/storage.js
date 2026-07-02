@@ -82,4 +82,23 @@ function sizeOf(backend, fileId) {
   }
 }
 
-module.exports = { activeBackend, put, stream, remove, sizeOf, localPath };
+/**
+ * 파일이 실제로 접근 가능한지 확인(깨진 첨부 링크 감지). Drive=files.get(휴지통/404면 없음), 로컬=존재 여부.
+ * 불확실(네트워크 오류 등)이면 true 반환(유효 파일을 숨기지 않도록) — 확실한 부재(404/410/휴지통)만 false.
+ */
+async function exists(backend, fileId) {
+  if (!fileId) return false;
+  if (backend === "drive") {
+    try {
+      const m = await drive.getFileMeta(fileId);
+      return !m.trashed; // 휴지통이면 없는 것으로 취급
+    } catch (e) {
+      const status = (e && (e.code || (e.response && e.response.status))) || 0;
+      if (status === 404 || status === 410 || /not ?found|does not exist/i.test(String((e && e.message) || ""))) return false;
+      return true; // 불확실(권한/네트워크) → 있음으로 간주
+    }
+  }
+  try { return fs.existsSync(localPath(fileId)); } catch (_e) { return true; }
+}
+
+module.exports = { activeBackend, put, stream, remove, sizeOf, localPath, exists };
