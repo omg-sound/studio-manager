@@ -457,8 +457,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
       ${affBlock}
       <div class="flex items-center gap-2">
         <button class="btn-primary transition" type="submit"${isEdit ? " data-dirty-save" : ""}>${isEdit ? "저장" : "추가"}</button>
-        <a href="${cancelHref}" class="btn-ghost">취소</a>
-        ${isEdit ? `<span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>` : ""}
+        ${isEdit ? `<span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>` : `<a href="${cancelHref}" class="btn-ghost">취소</a>`}
       </div>
     </form>`;
 }

@@ -642,7 +642,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       <div class="flex items-center gap-2">
         ${isEdit
-          ? `<button class="btn-primary transition" type="submit" data-dirty-save>저장</button><a href="/clients/${c.id}" class="btn-ghost">← 돌아가기</a><span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>`
+          ? `<button class="btn-primary transition" type="submit" data-dirty-save>저장</button><span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>`
           : `<button class="btn-primary" type="submit">추가</button><a href="/clients/new" class="btn-ghost">취소</a>`}
       </div>
     </form>
