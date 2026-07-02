@@ -18,6 +18,7 @@ const {
   deleteSession,
   busySessionSlots,
   sessionAttendeeEmails,
+  listSessionDirectors,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, detailsChevron } = require("../views");
@@ -32,10 +33,13 @@ const router = express.Router();
 function eventInputForSession(session, project) {
   const company = project.production_company || project.artist_company; // 제작사 우선, 없으면 레이블(레이블 자체 제작분)
   const title = [company, project.artist].filter(Boolean).join(" · ") || project.title || "스튜디오 세션";
+  // 담당 디렉터(다대다) 이름 — 활동명 우선. 캘린더 설명에 포함.
+  const directors = session.id ? listSessionDirectors(session.id).map((d) => d.activity_name || d.name).filter(Boolean) : [];
   const description = [
     session.session_type ? `종류: ${session.session_type}` : "",
     session.booker_name ? `예약: ${session.booker_name}` : "",
     session.engineer_name ? `엔지니어: ${session.engineer_name}` : "",
+    directors.length ? `디렉터: ${directors.join(", ")}` : "",
     session.memo ? `메모: ${session.memo}` : "",
     config.baseUrl ? `${config.baseUrl}/projects/${session.project_id}` : "",
   ].filter(Boolean).join("\n");
