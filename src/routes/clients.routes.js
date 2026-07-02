@@ -524,20 +524,10 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
       </div>
       <div data-client-cash${isArtist ? "" : " hidden"} class="space-y-4">
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label class="label">소속그룹 <span class="font-normal text-muted text-xs">(속한 그룹·팀 — 있으면)</span></label>
-            <input class="input" name="group_name" value="${esc(c.group_name || "")}" placeholder="예: 소속 그룹·팀명" />
-          </div>
-          <div>
-            <label class="label">소속사 <span class="font-normal text-muted text-xs">(소속사·레이블 — 업체와 연동)</span></label>
-            <input class="input" name="agency_name" value="${esc(c.agency_name || "")}" list="client-agency-companies" autocomplete="off" placeholder="예: 소속사·레이블명 · 업체 선택" />
-            <datalist id="client-agency-companies">${companies.map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
-          </div>
-        </div>
         <div>
           <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(개인 — 사업자등록증 없는 경우)</span></label>
           <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
+          <p class="mt-1 text-xs text-muted">소속사·소속 그룹은 <span class="text-fg">소속 이력</span>(연락처)이나 프로젝트의 소속사 칸에서 관리합니다.</p>
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">

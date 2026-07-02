@@ -24,6 +24,8 @@ const {
   updateParty,
   deleteParty,
   setPartyGoogleRef,
+  currentAffiliation,
+  syncCompanyAffiliation,
 } = require("./data");
 
 /** refresh token으로 인증된 People 클라이언트. 미연동이면 null. */
@@ -50,8 +52,10 @@ function personBodyFromContact(c) {
 
   if (c.nickname) body.nicknames = [{ value: c.nickname }];
 
+  // 회사는 당사자 모델에서 소속 이력(affiliations) — 현재 소속 org 이름을 Google organization으로 내보냄.
+  const company = c.company || (c.id ? (currentAffiliation(c.id) || {}).org_name : null);
   const orgFields = {};
-  if (c.company) orgFields.name = c.company;
+  if (company) orgFields.name = company;
   if (c.job_title) orgFields.title = c.job_title;
   if (c.department) orgFields.department = c.department;
   if (Object.keys(orgFields).length) body.organizations = [orgFields];
@@ -228,6 +232,7 @@ async function syncFromGoogle() {
         if (existing) {
           try {
             updateParty(existing.id, fields);
+            if (fields.company) syncCompanyAffiliation(existing.id, fields.company, fields.job_title); // Google 회사 → 소속 이력
             setPartyGoogleRef(existing.id, resourceName, etag);
             updated++;
           } catch (_e) {
@@ -238,6 +243,7 @@ async function syncFromGoogle() {
           if (!fields.name && !fields.given_name && !fields.family_name && !fields.nickname) continue;
           try {
             const newId = createPartyPerson(fields);
+            if (fields.company) syncCompanyAffiliation(newId, fields.company, fields.job_title); // Google 회사 → 소속 이력
             setPartyGoogleRef(newId, resourceName, etag);
             created++;
           } catch (_e) {
