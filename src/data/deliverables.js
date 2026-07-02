@@ -44,7 +44,7 @@ function recentDeliverables(_user, limit = 50) {
       `SELECT dv.*, p.title AS project_title, c.name AS client_name
        FROM deliverables dv
        LEFT JOIN projects p ON p.id = dv.project_id
-       LEFT JOIN clients c ON c.id = p.client_id
+       LEFT JOIN parties c ON c.id = COALESCE(p.production_id, p.agency_id, p.artist_id)
        ORDER BY dv.created_at DESC, dv.id DESC LIMIT ?`
     )
     .all(limit);

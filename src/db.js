@@ -44,19 +44,10 @@ function init() {
       name          TEXT NOT NULL DEFAULT '',
       password_hash TEXT,
       google_sub    TEXT,
-      client_id     INTEGER REFERENCES clients(id) ON DELETE SET NULL,
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS clients (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      name       TEXT NOT NULL,
-      kind       TEXT NOT NULL DEFAULT '아티스트',
-      phone      TEXT,
-      email      TEXT,
-      memo       TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    -- (레거시 clients/contacts/contact_affiliations 테이블은 당사자(parties) 모델로 이관 후 제거됨 — dropLegacyIdentity/legacy_drop_v1)
 
     CREATE TABLE IF NOT EXISTS projects (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +55,6 @@ function init() {
       artist     TEXT,
       artist_company TEXT,
       production_company TEXT,
-      client_id  INTEGER REFERENCES clients(id) ON DELETE SET NULL,
       manager_id INTEGER REFERENCES project_managers(id) ON DELETE SET NULL,
       status     TEXT NOT NULL DEFAULT '녹음중',
       kind       TEXT NOT NULL DEFAULT '싱글',
@@ -192,7 +182,6 @@ function init() {
     CREATE TABLE IF NOT EXISTS invoices (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id  INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-      client_id   INTEGER REFERENCES clients(id) ON DELETE SET NULL,
       title       TEXT NOT NULL,
       invoice_number TEXT UNIQUE,
       amount      INTEGER NOT NULL DEFAULT 0, -- 총액(원)
@@ -224,27 +213,7 @@ function init() {
       value TEXT
     );
 
-    -- 연락처(클라이언트 측 사람): 레이블/제작사 직원·프리 매니저·지인 등. 회사(clients)와 별개 마스터.
-    CREATE TABLE IF NOT EXISTS contacts (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      name       TEXT NOT NULL,
-      phone      TEXT,
-      email      TEXT,
-      memo       TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    -- 소속 이력(이직 히스토리): 한 연락처의 회사 소속 타임라인. client_id NULL = 무소속(프리/지인). ended_on NULL = 현재 소속.
-    CREATE TABLE IF NOT EXISTS contact_affiliations (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-      client_id  INTEGER REFERENCES clients(id) ON DELETE SET NULL,
-      title      TEXT,
-      started_on TEXT,
-      ended_on   TEXT,
-      memo       TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    -- (레거시 contacts/contact_affiliations는 parties/affiliations로 이관 후 제거 — legacy_drop_v1)
 
     -- ── 당사자(Party) 통합 모델 (party_model_v1) ──
     -- 사람·조직·그룹을 한 테이블로. "아티스트/청구처/담당자/디렉터/엔지니어"는 테이블이 아니라 party_id 참조(역할).
@@ -292,7 +261,7 @@ function init() {
     -- 클라이언트 첨부 서류(사업자등록증·통장사본). 치프 전용, 인증 다운로드만. kind별 1개(교체 시 이전 파일 스토리지 정리).
     CREATE TABLE IF NOT EXISTS client_files (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+      client_id       INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE, -- 조직(party) 첨부. 컬럼명은 레거시 유지(client_files_party_v1 재구성)
       kind            TEXT NOT NULL,                       -- 'biz_license' | 'bankbook'
       storage_backend TEXT NOT NULL DEFAULT 'local',       -- 'drive' | 'local'
       file_id         TEXT NOT NULL,                       -- drive fileId 또는 로컬 파일명
@@ -310,8 +279,6 @@ function init() {
       PRIMARY KEY (session_id, contact_id)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
-    CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
     CREATE INDEX IF NOT EXISTS idx_task_types_active ON task_types(active, sort_order, label);
     CREATE INDEX IF NOT EXISTS idx_project_tracks_project ON project_tracks(project_id);
@@ -322,13 +289,10 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_rooms_active ON rooms(active, sort_order, name);
     CREATE INDEX IF NOT EXISTS idx_deliverables_project ON deliverables(project_id);
     CREATE INDEX IF NOT EXISTS idx_deliverables_token ON deliverables(access_token);
-    CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id);
     CREATE INDEX IF NOT EXISTS idx_invoices_project ON invoices(project_id);
     CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
     CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id);
     CREATE INDEX IF NOT EXISTS idx_invoice_items_task ON invoice_items(task_id);
-    CREATE INDEX IF NOT EXISTS idx_contact_affiliations_contact ON contact_affiliations(contact_id, ended_on);
-    CREATE INDEX IF NOT EXISTS idx_contact_affiliations_client ON contact_affiliations(client_id, ended_on);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_client_files_kind ON client_files(client_id, kind);
     CREATE INDEX IF NOT EXISTS idx_client_files_client ON client_files(client_id);
   `);
@@ -371,7 +335,7 @@ function init() {
   addColumn("projects", "artist_company", "TEXT");
   addColumn("projects", "production_company", "TEXT");
   addColumn("projects", "manager_id", "INTEGER REFERENCES project_managers(id) ON DELETE SET NULL");
-  addColumn("projects", "contact_id", "INTEGER REFERENCES contacts(id) ON DELETE SET NULL"); // 클라이언트 측 담당 연락처
+  addColumn("projects", "contact_id", "INTEGER"); // 레거시(고객 담당 연락처) — FK 제거(contacts 드롭 대비), legacy_drop_v1이 제거
   addColumn("invoices", "invoice_number", "TEXT");
   addColumn("invoices", "tax_amount", "INTEGER NOT NULL DEFAULT 0");
   addColumn("invoices", "discount_amount", "INTEGER NOT NULL DEFAULT 0"); // 청구 전체 할인(원). 0=할인 없음.
@@ -423,6 +387,8 @@ function init() {
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_track_tasks_session ON track_tasks(session_id) WHERE session_id IS NOT NULL;");
   d.exec("CREATE INDEX IF NOT EXISTS idx_invoice_items_session ON invoice_items(session_id);");
+  // 레거시 정체성 테이블(clients/contacts) 존재 여부 — 아래 이관 게이트를 가드(드롭 후·신선 DB에선 스킵).
+  const hasLegacy = tableExists("clients");
   // 프로젝트 유형 키 전환(1회): 구 recording→session, mixing→task. 멱등 게이트.
   // backfillProjectServices는 project_type IS NULL만 대상이라 본 전환과 충돌하지 않는다.
   if (!getState("project_type_rename_v1")) {
@@ -445,7 +411,7 @@ function init() {
     setState("legacy_backfill_v1", "done");
   }
   // 업체 역할 백필(2026-07-01): 기존 업체(비아티스트)의 roles가 비면 kind를 첫 역할로 시드(겸업 태그 기반). 1회 게이트.
-  if (!getState("client_roles_backfill_v1")) {
+  if (hasLegacy && !getState("client_roles_backfill_v1")) {
     d.prepare("UPDATE clients SET roles = kind WHERE (roles IS NULL OR roles = '') AND kind <> '아티스트'").run();
     setState("client_roles_backfill_v1", "done");
   }
@@ -456,7 +422,7 @@ function init() {
     setState("invoice_tax_status_split_v1", "done");
   }
   // 기존 프로젝트의 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 1회 백필. 이후는 프로젝트 저장 시 자동 등록.
-  if (!getState("project_clients_backfill_v1")) {
+  if (hasLegacy && !getState("project_clients_backfill_v1")) {
     for (const [col, kind] of [["artist", "아티스트"], ["artist_company", "소속사/레이블"], ["production_company", "제작사"]]) {
       d.prepare(
         `INSERT INTO clients (name, kind)
@@ -495,7 +461,7 @@ function init() {
 
   // 활성 담당자(project_managers) 중 연동 연락처가 없는 행에 contacts 행을 1회 생성.
   // 멱등: contact_id가 이미 있는 행은 건너뜀.
-  if (!getState("manager_contacts_backfill_v1")) {
+  if (hasLegacy && !getState("manager_contacts_backfill_v1")) {
     const managers = d.prepare("SELECT id, name, phone, email FROM project_managers WHERE active = 1 AND contact_id IS NULL").all();
     const insContact = d.prepare("INSERT INTO contacts (name, family_name, given_name, phone, email) VALUES (?, ?, ?, ?, ?)");
     const updMgr = d.prepare("UPDATE project_managers SET contact_id = ? WHERE id = ?");
@@ -510,7 +476,7 @@ function init() {
 
   // 전 로그인 계정(owner 포함)을 연락처에 1회 연결: 하우스(chief/staff)는 기존 담당자 연락처에 user_id 링크,
   // 담당자 연락처가 없는 계정(owner)은 새 연락처 생성. 멱등(contacts.user_id 이미 있으면 건너뜀).
-  if (!getState("user_contacts_backfill_v1")) {
+  if (hasLegacy && !getState("user_contacts_backfill_v1")) {
     const users = d.prepare("SELECT id, name, email FROM users WHERE active = 1").all();
     const findByUser = d.prepare("SELECT id FROM contacts WHERE user_id = ?");
     const mgrContact = d.prepare("SELECT contact_id FROM project_managers WHERE user_id = ? AND contact_id IS NOT NULL");
@@ -528,7 +494,8 @@ function init() {
   }
 
   // 기존 단일 담당 디렉터(sessions.director_contact_id)를 다대다 테이블(session_directors)로 1회 복사. 멱등(중복 무시).
-  if (!getState("session_directors_backfill_v1")) {
+  // 레거시 세션 디렉터(contact 기반)만 대상 — 신선 DB(contacts 없음)에선 스킵(session_directors.contact_id FK→contacts).
+  if (hasLegacy && !getState("session_directors_backfill_v1")) {
     d.prepare(
       `INSERT OR IGNORE INTO session_directors (session_id, contact_id)
        SELECT id, director_contact_id FROM sessions WHERE director_contact_id IS NOT NULL`
@@ -541,7 +508,7 @@ function init() {
   //  - 매칭: 연락처 name 또는 nickname = 아티스트명, 이미 다른 아티스트에 연결되지 않은 연락처.
   //  - **유일 매칭일 때만** 연결(동명이인 오연결 방지 — ⑤ 정책). 2+·0 매칭은 건너뜀(수동 처리 여지).
   //  - 연결 시 연락처 nickname(활동명)이 비면 아티스트명으로 채움. 멱등(orphan만 대상).
-  if (!getState("artist_contact_link_backfill_v1")) {
+  if (hasLegacy && !getState("artist_contact_link_backfill_v1")) {
     const orphans = d
       .prepare("SELECT id, name FROM clients WHERE kind = '아티스트' AND source_contact_id IS NULL AND COALESCE(is_group,0) = 0")
       .all();
@@ -566,7 +533,7 @@ function init() {
 
   // 기존 연락처 중 성·이름이 둘 다 비어있는 행을 표시명(name)으로 1회 백필(splitKoreanName).
   // manager_contacts_backfill 뒤에 둬서 새로 만든 담당자 연락처(이미 성·이름 채워짐)는 자연히 건너뛴다.
-  if (!getState("contact_family_name_backfill_v1")) {
+  if (hasLegacy && !getState("contact_family_name_backfill_v1")) {
     const rows = d
       .prepare(
         `SELECT id, name FROM contacts
@@ -586,7 +553,7 @@ function init() {
   // ── 당사자(Party) 모델 이관(party_model_v1) — contacts+clients → parties, 역할 FK 재배선 ──
   // 위 모든 contacts/clients 백필 이후 실행(최종 상태를 이관). 순수 populate(읽기 경로 무변경, P2에서 전환).
   // 원자적(BEGIN/COMMIT: 게이트+데이터 일괄) + 부팅 안전(실패해도 앱은 레거시 clients/contacts로 무중단, 재배포 시 재시도).
-  if (!getState("party_model_v1")) {
+  if (hasLegacy && !getState("party_model_v1")) {
     try {
       d.exec("BEGIN IMMEDIATE;");
       migrateToPartyModel(d);
@@ -623,7 +590,7 @@ function init() {
 
   // client_files를 party(조직) 기준으로 재구성: client_id 컬럼명은 유지하되 FK를 parties로 바꾸고 값을 조직 party id로 remap(이름 매칭).
   //  → 새 조직(party)에도 사업자등록증 첨부 가능. 이름 매칭 실패분(주로 사업자 아닌 첨부)은 드롭(사업자등록증=조직).
-  if (!getState("client_files_party_v1")) {
+  if (hasLegacy && !getState("client_files_party_v1")) {
     try {
       d.exec("BEGIN IMMEDIATE;");
       d.exec(`CREATE TABLE IF NOT EXISTS client_files_new (
@@ -651,6 +618,16 @@ function init() {
     } catch (e) {
       try { d.exec("ROLLBACK;"); } catch (_e) { /* noop */ }
       console.error("[migrate client_files_party_v1] 실패 — 레거시 유지, 재배포 재시도:", e && e.message);
+    }
+  }
+
+  // 레거시 정체성 테이블·FK 컬럼 최종 드롭(party_model 이관 완료 후에만). 존재검사로 멱등·실패 무중단.
+  if (!getState("legacy_drop_v1") && getState("party_model_v1")) {
+    try {
+      dropLegacyIdentity(d);
+      setState("legacy_drop_v1", "done");
+    } catch (e) {
+      console.error("[migrate legacy_drop_v1] 실패 — 레거시 유지(앱은 정상), 재배포 재시도:", e && e.message);
     }
   }
 
@@ -682,13 +659,22 @@ function seedDefaultCatalogs() {
   }
 }
 
-/** 멱등 컬럼 추가: 이미 있으면 무시(플레이북 §2.8). */
+/** 멱등 컬럼 추가: 이미 있으면 무시(플레이북 §2.8). 드롭된 레거시 테이블(clients/contacts) 대상이면 'no such table'도 무시(무해). */
 function addColumn(table, column, typeSql) {
   try {
     db().exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${typeSql}`);
   } catch (e) {
-    if (!/duplicate column name/i.test(e.message)) throw e;
+    if (!/duplicate column name|no such table/i.test(e.message)) throw e;
   }
+}
+
+/** 테이블·컬럼 존재 여부(레거시 드롭 멱등 판정). */
+function tableExists(name) {
+  return !!db().prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+}
+function columnExists(table, column) {
+  if (!tableExists(table)) return false;
+  return db().prepare(`PRAGMA table_info(${table})`).all().some((r) => r.name === column);
 }
 
 function backfillProjectServices() {
@@ -926,6 +912,28 @@ function migrateToPartyModel(d) {
       `payer_mapped=${cnt("SELECT COUNT(*) n FROM invoices WHERE payer_id IS NOT NULL")} ` +
       `orphan_payer=${cnt("SELECT COUNT(*) n FROM invoices WHERE client_id IS NOT NULL AND payer_id IS NULL")}`
   );
+}
+
+/**
+ * 레거시 정체성(clients/contacts) 최종 드롭 — party 이관 완료 후 잔재 제거.
+ * 순서: 의존 인덱스 → FK 자식 컬럼(부모 참조 해제) → 레거시 테이블. 모두 존재검사로 멱등(부분 실패 후 재시도 안전).
+ * FK 자식 컬럼을 먼저 없애야 부모 테이블 드롭 후 신규 INSERT가 'no such table: clients'로 깨지지 않는다(실증 검증).
+ */
+function dropLegacyIdentity(d) {
+  const dropCol = (t, c) => { if (columnExists(t, c)) d.exec(`ALTER TABLE ${t} DROP COLUMN ${c}`); };
+  ["idx_invoices_client", "idx_projects_client", "idx_users_client", "idx_contact_affiliations_contact", "idx_contact_affiliations_client"].forEach(
+    (i) => d.exec(`DROP INDEX IF EXISTS ${i}`)
+  );
+  dropCol("invoices", "client_id");
+  dropCol("projects", "client_id");
+  dropCol("projects", "contact_id");
+  dropCol("project_managers", "contact_id");
+  dropCol("sessions", "director_contact_id");
+  dropCol("users", "client_id");
+  d.exec("DROP TABLE IF EXISTS contact_affiliations"); // clients/contacts 자식 → 먼저
+  d.exec("DROP TABLE IF EXISTS contacts");
+  d.exec("DROP TABLE IF EXISTS clients");
+  console.log("[migrate legacy_drop_v1] 레거시 정체성 테이블·FK 컬럼 제거 완료");
 }
 
 // ── admin_state 키-값 헬퍼 ──
