@@ -627,10 +627,10 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       </div>` : ""}
       ${type === "artist" ? `
       <div>
-        <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때)</span></label>
+        <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때 — 선택 시 소속사 자동 연동)</span></label>
         <select name="group_id" class="input">
-          <option value="">— 소속 그룹 없음 —</option>
-          ${groups.map((g) => `<option value="${g.id}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
+          <option value="" data-agency="">— 소속 그룹 없음 —</option>
+          ${groups.map((g) => `<option value="${g.id}" data-agency="${g.agency_id || ""}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
         </select>
       </div>` : ""}
       ${type === "group" && isEdit ? `<p class="text-xs text-muted">멤버는 아래 <span class="text-fg">멤버</span> 섹션에서 연결·관리합니다.</p>` : ""}

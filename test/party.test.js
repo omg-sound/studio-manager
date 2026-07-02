@@ -150,3 +150,30 @@ test("deleteParty: payer_id 참조를 SET NULL로 정리(인보이스 보존)", 
   assert.ok(inv, "인보이스는 보존");
   assert.equal(inv.payer_id, null, "payer_id는 NULL로 정리");
 });
+
+// ── 그룹 소속사 ↔ 멤버 소속사 연동(상속·전파·오버라이드) ──
+test("그룹 소속사: 멤버 상속·따르던 멤버 전파·개별 오버라이드 유지", () => {
+  const A = D.createCompany({ name: "레이블A", roles: "소속사/레이블" });
+  const B = D.createCompany({ name: "레이블B", roles: "소속사/레이블" });
+  const C = D.createCompany({ name: "레이블C", roles: "소속사/레이블" });
+  const g = D.createGroup({ name: "밴드기억" });
+  D.setPartyAgency(g, A); // 그룹 소속사 = A
+  const kim = D.createPerson({ name: "김멤버", is_artist: 1 });
+  const lee = D.createPerson({ name: "이멤버", is_artist: 1 });
+  // 멤버 추가 → 그룹 소속사 A 상속
+  D.setPartyGroup(kim, g);
+  D.setPartyGroup(lee, g);
+  assert.equal(D.currentAgencyId(kim), A, "김: 그룹 소속사 A 상속");
+  assert.equal(D.currentAgencyId(lee), A, "이: 그룹 소속사 A 상속");
+  // 이멤버 개별 오버라이드 → B
+  D.setPartyAgency(lee, B);
+  assert.equal(D.currentAgencyId(lee), B, "이: 개별 오버라이드 B");
+  // 그룹 소속사 A→C 변경: 따르던 김만 C, 오버라이드 이는 B 유지
+  D.setPartyAgency(g, C);
+  assert.equal(D.currentAgencyId(kim), C, "김(따름) → C 전파");
+  assert.equal(D.currentAgencyId(lee), B, "이(오버라이드) → B 유지");
+  assert.equal(D.currentAgencyId(g), C, "그룹 소속사 = C");
+  // 소속사 상세 '소속 아티스트'에 그룹·따르는 멤버 노출(is_artist)
+  const rosterC = D.listArtistsForAgency(C).map((r) => r.id);
+  assert.ok(rosterC.includes(g) && rosterC.includes(kim), "레이블C 소속에 그룹·김");
+});

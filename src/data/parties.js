@@ -585,12 +585,19 @@ function resolveCompanyByName(name) {
 /** 사람(아티스트)의 소속 그룹 지정/해제. groupId=null이면 그룹에서 제거. group 파티만 유효(아니면 무시). */
 function setPartyGroup(personId, groupId) {
   const pid = Number(personId);
+  const prev = db().prepare("SELECT group_id FROM parties WHERE id = ?").get(pid);
+  const prevGid = prev && prev.group_id ? Number(prev.group_id) : null;
   let gid = groupId ? Number(groupId) : null;
   if (gid) {
     const g = db().prepare("SELECT id FROM parties WHERE id = ? AND kind = 'group'").get(gid);
     if (!g) gid = null; // 그룹이 아니면 무시(오연결 방지)
   }
   db().prepare("UPDATE parties SET group_id = ? WHERE id = ? AND kind = 'person'").run(gid, pid);
+  // **새로 그룹에 소속됐을 때만**(이전과 다른 그룹) 그룹 소속사를 기본 상속 — 같은 그룹 재저장 시 재상속·타임라인 오염 방지. 이후 멤버 개별 변경 가능.
+  if (gid && gid !== prevGid) {
+    const gAgency = currentAgencyId(gid);
+    if (gAgency != null) setAgencyRaw(pid, gAgency);
+  }
   return gid;
 }
 
@@ -610,20 +617,46 @@ function groupOfParty(personId) {
 }
 
 /**
- * 아티스트(사람)·그룹의 소속사(현재 소속) 지정/해제 — affiliations 재사용.
- * agencyId 있으면 현재 소속이 다를 때 이직(closeCurrent) 등록, 없음(null)이면 현재 소속 종료.
- * company 파티만 유효(아니면 무시). 소속사 상세의 '소속 아티스트'(listArtistsForAgency)에 자동 반영.
+ * 한 파티의 현재 소속사만 갱신(전파 없음, 내부용) — affiliations 재사용.
+ * gid 있으면 현재 소속이 다를 때 이직(closeCurrent) 등록, 없음(null)이면 현재 소속 종료.
  */
-function setPartyAgency(partyId, agencyId) {
-  const pid = Number(partyId);
-  const gid = agencyId ? Number(agencyId) : null;
+function setAgencyRaw(pid, gid) {
+  gid = gid ? Number(gid) : null;
   const cur = currentAffiliation(pid);
   if (gid) {
     const org = db().prepare("SELECT id FROM parties WHERE id = ? AND kind = 'company'").get(gid);
     if (!org) return; // 회사가 아니면 무시(오연결 방지)
     if (!cur || Number(cur.org_id) !== gid) addAffiliation(pid, { org_id: gid, closeCurrent: true });
   } else if (cur) {
-    endAffiliation(cur.id, todayYmd()); // '없음' 선택 → 현재 소속 종료(이력 보존)
+    endAffiliation(cur.id, todayYmd()); // '없음' → 현재 소속 종료(이력 보존)
+  }
+}
+
+/**
+ * 아티스트(사람)·그룹의 소속사 지정/해제. company 파티만 유효.
+ * **그룹이면**: 소속사를 *따르던* 멤버(현재 소속사 = 그룹의 이전 소속사)에게 전파. 개별 지정(오버라이드)한 멤버는 유지.
+ * **개인(멤버)이면**: 그 사람만 갱신(오버라이드, 전파 없음).
+ * 소속사 상세의 '소속 아티스트'(listArtistsForAgency)에 자동 반영.
+ */
+function setPartyAgency(partyId, agencyId) {
+  const pid = Number(partyId);
+  const gid = agencyId ? Number(agencyId) : null;
+  const p = getParty(pid);
+  if (!p) return;
+  if (p.kind === "group") {
+    const oldAgency = currentAgencyId(pid); // 변경 전 그룹 소속사
+    setAgencyRaw(pid, gid);
+    if (Number(oldAgency || 0) !== Number(gid || 0)) {
+      // 그룹 소속사를 따르던 멤버(이전 그룹 소속사와 동일)만 새 소속사로 전파. 다른 소속사(오버라이드)는 유지.
+      const members = db().prepare("SELECT id FROM parties WHERE group_id = ?").all(pid);
+      for (const m of members) {
+        const mAgency = currentAgencyId(m.id);
+        const follows = Number(mAgency || 0) === Number(oldAgency || 0); // null==null(둘 다 없음)도 follows
+        if (follows) setAgencyRaw(m.id, gid);
+      }
+    }
+  } else {
+    setAgencyRaw(pid, gid); // 개인 멤버 개별 소속사(오버라이드)
   }
 }
 
@@ -633,9 +666,13 @@ function currentAgencyId(partyId) {
   return cur && cur.org_id ? cur.org_id : null;
 }
 
-/** 그룹 선택 콤보용 — 그룹(kind='group') 목록 {id, name}. */
+/** 그룹 선택 콤보용 — 그룹(kind='group') 목록 {id, name, agency_id(현재 그룹 소속사)}. agency_id는 폼 연동(그룹 선택 시 소속사 자동 맞춤)용. */
 function listGroupsForPicker() {
-  return db().prepare("SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name FROM parties WHERE kind = 'group' ORDER BY name COLLATE NOCASE").all();
+  return db().prepare(
+    `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name,
+       (SELECT a.org_id FROM affiliations a WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS agency_id
+     FROM parties p WHERE p.kind = 'group' ORDER BY p.name COLLATE NOCASE`
+  ).all();
 }
 
 /** 멤버 추가 콤보용 — 개인 아티스트(사람) 목록 {id, name, group_id}. 이미 이 그룹 소속이 아닌 사람만 후보로 쓰기 좋게 group_id 포함. */

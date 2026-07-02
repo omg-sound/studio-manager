@@ -571,6 +571,22 @@
   sync();
 })();
 
+// 아티스트 폼: 소속 그룹 선택 시 소속사를 그룹 소속사로 자동 맞춤(연동). 그룹 소속사가 있을 때만 — 이후 개별 변경(오버라이드) 가능.
+(function () {
+  "use strict";
+  document.addEventListener("change", function (ev) {
+    var gsel = ev.target;
+    if (!gsel || gsel.tagName !== "SELECT" || gsel.name !== "group_id") return;
+    var form = gsel.form;
+    if (!form) return;
+    var asel = form.querySelector('select[name="agency_id"]');
+    if (!asel) return;
+    var opt = gsel.options[gsel.selectedIndex];
+    var ag = opt ? opt.getAttribute("data-agency") || "" : "";
+    if (gsel.value && ag) { asel.value = ag; asel.dispatchEvent(new Event("change", { bubbles: true })); } // 그룹 소속사로 맞춤(dirty 반영)
+  });
+})();
+
 // 검색형 콤보박스(실결제자·클라이언트/세션 디렉터 담당자): <input list> 검색값 ↔ hidden id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정.
 // 위임(delegation)으로 처리 → 동적으로 추가되는 행(세션 디렉터 '+추가')도 자동 동작.
 (function () {
