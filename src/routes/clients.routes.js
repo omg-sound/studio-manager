@@ -135,10 +135,10 @@ router.get("/", (req, res) => {
     ? listGroup({
         rows: displayed.map((c) => {
           if (c.is_artist) {
-            // 아티스트: 기존 레이아웃 유지(활동명(본명) + 배지 + 이메일·전화)
+            // 아티스트: 활동명(본명) + 배지 · 오른쪽에 전화→이메일 세로 스택(업체·연락처와 통일)
             const badges = `<span class="badge-info">아티스트</span>${c.kind === "group" ? ` <span class="badge-neutral">그룹</span>` : ""}`;
             const left = `<div class="truncate font-semibold">${esc(personLabel(c.activity_name || c.name, c.name))}</div><div class="mt-1 flex flex-wrap gap-1">${badges}</div>`;
-            const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
+            const right = `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}<div>${esc(c.email || "이메일 없음")}</div></div>`;
             return listRow({ href: `/clients/${c.id}${fromParam}`, left, right });
           }
           // 업체(company): 대표는 회사명 뒤에 · 오른쪽에 사업자→전화→이메일 세로 스택
