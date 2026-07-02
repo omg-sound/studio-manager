@@ -25,7 +25,7 @@ const {
   syncPartyToManager,
 } = require("../data");
 const people = require("../people");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge, tabBar, detailsChevron } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron } = require("../views");
 
 const router = express.Router();
 
@@ -82,11 +82,11 @@ router.get("/", (req, res) => {
           // 회사(현재 소속)는 이름 뒤에 바탕 없이 텍스트로(배지 제거). 직함 있으면 병기.
           const company = cur && cur.client_id ? esc(cur.client_name || "") + (cur.title ? " · " + esc(cur.title) : "") : "";
           const nameLine = `${esc(personLabel(c.name, c.nickname))}${company ? ` <span class="text-xs font-normal text-muted">· ${company}</span>` : ""}`;
-          const left = `<div class="truncate font-semibold">${nameLine}</div>${typeBadges ? `<div class="mt-1 flex flex-wrap gap-1">${typeBadges}</div>` : ""}`;
           const right = (c.phone || c.email)
             ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}${c.email ? `<div>${esc(c.email)}</div>` : ""}</div>`
             : "";
-          return listRow({ href: `/contacts/${c.id}`, left, right });
+          // 이름만 링크 → 오른쪽 전화·이메일 복사 시 상세로 안 들어감.
+          return listRowLinked({ href: `/contacts/${c.id}`, title: nameLine, badges: typeBadges, right });
         }),
       })
     : q

@@ -430,4 +430,19 @@ function listRow({ href, left, right = "" }) {
   return `<div class="transition-colors hover:bg-surface">${inner}</div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow };
+/**
+ * 목록 행(제목만 링크): 행 전체가 아니라 **제목(이름)만** 상세 링크 → 우측 정보(이메일·전화·사업자 등)를
+ * 드래그·복사해도 상세로 들어가지 않는다. title/badges/right는 이미 빌드된 HTML(호출부에서 esc).
+ * @param {{href:string, title:string, badges?:string, right?:string}} opts
+ */
+function listRowLinked({ href, title, badges = "", right = "" }) {
+  return `<div class="flex items-start justify-between gap-4 px-4 py-3">
+      <div class="min-w-0">
+        <a href="${esc(href)}" class="inline-block max-w-full truncate align-bottom font-semibold hover:text-primary hover:underline focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-primary/40">${title}</a>
+        ${badges ? `<div class="mt-1 flex flex-wrap gap-1">${badges}</div>` : ""}
+      </div>
+      ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
+    </div>`;
+}
+
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked };
