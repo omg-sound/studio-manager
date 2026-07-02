@@ -197,11 +197,11 @@ function projectListRow(p, summary) {
     Number(p.sess_scheduled) ? `예정 세션 ${p.sess_scheduled}` : "",
     Number(p.sess_done) ? `완료 세션 ${p.sess_done}` : "",
   ].filter(Boolean).join(" · ");
-  // 한 프로젝트 = 은은한 라운드 테두리 블록 하나(제목행 + 요약 접기행). 블록 사이 여백(space-y)으로 구분 →
-  // 프로젝트 경계가 명확하되 과하지 않게. 내부 제목→요약 구분선은 더 옅게(border/40) 종속시켜 한 덩어리로 읽힌다.
+  // 한 프로젝트 = 밝은 바탕(bg-surface=흰색) 라운드 블록 하나(제목행 + 요약 접기행). 블록 사이 여백(space-y)으로 구분.
+  // 대시보드·일정처럼 마우스 호버 시 블록 전체가 강조(row-link=hover:bg-elevated/60). 내부 제목→요약 구분선은 옅게(border/40) 종속.
   return `
-    <div class="overflow-hidden rounded-xl border border-border/60 transition-colors hover:border-border">
-      <a href="/projects/${p.id}" class="flex items-start justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface">
+    <div class="overflow-hidden rounded-xl border border-border/60 bg-surface row-link">
+      <a href="/projects/${p.id}" class="flex items-start justify-between gap-3 px-4 py-3">
         <div class="min-w-0">
           <div class="truncate font-semibold">${esc(p.title)}</div>
           <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
@@ -210,7 +210,7 @@ function projectListRow(p, summary) {
         <div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>
       </a>
       <details class="group">
-        <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted transition-colors hover:bg-surface hover:text-fg">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted transition-colors hover:text-fg">
           <span>${esc(counts)}</span>
           <svg class="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         </summary>
