@@ -49,12 +49,14 @@ router.post("/sync", async (req, res) => {
 // ── 목록(이름·현재소속·전화 + ?q= 검색) ──
 router.get("/", (req, res) => {
   const q = String(req.query.q || "").trim();
-  const tab = req.query.tab === "staff" ? "staff" : "external"; // 녹음실 스태프(로그인 계정) 탭 / 외부·고객측 연락처 탭
-  const rows = listContacts({ q: q || undefined, staff: tab === "staff" });
+  const TABS = ["external", "worker", "staff"];
+  const tab = TABS.includes(req.query.tab) ? req.query.tab : "external"; // 외부 연락처 / 외주 작업자 / 녹음실 스태프
+  const rows = listContacts({ q: q || undefined, tab });
 
   const tabs = tabBar({
     tabs: [
       { key: "external", label: "외부 연락처" },
+      { key: "worker", label: "외주 작업자" },
       { key: "staff", label: "녹음실 스태프" },
     ],
     activeKey: tab,
@@ -87,7 +89,9 @@ router.get("/", (req, res) => {
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : tab === "staff"
         ? emptyState("녹음실 스태프 연락처가 없습니다. 관리 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
-        : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
+        : tab === "worker"
+          ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
+          : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
 
   const syncBtn = `
     <form method="post" action="/contacts/sync" class="inline">

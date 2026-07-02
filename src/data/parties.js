@@ -502,9 +502,26 @@ function setTaskPayout(taskId, paid) {
 
 // ── UI 편의 조회(연락처=사람 뷰, 클라이언트=업체·아티스트 뷰) ──
 
-/** 연락처 목록 = 사람(person) party. staff: true=녹음실 스태프(user_id 연결), false=외부. */
-function listContacts({ q, staff } = {}) {
-  return listParties({ q, kind: "person", staff });
+/**
+ * 연락처 목록 = 사람(person) party. tab:
+ *  - 'staff'    → 녹음실 스태프(로그인 계정, user_id 연결)
+ *  - 'worker'   → 외주 작업자(project_managers user_id NULL·party 연결, 스태프 아님)
+ *  - 'external' → 외부 연락처(그 외 사람 — 스태프·외주 아님)
+ *  - undefined  → 전체 사람. (레거시 staff:boolean도 허용)
+ */
+function listContacts({ q, tab, staff } = {}) {
+  if (staff === true) tab = "staff";
+  else if (staff === false && !tab) tab = undefined; // 레거시 staff:false=외부(외주 포함)와 구분 위해 tab 우선
+  const where = ["p.kind = 'person'"];
+  const args = [];
+  const term = String(q || "").trim();
+  if (term) { where.push("(p.name LIKE ? OR p.activity_name LIKE ? OR p.phone LIKE ?)"); args.push(`%${term}%`, `%${term}%`, `%${term}%`); }
+  const workerSub = "p.id IN (SELECT party_id FROM project_managers WHERE user_id IS NULL AND party_id IS NOT NULL)";
+  if (tab === "staff") where.push("p.user_id IS NOT NULL");
+  else if (tab === "worker") where.push("p.user_id IS NULL AND " + workerSub);
+  else if (tab === "external") where.push("p.user_id IS NULL AND NOT (" + workerSub + ")");
+  const sql = "SELECT p.* FROM parties p WHERE " + where.join(" AND ") + " ORDER BY p.name COLLATE NOCASE";
+  return db().prepare(sql).all(...args).map(withLegacy);
 }
 
 /** 클라이언트 목록 = 업체(company)·그룹·아티스트(사람 포함). kind로 좁힘(레거시 라벨/파티 kind 모두 허용). */

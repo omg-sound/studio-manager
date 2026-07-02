@@ -107,9 +107,9 @@ router.get("/", (req, res) => {
     if (q) p.push("q=" + encodeURIComponent(q));
     return p.length ? "/clients?" + p.join("&") : "/clients";
   };
-  // 1차 서브메뉴(업체/아티스트)
-  const groupChips = filterChips({
-    chips: [{ key: "", label: `전체 ${total}` }, { key: "company", label: `업체 ${companyCount}` }, { key: "artist", label: `아티스트 ${artistCount}` }],
+  // 1차 서브메뉴(전체/업체/아티스트) — 탭 스타일(연락처 탭과 통일)
+  const groupChips = tabBar({
+    tabs: [{ key: "", label: `전체 ${total}` }, { key: "company", label: `업체 ${companyCount}` }, { key: "artist", label: `아티스트 ${artistCount}` }],
     activeKey: group,
     hrefFn: (key) => qs({ group: key }),
   });
@@ -155,7 +155,7 @@ router.get("/", (req, res) => {
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "클라이언트", desc: "업체(소속사·제작사) · 아티스트 (프로젝트에서 자동 등록). 청구처가 될 수 있습니다.", action: `<a href="/clients/new" class="btn-primary">+ 새 클라이언트</a>` })}
-    <div class="mb-3">${groupChips}</div>
+    ${groupChips}
     ${kindChips}
     ${searchBar}
     ${resultNote}
