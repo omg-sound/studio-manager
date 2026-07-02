@@ -301,7 +301,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 
 ## 다음 단계 TODO
 
-1. Drive 실연동 검증. **(유일한 잔여 항목 — 사용자 요청으로 보류)**
+1. **Drive 실연동** — 코드 완비(OAuth `drive.file` 스코프·`storage.put` 연동 시 Drive 저장·`checkFolder`·`probeUpload` 업로드 왕복 검증·로컬→Drive 이관). **실제 연동=사용자가 구글 로그인으로 `drive.file` 허용**(매 로그인 `prompt=consent`+`offline`로 토큰 발급) → 관리 > 환경설정 > 자료 저장 > **'Drive 연결 테스트'**로 폴더·업로드 확인. 남은 건 프로덕션에서 사용자의 로그인·검증 클릭뿐.
 2. ✅ (완료) **거래명세서 PDF 프로덕션 견고화** — `@resvg/resvg-js` **지연 로드**(`invoice-pdf.loadResvg`)로 네이티브 모듈 부재 시 청구 라우트 무중단(PDF만 503 `PDF_RENDERER_UNAVAILABLE`). 런타임 의존성 확인·로컬 렌더 검증. Render 실동작은 배포본에서 확인.
 3. ✅ (완료) **구글 캘린더 역방향 동기화** — `/sessions` 수동 버튼(위 세션 일정 섹션 참조).
 4. (선택) 알림 Gmail 어댑터 — 현재 웹훅만. 클라이언트 직접 메일 통지가 필요해지면 `notify.js`에 어댑터 추가.
