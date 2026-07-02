@@ -11,6 +11,8 @@ const { db, getState, setState } = require("./db");
 const { todayYmd, isValidYmd, formatYmdShort, cleanTime, timeToMin, minutesBetween } = require("./lib/date");
 const studio = require("./data/studio"); // 스튜디오 설정 도메인(분리 모듈) — 아래에서 재export
 const clientFiles = require("./data/client-files"); // 클라이언트 첨부 서류 도메인(분리 모듈) — 아래에서 재export
+const revenue = require("./data/revenue"); // 매출 집계 도메인(분리 모듈) — 아래에서 재export
+const deliverables = require("./data/deliverables"); // 자료 전달 도메인(분리 모듈) — 아래에서 재export
 const { parseMoney } = require("./lib/forms");
 const { splitKoreanName } = require("./lib/korean-name");
 const { canInvoice, canBill, isChief, canEdit } = require("./auth");
@@ -1758,132 +1760,9 @@ function sessionsForMonth(_user, ym) {
     .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
 }
 
-// ── 자료 전달(deliverables) — 프로젝트 범위 강제 ──
+// ── 자료 전달(deliverables) 도메인은 src/data/deliverables.js로 분리. 아래 module.exports에서 `...deliverables`로 재export. ──
 
-/** 프로젝트의 자료 목록(권한 검사: 클라이언트는 자기 프로젝트만). 권한 없으면 null. */
-function listDeliverablesForProject(user, projectId) {
-  const project = getProjectForUser(user, projectId);
-  if (!project) return null; // 404 처리용
-  const rows = db()
-    .prepare("SELECT * FROM deliverables WHERE project_id = ? ORDER BY created_at DESC, id DESC")
-    .all(projectId);
-  return { project, rows };
-}
-
-/** 단건 자료(로그인 직원 전체 열람). 소속 프로젝트가 있으면 존재만 확인. */
-function getDeliverableForUser(user, id) {
-  const row = db().prepare("SELECT * FROM deliverables WHERE id = ?").get(id);
-  if (!row) return null;
-  if (row.project_id != null && !getProjectForUser(user, row.project_id)) return null;
-  return row;
-}
-
-/** 공개 토큰으로 단건 조회(로그인 불필요). 철회/만료 검사는 호출부에서. */
-function getDeliverableByToken(token) {
-  if (!token) return null;
-  return db().prepare("SELECT * FROM deliverables WHERE access_token = ?").get(token);
-}
-
-/** 최근 자료 타임라인(로그인 직원 전체 열람). */
-function recentDeliverables(_user, limit = 50) {
-  return db()
-    .prepare(
-      `SELECT dv.*, p.title AS project_title, c.name AS client_name
-       FROM deliverables dv
-       LEFT JOIN projects p ON p.id = dv.project_id
-       LEFT JOIN clients c ON c.id = p.client_id
-       ORDER BY dv.created_at DESC, dv.id DESC LIMIT ?`
-    )
-    .all(limit);
-}
-
-// ── 매출: 담당 엔지니어별 집계 ──
-
-/**
- * 전체 엔지니어별 매출 요약. 작업(engineer_id)·세션(engineer_name) 합산.
- * total > 0인 엔지니어만 반환, 합계 내림차순.
- */
-function revenueByEngineer() {
-  // 매출 = 실제 청구된 것만(사용자 결정). 작업=is_invoiced, 세션=invoice_items 스냅샷(청구된 세션·실제 청구액).
-  // 1) 작업 집계 (engineer_id별, 청구 확정분만)
-  const taskRows = db()
-    .prepare(
-      `SELECT engineer_id, SUM(total_price) AS task_total, COUNT(*) AS task_cnt
-       FROM track_tasks WHERE engineer_id IS NOT NULL AND is_invoiced = 1 GROUP BY engineer_id`
-    )
-    .all();
-  const taskByMgr = new Map(taskRows.map((r) => [r.engineer_id, r]));
-
-  // 2) 세션 집계 (engineer_name별) — 청구된 세션의 실제 청구액(invoice_items.amount)
-  const sessionRows = db()
-    .prepare(
-      `SELECT s.engineer_name, ii.amount
-       FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id
-       WHERE ii.session_id IS NOT NULL AND s.engineer_name IS NOT NULL`
-    )
-    .all();
-  const sessionByName = {};
-  for (const row of sessionRows) {
-    if (!sessionByName[row.engineer_name]) sessionByName[row.engineer_name] = { total: 0, cnt: 0 };
-    sessionByName[row.engineer_name].total += row.amount || 0;
-    sessionByName[row.engineer_name].cnt += 1;
-  }
-
-  // 3) 매니저 목록과 조합 (total > 0만, 내림차순)
-  const managers = listProjectManagers({ includeInactive: true });
-  return managers
-    .map((m) => {
-      const t = taskByMgr.get(m.id) || { task_total: 0, task_cnt: 0 };
-      const s = sessionByName[m.name] || { total: 0, cnt: 0 };
-      const task_total = t.task_total || 0;
-      const task_cnt = t.task_cnt || 0;
-      const session_total = s.total;
-      const session_cnt = s.cnt;
-      const total = task_total + session_total;
-      return { id: m.id, name: m.name, is_external: !m.user_id, task_total, task_cnt, session_total, session_cnt, total };
-    })
-    .filter((r) => r.total > 0)
-    .sort((a, b) => b.total - a.total);
-}
-
-/**
- * 특정 엔지니어(managerId) 상세 매출. 없으면 null.
- * tasks: track_tasks(engineer_id=id) + 프로젝트·곡 정보.
- * sessions: sessions(engineer_name=manager.name) + 프로젝트명·금액.
- */
-function revenueForEngineer(managerId) {
-  const manager = db().prepare("SELECT * FROM project_managers WHERE id = ?").get(Number(managerId));
-  if (!manager) return null;
-
-  // 실제 청구된 것만(사용자 결정): 작업=is_invoiced=1, 세션=청구된 invoice_items 스냅샷.
-  const tasks = db()
-    .prepare(
-      `SELECT t.id, t.task_type, t.total_price, t.is_invoiced,
-              tr.title AS track_title, p.id AS project_id, p.title AS project_title
-       FROM track_tasks t
-       JOIN project_tracks tr ON tr.id = t.track_id
-       JOIN projects p ON p.id = tr.project_id
-       WHERE t.engineer_id = ? AND t.is_invoiced = 1
-       ORDER BY p.title COLLATE NOCASE, tr.title COLLATE NOCASE`
-    )
-    .all(Number(managerId));
-
-  const sessions = db()
-    .prepare(
-      `SELECT s.id, s.session_date, s.session_type, s.start_time, s.end_time,
-              p.id AS project_id, p.title AS project_title, ii.amount AS amount
-       FROM invoice_items ii
-       JOIN sessions s ON s.id = ii.session_id
-       JOIN projects p ON p.id = s.project_id
-       WHERE ii.session_id IS NOT NULL AND s.engineer_name = ?
-       ORDER BY s.session_date DESC, s.start_time`
-    )
-    .all(manager.name);
-
-  const task_total = tasks.reduce((s, t) => s + (t.total_price || 0), 0);
-  const session_total = sessions.reduce((s, r) => s + r.amount, 0);
-  return { manager, tasks, sessions, task_total, session_total, total: task_total + session_total };
-}
+// ── 매출 집계 도메인은 src/data/revenue.js로 분리. 아래 module.exports에서 `...revenue`로 재export. ──
 
 // ── 클라이언트 첨부 서류 도메인은 src/data/client-files.js로 분리. 아래 module.exports에서 `...clientFiles`로 재export. ──
 
@@ -1969,10 +1848,7 @@ module.exports = {
   invoiceDraftForPdf,
   deleteInvoice,
   dashboardStats,
-  listDeliverablesForProject,
-  getDeliverableForUser,
-  getDeliverableByToken,
-  recentDeliverables,
+  ...deliverables, // 자료 전달 도메인 재export(src/data/deliverables.js): listDeliverablesForProject·getDeliverableForUser·getDeliverableByToken·recentDeliverables
   balanceOf,
   payStatusOf,
   isOverdue,
@@ -1996,7 +1872,6 @@ module.exports = {
   pastSessions,
   sessionsForMonth,
   sessionRateAmount,
-  revenueByEngineer,
-  revenueForEngineer,
+  ...revenue, // 매출 집계 도메인 재export(src/data/revenue.js): revenueByEngineer·revenueForEngineer
   ...clientFiles, // 클라이언트 첨부 서류 도메인 재export(src/data/client-files.js): getClientFile·listClientFiles·upsertClientFile·deleteClientFile
 };
