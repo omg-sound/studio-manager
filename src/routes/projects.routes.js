@@ -102,11 +102,32 @@ router.get("/", requireAuth, (req, res) => {
   const rows = listProjects(user, { q });
 
   const searched = Boolean(q);
-  const list = rows.length
-    ? listGroup({ rows: rows.map(projectListRow) })
-    : searched
+  // 진행 중(상단) / 완료(하단 접기)로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
+  const ongoing = rows.filter((r) => !r.is_completed);
+  const done = rows.filter((r) => r.is_completed);
+  const sectionHeading = (title, n) =>
+    `<h2 class="mb-2 font-display text-base font-semibold">${title} <span class="text-sm font-normal text-muted">${n}</span></h2>`;
+  let list;
+  if (!rows.length) {
+    list = searched
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
+  } else {
+    const ongoingSec = ongoing.length
+      ? `${sectionHeading("진행 중", ongoing.length)}${listGroup({ rows: ongoing.map(projectListRow) })}`
+      : "";
+    const doneOpen = searched || ongoing.length === 0; // 검색 중이거나 진행 중이 없으면 완료 섹션을 펼침
+    const doneSec = done.length
+      ? `<details class="group mt-4" ${doneOpen ? "open" : ""}>
+           <summary class="mb-2 flex cursor-pointer list-none items-center justify-between gap-3">
+             <h2 class="font-display text-base font-semibold">완료 <span class="text-sm font-normal text-muted">${done.length}</span></h2>
+             ${detailsChevron()}
+           </summary>
+           ${listGroup({ rows: done.map(projectListRow) })}
+         </details>`
+      : "";
+    list = `${ongoingSec}${doneSec}`;
+  }
 
   const action = canCreate ? newProjectMenu() : "";
 

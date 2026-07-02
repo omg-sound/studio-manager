@@ -10,7 +10,7 @@
  */
 
 const { db } = require("../db");
-const { minutesBetween } = require("../lib/date");
+const { minutesBetween, todayYmd } = require("../lib/date");
 const { computeRatePrice } = require("./rate-items"); // 무순환(rate-items는 projects를 호출하지 않음)
 
 /** 프로젝트 폼 자동완성용 — 기존 프로젝트의 아티스트·소속사/레이블·제작사 중복 제거 목록. */
@@ -53,13 +53,17 @@ function sessionAmountsByProject(projectIds) {
 // 라우트는 filters 객체(service/clientId/q)를 넘기지만 목록 UI는 검색(q)만 사용 → q만 처리(나머지 인자는 무시).
 function listProjects(_user, { q } = {}) {
   const where = [];
-  const params = {};
+  const params = { today: todayYmd() };
 
   if (q) {
     where.push("(p.title LIKE @q OR p.artist LIKE @q)");
     params.q = `%${q}%`;
   }
 
+  // 완료/진행 판정 신호:
+  //  has_upcoming = 다가오는 세션(오늘 이후, 취소 제외) 존재
+  //  open_tasks   = 미완료 작업(status <> 'Completed') 수 = 대기·진행중
+  //  content_cnt  = 세션+작업 총량(0이면 아직 아무 내용 없는 빈 프로젝트) → 진행 중으로 취급
   const sql = `
     SELECT p.*, c.name AS client_name, m.name AS manager_name,
       (SELECT GROUP_CONCAT(tr.title, '||') FROM project_tracks tr WHERE tr.project_id = p.id) AS track_titles,
@@ -67,7 +71,14 @@ function listProjects(_user, { q } = {}) {
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        LEFT JOIN task_types tt ON tt.key = t.task_type
-       WHERE tr.project_id = p.id AND t.is_invoiced = 0) AS task_total
+       WHERE tr.project_id = p.id AND t.is_invoiced = 0) AS task_total,
+      (SELECT COUNT(*) FROM sessions s
+       WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS upcoming_cnt,
+      (SELECT COUNT(*) FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       WHERE tr.project_id = p.id AND t.status <> 'Completed') AS open_tasks,
+      ((SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id)
+       + (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id)) AS content_cnt
     FROM projects p
     LEFT JOIN clients c ON c.id = p.client_id
     LEFT JOIN project_managers m ON m.id = p.manager_id
@@ -79,7 +90,12 @@ function listProjects(_user, { q } = {}) {
   const rows = db().prepare(sql).all(params);
   if (!rows.length) return rows;
   const sessionAmounts = sessionAmountsByProject(rows.map((r) => r.id));
-  return rows.map((r) => ({ ...r, session_amount_total: sessionAmounts[r.id] || 0 }));
+  return rows.map((r) => ({
+    ...r,
+    session_amount_total: sessionAmounts[r.id] || 0,
+    // 완료 = 실제 활동이 있었고(content_cnt>0) 다가오는 세션 없음 + 미완료 작업 없음.
+    is_completed: r.content_cnt > 0 && r.upcoming_cnt === 0 && r.open_tasks === 0,
+  }));
 }
 
 /** 단건 조회 + 권한 검사. 권한 없으면 null(클라이언트가 타 프로젝트 접근 시도 시 404 처리용). */
