@@ -134,13 +134,22 @@ router.get("/", (req, res) => {
   const list = displayed.length
     ? listGroup({
         rows: displayed.map((c) => {
-          const taxLine = [c.biz_no ? "사업자 " + esc(c.biz_no) : "", c.owner_name ? "대표 " + esc(c.owner_name) : ""].filter(Boolean).join(" · ");
-          const badges = c.is_artist
-            ? `<span class="badge-info">아티스트</span>${c.kind === "group" ? ` <span class="badge-neutral">그룹</span>` : ""}`
-            : (clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(r)}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`);
-          const dispName = c.is_artist ? personLabel(c.activity_name || c.name, c.name) : c.name; // 아티스트=활동명(본명)
-          const left = `<div class="truncate font-semibold">${esc(dispName)}</div><div class="mt-1 flex flex-wrap gap-1">${badges}</div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
-          const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
+          if (c.is_artist) {
+            // 아티스트: 기존 레이아웃 유지(활동명(본명) + 배지 + 이메일·전화)
+            const badges = `<span class="badge-info">아티스트</span>${c.kind === "group" ? ` <span class="badge-neutral">그룹</span>` : ""}`;
+            const left = `<div class="truncate font-semibold">${esc(personLabel(c.activity_name || c.name, c.name))}</div><div class="mt-1 flex flex-wrap gap-1">${badges}</div>`;
+            const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
+            return listRow({ href: `/clients/${c.id}${fromParam}`, left, right });
+          }
+          // 업체(company): 대표는 회사명 뒤에 · 오른쪽에 사업자→이메일→전화 세로 스택
+          const badges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(r)}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
+          const nameLine = `${esc(c.name)}${c.owner_name ? ` <span class="font-normal text-muted">· 대표 ${esc(c.owner_name)}</span>` : ""}`;
+          const left = `<div class="truncate font-semibold">${nameLine}</div><div class="mt-1 flex flex-wrap gap-1">${badges}</div>`;
+          const right = `<div class="text-sm text-muted space-y-0.5">
+            ${c.biz_no ? `<div>사업자 ${esc(c.biz_no)}</div>` : ""}
+            <div>${esc(c.email || "이메일 없음")}</div>
+            ${c.phone ? `<div>${esc(c.phone)}</div>` : ""}
+          </div>`;
           return listRow({ href: `/clients/${c.id}${fromParam}`, left, right });
         }),
       })
