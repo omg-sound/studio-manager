@@ -81,7 +81,7 @@ router.get("/", (req, res) => {
           const typeBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
           // 회사(현재 소속)는 이름 뒤에 바탕 없이 텍스트로(배지 제거). 직함 있으면 병기.
           const company = cur && cur.client_id ? esc(cur.client_name || "") + (cur.title ? " · " + esc(cur.title) : "") : "";
-          const nameLine = `${esc(personLabel(c.name, c.nickname))}${company ? ` <span class="font-normal text-muted">· ${company}</span>` : ""}`;
+          const nameLine = `${esc(personLabel(c.name, c.nickname))}${company ? ` <span class="text-xs font-normal text-muted">· ${company}</span>` : ""}`;
           const left = `<div class="truncate font-semibold">${nameLine}</div>${typeBadges ? `<div class="mt-1 flex flex-wrap gap-1">${typeBadges}</div>` : ""}`;
           const right = (c.phone || c.email)
             ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}${c.email ? `<div>${esc(c.email)}</div>` : ""}</div>`
