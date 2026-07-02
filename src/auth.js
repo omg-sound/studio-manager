@@ -85,7 +85,7 @@ function upsertUserFromGoogle(profile) {
 
 // data.js는 auth.js를 require하므로(순환) 로드시점 import 대신 호출시점 lazy require + fail-safe.
 function ensureContactForUserSafe(u) {
-  try { require("./data").ensureContactForUser(u); } catch (e) { /* 연락처 연동 실패는 로그인 비차단 */ }
+  try { require("./data").ensurePartyForUser(u); } catch (e) { /* 연락처 연동 실패는 로그인 비차단 */ }
 }
 
 /**

@@ -19,11 +19,11 @@ const { oauthClient } = require("./auth");
 const { getRefreshToken } = require("./drive");
 const { getState, setState } = require("./db");
 const {
-  getContactByResourceName,
-  createContact,
-  updateContact,
-  deleteContact,
-  setContactGoogleRef,
+  getPartyByResourceName,
+  createPerson: createPartyPerson, // 로컬 Google API createPerson과 충돌 방지(별칭)
+  updateParty,
+  deleteParty,
+  setPartyGoogleRef,
 } = require("./data");
 
 /** refresh token으로 인증된 People 클라이언트. 미연동이면 null. */
@@ -68,7 +68,7 @@ async function createPerson(contact) {
   if (!people) return null;
   try {
     const requestBody = personBodyFromContact(contact);
-    const { data } = await people.people.createContact({ requestBody });
+    const { data } = await people.people.createPerson({ requestBody });
     return { resourceName: data.resourceName, etag: data.etag };
   } catch (_e) {
     return null;
@@ -86,7 +86,7 @@ async function updatePerson(resourceName, etag, contact) {
 
   async function attempt(currentEtag) {
     const requestBody = { etag: currentEtag, ...personBodyFromContact(contact) };
-    const { data } = await people.people.updateContact({
+    const { data } = await people.people.updateParty({
       resourceName,
       updatePersonFields: "names,nicknames,organizations,phoneNumbers,emailAddresses",
       requestBody,
@@ -116,7 +116,7 @@ async function deletePerson(resourceName) {
   const people = peopleClient();
   if (!people || !resourceName) return;
   try {
-    await people.people.deleteContact({ resourceName });
+    await people.people.deleteParty({ resourceName });
   } catch (_e) {
     // fail-safe
   }
@@ -217,18 +217,18 @@ async function syncFromGoogle() {
       const meta = person.metadata || {};
 
       if (meta.deleted) {
-        const existing = getContactByResourceName(resourceName);
+        const existing = getPartyByResourceName(resourceName);
         if (existing) {
-          deleteContact(existing.id);
+          deleteParty(existing.id);
           deleted++;
         }
       } else {
         const fields = personToContactFields(person);
-        const existing = getContactByResourceName(resourceName);
+        const existing = getPartyByResourceName(resourceName);
         if (existing) {
           try {
-            updateContact(existing.id, fields);
-            setContactGoogleRef(existing.id, resourceName, etag);
+            updateParty(existing.id, fields);
+            setPartyGoogleRef(existing.id, resourceName, etag);
             updated++;
           } catch (_e) {
             // CONTACT_NAME_REQUIRED 등 — 무시하고 계속
@@ -237,8 +237,8 @@ async function syncFromGoogle() {
           // 이름 식별 불가 연락처는 건너뜀
           if (!fields.name && !fields.given_name && !fields.family_name && !fields.nickname) continue;
           try {
-            const newId = createContact(fields);
-            setContactGoogleRef(newId, resourceName, etag);
+            const newId = createPartyPerson(fields);
+            setPartyGoogleRef(newId, resourceName, etag);
             created++;
           } catch (_e) {
             // CONTACT_NAME_REQUIRED 등 — 무시하고 계속

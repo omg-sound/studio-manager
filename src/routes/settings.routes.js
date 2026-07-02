@@ -27,9 +27,9 @@ const {
   setProMinutes,
   getDefaultBooker,
   setDefaultBooker,
-  syncManagerToContact,
-  ensureContactForManager,
-  ensureContactForUser,
+  syncManagerToParty,
+  ensurePartyForManager,
+  ensurePartyForUser,
   formatPhone,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron, explain } = require("../views");
@@ -510,11 +510,11 @@ router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) =
   res.redirect("/settings?tab=settings&flash=tested");
 }));
 
-// 로그인 계정(owner 포함) → 연락처 보장(+하우스 담당자 연결은 ensureContactForUser가 자체 처리). 담당자 있으면 성·이름 보강.
+// 로그인 계정(owner 포함) → 연락처 보장(+하우스 담당자 연결은 ensurePartyForUser가 자체 처리). 담당자 있으면 성·이름 보강.
 function ensureContactForHouseUser(userId) {
-  ensureContactForUser(findUserById(userId)); // user_id 연결 연락처 생성/보장 + 담당자 연락처 연결(중복 방지)
+  ensurePartyForUser(findUserById(userId)); // user_id 연결 연락처 생성/보장 + 담당자 연락처 연결(중복 방지)
   const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ? AND active = 1").get(userId);
-  if (mgr) ensureContactForManager(mgr.id); // 성·이름 자동 분리 보강
+  if (mgr) ensurePartyForManager(mgr.id); // 성·이름 자동 분리 보강
 }
 
 // ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
@@ -583,8 +583,8 @@ router.post("/users/:id/edit", requireChief, (req, res) => {
   if (mgr) {
     db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(formatPhone(req.body.phone), mgr.id);
     if (name) db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, mgr.id); // 이름 변경 시 기존 작업 스냅샷 동기화(헤더 표시·매출 매칭) — 외주와 동일
-    syncManagerToContact(mgr.id); // 전화 → 연동 연락처 동기화(하우스는 이메일 제외)
-    ensureContactForManager(mgr.id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
+    syncManagerToParty(mgr.id); // 전화 → 연동 연락처 동기화(하우스는 이메일 제외)
+    ensurePartyForManager(mgr.id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
   }
   res.redirect("/settings?tab=people&flash=saved");
 });

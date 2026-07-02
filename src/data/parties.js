@@ -79,8 +79,9 @@ function partyKindCounts() {
 
 // ── 생성/수정/삭제 ──
 
-/** 사람(person) 생성. 성·이름 미지정 시 표시명에서 한국식 자동 분리. activity_name 있으면 is_artist=1. */
+/** 사람(person) 생성. 성·이름 미지정 시 표시명에서 한국식 자동 분리. activity_name(=nickname 별칭) 있으면 is_artist=1. */
 function createPerson(b = {}) {
+  b = { ...b, activity_name: b.activity_name || b.nickname }; // 연락처 폼은 활동명을 nickname 필드로 보냄
   const name = resolveDisplayName({ ...b });
   let fam = blankToNull(b.family_name), giv = blankToNull(b.given_name);
   if (!fam && !giv) {
@@ -144,6 +145,7 @@ function createParty(b = {}) {
 
 /** 당사자 수정. kind는 불변(정체성). person/company/group 각 필드 갱신. */
 function updateParty(id, b = {}) {
+  b = { ...b, activity_name: b.activity_name != null ? b.activity_name : b.nickname }; // 활동명=nickname 별칭(연락처 폼)
   const cur = getParty(id);
   if (!cur) return;
   if (cur.kind === "company") {
@@ -197,14 +199,16 @@ function getPartyByResourceName(resourceName) {
 }
 
 // ── 소속 이력(affiliations) — 사람 party 기준 ──
+// UI/뷰 호환: 반환 행에 client_* 별칭(org_*와 동일) 부여 — 소속 이력 렌더가 client_id/client_name/client_kind를 읽음.
+const affShape = (a) => (a ? { ...a, client_id: a.org_id, client_name: a.org_name, client_kind: a.org_kind } : a);
 
 function currentAffiliation(personId) {
-  return db().prepare(
+  return affShape(db().prepare(
     `SELECT a.*, o.name AS org_name, o.kind AS org_kind
        FROM affiliations a LEFT JOIN parties o ON o.id = a.org_id
       WHERE a.person_id = ? AND a.ended_on IS NULL
       ORDER BY a.started_on DESC, a.id DESC LIMIT 1`
-  ).get(Number(personId)) || null;
+  ).get(Number(personId)) || null);
 }
 
 function listAffiliations(personId) {
@@ -213,11 +217,12 @@ function listAffiliations(personId) {
        FROM affiliations a LEFT JOIN parties o ON o.id = a.org_id
       WHERE a.person_id = ?
       ORDER BY (a.ended_on IS NULL) DESC, COALESCE(a.started_on, '') DESC, a.id DESC`
-  ).all(Number(personId));
+  ).all(Number(personId)).map(affShape);
 }
 
-/** 소속 추가. closeCurrent(기본 true)면 기존 현재 소속을 종료 후 새 소속 INSERT(이직). */
-function addAffiliation(personId, { org_id, title, started_on, memo, closeCurrent = true } = {}) {
+/** 소속 추가. org_id(=client_id 별칭). closeCurrent(기본 true)면 기존 현재 소속을 종료 후 새 소속 INSERT(이직). */
+function addAffiliation(personId, { org_id, client_id, title, started_on, memo, closeCurrent = true } = {}) {
+  if (org_id == null) org_id = client_id; // client_id 별칭(레거시 호출 호환)
   const pid = Number(personId);
   const start = blankToNull(started_on);
   if (closeCurrent) {
@@ -232,7 +237,8 @@ function endAffiliation(affId, endedOn) {
   db().prepare("UPDATE affiliations SET ended_on = ? WHERE id = ?").run(blankToNull(endedOn) || todayYmd(), Number(affId));
 }
 
-function updateAffiliation(affId, { org_id, title, started_on, ended_on, memo } = {}) {
+function updateAffiliation(affId, { org_id, client_id, title, started_on, ended_on, memo } = {}) {
+  if (org_id == null) org_id = client_id; // client_id 별칭(레거시 호출 호환)
   db().prepare(
     "UPDATE affiliations SET org_id = ?, title = ?, started_on = ?, ended_on = ?, memo = ? WHERE id = ?"
   ).run(org_id ? Number(org_id) : null, blankToNull(title), blankToNull(started_on), blankToNull(ended_on), blankToNull(memo), Number(affId));
@@ -494,6 +500,68 @@ function setTaskPayout(taskId, paid) {
   db().prepare("UPDATE track_tasks SET worker_paid = ?, worker_paid_date = ? WHERE id = ?").run(p, p ? todayYmd() : null, Number(taskId));
 }
 
+// ── UI 편의 조회(연락처=사람 뷰, 클라이언트=업체·아티스트 뷰) ──
+
+/** 연락처 목록 = 사람(person) party. staff: true=녹음실 스태프(user_id 연결), false=외부. */
+function listContacts({ q, staff } = {}) {
+  return listParties({ q, kind: "person", staff });
+}
+
+/** 클라이언트 목록 = 업체(company)·그룹·아티스트(사람 포함). kind로 좁힘(레거시 라벨/파티 kind 모두 허용). */
+function listClients({ kind } = {}) {
+  if (kind === "소속사/레이블" || kind === "제작사" || kind === "company" || kind === "조직") return listParties({ kind: "company" });
+  if (kind === "아티스트" || kind === "artist") return listParties({ artist: true });
+  if (kind === "group" || kind === "그룹") return listParties({ kind: "group" });
+  return db().prepare("SELECT * FROM parties WHERE kind IN ('company','group') OR is_artist = 1 ORDER BY name COLLATE NOCASE").all().map(withLegacy);
+}
+
+/** 거래처 kind 카운트(탭 배지) — 레거시 라벨 키 포함. */
+function clientKindCounts() {
+  const c = partyKindCounts();
+  return { "소속사/레이블": c.company, "제작사": 0, "아티스트": c.artist, "기타": 0, company: c.company, group: c.group, artist: c.artist };
+}
+
+/** 콤보 옵션: 담당자(사람) — {id, name, phone, email, current_client(현재 소속)}. */
+function contactOptions() {
+  return db()
+    .prepare(
+      `SELECT p.id, p.name, p.phone, p.email,
+              (SELECT o.name FROM affiliations a LEFT JOIN parties o ON o.id = a.org_id
+                WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS current_client
+         FROM parties p WHERE p.kind = 'person' ORDER BY p.name COLLATE NOCASE`
+    )
+    .all();
+}
+
+/** 콤보 옵션: 청구처(전체 당사자) — {id, name(아티스트=활동명), kind}. */
+function clientOptions() {
+  return db()
+    .prepare(
+      `SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name, kind FROM parties
+        WHERE kind IN ('company','group') OR is_artist = 1 ORDER BY name COLLATE NOCASE`
+    )
+    .all();
+}
+
+/** 업체(조직) 소속 아티스트 — affiliations 기반. */
+function listArtistsForAgency(orgId) {
+  return db()
+    .prepare(
+      `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name FROM affiliations a
+         JOIN parties p ON p.id = a.person_id
+        WHERE a.org_id = ? AND a.ended_on IS NULL AND p.is_artist = 1 ORDER BY p.name`
+    )
+    .all(Number(orgId));
+}
+
+/** 이름으로 조직 찾기(자동 생성 안 함). */
+function resolveCompanyByName(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const ex = db().prepare("SELECT id FROM parties WHERE kind = 'company' AND name = ? ORDER BY id LIMIT 1").get(n);
+  return ex ? ex.id : null;
+}
+
 module.exports = {
   formatPhone,
   listParties,
@@ -532,4 +600,11 @@ module.exports = {
   getWorker,
   listTasksForWorker,
   setTaskPayout,
+  listContacts,
+  listClients,
+  clientKindCounts,
+  contactOptions,
+  clientOptions,
+  listArtistsForAgency,
+  resolveCompanyByName,
 };

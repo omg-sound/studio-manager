@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireEditor, canEdit } = require("../auth");
-const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel, syncManagerToContact, ensureContactForManager, formatPhone } = require("../data");
+const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel, syncManagerToParty, ensurePartyForManager, formatPhone } = require("../data");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE } = require("../config");
 
@@ -53,7 +53,7 @@ router.post("/", requireEditor, (req, res) => {
     const info = db()
       .prepare("INSERT INTO project_managers (name, email, phone, active) VALUES (?, ?, ?, 1)")
       .run(name, String(req.body.email || "").trim() || null, formatPhone(req.body.phone));
-    ensureContactForManager(info.lastInsertRowid); // 새 외주 작업자 → 연동 연락처+성·이름 자동 생성
+    ensurePartyForManager(info.lastInsertRowid); // 새 외주 작업자 → 연동 연락처+성·이름 자동 생성
   }
   res.redirect("/workers?flash=created");
 });
@@ -71,8 +71,8 @@ router.post("/:id/edit", requireEditor, (req, res) => {
     db().prepare("UPDATE project_managers SET name = ?, email = ?, phone = ? WHERE id = ? AND user_id IS NULL")
       .run(name, String(req.body.email || "").trim() || null, formatPhone(req.body.phone), id);
     db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, id); // 이름 변경 시 작업 스냅샷 동기화(정산 매칭 유지)
-    syncManagerToContact(id); // 전화·이메일 → 연동 연락처 동기화
-    ensureContactForManager(id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
+    syncManagerToParty(id); // 전화·이메일 → 연동 연락처 동기화
+    ensurePartyForManager(id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
   }
   res.redirect(`/workers/${id}?flash=saved`);
 });

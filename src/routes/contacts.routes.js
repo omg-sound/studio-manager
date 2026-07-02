@@ -4,11 +4,11 @@ const express = require("express");
 const { requireEditor } = require("../auth");
 const {
   listContacts,
-  getContact,
-  createContact,
-  updateContact,
-  deleteContact,
-  setContactGoogleRef,
+  getParty,
+  createPerson,
+  updateParty,
+  deleteParty,
+  setPartyGoogleRef,
   currentAffiliation,
   listAffiliations,
   addAffiliation,
@@ -16,13 +16,13 @@ const {
   endAffiliation,
   updateAffiliation,
   deleteAffiliation,
-  listProjectsForContact,
-  listSessionsForContact,
+  listProjectsForParty,
+  listSessionsForParty,
   listClients,
-  clientsWithOwnerContact,
-  getManagerByContactId,
-  classifyContact,
-  syncContactToManager,
+  orgsWithOwnerParty,
+  getManagerByPartyId,
+  classifyParty,
+  syncPartyToManager,
 } = require("../data");
 const people = require("../people");
 const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge, tabBar, detailsChevron } = require("../views");
@@ -76,7 +76,7 @@ router.get("/", (req, res) => {
     ? listGroup({
         rows: rows.map((c) => {
           const cur = currentAffiliation(c.id);
-          const typeBadges = classifyContact(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
+          const typeBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
           const affBadge = cur && cur.client_id ? `<span class="badge badge-neutral">${esc(cur.client_name || "")}${cur.title ? " · " + esc(cur.title) : ""}</span>` : "";
           const left = `<div class="truncate font-semibold">${esc(personLabel(c.name, c.nickname))}</div><div class="mt-1 flex flex-wrap gap-1">${typeBadges}${affBadge}</div>`;
           const right = c.phone ? `<span class="text-sm text-muted">${esc(c.phone)}</span>` : "";
@@ -112,7 +112,7 @@ router.get("/new", (req, res) => {
 router.post("/", async (req, res) => {
   const b = req.body;
   try {
-    const id = createContact({
+    const id = createPerson({
       name: b.name, phone: b.phone, email: b.email, memo: b.memo,
       family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
       nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
@@ -122,12 +122,12 @@ router.post("/", async (req, res) => {
       addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
     }
     if (!b.client_id) syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 입력 → 소속 이력 반영(업체 클라이언트 연결)
-    // 활동명(nickname→activity_name)은 createContact가 party에 저장하며 is_artist를 자동 세팅(별도 아티스트 셸 없음).
+    // 활동명(nickname→activity_name)은 createPerson가 party에 저장하며 is_artist를 자동 세팅(별도 아티스트 셸 없음).
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
-      const contact = getContact(id);
+      const contact = getParty(id);
       const ref = await people.createPerson(contact);
-      if (ref) setContactGoogleRef(id, ref.resourceName, ref.etag);
+      if (ref) setPartyGoogleRef(id, ref.resourceName, ref.etag);
     } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=created`);
   } catch (_e) {
@@ -142,14 +142,14 @@ router.get("/:id/edit", (req, res) => {
 
 router.post("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const c = getContact(id);
+  const c = getParty(id);
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   // 하우스 엔지니어 연동 연락처면 이메일은 기존값 유지(users.email 보호)
-  const linkedManager = getManagerByContactId(id);
+  const linkedManager = getManagerByPartyId(id);
   const isHouseEngineer = linkedManager && linkedManager.user_id != null;
   const b = req.body;
   try {
-    updateContact(id, {
+    updateParty(id, {
       name: b.name, phone: b.phone,
       email: isHouseEngineer ? c.email : b.email,  // 하우스: 기존 이메일 유지
       memo: b.memo,
@@ -158,17 +158,17 @@ router.post("/:id", async (req, res) => {
     });
     syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 → 소속 이력 반영(현재 소속과 다르면 이직으로 등록)
     // 담당자(project_managers) 동기화: 전화(항상) + 이메일(외주만)
-    syncContactToManager(id);
-    // 활동명 변경은 updateContact가 party activity_name·is_artist에 반영(별도 아티스트 셸 없음).
+    syncPartyToManager(id);
+    // 활동명 변경은 updateParty가 party activity_name·is_artist에 반영(별도 아티스트 셸 없음).
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
-      const updated = getContact(id);
+      const updated = getParty(id);
       if (updated.google_resource_name) {
         const ref = await people.updatePerson(updated.google_resource_name, updated.google_etag, updated);
-        if (ref) setContactGoogleRef(id, updated.google_resource_name, ref.etag);
+        if (ref) setPartyGoogleRef(id, updated.google_resource_name, ref.etag);
       } else {
         const ref = await people.createPerson(updated);
-        if (ref) setContactGoogleRef(id, ref.resourceName, ref.etag);
+        if (ref) setPartyGoogleRef(id, ref.resourceName, ref.etag);
       }
     } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=saved`);
@@ -181,9 +181,9 @@ router.post("/:id", async (req, res) => {
 router.post("/:id/delete", async (req, res) => {
   const id = Number(req.params.id);
   // DB 삭제 전 resourceName 확보 — 삭제 후에는 조회 불가.
-  const contact = getContact(id);
+  const contact = getParty(id);
   const resourceName = contact && contact.google_resource_name;
-  deleteContact(id);
+  deleteParty(id);
   // DB 삭제 후 People 삭제 — fail-safe: 실패해도 앱 정상.
   if (resourceName) {
     try { await people.deletePerson(resourceName); } catch (_e) {}
@@ -194,7 +194,7 @@ router.post("/:id/delete", async (req, res) => {
 // ── 소속 이력: 추가/이직 · 종료 · 삭제 ──
 router.post("/:id/affiliations", (req, res) => {
   const id = Number(req.params.id);
-  if (!getContact(id)) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!getParty(id)) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
   addAffiliation(id, {
     client_id: b.client_id || null,
@@ -232,13 +232,13 @@ router.post("/:id/affiliations/:aid/delete", (req, res) => {
 // ── 상세(연락처 정보 + 소속 이력 타임라인 + 추가/이직 폼 + 연결 프로젝트) ──
 // 주의: GET /:id 는 GET /new·GET /:id/edit 보다 뒤에 등록해 경로 충돌을 피한다.
 router.get("/:id", (req, res) => {
-  const c = getContact(Number(req.params.id));
+  const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const affs = listAffiliations(c.id);
-  const projects = listProjectsForContact(c.id);
-  const sessions = listSessionsForContact(c.id);
+  const projects = listProjectsForParty(c.id);
+  const sessions = listSessionsForParty(c.id);
   const clients = listClients({});
-  const linkedManager = getManagerByContactId(c.id);
+  const linkedManager = getManagerByPartyId(c.id);
 
   const nameDetail = [`${String(c.family_name || "").trim()}${String(c.given_name || "").trim()}`, c.honorific].filter(Boolean).join(" "); // 한국식: 성+이름 붙이고 호칭 뒤
   const managerBadge = linkedManager
@@ -248,7 +248,7 @@ router.get("/:id", (req, res) => {
           : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
       }</div>`
     : "";
-  const ownerClients = clientsWithOwnerContact(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
+  const ownerClients = orgsWithOwnerParty(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
   const cur = currentAffiliation(c.id); // 현재 소속 — 회사칸 기본값(담당자로만 등록돼 company 텍스트가 비어 있던 경우 반영)
   // 상세로 들어오면 바로 수정 가능한 화면 — 읽기전용 카드+'정보 수정' 버튼 대신 인라인 편집 폼(변경 시 하이라이트 저장).
   const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true);
@@ -357,7 +357,7 @@ router.get("/:id", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: personLabel(c.name, c.nickname), desc: `연락처 · ${classifyContact(c.id).map((t) => t.label).join(" · ")}`, back: { href: "/contacts", label: "연락처" } })}
+    ${pageHeader({ title: personLabel(c.name, c.nickname), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: "/contacts", label: "연락처" } })}
     ${infoCard}
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
     ${timeline}

@@ -9,10 +9,10 @@ const { db } = require("../db");
 const { requireChief, requireEditor, isChief } = require("../auth");
 const { CLIENT_KINDS, COMPANY_ROLES, normalizeClientKind } = require("../config");
 const {
-  listClients, clientKindCounts, getClient, getContact, listProjectsForClient,
-  listInvoicesForClientEntity, listContactsForClient,
+  listClients, clientKindCounts, getParty, listProjectsForParty,
+  listInvoicesForParty, listPersonsForOrg,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  contactOptions, createContact, addAffiliation, listContacts, resolveContactByName, clientsWithOwnerContact,
+  contactOptions, addAffiliation, listContacts, resolvePersonByName, orgsWithOwnerParty,
   listArtistsForAgency, resolveCompanyByName,
   createCompany, createPerson, updateParty, deleteParty,
 } = require("../data");
@@ -179,7 +179,7 @@ router.post("/", (req, res) => {
     id = createCompany({
       name, phone: b.phone, email: b.email, memo: b.memo,
       biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
-      owner_party_id: String(b.owner_name || "").trim() ? resolveContactByName(b.owner_name) : null, // 대표자 → 사람 party 연동
+      owner_party_id: String(b.owner_name || "").trim() ? resolvePersonByName(b.owner_name) : null, // 대표자 → 사람 party 연동
       address: b.address, roles: companyRolesFrom(b, kind, false),
     });
   } else {
@@ -206,7 +206,7 @@ router.get("/:id/edit", (req, res) => {
 
 router.post("/:id", (req, res) => {
   const id = Number(req.params.id);
-  const c = getClient(id);
+  const c = getParty(id);
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const isFetch = req.get("X-Requested-With") === "fetch"; // 자동저장(AJAX)
   const b = req.body;
@@ -221,7 +221,7 @@ router.post("/:id", (req, res) => {
     name, phone: b.phone, email: b.email, memo: b.memo,
     // company 필드
     biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
-    owner_party_id: String(b.owner_name || "").trim() ? resolveContactByName(b.owner_name) : (c.owner_party_id || null),
+    owner_party_id: String(b.owner_name || "").trim() ? resolvePersonByName(b.owner_name) : (c.owner_party_id || null),
     address: b.address, roles: companyRolesFrom(b, normalizeClientKind(b.kind), c.kind === "person"),
     // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신)
     activity_name: c.activity_name, is_artist: c.is_artist,
@@ -247,7 +247,7 @@ router.post("/:id/delete", (req, res) => {
 router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
-  const c = getClient(id);
+  const c = getParty(id);
   if (!c) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
     return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "", user: req.user }));
@@ -315,11 +315,11 @@ router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, r
 
 // ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리 + 첨부 서류 링크) ──
 router.get("/:id", (req, res) => {
-  const c = getClient(Number(req.params.id));
+  const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tab = req.query.tab === "invoices" ? "invoices" : "projects";
-  const projects = listProjectsForClient(c);
-  const invoices = listInvoicesForClientEntity(c);
+  const projects = listProjectsForParty(c);
+  const invoices = listInvoicesForParty(c);
   const files = listClientFiles(c.id);
   // 목록에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만 허용).
   const from = String(req.query.from || "");
@@ -369,7 +369,7 @@ router.get("/:id", (req, res) => {
   const crossRefs = [
     // 아티스트(사람) party는 연락처와 동일 레코드 — '연락처로 보기' 링크(같은 party를 연락처 화면에서).
     c.kind === "person" ? `<div><span class="text-muted">연락처로 보기</span> <a href="/contacts/${c.id}" class="text-primary hover:underline">${esc(c.name)} ↗</a></div>` : "",
-    (() => { const oc = c.owner_party_id ? getContact(c.owner_party_id) : null; return oc ? `<div><span class="text-muted">대표자 연락처</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : ""; })(),
+    (() => { const oc = c.owner_party_id ? getParty(c.owner_party_id) : null; return oc ? `<div><span class="text-muted">대표자 연락처</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : ""; })(),
   ].filter(Boolean).join("");
   const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
   const filesBlock = clientFilesBlock(c, files, fileErr); // 자체 '첨부 서류' 헤딩 포함
@@ -451,7 +451,7 @@ function clientFileSection(c, fileMap, fileErr) {
 /** 클라이언트 담당자 연락처 콤보 — 이름 선택/입력 시 연락처에 연동(이 클라이언트 소속으로). 프로젝트 contactCombo와 동일 패턴(app.js 처리). */
 function clientContactCombo(c, isEdit) {
   const opts = contactOptions();
-  const cur = isEdit && c.id ? (listContactsForClient(c.id)[0] || null) : null;
+  const cur = isEdit && c.id ? (listPersonsForOrg(c.id)[0] || null) : null;
   // 현재 담당자의 전화·소속을 서버에서 미리 채워 로드 즉시 표시(이름 뒤에 번호). app.js가 변경 시 갱신.
   const curInfo = cur
     ? [cur.phone ? `☎ ${esc(cur.phone)}` : "", `소속: ${esc(c.name)}`].filter(Boolean).join(" · ")
@@ -478,7 +478,7 @@ function linkClientContact(clientId, body) {
   if (!contactId) {
     const name = String(body.contact_name || "").trim();
     if (!name) return;
-    contactId = resolveContactByName(name); // 이름으로 기존 연락처 재사용 후 없으면 생성 — 자동저장 blur마다 중복 생성되던 것 방지
+    contactId = resolvePersonByName(name); // 이름으로 기존 연락처 재사용 후 없으면 생성 — 자동저장 blur마다 중복 생성되던 것 방지
   }
   if (!contactId) return;
   // 당사자 모델: 소속 이력은 affiliations(person_id, org_id). 중복(현재 소속 동일 조직)만 건너뛴다.

@@ -16,9 +16,9 @@ const {
   deleteInvoice,
   getStudioInfo,
   getStudioLogo,
-  getClient,
+  getParty,
   getClientFile,
-  listContactsForClient,
+  listPersonsForOrg,
   ensureInvoiceNumber,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup, explain } = require("../views");
@@ -209,9 +209,9 @@ router.get("/:id", requireBilling, (req, res) => {
   const items = itemBundle ? itemBundle.rows : [];
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
   // 청구처 정보(대표자·사업자번호·담당자 연락처) — 청구처가 클라이언트일 때
-  const payerClient = inv.payer_id ? getClient(inv.payer_id) : null;
+  const payerClient = inv.payer_id ? getParty(inv.payer_id) : null;
   const payerCard = payerClient
-    ? payerInfoCard(payerClient, listContactsForClient(payerClient.id), !!getClientFile(payerClient.id, "biz_license"))
+    ? payerInfoCard(payerClient, listPersonsForOrg(payerClient.id), !!getClientFile(payerClient.id, "biz_license"))
     : "";
 
   const row = (label, value) =>
@@ -288,7 +288,7 @@ router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) =
   // 3종 문서(견적서·내역서·거래명세서) 모두 상태 무관 발행 허용 — 참고용 문서라 미발행 초안에서도 뽑을 수 있게(사용자 요청).
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
-  const client = inv.payer_id ? getClient(inv.payer_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
+  const client = inv.payer_id ? getParty(inv.payer_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
   const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
