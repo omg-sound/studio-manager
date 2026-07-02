@@ -20,8 +20,7 @@ const deliverables = require("./data/deliverables"); // 자료 전달
 const rooms = require("./data/rooms"); // 룸
 const rateItems = require("./data/rate-items"); // 단가표
 const taskTypes = require("./data/task-types"); // 작업 종류 카탈로그(모듈 캐시 포함)
-const contacts = require("./data/contacts"); // 연락처(사람)+소속 이력+담당자연동
-const clientsMod = require("./data/clients"); // 클라이언트(거래처)+담당자 마스터
+const parties = require("./data/parties"); // 당사자(사람·조직·그룹) 통합 마스터 — clients/contacts 대체
 const projects = require("./data/projects"); // 프로젝트
 const tracks = require("./data/tracks"); // 트랙/작업 CRUD
 const invoicesMod = require("./data/invoices"); // 청구(금액 파생·채번·초안/생성/삭제·목록/통계)
@@ -30,13 +29,9 @@ const sessions = require("./data/sessions"); // 세션(스튜디오 일정)
 
 // 작업 종류 카탈로그: 공개 API는 아래 7함수만 재export(normalizeTaskTypeDb는 내부전용이므로 spread하지 않고 명시 나열).
 const { listTaskTypes, activeTaskTypes, taskTypeLabel, taskTypeUnitPrice, createTaskType, updateTaskType, deleteTaskType } = taskTypes;
-// 클라이언트: getManagerByUserId는 내부전용(tracks.js가 직접 사용)이라 rest-spread로 공개 제외.
-const { getManagerByUserId, ...clientsPublic } = clientsMod;
-void getManagerByUserId; // 공개 제외 목적의 구조분해(런타임 미사용) — 린트 오탐 방지
 
 module.exports = {
-  ...contacts, // src/data/contacts.js
-  ...clientsPublic, // src/data/clients.js (getManagerByUserId 제외=내부전용)
+  ...parties, // src/data/parties.js — 당사자 통합(사람/조직/아티스트/담당자연동)
   ...rooms, // src/data/rooms.js
   ...rateItems, // src/data/rate-items.js
   listTaskTypes, // src/data/task-types.js (7함수, normalizeTaskTypeDb 내부전용 제외)

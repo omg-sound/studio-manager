@@ -20,7 +20,7 @@ function dashboardStats(user) {
     canInvoice: showInvoices,
     isChief: showClients,
     total,
-    clients: showClients ? d.prepare("SELECT COUNT(*) AS n FROM clients").get().n : null,
+    clients: showClients ? d.prepare("SELECT COUNT(*) AS n FROM parties WHERE kind IN ('company','group') OR is_artist = 1").get().n : null,
     invoices: showInvoices ? invoiceStats(user) : null,
   };
 }

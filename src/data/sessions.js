@@ -15,7 +15,7 @@ const { db } = require("../db");
 const { todayYmd, isValidYmd, cleanTime, timeToMin, minutesBetween } = require("../lib/date");
 const { normalizeSessionType, normalizeSessionStatus } = require("../config");
 const { getProjectForUser } = require("./projects"); // 무순환
-const { createContact } = require("./contacts"); // 무순환
+const { resolvePersonByName } = require("./parties"); // 무순환 — 디렉터=parties.id(사람)
 const { listRooms } = require("./rooms"); // 무순환
 const { computeRatePrice } = require("./rate-items"); // 무순환
 
@@ -92,13 +92,13 @@ function sessionFields(input) {
     status: normalizeSessionStatus(input.status),
     rate_item_id: rateItemId,
     room_id: validRoomId(input.room_id), // 활성 룸 검증 — 없거나 삭제된 id는 null
-    director_contact_id: null,
+    director_party_id: null,
     memo: String(input.memo || "").trim() || null,
   };
 }
 
-/** 세션 담당 디렉터(다대다): director_contact_id[](목록 선택) + director_name[](새/입력 이름)을 연락처 id 배열로 해석(중복 제거).
- *  id 우선, 없으면 같은 이름 연락처 재사용, 그래도 없으면 새로 생성. */
+/** 세션 담당 디렉터(다대다): director_contact_id[](목록 선택=party id) + director_name[](새/입력 이름)을 당사자 id 배열로 해석(중복 제거).
+ *  콤보 hidden 필드명은 레거시 유지하되 값=parties.id. id 우선, 없으면 같은 이름 사람 재사용(유일 매칭), 없으면 생성. */
 function resolveDirectorIds(input) {
   const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
   const ids = asArr(input.director_contact_id);
@@ -107,25 +107,24 @@ function resolveDirectorIds(input) {
   const out = [];
   const seen = new Set();
   for (let i = 0; i < n; i++) {
-    let cid = Number(ids[i]) || null;
-    if (!cid) {
+    let pid = Number(ids[i]) || null;
+    if (!pid) {
       const nm = String(names[i] || "").trim();
       if (!nm) continue;
-      const existing = db().prepare("SELECT id FROM contacts WHERE name = ? LIMIT 1").get(nm);
-      cid = existing ? existing.id : createContact({ name: nm });
+      pid = resolvePersonByName(nm); // 유일 매칭 재사용·아니면 새 사람 party
     }
-    if (cid && !seen.has(cid)) { seen.add(cid); out.push(cid); }
+    if (pid && !seen.has(pid)) { seen.add(pid); out.push(pid); }
   }
   return out;
 }
 
-/** 세션의 담당 디렉터 목록을 통째로 교체(다대다). 레거시 sessions.director_contact_id도 첫 디렉터로 동기화. */
+/** 세션의 담당 디렉터 목록을 통째로 교체(다대다, party 기준). sessions.director_party_id=첫 디렉터(레거시 단일 참조 동기화). */
 function setSessionDirectors(sessionId, ids) {
   const d = db();
   d.prepare("DELETE FROM session_directors WHERE session_id = ?").run(sessionId);
-  const ins = d.prepare("INSERT OR IGNORE INTO session_directors (session_id, contact_id) VALUES (?, ?)");
-  for (const cid of ids) ins.run(sessionId, cid);
-  d.prepare("UPDATE sessions SET director_contact_id = ? WHERE id = ?").run(ids[0] || null, sessionId);
+  const ins = d.prepare("INSERT OR IGNORE INTO session_directors (session_id, party_id) VALUES (?, ?)");
+  for (const pid of ids) ins.run(sessionId, pid);
+  d.prepare("UPDATE sessions SET director_party_id = ? WHERE id = ?").run(ids[0] || null, sessionId);
 }
 
 /** 세션 캘린더 참석자 이메일 — 프로젝트 매니저(project.manager_id)·예약담당자(booker_name)·담당엔지니어(engineer_name)의 이메일(중복·빈값 제거). */
@@ -147,7 +146,7 @@ function sessionAttendeeEmails(session, project) {
 function listSessionDirectors(sessionId) {
   return db()
     .prepare(
-      `SELECT ct.* FROM session_directors sd JOIN contacts ct ON ct.id = sd.contact_id
+      `SELECT ct.* FROM session_directors sd JOIN parties ct ON ct.id = sd.party_id
        WHERE sd.session_id = ? ORDER BY sd.created_at, ct.name COLLATE NOCASE`
     )
     .all(Number(sessionId));
@@ -259,7 +258,7 @@ function createSession(user, projectId, input = {}) {
   if (!project) return null;
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
-  f.director_contact_id = directorIds[0] || null; // 레거시 컬럼=첫 디렉터
+  f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
   assertNoSessionConflict(f, null);
   // 세션 행 + 다대다 디렉터를 한 트랜잭션으로 — 중간 실패 시 반쪽 세션(디렉터 없는)이 남지 않게.
   const d = db();
@@ -268,8 +267,8 @@ function createSession(user, projectId, input = {}) {
   try {
     const info = d
       .prepare(
-        `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_contact_id, memo)
-         VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_contact_id, @memo)`
+        `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_party_id, memo)
+         VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_party_id, @memo)`
       )
       .run({ project_id: project.id, ...f });
     newId = info.lastInsertRowid;
@@ -289,7 +288,7 @@ function updateSession(user, sessionId, input = {}) {
   if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED");
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
-  f.director_contact_id = directorIds[0] || null; // 레거시 컬럼=첫 디렉터
+  f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
   assertNoSessionConflict(f, s.id);
   // UPDATE + 디렉터 교체를 한 트랜잭션으로(디렉터만 지워지고 세션은 옛값으로 남는 반쪽 갱신 방지).
   const d = db();
@@ -299,7 +298,7 @@ function updateSession(user, sessionId, input = {}) {
       .prepare(
         `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
          end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
-         rate_item_id=@rate_item_id, room_id=@room_id, director_contact_id=@director_contact_id, memo=@memo WHERE id=@id`
+         rate_item_id=@rate_item_id, room_id=@room_id, director_party_id=@director_party_id, memo=@memo WHERE id=@id`
       )
       .run({ id: s.id, ...f });
     setSessionDirectors(s.id, directorIds); // 다대다 디렉터 교체

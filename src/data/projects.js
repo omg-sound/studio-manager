@@ -87,7 +87,7 @@ function listProjects(_user, { q } = {}) {
       ((SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id)
        + (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id)) AS content_cnt
     FROM projects p
-    LEFT JOIN clients c ON c.id = p.client_id
+    LEFT JOIN parties c ON c.id = COALESCE(p.production_id, p.agency_id, p.artist_id)
     LEFT JOIN project_managers m ON m.id = p.manager_id
     ${where.length ? "WHERE " + where.join(" AND ") : ""}
     ORDER BY
@@ -112,9 +112,9 @@ function getProjectForUser(user, id) {
   const row = db()
     .prepare(
       `SELECT p.*, c.name AS client_name, m.name AS manager_name, ct.name AS contact_name, ct.phone AS contact_phone, tr_sum.track_titles, task_sum.task_total FROM projects p
-       LEFT JOIN clients c ON c.id = p.client_id
+       LEFT JOIN parties c ON c.id = COALESCE(p.production_id, p.agency_id, p.artist_id)
        LEFT JOIN project_managers m ON m.id = p.manager_id
-       LEFT JOIN contacts ct ON ct.id = p.contact_id
+       LEFT JOIN parties ct ON ct.id = p.contact_party_id
        LEFT JOIN (
          SELECT project_id, GROUP_CONCAT(title, '||') AS track_titles
          FROM project_tracks

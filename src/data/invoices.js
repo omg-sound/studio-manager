@@ -15,7 +15,7 @@ const { todayYmd, formatYmdShort } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
 const { canBill, canInvoice } = require("../auth");
 const { getProjectForUser } = require("./projects"); // 무순환
-const { getClient } = require("./clients"); // 무순환
+const { getParty } = require("./parties"); // 무순환 — 청구처(payer)=parties.id
 const { taskTypeLabel } = require("./task-types"); // 무순환
 
 const parseWon = parseMoney; // 내부 호출명 parseWon 유지
@@ -189,8 +189,9 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
   const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0, vatIncluded);
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
-  const resolvedClientId = (clientId ? Number(clientId) : null) || project.client_id || null;
-  if (resolvedClientId && !d.prepare("SELECT 1 FROM clients WHERE id = ?").get(resolvedClientId)) throw new Error("CLIENT_NOT_FOUND");
+  // 청구처(payer) = parties.id. 폼 선택(clientId=party id) 우선, 없으면 프로젝트에서 제작사›소속사›아티스트 파생.
+  const resolvedPayerId = (clientId ? Number(clientId) : null) || project.production_id || project.agency_id || project.artist_id || null;
+  if (resolvedPayerId && !d.prepare("SELECT 1 FROM parties WHERE id = ?").get(resolvedPayerId)) throw new Error("CLIENT_NOT_FOUND");
 
   // 라인아이템(청구서·PDF 공용). 작업=곡명 - 종류, 세션=녹음 세션 라인.
   const items = [];
@@ -201,7 +202,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
     const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
     items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `녹음 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`, quantity: 1, unit_price: amount, amount });
   }
-  return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedClientId };
+  return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedPayerId };
 }
 
 function createInvoiceFromTasks(user, opts = {}) {
@@ -214,12 +215,12 @@ function createInvoiceFromTasks(user, opts = {}) {
     const info = d
       .prepare(
         `INSERT INTO invoices
-         (project_id, client_id, title, invoice_number, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
-         VALUES (@project_id, @client_id, @title, @invoice_number, @amount, @tax_amount, @discount_amount, 0, '발행', @issued_date, @due_date, @memo)`
+         (project_id, payer_id, title, invoice_number, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
+         VALUES (@project_id, @payer_id, @title, @invoice_number, @amount, @tax_amount, @discount_amount, 0, '발행', @issued_date, @due_date, @memo)`
       )
       .run({
         project_id: draft.project.id,
-        client_id: draft.resolvedClientId,
+        payer_id: draft.resolvedPayerId,
         title: draft.invoiceTitle,
         invoice_number: invoiceNumber,
         amount: draft.total,
@@ -254,7 +255,7 @@ function createInvoiceFromTasks(user, opts = {}) {
 function invoiceDraftForPdf(user, opts = {}) {
   const draft = computeInvoiceDraft(user, opts);
   if (!draft) return null;
-  const client = draft.resolvedClientId ? getClient(draft.resolvedClientId) : null;
+  const client = draft.resolvedPayerId ? getParty(draft.resolvedPayerId) : null;
   const invoice = {
     title: draft.invoiceTitle,
     invoice_number: null, // 미발행(초안) — 채번 전
@@ -265,8 +266,8 @@ function invoiceDraftForPdf(user, opts = {}) {
     status: "미발행",
     issued_date: draft.issued,
     due_date: draft.dueDate,
-    client_id: draft.resolvedClientId,
-    client_name: client ? client.name : "",
+    client_id: draft.resolvedPayerId,
+    client_name: client ? (client.activity_name || client.name) : "",
   };
   return { project: draft.project, client: client || { name: "" }, invoice, items: draft.items };
 }
@@ -303,14 +304,14 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
     params.status = status;
   }
   if (clientId) {
-    where.push("i.client_id = @clientId");
+    where.push("i.payer_id = @clientId");
     params.clientId = Number(clientId);
   }
   const sql = `
-    SELECT i.*, p.title AS project_title, c.name AS client_name
+    SELECT i.*, p.title AS project_title, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name
     FROM invoices i
     LEFT JOIN projects p ON p.id = i.project_id
-    LEFT JOIN clients c ON c.id = i.client_id
+    LEFT JOIN parties c ON c.id = i.payer_id
     ${where.length ? "WHERE " + where.join(" AND ") : ""}
     ORDER BY
       CASE WHEN i.due_date IS NULL OR i.due_date = '' THEN 1 ELSE 0 END,
@@ -324,10 +325,10 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
 function getInvoiceForUser(_user, id) {
   const row = db()
     .prepare(
-      `SELECT i.*, p.title AS project_title, c.name AS client_name
+      `SELECT i.*, p.title AS project_title, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name
        FROM invoices i
        LEFT JOIN projects p ON p.id = i.project_id
-       LEFT JOIN clients c ON c.id = i.client_id WHERE i.id = ?`
+       LEFT JOIN parties c ON c.id = i.payer_id WHERE i.id = ?`
     )
     .get(id);
   return row || null;
@@ -354,8 +355,8 @@ function listInvoicesForProject(user, projectId) {
   if (!project) return null;
   const rows = db()
     .prepare(
-      `SELECT i.*, c.name AS client_name FROM invoices i
-       LEFT JOIN clients c ON c.id = i.client_id
+      `SELECT i.*, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name FROM invoices i
+       LEFT JOIN parties c ON c.id = i.payer_id
        WHERE i.project_id = ? ORDER BY i.created_at DESC, i.id DESC`
     )
     .all(projectId);

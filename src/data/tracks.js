@@ -14,7 +14,7 @@ const { db } = require("../db");
 const { normalizeTrackContentType, normalizeTaskStatus } = require("../config");
 const { parseMoney } = require("../lib/forms");
 const { getProjectForUser } = require("./projects"); // 무순환
-const { getManagerByUserId } = require("./clients"); // 무순환
+const { getManagerByUserId } = require("./parties"); // 무순환
 const { normalizeTaskTypeDb, taskTypeUnitPrice } = require("./task-types"); // 무순환
 
 const parseWon = parseMoney; // 내부 호출명 parseWon 유지
@@ -45,7 +45,7 @@ function listTracksForProject(user, projectId) {
 function getTrackForUser(user, trackId) {
   const track = db()
     .prepare(
-      `SELECT tr.*, p.client_id, p.title AS project_title
+      `SELECT tr.*, COALESCE(p.production_id, p.agency_id, p.artist_id) AS client_id, p.title AS project_title
        FROM project_tracks tr
        JOIN projects p ON p.id = tr.project_id
        WHERE tr.id = ?`
@@ -93,7 +93,7 @@ function deleteTrack(user, trackId) {
 function getTaskForUser(user, taskId) {
   const task = db()
     .prepare(
-      `SELECT t.*, tr.project_id, tr.title AS track_title, tr.content_type, p.client_id
+      `SELECT t.*, tr.project_id, tr.title AS track_title, tr.content_type, COALESCE(p.production_id, p.agency_id, p.artist_id) AS client_id
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        JOIN projects p ON p.id = tr.project_id

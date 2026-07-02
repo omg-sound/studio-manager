@@ -310,7 +310,6 @@ function init() {
       PRIMARY KEY (session_id, contact_id)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_session_directors_contact ON session_directors(contact_id);
     CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
     CREATE INDEX IF NOT EXISTS idx_users_client ON users(client_id);
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
@@ -599,6 +598,62 @@ function init() {
     }
   }
 
+  // session_directors를 party 기준으로 재구성(contact_id FK→contacts 제거, party_id FK→parties). party_model_v1이 party_id를 채운 뒤.
+  //  FK 활성 상태라 contact_id에 party id filler를 넣을 수 없어(위반) 테이블 재작성이 필요. 원자·무중단.
+  if (!getState("session_directors_party_v1")) {
+    try {
+      d.exec("BEGIN IMMEDIATE;");
+      d.exec(`CREATE TABLE IF NOT EXISTS session_directors_new (
+        session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        party_id   INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (session_id, party_id)
+      );`);
+      d.exec("INSERT OR IGNORE INTO session_directors_new (session_id, party_id, created_at) SELECT session_id, party_id, created_at FROM session_directors WHERE party_id IS NOT NULL;");
+      d.exec("DROP TABLE session_directors;");
+      d.exec("ALTER TABLE session_directors_new RENAME TO session_directors;");
+      d.exec("CREATE INDEX IF NOT EXISTS idx_session_directors_party ON session_directors(party_id);");
+      setState("session_directors_party_v1", "done");
+      d.exec("COMMIT;");
+    } catch (e) {
+      try { d.exec("ROLLBACK;"); } catch (_e) { /* noop */ }
+      console.error("[migrate session_directors_party_v1] 실패 — 레거시 유지, 재배포 재시도:", e && e.message);
+    }
+  }
+
+  // client_files를 party(조직) 기준으로 재구성: client_id 컬럼명은 유지하되 FK를 parties로 바꾸고 값을 조직 party id로 remap(이름 매칭).
+  //  → 새 조직(party)에도 사업자등록증 첨부 가능. 이름 매칭 실패분(주로 사업자 아닌 첨부)은 드롭(사업자등록증=조직).
+  if (!getState("client_files_party_v1")) {
+    try {
+      d.exec("BEGIN IMMEDIATE;");
+      d.exec(`CREATE TABLE IF NOT EXISTS client_files_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+        kind            TEXT NOT NULL,
+        storage_backend TEXT NOT NULL DEFAULT 'local',
+        file_id         TEXT NOT NULL,
+        file_name       TEXT NOT NULL,
+        mime_type       TEXT,
+        file_size       INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+      );`);
+      d.exec(`INSERT INTO client_files_new (id, client_id, kind, storage_backend, file_id, file_name, mime_type, file_size, created_at)
+        SELECT cf.id, pp.id, cf.kind, cf.storage_backend, cf.file_id, cf.file_name, cf.mime_type, cf.file_size, cf.created_at
+        FROM client_files cf
+        JOIN clients c ON c.id = cf.client_id
+        JOIN parties pp ON pp.kind = 'company' AND pp.name = c.name;`);
+      d.exec("DROP TABLE client_files;");
+      d.exec("ALTER TABLE client_files_new RENAME TO client_files;");
+      d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_client_files_kind ON client_files(client_id, kind);");
+      d.exec("CREATE INDEX IF NOT EXISTS idx_client_files_client ON client_files(client_id);");
+      setState("client_files_party_v1", "done");
+      d.exec("COMMIT;");
+    } catch (e) {
+      try { d.exec("ROLLBACK;"); } catch (_e) { /* noop */ }
+      console.error("[migrate client_files_party_v1] 실패 — 레거시 유지, 재배포 재시도:", e && e.message);
+    }
+  }
+
   // ── 후속 단계 테이블 자리(스키마만; 아직 미사용) ──
   // invoice_items / payments (라인아이템·입금 이력 분리가 필요해지면)
 
@@ -849,11 +904,14 @@ function migrateToPartyModel(d) {
     if (ag) setAgency.run(ag, p.id);
     if (pr) setProduction.run(pr, p.id);
   }
-  // session_directors.party_id ← contact_id (복합키라 별도)
-  const setSd = d.prepare("UPDATE session_directors SET party_id = ? WHERE session_id = ? AND contact_id = ?");
-  for (const sd of d.prepare("SELECT session_id, contact_id FROM session_directors").all()) {
-    const pid = contactMap.get(sd.contact_id);
-    if (pid) setSd.run(pid, sd.session_id, sd.contact_id);
+  // session_directors.party_id ← contact_id (복합키라 별도). session_directors_party_v1 재구성 후엔 contact_id가 없으므로 방어.
+  const sdHasContact = d.prepare("SELECT COUNT(*) AS n FROM pragma_table_info('session_directors') WHERE name = 'contact_id'").get().n;
+  if (sdHasContact) {
+    const setSd = d.prepare("UPDATE session_directors SET party_id = ? WHERE session_id = ? AND contact_id = ?");
+    for (const sd of d.prepare("SELECT session_id, contact_id FROM session_directors").all()) {
+      const pid = contactMap.get(sd.contact_id);
+      if (pid) setSd.run(pid, sd.session_id, sd.contact_id);
+    }
   }
 
   // 이관 리포트(관측성): orphan_payer는 0이어야 정상.
