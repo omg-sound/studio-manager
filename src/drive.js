@@ -114,20 +114,53 @@ async function ensureFolder() {
  */
 async function reconcileRootFolder() {
   const folders = await listRootFolders();
-  if (!folders.length) return { folders: [], canonical: null, duplicates: 0 };
+  if (!folders.length) return { folders: [], canonical: null, duplicates: 0, subDuplicates: 0 };
   const canonical = folders[0].id; // createdTime asc → 가장 오래된 원본
   setState(STATE_ROOT_FOLDER, canonical);
   setState(STATE_ROOT_RENAMED, "done");
-  return { folders, canonical, duplicates: folders.length - 1 };
+  // 하위 폴더 중복도 통합: 정본 루트 아래 폴더를 이름별로 묶어 가장 오래된 것을 캐시로, 나머지는 중복 카운트.
+  let subDuplicates = 0;
+  try {
+    const drive = driveClient();
+    const { data } = await drive.files.list({
+      q: `mimeType = 'application/vnd.google-apps.folder' and trashed = false and '${canonical}' in parents`,
+      fields: "files(id,name,createdTime)", orderBy: "createdTime", pageSize: 100, spaces: "drive",
+    });
+    const byName = {};
+    for (const f of data.files || []) (byName[f.name] = byName[f.name] || []).push(f);
+    for (const nm of Object.keys(byName)) {
+      const dupes = byName[nm]; // createdTime asc
+      setState(STATE_FOLDER_PREFIX + "sub_" + nm, dupes[0].id); // 가장 오래된 원본으로 캐시 재지정
+      subDuplicates += dupes.length - 1;
+    }
+  } catch (_e) { /* 하위 폴더 통합 실패는 무시(루트만이라도 통합) */ }
+  return { folders, canonical, duplicates: folders.length - 1, subDuplicates };
 }
 
-/** 루트 아래 하위 폴더(이름별)를 lazy 생성·캐시. 캐시가 삭제/휴지통이면 재생성(자가치유). 반환 folder id. */
+/** 루트(또는 지정 부모) 아래 같은 이름의 하위 폴더 목록. 생성일 오름차순(가장 오래된=원본). */
+async function listSubfolders(name, parentId) {
+  const drive = driveClient();
+  const q = `name = '${String(name).replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and '${parentId}' in parents`;
+  const { data } = await drive.files.list({ q, fields: "files(id,name,createdTime)", orderBy: "createdTime", pageSize: 50, spaces: "drive" });
+  return data.files || [];
+}
+
+/**
+ * 루트 아래 하위 폴더(이름별)를 lazy 생성·캐시. 캐시가 삭제/휴지통/안 보임이면 **이름으로 기존 폴더를 먼저 검색**해
+ * 재사용(중복 생성 방지 — 루트 캐시 변경/토큰 변경으로 같은 이름 하위 폴더가 여러 개 생기던 문제). 여러 개면 가장 오래된 것.
+ */
 async function ensureSubfolder(name) {
   const key = STATE_FOLDER_PREFIX + "sub_" + name;
   const drive = driveClient();
   const cached = getState(key);
   if (cached && (await folderAlive(drive, cached))) return cached;
+  if (cached) setState(key, null); // 무효 캐시 폐기
   const root = await ensureFolder();
+  // 새로 만들기 전에 루트 아래 같은 이름의 기존 하위 폴더 검색 — 있으면 재사용(가장 오래된 원본).
+  try {
+    const existing = await listSubfolders(name, root);
+    if (existing.length) { setState(key, existing[0].id); return existing[0].id; }
+  } catch (_e) { /* 검색 실패 시 생성 폴백 */ }
   const { data } = await drive.files.create({
     requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [root] },
     fields: "id",
@@ -223,6 +256,7 @@ module.exports = {
   checkFolder,
   probeUpload,
   listRootFolders,
+  listSubfolders,
   reconcileRootFolder,
   uploadFile,
   streamFile,

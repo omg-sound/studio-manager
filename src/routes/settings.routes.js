@@ -432,12 +432,13 @@ router.get("/drive-check", requireEditor, asyncHandler(async (req, res) => {
   const driveN = driveFileCount();
   let card;
   try {
-    // ① 중복 루트 폴더 감지·통합 — 가장 오래된 원본을 정본 캐시로(캐시 유실/토큰 변경으로 생긴 빈 중복 방지).
+    // ① 중복 루트/하위 폴더 감지·통합 — 가장 오래된 원본을 정본 캐시로(캐시 유실/토큰 변경으로 생긴 빈 중복 방지).
     const rec = await drive.reconcileRootFolder();
-    const dupWarn = rec.duplicates > 0
+    const dupTotal = (rec.duplicates || 0) + (rec.subDuplicates || 0);
+    const dupWarn = dupTotal > 0
       ? `<div class="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
-           <p class="font-medium text-warning">⚠️ 같은 이름의 루트 폴더가 ${rec.folders.length}개 감지됐습니다.</p>
-           <p class="mt-1 text-muted">가장 <span class="text-fg">오래된 원본 폴더</span>(사업자등록증 등 기존 파일이 든 곳)를 기준으로 통합했습니다. 앞으로 업로드·이관은 이 원본으로 갑니다. Drive에서 <span class="text-fg">비어 있는 나머지 중복 폴더는 직접 삭제</span>해 주세요.</p>
+           <p class="font-medium text-warning">⚠️ 중복 폴더 ${dupTotal}개 감지 — 통합했습니다.${rec.duplicates > 0 ? ` (루트 ${rec.folders.length}개)` : ""}${rec.subDuplicates > 0 ? ` (사업자등록증 등 하위 폴더 중복 ${rec.subDuplicates}개)` : ""}</p>
+           <p class="mt-1 text-muted">가장 <span class="text-fg">오래된 원본 폴더</span>(기존 파일이 든 곳)를 기준으로 통합했습니다. 앞으로 업로드·이관은 원본으로 갑니다. Drive에서 <span class="text-fg">비어 있는 나머지 중복 폴더는 직접 삭제</span>해 주세요.</p>
          </div>`
       : "";
     const f = await drive.checkFolder(); // 통합된 원본 폴더 메타
