@@ -14,7 +14,7 @@
 
 const { google } = require("googleapis");
 const { config } = require("./config");
-const { getState, setState } = require("./db");
+const { getState, setState, db } = require("./db");
 const { oauthClient } = require("./auth");
 const { getRefreshToken } = require("./drive"); // Drive와 같은 refresh token 재사용
 
@@ -175,6 +175,70 @@ async function updateEvent(eventId, input = {}) {
   }
 }
 
+/** 단일 이벤트 조회. { skipped } | { event } (event=null이면 삭제됨) | { error }. */
+async function getEvent(eventId) {
+  const cal = calendarClient();
+  const calId = getStudioCalendarId();
+  if (!cal || !calId || !eventId) return { skipped: true };
+  try {
+    const { data } = await cal.events.get({ calendarId: calId, eventId });
+    return { event: data };
+  } catch (e) {
+    if (e && (e.code === 404 || e.code === 410)) return { event: null }; // 외부에서 삭제됨
+    return { error: (e && e.message) || "unknown" };
+  }
+}
+
+/** RFC3339 datetime → KST(+09:00) { date:'YYYY-MM-DD', time:'HH:MM' }. 어떤 오프셋이든 KST로 정규화. */
+function toKstParts(dateTime) {
+  const dt = new Date(dateTime);
+  if (isNaN(dt.getTime())) return null;
+  const kst = new Date(dt.getTime() + 9 * 3600 * 1000).toISOString();
+  return { date: kst.slice(0, 10), time: kst.slice(11, 16) };
+}
+
+/**
+ * 역방향 동기화(수동): 구글 캘린더에서 직접 삭제/시간 변경한 것을 앱 세션에 반영.
+ *  - 이벤트 삭제/취소 → 세션 '취소'. 시작/종료 변경 → 세션 날짜·시간 갱신.
+ * 안전: 미연동/청구된 세션/이미 취소된 세션·종일 이벤트는 건너뜀. **db 직접 갱신**(앱→구글 push 훅 안 거침=루프 방지).
+ * 반환: { skipped } | { cancelled, updated, checked }.
+ */
+async function syncSessionsFromCalendar() {
+  const cal = calendarClient();
+  const calId = getStudioCalendarId();
+  if (!cal || !calId) return { skipped: true };
+  const d = db();
+  const sessions = d
+    .prepare("SELECT id, gcal_event_id, session_date, start_time, end_time FROM sessions WHERE gcal_event_id IS NOT NULL AND status <> '취소'")
+    .all();
+  const invoicedStmt = d.prepare("SELECT 1 FROM invoice_items WHERE session_id = ? LIMIT 1");
+  const cancelStmt = d.prepare("UPDATE sessions SET status = '취소' WHERE id = ?");
+  const timeStmt = d.prepare("UPDATE sessions SET session_date = ?, start_time = ?, end_time = ? WHERE id = ?");
+  let cancelled = 0, updated = 0, checked = 0;
+  for (const s of sessions) {
+    if (invoicedStmt.get(s.id)) continue; // 청구된 세션은 스냅샷 보존(변경 금지)
+    const r = await getEvent(s.gcal_event_id);
+    if (r.skipped || r.error) continue;
+    checked++;
+    if (r.event === null || r.event.status === "cancelled") {
+      cancelStmt.run(s.id);
+      cancelled++;
+      continue;
+    }
+    const st = r.event.start && r.event.start.dateTime; // 종일 이벤트(date만)면 undefined → 시간 반영 생략
+    if (!st) continue;
+    const sp = toKstParts(st);
+    const ep = r.event.end && r.event.end.dateTime ? toKstParts(r.event.end.dateTime) : null;
+    if (!sp) continue;
+    const newEnd = ep ? ep.time : s.end_time;
+    if (sp.date !== s.session_date || sp.time !== s.start_time || newEnd !== s.end_time) {
+      timeStmt.run(sp.date, sp.time, newEnd, s.id);
+      updated++;
+    }
+  }
+  return { cancelled, updated, checked };
+}
+
 /** 일정 삭제. 미연동/없음/오류는 조용히 무시. */
 async function deleteEvent(eventId) {
   const cal = calendarClient();
@@ -204,4 +268,6 @@ module.exports = {
   createEvent,
   updateEvent,
   deleteEvent,
+  getEvent,
+  syncSessionsFromCalendar,
 };
