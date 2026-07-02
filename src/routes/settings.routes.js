@@ -204,8 +204,8 @@ function driveStorageSection() {
       ? `<p class="text-xs text-muted">로컬에 남은 파일이 없습니다 · Drive 저장 ${driveN}개.</p>`
       : "";
   const check = linked
-    ? `<div class="border-t border-border pt-2"><a class="btn-ghost btn-sm" href="/settings/drive-check">Drive 폴더 점검 · 바로가기</a></div>`
-    : "";
+    ? `<div class="border-t border-border pt-2"><a class="btn-ghost btn-sm" href="/settings/drive-check">Drive 연결 테스트 (폴더·업로드 확인) ↗</a></div>`
+    : `<div class="border-t border-border pt-2"><a class="btn-primary btn-sm" href="/auth/google">구글 계정 연동 (Drive 권한 포함)</a></div>`;
   return `<section class="card mt-3 space-y-2">
     <div>
       <h2 class="font-display text-lg font-semibold">자료 저장 (구글 Drive)</h2>
@@ -433,15 +433,20 @@ router.get("/drive-check", requireEditor, asyncHandler(async (req, res) => {
   let card;
   try {
     const f = await drive.checkFolder(); // 폴더 없으면 생성 후 메타 반환
+    // 실제 업로드 파이프라인(첨부 저장 경로) 왕복 검증 — 폴더 접근만 보는 것보다 강함.
+    let probeBadge;
+    try { await drive.probeUpload(); probeBadge = '<span class="badge badge-success">업로드 테스트 통과</span>'; }
+    catch (pe) { probeBadge = `<span class="badge badge-error">업로드 테스트 실패</span>`; console.warn("[drive-check] probe 실패:", pe && pe.message); }
     const link = f.webViewLink
       ? `<a href="${esc(f.webViewLink)}" target="_blank" rel="noopener" class="text-primary hover:underline">Drive에서 폴더 열기 ↗</a>`
       : `<span class="text-muted">링크 없음(폴더 ID: ${esc(f.id)})</span>`;
     card = `<div class="card space-y-2">
-      <div class="flex items-center gap-2"><span class="badge badge-success">폴더 확인됨</span>${f.created ? '<span class="badge badge-info">방금 생성</span>' : ""}${f.trashed ? '<span class="badge badge-error">휴지통</span>' : ""}</div>
+      <div class="flex flex-wrap items-center gap-2"><span class="badge badge-success">폴더 확인됨</span>${probeBadge}${f.created ? '<span class="badge badge-info">방금 생성</span>' : ""}${f.trashed ? '<span class="badge badge-error">휴지통</span>' : ""}</div>
       <div class="text-sm"><span class="text-muted">폴더명</span> <span class="font-medium">${esc(f.name)}</span></div>
       <div class="text-sm"><span class="text-muted">폴더 ID</span> <code class="text-xs">${esc(f.id)}</code></div>
       <div class="text-sm"><span class="text-muted">Drive 저장 파일</span> ${driveN}개</div>
       <div class="pt-1">${link}</div>
+      <p class="text-xs text-muted">업로드 테스트는 작은 파일을 올렸다 즉시 삭제해 실제 첨부 저장 경로를 확인합니다.</p>
       ${f.trashed ? '<p class="text-xs text-danger">⚠️ 폴더가 휴지통에 있습니다 — Drive에서 복원하세요.</p>' : ""}
     </div>`;
   } catch (e) {

@@ -151,6 +151,27 @@ async function checkFolder() {
   return { id: meta.id, name: meta.name, webViewLink: meta.webViewLink || null, trashed: !!meta.trashed, created: !before };
 }
 
+/**
+ * 업로드 왕복 프로브: 작은 임시 파일을 Drive에 업로드→메타 확인→삭제. 실제 첨부 저장 경로(uploadFile)를
+ * 그대로 검증한다(폴더 접근만 보는 checkFolder보다 강함). 성공 { ok:true, fileId } / 실패 시 예외.
+ */
+async function probeUpload() {
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+  const tmp = path.join(os.tmpdir(), `omg-drive-probe-${Date.now()}.txt`);
+  fs.writeFileSync(tmp, "OMG Studios Drive 연결 테스트 — 자동 삭제됩니다.\n");
+  let fileId;
+  try {
+    fileId = await uploadFile({ filePath: tmp, name: "_연결테스트.txt", mimeType: "text/plain" });
+    await getFileMeta(fileId); // 읽기 확인
+    return { ok: true, fileId };
+  } finally {
+    try { fs.unlinkSync(tmp); } catch (_e) { /* noop */ }
+    if (fileId) { try { await deleteFile(fileId); } catch (_e) { /* 삭제 실패는 무해(휴지통 처리) */ } }
+  }
+}
+
 module.exports = {
   DriveNotLinkedError,
   STATE_REFRESH_TOKEN,
@@ -164,6 +185,7 @@ module.exports = {
   getFolderId,
   getFileMeta,
   checkFolder,
+  probeUpload,
   uploadFile,
   streamFile,
   deleteFile,
