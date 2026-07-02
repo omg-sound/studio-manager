@@ -6,7 +6,6 @@
  * 통계·표시 분기는 권한 술어(canInvoice/isChief, auth.js)로 판단한다(거래처 외부 열람은 폐기됨).
  */
 
-const crypto = require("crypto");
 const { db, getState, setState } = require("./db");
 const { todayYmd, isValidYmd, formatYmdShort, cleanTime, timeToMin, minutesBetween } = require("./lib/date");
 const studio = require("./data/studio"); // 스튜디오 설정 도메인(분리 모듈) — 아래에서 재export
@@ -15,18 +14,19 @@ const revenue = require("./data/revenue"); // 매출 집계 도메인(분리 모
 const deliverables = require("./data/deliverables"); // 자료 전달 도메인(분리 모듈) — 아래에서 재export
 const rooms = require("./data/rooms"); // 룸 도메인(분리 모듈) — 아래에서 재export
 const rateItems = require("./data/rate-items"); // 단가표 도메인(분리 모듈) — 아래에서 재export
+const taskTypes = require("./data/task-types"); // 작업 종류 카탈로그 도메인(분리 모듈·캐시 포함) — 아래에서 재export
 const { listRooms } = rooms; // 내부 호출 유지용(세션 room_id 활성 검증)
 const { computeRatePrice } = rateItems; // 내부 호출 유지용(프로젝트 세션액 합산·sessionRateAmount)
+// 공개 재export + 내부 호출(taskTypeLabel·taskTypeUnitPrice·normalizeTaskTypeDb) 유지. normalizeTaskTypeDb는 내부 전용(공개 API 미노출).
+const { listTaskTypes, activeTaskTypes, taskTypeLabel, taskTypeUnitPrice, createTaskType, updateTaskType, deleteTaskType, normalizeTaskTypeDb } = taskTypes;
 const { parseMoney } = require("./lib/forms");
 const { splitKoreanName } = require("./lib/korean-name");
 const { canInvoice, canBill, isChief, canEdit } = require("./auth");
 const {
   normalizeTrackContentType,
-  normalizeBillingType,
   normalizeTaskStatus,
   normalizeSessionType,
   normalizeSessionStatus,
-  normalizeRecordingCategory,
   normalizeClientKind,
 } = require("./config");
 
@@ -581,83 +581,7 @@ function syncManagerToContact(managerId) {
 
 // ── 룸 도메인은 src/data/rooms.js로, 단가표 도메인은 src/data/rate-items.js로 분리. module.exports에서 `...rooms`·`...rateItems` 재export. ──
 
-// ── 작업 종류 카탈로그(task_types) — config.TASK_TYPES 시드, DB가 단일 진실원천 ──
-// 라벨·그룹 해석은 자주 호출되므로 모듈 캐시(쓰기 시 무효화)로 동기 접근.
-let _taskTypeCache = null;
-function taskTypeCache() {
-  if (_taskTypeCache) return _taskTypeCache;
-  const rows = db().prepare("SELECT * FROM task_types ORDER BY active DESC, sort_order, label COLLATE NOCASE").all();
-  _taskTypeCache = { rows, byKey: new Map(rows.map((r) => [r.key, r])) };
-  return _taskTypeCache;
-}
-function invalidateTaskTypeCache() {
-  _taskTypeCache = null;
-}
-/** 관리용 전체 목록(설정 화면). 캐시 사용. */
-function listTaskTypes({ includeInactive = false } = {}) {
-  const rows = taskTypeCache().rows;
-  return includeInactive ? rows : rows.filter((r) => r.active);
-}
-/** 활성 종류(작업 폼 옵션·빠른추가 출처). */
-function activeTaskTypes() {
-  return taskTypeCache().rows.filter((r) => r.active);
-}
-/** key → 표시 라벨(없으면 key 폴백 — 삭제된 종류의 과거 작업도 깨지지 않게). */
-function taskTypeLabel(key) {
-  const r = taskTypeCache().byKey.get(key);
-  return (r && r.label) || key;
-}
-/** key → 작업 종류 기본단가(없으면 0). 작업 생성·수정 시 금액 자동 적용(청구 탭에서 조정). */
-function taskTypeUnitPrice(key) {
-  const r = taskTypeCache().byKey.get(key);
-  return (r && r.unit_price) || 0;
-}
-/** 카탈로그에 있는 key면 통과, 없으면 첫 활성 종류로 폴백(없으면 raw 유지). 신규 종류도 정규화 통과. */
-function normalizeTaskTypeDb(key) {
-  const k = String(key || "").trim();
-  if (taskTypeCache().byKey.has(k)) return k;
-  const first = activeTaskTypes()[0];
-  return first ? first.key : k;
-}
-
-function taskTypeFields(input) {
-  return {
-    label: String(input.label || "").trim(),
-    task_group: "Post_Production", // 분류 개념 폐기 — 곡·콘텐츠 작업은 모두 후반작업(task_group은 레거시 컬럼으로만 보존)
-    billing_type: normalizeBillingType(input.billing_type),
-    unit_price: parseWon(input.unit_price),
-    is_quick: input.is_quick ? 1 : 0,
-    sort_order: Number.isFinite(Number(input.sort_order)) ? Number(input.sort_order) : 100,
-  };
-}
-function createTaskType(input = {}) {
-  const f = taskTypeFields(input);
-  if (!f.label) throw new Error("TASK_TYPE_LABEL_REQUIRED");
-  const key = `tt_${crypto.randomBytes(5).toString("hex")}`; // 안정 불투명 key(라벨 변경에도 불변)
-  db()
-    .prepare(
-      `INSERT INTO task_types (key, label, task_group, billing_type, unit_price, is_quick, sort_order, active)
-       VALUES (@key,@label,@task_group,@billing_type,@unit_price,@is_quick,@sort_order,1)`
-    )
-    .run({ key, ...f });
-  invalidateTaskTypeCache();
-}
-function updateTaskType(id, input = {}) {
-  const f = taskTypeFields(input);
-  if (!f.label) throw new Error("TASK_TYPE_LABEL_REQUIRED");
-  db()
-    .prepare(
-      `UPDATE task_types SET label=@label, task_group=@task_group, billing_type=@billing_type,
-       unit_price=@unit_price, is_quick=@is_quick, sort_order=@sort_order WHERE id=@id`
-    )
-    .run({ id, ...f });
-  invalidateTaskTypeCache();
-}
-/** 강제 삭제(연결 가드 없음, 사용자 결정). 과거 track_tasks는 key 문자열을 유지(라벨만 폴백). */
-function deleteTaskType(id) {
-  db().prepare("DELETE FROM task_types WHERE id = ?").run(id);
-  invalidateTaskTypeCache();
-}
+// ── 작업 종류 카탈로그 도메인은 src/data/task-types.js로 분리(모듈 캐시 포함). module.exports에서 `...taskTypes` 재export. ──
 
 // ── 프로젝트(클라이언트 범위 강제) ──
 
