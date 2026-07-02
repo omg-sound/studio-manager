@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const { db, getState, setState } = require("./db");
 const { todayYmd, isValidYmd, formatYmdShort, cleanTime, timeToMin, minutesBetween } = require("./lib/date");
 const studio = require("./data/studio"); // 스튜디오 설정 도메인(분리 모듈) — 아래에서 재export
+const clientFiles = require("./data/client-files"); // 클라이언트 첨부 서류 도메인(분리 모듈) — 아래에서 재export
 const { parseMoney } = require("./lib/forms");
 const { splitKoreanName } = require("./lib/korean-name");
 const { canInvoice, canBill, isChief, canEdit } = require("./auth");
@@ -1884,52 +1885,7 @@ function revenueForEngineer(managerId) {
   return { manager, tasks, sessions, task_total, session_total, total: task_total + session_total };
 }
 
-// ── 클라이언트 첨부 서류(사업자등록증·통장사본) ──
-
-/** kind에 해당하는 파일 행(없으면 null). */
-function getClientFile(clientId, kind) {
-  return db().prepare("SELECT * FROM client_files WHERE client_id = ? AND kind = ?").get(clientId, kind) || null;
-}
-
-/** 클라이언트의 모든 첨부 서류 행 목록. */
-function listClientFiles(clientId) {
-  return db().prepare("SELECT * FROM client_files WHERE client_id = ? ORDER BY kind").all(clientId);
-}
-
-/**
- * 파일 행 upsert(삽입 또는 갱신).
- * 기존 같은 kind가 있으면 {storage_backend, file_id}를 반환해 호출부가 storage.remove를 호출하게 한다.
- * 없으면 null 반환.
- */
-function upsertClientFile(clientId, kind, { storage_backend, file_id, file_name, mime_type, file_size }) {
-  const existing = db().prepare("SELECT storage_backend, file_id FROM client_files WHERE client_id = ? AND kind = ?").get(clientId, kind);
-  if (existing) {
-    db()
-      .prepare(
-        "UPDATE client_files SET storage_backend=@storage_backend, file_id=@file_id, file_name=@file_name, mime_type=@mime_type, file_size=@file_size WHERE client_id=@client_id AND kind=@kind"
-      )
-      .run({ client_id: clientId, kind, storage_backend, file_id, file_name, mime_type: mime_type || null, file_size: file_size || 0 });
-  } else {
-    db()
-      .prepare(
-        "INSERT INTO client_files (client_id, kind, storage_backend, file_id, file_name, mime_type, file_size) VALUES (@client_id, @kind, @storage_backend, @file_id, @file_name, @mime_type, @file_size)"
-      )
-      .run({ client_id: clientId, kind, storage_backend, file_id, file_name, mime_type: mime_type || null, file_size: file_size || 0 });
-  }
-  return existing || null;
-}
-
-/**
- * 파일 행 삭제. 삭제된 행의 {storage_backend, file_id} 반환(호출부가 storage.remove 호출).
- * 없으면 null 반환.
- */
-function deleteClientFile(clientId, kind) {
-  const existing = db().prepare("SELECT storage_backend, file_id FROM client_files WHERE client_id = ? AND kind = ?").get(clientId, kind);
-  if (existing) {
-    db().prepare("DELETE FROM client_files WHERE client_id = ? AND kind = ?").run(clientId, kind);
-  }
-  return existing || null;
-}
+// ── 클라이언트 첨부 서류 도메인은 src/data/client-files.js로 분리. 아래 module.exports에서 `...clientFiles`로 재export. ──
 
 module.exports = {
   formatPhone,
@@ -2042,8 +1998,5 @@ module.exports = {
   sessionRateAmount,
   revenueByEngineer,
   revenueForEngineer,
-  getClientFile,
-  listClientFiles,
-  upsertClientFile,
-  deleteClientFile,
+  ...clientFiles, // 클라이언트 첨부 서류 도메인 재export(src/data/client-files.js): getClientFile·listClientFiles·upsertClientFile·deleteClientFile
 };
