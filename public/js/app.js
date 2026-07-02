@@ -684,6 +684,12 @@
     if (!r) return;
     refresh(r);
     setTimeout(function () { refresh(r); }, 0); // 콤보 hidden id 등 비동기 갱신 반영
+    // 접힌 <details> 안의 폼이 변경되면(예: 작업 헤더 상태 select를 접은 채 수정) 자동으로 펼쳐
+    // 저장 버튼·'저장되지 않은 변경사항' 힌트를 드러낸다 — 접힌 상태에서 저장을 놓치는 문제 방지.
+    if (snapshot(r.form) !== r.initial && r.form.closest) {
+      var det = r.form.closest("details");
+      if (det && !det.open) det.open = true;
+    }
   }
   document.addEventListener("input", onEvt);
   document.addEventListener("change", onEvt);
