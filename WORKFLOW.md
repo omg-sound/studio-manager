@@ -23,6 +23,8 @@
 > - 시작 시간 '직접입력' 인라인 전환·전화칸 자동완성 끔·'제작사→제작사/운영사'. 테스트 `node:test` 40개 + **GitHub Actions CI**(Node 20/22: `npm test`+`build:css`).
 >
 > **🏗 당사자(Party) 모델 — 정체성 통합(2026-07-02, P1–P3 배포)**: clients/contacts 이중화(source_contact_id 셸·'기타'·is_group)를 근본 제거하고 **`parties` 한 테이블**(person·company·group, is_artist 플래그)로 통합. 역할(아티스트·청구처·담당자·디렉터·엔지니어)=`parties.id` 참조(다형 없음, 단일 FK). `invoices.payer_id`·`projects.artist_id/agency_id/production_id/contact_party_id`·`project_managers.party_id`·`session_directors.party_id`. `src/data/parties.js`(+임시 `compat.js` 어댑터, **P4에서 제거**). 이관 게이트 `party_model_v1`·`session_directors_party_v1`·`client_files_party_v1`(원자·무중단). DEV_LOGIN E2E 전 경로+거래명세서 PDF 검증, 40 테스트 통과, orphan_payer=0. **P4 정리 + P4b 레거시 드롭 완료·배포**: 죽은 contacts.js/clients.js 삭제, linkClientContact/deliverables 잔여 수정, seed.js party화, 그리고 `legacy_drop_v1`이 레거시 테이블(clients/contacts/contact_affiliations)·FK 컬럼(invoices.client_id 등)을 **제거**(FK 컬럼 먼저 DROP → 테이블 DROP, 신선 DB는 CREATE 제거+hasLegacy 가드, 멱등·무중단). 신선/프로덕션형 사본 검증(전 경로 200·신규 INSERT·데이터 보존). **compat.js 제거 완료** — 라우트가 parties 함수 직접 사용(쿼리·호환별칭은 parties.js 네이티브 흡수, 순수 별칭 21종 리네임). **당사자(Party) 모델 재정리 완결**(clients/contacts 이중화 → parties 단일). ⚠️ 대규모 컷오버는 브랜치에서(중간 커밋 자동배포 주의).
+>
+> **후속 마무리(2026-07-02)**: 파티 모델 `node:test` 12개 추가(총 52) · 소소한 정리(clientForm 잔재 필드·Google 회사↔소속이력 동기화·CLAUDE 문서) · **거래명세서 PDF 견고화**(@resvg/resvg-js 지연 로드 — 네이티브 부재 시 청구 라우트 무중단·PDF만 503) · **구글 캘린더 역방향 동기화**(`/sessions` 수동 버튼: 구글 삭제→세션 취소·시간변경→갱신, 청구 세션 제외·루프 방지·KST 정규화). 잔여 TODO=Drive 실연동(사용자 보류)만.
 
 ---
 
