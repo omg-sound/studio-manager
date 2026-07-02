@@ -334,6 +334,19 @@ function detailsChevron() {
 }
 
 /**
+ * 접이식 '설명' 블록 — 긴 안내/항목 설명을 기본 접힘으로(화면을 짧게). 네이티브 `<details>`(무JS·CSP 안전).
+ * `content`는 이미 빌드된 HTML 조각(동적 값 포함 가능). 상태·오류·권한 문구가 아니라 '어떻게 동작하는지' 설명에만 쓴다.
+ * @param {string} content HTML 조각. @param {{label?:string, cls?:string}} opts label=요약 라벨(기본 '설명').
+ */
+function explain(content, { label = "설명", cls = "mt-1" } = {}) {
+  if (!content) return "";
+  return `<details class="group ${cls} text-xs text-muted">
+    <summary class="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded text-primary/70 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(label)}<svg class="h-3 w-3 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg></summary>
+    <div class="mt-1 leading-relaxed">${content}</div>
+  </details>`;
+}
+
+/**
  * 프로젝트 유형 배지 HTML.
  * @param {string} type "session" | "task" | 기타
  * @returns {string} HTML — .badge-primary(세션) | .badge-neutral(작업/미정)
@@ -410,4 +423,4 @@ function listRow({ href, left, right = "" }) {
   return `<div class="transition-colors hover:bg-surface">${inner}</div>`;
 }
 
-module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, projectTypeBadge, tabBar, filterChips, listGroup, listRow };
+module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow };

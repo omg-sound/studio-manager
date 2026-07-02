@@ -50,7 +50,7 @@ const {
   getStudioInfo,
   getStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, listGroup, listRow } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, listGroup, listRow } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -671,7 +671,7 @@ function clientCombo(selectedId) {
         ${opts.map((c) => `<option value="${esc(clientComboLabel(c))}" data-id="${c.id}"></option>`).join("")}
         ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자${o.current_client ? " · " + esc(o.current_client) : o.phone ? " · " + esc(o.phone) : " #" + o.id}" data-contact-id="${o.id}"></option>`).join("")}
       </datalist>
-      <p class="mt-1 text-xs text-muted">클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.</p>
+      ${explain(`클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.`)}
     </div>`;
 }
 
@@ -693,7 +693,7 @@ function contactCombo(selectedId) {
         ${opts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
       </datalist>
       <div class="mt-1.5 hidden text-sm text-muted" data-contact-info></div>
-      <p class="mt-1 text-xs text-muted">목록에 없는 이름을 입력하면 저장 시 <span class="text-fg">새 연락처</span>로 등록됩니다. 비워 두면 미연결.</p>
+      ${explain(`목록에 없는 이름을 입력하면 저장 시 <span class="text-fg">새 연락처</span>로 등록됩니다. 비워 두면 미연결.`)}
     </div>`;
 }
 
@@ -711,7 +711,7 @@ function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId =
     ? tracks.map((track) => trackCard(track, { isAdmin, managers, expandTaskId })).join("")
     : emptyState("등록된 곡·콘텐츠가 없습니다.");
   const hint = isAdmin
-    ? `<p class="text-xs text-muted">세션(예약·실시간 작업)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 여기선 <span class="text-fg">종류·담당·진행 상태</span>만 기록하고, <span class="text-fg">금액은 청구 탭에서</span> 정합니다.</p>`
+    ? explain(`세션(예약·실시간 작업)과 <span class="text-muted">별개로</span> 곡·콘텐츠별 후반작업(보컬튠·믹싱·마스터링)을 관리합니다. 여기선 <span class="text-fg">종류·담당·진행 상태</span>만 기록하고, <span class="text-fg">금액은 청구 탭에서</span> 정합니다.`)
     : "";
   return `
     <section class="card mt-3 space-y-4">
@@ -986,7 +986,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>
-      ${hasPending ? `<p class="mt-1.5 text-xs text-muted">미완료(대기·진행중) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.</p>` : ""}
+      ${hasPending ? explain(`미완료(대기·진행중) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.`) : ""}
       <div class="mt-3 space-y-2">
         <div>
           <label class="label mb-1 text-xs">할인 <span class="font-normal text-muted">(선택 — 체크한 항목 공급가 기준)</span></label>
@@ -1028,7 +1028,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <button class="btn-ghost btn-sm" type="submit" formaction="/projects/${project.id}/invoices/preview.pdf?type=${encodeURIComponent("거래명세서")}" formtarget="_blank">거래명세서</button>
           </div>
         </div>
-        <p class="mb-2 text-xs text-muted"><span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).</p>
+        ${explain(`<span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).`, { cls: "mb-2" })}
         <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성 (계산서 발행)</button>
       </div>
     </form>`;

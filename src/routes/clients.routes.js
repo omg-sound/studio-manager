@@ -18,7 +18,7 @@ const {
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
-const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow, explain } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -458,7 +458,7 @@ function clientFileSection(c, fileMap, fileErr) {
   <section class="card mt-3 space-y-4">
     <div>
       <h2 class="font-semibold">첨부 서류</h2>
-      <p class="mt-1 text-xs text-muted">PNG · JPG · PDF · 최대 10MB. 직원 인증 열람(공개 링크 없음).</p>
+      ${explain(`PNG · JPG · PDF · 최대 10MB. 직원 인증 열람(공개 링크 없음).`)}
     </div>
     ${fileErr ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(fileErr)}</p>` : ""}
     ${rows}
@@ -484,7 +484,7 @@ function clientContactCombo(c, isEdit) {
           ${opts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
         </datalist>
         <div class="mt-1 text-sm text-muted${curInfo ? "" : " hidden"}" data-contact-info>${curInfo}</div>
-        <p class="mt-0.5 text-xs text-muted">목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.</p>
+        ${explain(`목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.`)}
       </div>
     </div>`;
 }

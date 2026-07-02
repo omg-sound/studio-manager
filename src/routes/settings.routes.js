@@ -32,7 +32,7 @@ const {
   ensureContactForUser,
   formatPhone,
 } = require("../data");
-const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron } = require("../views");
+const { layout, pageHeader, esc, flashBanner, formatKRW, emptyState, detailsChevron, explain } = require("../views");
 const { asyncHandler } = require("../lib/async");
 const multer = require("multer");
 const drive = require("../drive");
@@ -106,7 +106,7 @@ function peopleTab(currentUser) {
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">하우스 엔지니어 <span class="text-sm font-normal text-muted">(로그인 계정)</span></h2>
-          <p class="mt-1 text-xs text-muted">등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.</p>
+          ${explain(`등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.`)}
         </div>
         ${addForm}
         <div class="space-y-2">${userRows}</div>
@@ -133,7 +133,7 @@ function contentTab() {
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">단가표 · 녹음 종류</h2>
-          <p class="mt-1 text-xs text-muted">분류(스튜디오 녹음 / 로케이션 녹음)별로 녹음 종류(보컬 녹음, 악기 녹음 등)를 추가합니다. 녹음 세션 폼의 '녹음 종류'에 이 항목이 분류로 묶여 표시됩니다. 기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금.</p>
+          ${explain(`분류(스튜디오 녹음 / 로케이션 녹음)별로 녹음 종류(보컬 녹음, 악기 녹음 등)를 추가합니다. 녹음 세션 폼의 '녹음 종류'에 이 항목이 분류로 묶여 표시됩니다. 기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금.`)}
         </div>
         <form method="post" action="/settings/rate-items" class="space-y-2 rounded-lg border border-border bg-bg p-3">
           <div class="grid gap-2 sm:grid-cols-2">
@@ -168,7 +168,7 @@ function contentTab() {
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">작업 종류 <span class="text-sm font-normal text-muted">(곡·콘텐츠 후반작업)</span></h2>
-          <p class="mt-1 text-xs text-muted">곡·콘텐츠의 작업 종류(보컬튠·믹싱·마스터링 등)와 기본 단가·과금을 관리합니다. '빠른추가'를 켜면 곡·콘텐츠의 빠른 추가 버튼에 노출됩니다.</p>
+          ${explain(`곡·콘텐츠의 작업 종류(보컬튠·믹싱·마스터링 등)와 기본 단가·과금을 관리합니다. '빠른추가'를 켜면 곡·콘텐츠의 빠른 추가 버튼에 노출됩니다.`)}
         </div>
         <form method="post" action="/settings/task-types" class="space-y-2 rounded-lg border border-border bg-bg p-3">
           <input class="input py-1.5 text-sm w-full" name="label" placeholder="작업 종류명 (예: 보컬튠)" required />
@@ -209,7 +209,7 @@ function driveStorageSection() {
   return `<section class="card mt-3 space-y-2">
     <div>
       <h2 class="font-display text-lg font-semibold">자료 저장 (구글 Drive)</h2>
-      <p class="mt-1 text-xs text-muted">첨부 서류·자료 전달 파일의 실제 저장 위치. 최소 권한(<code>drive.file</code>)으로 앱이 만든 전용 폴더에만 접근합니다. 그 폴더를 원하는 위치로 옮기거나 공유해 쓰실 수 있습니다.</p>
+      ${explain(`첨부 서류·자료 전달 파일의 실제 저장 위치. 최소 권한(<code>drive.file</code>)으로 앱이 만든 전용 폴더에만 접근합니다. 그 폴더를 원하는 위치로 옮기거나 공유해 쓰실 수 있습니다.`)}
     </div>
     ${status}${migrate}${check}
   </section>`;
@@ -219,7 +219,7 @@ function driveStorageSection() {
 async function studioCalendarSection() {
   const title = `<div>
       <h2 class="font-display text-lg font-semibold">스튜디오 캘린더 (구글)</h2>
-      <p class="mt-1 text-xs text-muted"><span class="text-fg font-medium">세션을 예약하면 이 캘린더에 일정이 자동 생성·수정·삭제됩니다.</span> <span class="text-warning font-medium">'사용 안 함'으로 두면 캘린더 자동 연동이 꺼집니다</span> — 구글 캘린더로 넘기려면 반드시 스튜디오 캘린더를 선택하세요. <span class="text-muted">스튜디오 전용 캘린더를 권장</span>합니다(개인 일정과 섞이지 않게).</p>
+      ${explain(`<span class="text-fg font-medium">세션을 예약하면 이 캘린더에 일정이 자동 생성·수정·삭제됩니다.</span> <span class="text-warning font-medium">'사용 안 함'으로 두면 캘린더 자동 연동이 꺼집니다</span> — 구글 캘린더로 넘기려면 반드시 스튜디오 캘린더를 선택하세요. <span class="text-muted">스튜디오 전용 캘린더를 권장</span>합니다(개인 일정과 섞이지 않게).`)}
     </div>`;
   let inner;
   if (!config.googleConfigured) {
@@ -263,7 +263,7 @@ function roomsSection() {
     <section class="card space-y-4">
       <div>
         <h2 class="font-display text-lg font-semibold">룸 (스튜디오 공간)</h2>
-        <p class="mt-1 text-xs text-muted">세션 예약 시 룸을 지정하면 <span class="text-fg">같은 룸끼리만 시간 겹침을 검사</span>합니다(다른 룸은 같은 시간 병렬 예약 허용). 룸을 삭제하면 그 룸으로 잡힌 세션은 '룸 미지정'으로 바뀝니다.</p>
+        ${explain(`세션 예약 시 룸을 지정하면 <span class="text-fg">같은 룸끼리만 시간 겹침을 검사</span>합니다(다른 룸은 같은 시간 병렬 예약 허용). 룸을 삭제하면 그 룸으로 잡힌 세션은 '룸 미지정'으로 바뀝니다.`)}
       </div>
       <form method="post" action="/settings/rooms" class="flex gap-2">
         <input class="input py-1.5 text-sm" name="name" placeholder="룸 이름 (예: A룸)" required />
@@ -293,7 +293,7 @@ function studioHoursSection() {
     <section class="card space-y-4">
       <div>
         <h2 class="font-display text-lg font-semibold">운영시간 <span class="text-sm font-normal text-muted">(예약 시작 그리드 범위)</span></h2>
-        <p class="mt-1 text-xs text-muted">세션 예약 폼의 '시작 시간 그리드'에 표시되는 시간 범위입니다(30분 단위). 그리드 바깥 시각은 '직접입력'으로 예약할 수 있습니다.</p>
+        ${explain(`세션 예약 폼의 '시작 시간 그리드'에 표시되는 시간 범위입니다(30분 단위). 그리드 바깥 시각은 '직접입력'으로 예약할 수 있습니다.`)}
       </div>
       <form method="post" action="/settings/studio-hours" class="flex flex-wrap items-end gap-2">
         <div>
@@ -325,7 +325,7 @@ function defaultBookerSection() {
     <section class="card space-y-4">
       <div>
         <h2 class="font-display text-lg font-semibold">기본 예약 담당자</h2>
-        <p class="mt-1 text-xs text-muted">새 세션 예약 폼에서 '예약 담당자'로 기본 선택됩니다.</p>
+        ${explain(`새 세션 예약 폼에서 '예약 담당자'로 기본 선택됩니다.`)}
       </div>
       <form method="post" action="/settings/default-booker" class="flex flex-wrap items-end gap-2">
         <select class="input py-1.5 text-sm" name="default_booker">
@@ -347,7 +347,7 @@ function studioInfoSection() {
     <section class="card space-y-4">
       <div>
         <h2 class="font-display text-lg font-semibold">공급자(스튜디오) 세금정보</h2>
-        <p class="mt-1 text-xs text-muted">발행된 청구의 <span class="text-fg">거래명세서 PDF</span> '공급자'란에 들어갑니다. (세금계산서가 아닌 참고용 문서)</p>
+        ${explain(`발행된 청구의 <span class="text-fg">거래명세서 PDF</span> '공급자'란에 들어갑니다. (세금계산서가 아닌 참고용 문서)`)}
       </div>
       <form method="post" action="/settings/studio-info" class="space-y-2">
         <div class="grid gap-2 sm:grid-cols-2">
@@ -396,7 +396,7 @@ function alertWebhookSection(chief = true) {
     <section class="card space-y-4">
       <div>
         <h2 class="font-display text-lg font-semibold">알림 (웹훅)</h2>
-        <p class="mt-1 text-xs text-muted">연체·청구 발행·자료 공유 시 Slack/Discord 등으로 팀 알림을 보냅니다. Incoming Webhook URL을 넣으세요(비우면 알림 끔). 저장 시 암호화됩니다.</p>
+        ${explain(`연체·청구 발행·자료 공유 시 Slack/Discord 등으로 팀 알림을 보냅니다. Incoming Webhook URL을 넣으세요(비우면 알림 끔). 저장 시 암호화됩니다.`)}
         ${envNote}
       </div>
       ${controls}

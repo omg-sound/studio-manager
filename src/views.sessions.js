@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, listSessionDirectors } = require("./data");
 
@@ -140,7 +140,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
           ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
          ${engineerField}
        </div>
-       <p class="mt-1 text-xs text-muted">청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)</p>`;
+       ${explain(`청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
   // 담당 디렉터 — 다대다(여러 명). 각 행이 contactCombo(data-contact-combo, app.js 위임 처리). '디렉터 추가'로 행 복제(template).
   const allContacts = contactOptions();
   const dlId = "dl-session-directors-" + (s && s.id ? s.id : "new"); // 폼별 유니크 — 한 페이지에 여러 세션 편집 폼이 있어도 datalist id 중복 방지
@@ -164,7 +164,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
       <datalist id="${dlId}">
         ${allContacts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
       </datalist>
-      <p class="mt-0.5 text-xs text-muted">목록에 없는 이름을 입력하면 저장 시 새 연락처로 등록됩니다. 비워 둔 행은 무시됩니다.</p>
+      ${explain(`목록에 없는 이름을 입력하면 저장 시 새 연락처로 등록됩니다. 비워 둔 행은 무시됩니다.`)}
     </div>`;
   return `
     <div class="grid gap-2 sm:grid-cols-3">

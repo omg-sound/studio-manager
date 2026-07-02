@@ -22,7 +22,7 @@ const {
   listContactsForClient,
   ensureInvoiceNumber,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup, explain } = require("../views");
 const { invoiceRow, invoiceBadge, payerInfoCard } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
@@ -419,7 +419,7 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
         ${clients.map((c) => `<option value="${esc(c.name + (c.kind ? " · " + c.kind : ""))}" data-id="${c.id}"></option>`).join("")}
         ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자${o.current_client ? " · " + esc(o.current_client) : o.phone ? " · " + esc(o.phone) : " #" + o.id}" data-contact-id="${o.id}"></option>`).join("")}
       </datalist>
-      <p class="mt-1 text-xs text-muted">클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.</p>
+      ${explain(`클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.`)}
     </div>`;
   const retHidden = returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : "";
   const errBox = e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : "";
@@ -450,7 +450,7 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
     ${pageHeader({ title: "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
     <form method="post" action="${action}" class="card space-y-4" data-vat-amount-form>
       ${retHidden}${errBox}
-      <p class="rounded-lg bg-elevated px-3 py-2 text-sm text-muted">프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.</p>
+      ${explain(`프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.`)}
       ${fields}
       <div class="flex gap-2">
         <button class="btn-primary" type="submit">추가</button>
