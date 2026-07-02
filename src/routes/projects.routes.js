@@ -62,7 +62,7 @@ const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, 
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
-const { isValidYmd, formatYmdShort, todayYmd } = require("../lib/date");
+const { isValidYmd, formatYmdShort, todayYmd, daysUntilYmd } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
 const { notifyInvoiceIssued } = require("../notify");
 
@@ -114,10 +114,11 @@ router.get("/", requireAuth, (req, res) => {
   // 진행 중 / 완료로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
   const ongoing = rows.filter((r) => !r.is_completed);
   const done = rows.filter((r) => r.is_completed);
-  // 두 섹션 모두 접기 가능(기본 펼침). summary는 사이드바 메뉴처럼 은은하게 — 테두리·배경 없이 옅은 hover(bg-surface)만.
-  const projectSection = (title, arr) =>
+  // 두 섹션 모두 접기 가능. 진행 중은 기본 펼침, 완료는 기본 접힘(완료가 쌓여도 목록을 짧게 유지 — 개수는 헤딩에 유지).
+  // summary는 사이드바 메뉴처럼 은은하게 — 테두리·배경 없이 옅은 hover(bg-surface)만.
+  const projectSection = (title, arr, { open = true } = {}) =>
     arr.length
-      ? `<details class="group" open>
+      ? `<details class="group"${open ? " open" : ""}>
            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-fg/80 transition-colors hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
              <span class="flex items-baseline gap-2 font-display text-base font-semibold">${title}<span class="text-sm font-normal text-muted">${arr.length}</span></span>
              ${detailsChevron()}
@@ -132,7 +133,7 @@ router.get("/", requireAuth, (req, res) => {
       : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
   } else {
     const ongoingSec = projectSection("진행 중", ongoing);
-    const doneSec = projectSection("완료", done);
+    const doneSec = projectSection("완료", done, { open: false }); // 완료는 기본 접힘
     list = `${ongoingSec}${doneSec ? `<div class="${ongoingSec ? "mt-4" : ""}">${doneSec}</div>` : ""}`;
   }
 
@@ -158,6 +159,18 @@ router.get("/", requireAuth, (req, res) => {
 /** "+ 새 프로젝트" 버튼 — 유형 구분 없이 단일 진입(모든 프로젝트가 세션 일정+곡·콘텐츠 동일). */
 function newProjectMenu() {
   return `<a href="/projects/new" class="btn-primary">+ 새 프로젝트</a>`;
+}
+
+/**
+ * 다음 방문(다가오는 세션) 한 줄 — `listProjects`가 파생하는 next_session_date(오늘 이후·취소 제외 최소일).
+ * 임박(D-3 이내)하면 브랜드색으로 강조해 "다음 방문이 언제인지"를 목록에서 바로 파악.
+ */
+function nextSessionLine(p) {
+  if (!p.next_session_date) return "";
+  const d = daysUntilYmd(p.next_session_date);
+  const dday = d === 0 ? "오늘" : d > 0 ? `D-${d}` : `${-d}일 지남`;
+  const cls = d != null && d <= 3 ? "font-medium text-primary" : "text-muted";
+  return `<div class="mt-0.5 text-xs ${cls}">다음 세션 ${esc(formatYmdShort(p.next_session_date))} · ${dday}</div>`;
 }
 
 /** 프로젝트의 항목(트랙) 개수. track_titles("||" 연결)에서 파생. */
@@ -190,6 +203,7 @@ function projectListRow(p, summary) {
         <div class="min-w-0">
           <div class="truncate font-semibold">${esc(p.title)}</div>
           <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
+          ${nextSessionLine(p)}
         </div>
         <div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>
       </a>

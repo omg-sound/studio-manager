@@ -56,7 +56,10 @@ function listProjects(_user, { q } = {}) {
   const params = { today: todayYmd() };
 
   if (q) {
-    where.push("(p.title LIKE @q OR p.artist LIKE @q)");
+    // 제목·아티스트 외 소속사/레이블·제작사·메모·청구처(c.name)·담당 엔지니어(m.name)까지 검색.
+    where.push(
+      "(p.title LIKE @q OR p.artist LIKE @q OR p.artist_company LIKE @q OR p.production_company LIKE @q OR p.memo LIKE @q OR c.name LIKE @q OR m.name LIKE @q)"
+    );
     params.q = `%${q}%`;
   }
 
@@ -74,6 +77,8 @@ function listProjects(_user, { q } = {}) {
        WHERE tr.project_id = p.id AND t.is_invoiced = 0) AS task_total,
       (SELECT COUNT(*) FROM sessions s
        WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS upcoming_cnt,
+      (SELECT MIN(s.session_date) FROM sessions s
+       WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS next_session_date,
       (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '예정') AS sess_scheduled,
       (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '완료') AS sess_done,
       (SELECT COUNT(*) FROM track_tasks t
@@ -86,8 +91,10 @@ function listProjects(_user, { q } = {}) {
     LEFT JOIN project_managers m ON m.id = p.manager_id
     ${where.length ? "WHERE " + where.join(" AND ") : ""}
     ORDER BY
-      CASE WHEN p.due_date IS NULL OR p.due_date = '' THEN 1 ELSE 0 END,
-      p.due_date ASC,
+      -- 다가오는 세션 임박순(가까운 방문이 위)을 우선, 예정 세션 없으면 최근 생성순.
+      -- (레거시 due_date 정렬 폐기 — 마감일 개념이 사라져 남은 값이 엉뚱하게 상단으로 튀던 문제 수정)
+      CASE WHEN next_session_date IS NULL THEN 1 ELSE 0 END,
+      next_session_date ASC,
       p.created_at DESC`;
   const rows = db().prepare(sql).all(params);
   if (!rows.length) return rows;

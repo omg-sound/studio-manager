@@ -77,24 +77,30 @@ function startSlotGrid(current) {
 // 소요 시간 = 슬라이더(30분 단위·0~14시간)가 주 입력. 아래 1~4Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
 // 전송값은 custom_hours + duration_mode=custom(hidden) → 서버 resolveEndTime이 그대로 산정(슬라이더 자체는 미전송 UI).
 // minutesBetween은 ../lib/date 공용 유틸을 사용한다(중복 정의 제거).
+const DURATION_SLIDER_MAX = 840; // 슬라이더 최대(분) = 14시간. Pro 눈금 위치 계산의 기준(app.js SLIDER_MAX와 동일).
 function durationButtons(initMinutes = 0) {
   const m = Number(initMinutes) > 0 ? Math.round(Number(initMinutes)) : 0;
   const hours = m > 0 ? (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(1)) : "";
-  const presetBtn = (val, label) =>
-    `<button type="button" class="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="${val}">${label}</button>`;
+  const pro = getProMinutes();
+  // Pro 프리셋을 슬라이더 트랙 위 '눈금'으로 절대배치: 1Pro=기준시간, 2Pro=×2… 위치에 표시
+  // (예: 기준 3시간30분이면 1Pro가 슬라이더 3시간30분 지점). 인라인 style은 CSP(styleSrc unsafe-inline 없음)에 막히므로
+  // 서버는 Tailwind 위치 클래스로 기본값(210분 기준 25/50/75/100%)만 렌더하고, app.js가 CSSOM으로 실제 기준시간에 맞춰 재배치한다.
+  const TICK_POS = { 1: "left-1/4 -translate-x-1/2", 2: "left-1/2 -translate-x-1/2", 3: "left-3/4 -translate-x-1/2", 4: "left-full -translate-x-full" };
+  const tickBtn = (n) =>
+    `<button type="button" class="absolute top-0 ${TICK_POS[n]} whitespace-nowrap rounded-md border border-border bg-bg px-2 py-1 text-xs hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="pro${n}">${n}Pro</button>`;
   return `
-    <div data-duration-group data-pro-default="${getProMinutes()}">
-      <input type="range" min="0" max="840" step="30" value="${Math.min(m, 840)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
+    <div data-duration-group data-pro-default="${pro}">
+      <div class="relative">
+        <input type="range" min="0" max="${DURATION_SLIDER_MAX}" step="30" value="${Math.min(m, DURATION_SLIDER_MAX)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
+        <div class="relative mt-1 h-8" data-duration-ticks data-show-when="rec">${tickBtn(1)}${tickBtn(2)}${tickBtn(3)}${tickBtn(4)}</div>
+      </div>
       <div class="mt-1 flex items-center justify-between text-xs">
         <span class="font-medium text-primary" data-duration-label>설정 안 함</span>
         <span class="text-muted">0 ~ 14시간 · 30분 단위</span>
       </div>
-      <div class="mt-2 flex flex-wrap items-center gap-1.5">
-        <span class="flex gap-1.5" data-show-when="rec">${presetBtn("pro1", "1Pro")}${presetBtn("pro2", "2Pro")}${presetBtn("pro3", "3Pro")}${presetBtn("pro4", "4Pro")}</span>
-        <span class="ml-auto flex items-center gap-1.5">
-          <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" value="${hours}" data-custom-hours />
-          <span class="text-xs text-muted">시간</span>
-        </span>
+      <div class="mt-2 flex items-center justify-end gap-1.5">
+        <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" value="${hours}" data-custom-hours />
+        <span class="text-xs text-muted">시간</span>
       </div>
       <input type="hidden" name="duration_mode" value="custom" />
     </div>`;

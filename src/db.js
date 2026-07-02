@@ -246,6 +246,49 @@ function init() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- ── 당사자(Party) 통합 모델 (party_model_v1) ──
+    -- 사람·조직·그룹을 한 테이블로. "아티스트/청구처/담당자/디렉터/엔지니어"는 테이블이 아니라 party_id 참조(역할).
+    -- contacts + clients를 이관해 정체성 이중화(source_contact_id 셸·'기타'·is_group)를 제거한다.
+    CREATE TABLE IF NOT EXISTS parties (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind           TEXT NOT NULL DEFAULT 'person',   -- person | company | group
+      name           TEXT NOT NULL,                    -- 사람=본명, 조직=업체명, 그룹=팀명
+      activity_name  TEXT,                             -- 활동명(아티스트). 오늘 contacts.nickname / 아티스트 client.name
+      is_artist      INTEGER NOT NULL DEFAULT 0,       -- 아티스트 역할 플래그(person solo·group)
+      phone          TEXT,
+      email          TEXT,
+      memo           TEXT,
+      -- person 속성
+      family_name    TEXT,
+      given_name     TEXT,
+      honorific      TEXT,
+      department     TEXT,
+      job_title      TEXT,
+      user_id        INTEGER,                          -- 로그인 계정(스태프). FK 없음(ALTER 한계 통일)
+      google_resource_name TEXT,
+      google_etag    TEXT,
+      cash_receipt_no TEXT,                            -- 개인/솔로 아티스트 현금영수증(사업자 없는 경우)
+      -- company 속성
+      biz_no         TEXT,                             -- 사업자등록번호
+      owner_name     TEXT,                             -- 대표자명
+      owner_party_id INTEGER,                          -- 대표자를 사람 party와 연동(양방향)
+      address        TEXT,
+      roles          TEXT,                             -- 조직 역할 다중 CSV(소속사/레이블·제작사 겸업)
+      created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- 소속 이력(이직 히스토리) — parties 기준으로 재작성(contact_affiliations 이관). org_id NULL = 무소속.
+    CREATE TABLE IF NOT EXISTS affiliations (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      person_id  INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+      org_id     INTEGER REFERENCES parties(id) ON DELETE SET NULL,
+      title      TEXT,
+      started_on TEXT,
+      ended_on   TEXT,
+      memo       TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- 클라이언트 첨부 서류(사업자등록증·통장사본). 치프 전용, 인증 다운로드만. kind별 1개(교체 시 이전 파일 스토리지 정리).
     CREATE TABLE IF NOT EXISTS client_files (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -362,6 +405,20 @@ function init() {
   addColumn("contacts", "google_resource_name", "TEXT"); // Google People API resourceName (예: "people/c123")
   addColumn("contacts", "google_etag",          "TEXT"); // Google People API etag(충돌 방지)
   addColumn("contacts", "user_id", "INTEGER"); // 녹음실 스태프(로그인 계정)와 연결. FK 없음(ALTER 한계). null=외부/고객측 연락처. owner 포함 전 직원이 연락처에 노출
+  // ── 당사자 모델 역할 참조 컬럼(party_model_v1, 휴면) — P1은 populate만, 읽기 경로는 P2에서 전환 ──
+  addColumn("invoices", "payer_id", "INTEGER"); // 청구처 = parties.id(기존 client_id 대체). FK 없음(ALTER 한계)
+  addColumn("projects", "artist_id", "INTEGER"); // 공연 당사자(parties.id)
+  addColumn("projects", "agency_id", "INTEGER"); // 소속사/레이블(parties.id, 기존 artist_company TEXT 대체)
+  addColumn("projects", "production_id", "INTEGER"); // 제작사(parties.id, 기존 production_company TEXT 대체)
+  addColumn("projects", "contact_party_id", "INTEGER"); // 고객측 담당자(parties.id, 기존 contact_id 대체)
+  addColumn("project_managers", "party_id", "INTEGER"); // 작업 담당 엔지니어 = person party(기존 contact_id 대체)
+  addColumn("sessions", "director_party_id", "INTEGER"); // 담당 디렉터 첫 명(parties.id, 레거시 director_contact_id 대체)
+  addColumn("session_directors", "party_id", "INTEGER"); // 다대다 디렉터(parties.id, 기존 contact_id 대체)
+  d.exec("CREATE INDEX IF NOT EXISTS idx_parties_kind ON parties(kind, is_artist, name);");
+  d.exec("CREATE INDEX IF NOT EXISTS idx_parties_user ON parties(user_id);");
+  d.exec("CREATE INDEX IF NOT EXISTS idx_affiliations_person ON affiliations(person_id, ended_on);");
+  d.exec("CREATE INDEX IF NOT EXISTS idx_affiliations_org ON affiliations(org_id, ended_on);");
+  d.exec("CREATE INDEX IF NOT EXISTS idx_invoices_payer ON invoices(payer_id);");
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.
@@ -527,8 +584,14 @@ function init() {
     setState("contact_family_name_backfill_v1", "done");
   }
 
+  // ── 당사자(Party) 모델 이관(party_model_v1) — contacts+clients → parties, 역할 FK 재배선 ──
+  // 위 모든 contacts/clients 백필 이후 실행(최종 상태를 이관). 순수 populate(읽기 경로 무변경, P2에서 전환).
+  if (!getState("party_model_v1")) {
+    migrateToPartyModel(d);
+    setState("party_model_v1", "done");
+  }
+
   // ── 후속 단계 테이블 자리(스키마만; 아직 미사용) ──
-  // sessions(project_id, kind, session_date, hours, done)
   // invoice_items / payments (라인아이템·입금 이력 분리가 필요해지면)
 
   return d;
@@ -640,6 +703,163 @@ function backfillLegacyServicesToTracks() {
 function parsePositiveInt(value) {
   const n = parseInt(String(value == null ? "" : value).replace(/[^\d-]/g, ""), 10);
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * 당사자(Party) 모델 이관(party_model_v1): contacts + clients를 parties로 모으고 역할 FK를 재배선한다.
+ * **순수 populate** — 기존 contacts/clients/레거시 컬럼은 휴면 보존(P2에서 읽기 전환, P4에서 제거). 1회 게이트로 호출.
+ * 매핑: contacts→person / 소속사·제작사→company / 그룹 아티스트→group /
+ *       솔로 아티스트·'기타' 셸(source_contact_id)→해당 사람 party 병합(중복 제거의 핵심).
+ */
+function migrateToPartyModel(d) {
+  const contactMap = new Map(); // contacts.id → parties.id
+  const clientMap = new Map(); // clients.id → parties.id
+
+  const insPerson = d.prepare(
+    `INSERT INTO parties (kind, name, activity_name, is_artist, phone, email, memo,
+       family_name, given_name, honorific, department, job_title, user_id, google_resource_name, google_etag, cash_receipt_no)
+     VALUES ('person', @name, @activity_name, @is_artist, @phone, @email, @memo,
+       @family_name, @given_name, @honorific, @department, @job_title, @user_id, @google_resource_name, @google_etag, @cash_receipt_no)`
+  );
+  const personRow = (o) => ({
+    name: o.name, activity_name: o.activity_name || null, is_artist: o.is_artist ? 1 : 0,
+    phone: o.phone || null, email: o.email || null, memo: o.memo || null,
+    family_name: o.family_name || null, given_name: o.given_name || null, honorific: o.honorific || null,
+    department: o.department || null, job_title: o.job_title || null, user_id: o.user_id || null,
+    google_resource_name: o.google_resource_name || null, google_etag: o.google_etag || null,
+    cash_receipt_no: o.cash_receipt_no || null,
+  });
+
+  // 1) contacts → person parties
+  for (const c of d.prepare("SELECT * FROM contacts").all()) {
+    const info = insPerson.run(personRow({ ...c, activity_name: c.nickname }));
+    contactMap.set(c.id, info.lastInsertRowid);
+  }
+
+  // 2) clients → parties
+  const insCompany = d.prepare(
+    `INSERT INTO parties (kind, name, phone, email, memo, biz_no, owner_name, address, roles)
+     VALUES ('company', @name, @phone, @email, @memo, @biz_no, @owner_name, @address, @roles)`
+  );
+  const insArtistParty = d.prepare(
+    `INSERT INTO parties (kind, name, activity_name, is_artist, phone, email, memo, cash_receipt_no)
+     VALUES (@kind, @name, @name, 1, @phone, @email, @memo, @cash_receipt_no)`
+  );
+  const markArtist = d.prepare(
+    `UPDATE parties SET is_artist = 1,
+       activity_name = COALESCE(NULLIF(TRIM(activity_name), ''), @activity_name),
+       cash_receipt_no = COALESCE(cash_receipt_no, @cash_receipt_no) WHERE id = @id`
+  );
+  for (const c of d.prepare("SELECT * FROM clients").all()) {
+    if (c.kind === "소속사/레이블" || c.kind === "제작사") {
+      const info = insCompany.run({
+        name: c.name, phone: c.phone || null, email: c.email || null, memo: c.memo || null,
+        biz_no: c.biz_no || null, owner_name: c.owner_name || null, address: c.address || null, roles: c.roles || c.kind,
+      });
+      clientMap.set(c.id, info.lastInsertRowid);
+    } else if (c.kind === "아티스트" && c.is_group) {
+      const info = insArtistParty.run({
+        kind: "group", name: c.name, phone: c.phone || null, email: c.email || null, memo: c.memo || null,
+        cash_receipt_no: c.cash_receipt_no || null,
+      });
+      clientMap.set(c.id, info.lastInsertRowid);
+    } else if (c.kind === "아티스트") {
+      // 솔로 아티스트: source_contact_id 있으면 그 사람 party에 병합(중복 제거), 없으면 신규 person
+      const pid = c.source_contact_id ? contactMap.get(c.source_contact_id) : null;
+      if (pid) {
+        markArtist.run({ id: pid, activity_name: c.name, cash_receipt_no: c.cash_receipt_no || null });
+        clientMap.set(c.id, pid);
+      } else {
+        const info = insArtistParty.run({
+          kind: "person", name: c.name, phone: c.phone || null, email: c.email || null, memo: c.memo || null,
+          cash_receipt_no: c.cash_receipt_no || null,
+        });
+        clientMap.set(c.id, info.lastInsertRowid);
+      }
+    } else {
+      // '기타'(담당자 셸 등): source_contact_id의 사람 party로 매핑(새 행 없음), 없으면 신규 person
+      const pid = c.source_contact_id ? contactMap.get(c.source_contact_id) : null;
+      if (pid) clientMap.set(c.id, pid);
+      else clientMap.set(c.id, insPerson.run(personRow({ name: c.name, phone: c.phone, email: c.email, memo: c.memo })).lastInsertRowid);
+    }
+  }
+
+  // 3) company owner_party_id(대표자 연동) ← clients.owner_contact_id
+  const setOwner = d.prepare("UPDATE parties SET owner_party_id = ? WHERE id = ?");
+  for (const c of d.prepare("SELECT id, owner_contact_id FROM clients WHERE owner_contact_id IS NOT NULL").all()) {
+    const orgPid = clientMap.get(c.id);
+    const ownerPid = contactMap.get(c.owner_contact_id);
+    if (orgPid && ownerPid) setOwner.run(ownerPid, orgPid);
+  }
+
+  // 4) 소속 이력 이관: contact_affiliations → affiliations
+  const insAff = d.prepare(
+    `INSERT INTO affiliations (person_id, org_id, title, started_on, ended_on, memo, created_at)
+     VALUES (@person_id, @org_id, @title, @started_on, @ended_on, @memo, @created_at)`
+  );
+  for (const a of d.prepare("SELECT * FROM contact_affiliations").all()) {
+    const person = contactMap.get(a.contact_id);
+    if (!person) continue;
+    insAff.run({
+      person_id: person, org_id: a.client_id ? clientMap.get(a.client_id) || null : null,
+      title: a.title || null, started_on: a.started_on || null, ended_on: a.ended_on || null,
+      memo: a.memo || null, created_at: a.created_at || null,
+    });
+  }
+
+  // 5) 역할 FK 재배선(populate; 기존 컬럼 휴면 보존)
+  const relink = (sql, rows, mapFn) => {
+    const upd = d.prepare(sql);
+    for (const r of rows) {
+      const pid = mapFn(r);
+      if (pid) upd.run(pid, r.id);
+    }
+  };
+  relink("UPDATE invoices SET payer_id = ? WHERE id = ?", d.prepare("SELECT id, client_id FROM invoices WHERE client_id IS NOT NULL").all(), (r) => clientMap.get(r.client_id));
+  relink("UPDATE projects SET contact_party_id = ? WHERE id = ?", d.prepare("SELECT id, contact_id FROM projects WHERE contact_id IS NOT NULL").all(), (r) => contactMap.get(r.contact_id));
+  relink("UPDATE project_managers SET party_id = ? WHERE id = ?", d.prepare("SELECT id, contact_id FROM project_managers WHERE contact_id IS NOT NULL").all(), (r) => contactMap.get(r.contact_id));
+  relink("UPDATE sessions SET director_party_id = ? WHERE id = ?", d.prepare("SELECT id, director_contact_id FROM sessions WHERE director_contact_id IS NOT NULL").all(), (r) => contactMap.get(r.director_contact_id));
+
+  // projects.artist_id / agency_id / production_id ← artist/artist_company/production_company TEXT.
+  //  project_clients_backfill_v1이 각 이름을 kind별 client로 등록했으므로 (name,kind)→client→party로 결정적 매핑.
+  const artistByName = new Map();
+  const companyByName = new Map();
+  for (const c of d.prepare("SELECT id, name, kind FROM clients").all()) {
+    const key = String(c.name || "").trim();
+    if (!key) continue;
+    if (c.kind === "아티스트") { if (!artistByName.has(key)) artistByName.set(key, clientMap.get(c.id)); }
+    else companyByName.set(key + "|" + c.kind, clientMap.get(c.id));
+  }
+  const setArtist = d.prepare("UPDATE projects SET artist_id = ? WHERE id = ?");
+  const setAgency = d.prepare("UPDATE projects SET agency_id = ? WHERE id = ?");
+  const setProduction = d.prepare("UPDATE projects SET production_id = ? WHERE id = ?");
+  for (const p of d.prepare("SELECT id, artist, artist_company, production_company FROM projects").all()) {
+    const a = artistByName.get(String(p.artist || "").trim());
+    const ag = companyByName.get(String(p.artist_company || "").trim() + "|소속사/레이블");
+    const pr = companyByName.get(String(p.production_company || "").trim() + "|제작사");
+    if (a) setArtist.run(a, p.id);
+    if (ag) setAgency.run(ag, p.id);
+    if (pr) setProduction.run(pr, p.id);
+  }
+  // session_directors.party_id ← contact_id (복합키라 별도)
+  const setSd = d.prepare("UPDATE session_directors SET party_id = ? WHERE session_id = ? AND contact_id = ?");
+  for (const sd of d.prepare("SELECT session_id, contact_id FROM session_directors").all()) {
+    const pid = contactMap.get(sd.contact_id);
+    if (pid) setSd.run(pid, sd.session_id, sd.contact_id);
+  }
+
+  // 이관 리포트(관측성): orphan_payer는 0이어야 정상.
+  const cnt = (sql) => d.prepare(sql).get().n;
+  console.log(
+    `[migrate party_model_v1] parties=${cnt("SELECT COUNT(*) n FROM parties")} ` +
+      `person=${cnt("SELECT COUNT(*) n FROM parties WHERE kind='person'")} ` +
+      `company=${cnt("SELECT COUNT(*) n FROM parties WHERE kind='company'")} ` +
+      `group=${cnt("SELECT COUNT(*) n FROM parties WHERE kind='group'")} ` +
+      `artist=${cnt("SELECT COUNT(*) n FROM parties WHERE is_artist=1")} ` +
+      `affiliations=${cnt("SELECT COUNT(*) n FROM affiliations")} ` +
+      `payer_mapped=${cnt("SELECT COUNT(*) n FROM invoices WHERE payer_id IS NOT NULL")} ` +
+      `orphan_payer=${cnt("SELECT COUNT(*) n FROM invoices WHERE client_id IS NOT NULL AND payer_id IS NULL")}`
+  );
 }
 
 // ── admin_state 키-값 헬퍼 ──

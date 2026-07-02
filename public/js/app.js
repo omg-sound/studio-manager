@@ -197,6 +197,20 @@
   function updateProAvailability() {
     var base = baseMinutes();
     Array.prototype.forEach.call(presets, function (b) { b.disabled = base <= 0; });
+    positionTicks();
+  }
+  // Pro 눈금을 슬라이더 값 위치에 맞춰 재배치: 1Pro=기준시간, 2Pro=×2…(기준=녹음 단가 기준시간, 없으면 스튜디오 기본).
+  // 양 끝(0%/100%)은 잘리지 않게 정렬 기준(translateX)을 바꾼다. 서버 초기 렌더와 동일 규칙.
+  function positionTicks() {
+    var base = baseMinutes() || proDefaultMinutes();
+    if (!(base > 0)) return;
+    Array.prototype.forEach.call(presets, function (b) {
+      var mult = parseInt(String(b.getAttribute("data-duration-preset") || "pro1").replace("pro", ""), 10) || 1;
+      var pos = Math.min(100, (base * mult / SLIDER_MAX) * 100);
+      var t = pos <= 5 ? "0" : pos >= 95 ? "-100%" : "-50%";
+      b.style.left = pos + "%";
+      b.style.transform = "translateX(" + t + ")";
+    });
   }
   function updatePreview() {
     if (!preview) return;
