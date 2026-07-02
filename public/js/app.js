@@ -561,7 +561,8 @@
   var filesBox = document.querySelector("[data-client-files]"); // 아티스트는 첨부 서류(사업자등록증·통장사본) 불필요 → 숨김
   if (!kindSel || !tax) return;
   function sync() {
-    var isArtist = kindSel.value === "아티스트";
+    // 아티스트(개인)·그룹은 세금정보 없음(현금영수증만), 업체(소속사/제작사/기타)는 세금정보·첨부.
+    var isArtist = kindSel.value === "아티스트" || kindSel.value === "그룹";
     tax.hidden = isArtist;
     if (cash) cash.hidden = !isArtist;
     if (filesBox) filesBox.hidden = isArtist;

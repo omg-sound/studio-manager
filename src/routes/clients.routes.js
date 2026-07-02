@@ -14,7 +14,7 @@ const {
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
   contactOptions, addAffiliation, listContacts, resolvePersonByName, orgsWithOwnerParty,
   listArtistsForAgency, resolveCompanyByName,
-  createCompany, createPerson, updateParty, deleteParty,
+  createCompany, createGroup, createPerson, updateParty, deleteParty,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -84,17 +84,20 @@ function clientRoleList(c) {
 
 // ── 목록(서브메뉴 = 업체/아티스트 우선 분리 + 업체 내 분류 · 이름 검색) ──
 router.get("/", (req, res) => {
-  // 당사자 모델: 업체(company) / 아티스트(is_artist, 사람·그룹 포함). '기타'·2차 분류 폐기(조직은 roles로 겸업 표기).
-  const group = req.query.group === "artist" ? "artist" : req.query.group === "company" ? "company" : "";
+  // 당사자 모델 4분류: 업체(company) / 아티스트(개인 솔로=person·is_artist) / 그룹(밴드·아이돌 그룹=group) / 전체.
+  const group = ["artist", "company", "group"].includes(req.query.group) ? req.query.group : "";
   const activeKind = ""; // 레거시 2차 필터 제거(호환용 빈값 유지)
   const q = String(req.query.q || "").trim();
 
+  const isSoloArtist = (c) => c.is_artist && c.kind === "person";
   const allRows = listClients({});
   let rows = allRows;
-  if (group === "artist") rows = allRows.filter((c) => c.is_artist);
+  if (group === "artist") rows = allRows.filter(isSoloArtist);
+  else if (group === "group") rows = allRows.filter((c) => c.kind === "group");
   else if (group === "company") rows = allRows.filter((c) => c.kind === "company");
 
-  const artistCount = allRows.filter((c) => c.is_artist).length;
+  const artistCount = allRows.filter(isSoloArtist).length;
+  const groupCount = allRows.filter((c) => c.kind === "group").length;
   const companyCount = allRows.filter((c) => c.kind === "company").length;
   const total = allRows.length;
 
@@ -109,7 +112,12 @@ router.get("/", (req, res) => {
   };
   // 1차 서브메뉴(전체/업체/아티스트) — 탭 스타일(연락처 탭과 통일)
   const groupChips = tabBar({
-    tabs: [{ key: "", label: `전체 ${total}` }, { key: "company", label: `업체 ${companyCount}` }, { key: "artist", label: `아티스트 ${artistCount}` }],
+    tabs: [
+      { key: "", label: `전체 ${total}` },
+      { key: "company", label: `업체 ${companyCount}` },
+      { key: "artist", label: `아티스트 ${artistCount}` },
+      { key: "group", label: `그룹 ${groupCount}` },
+    ],
     activeKey: group,
     hrefFn: (key) => qs({ group: key }),
   });
@@ -136,8 +144,8 @@ router.get("/", (req, res) => {
         rows: displayed.map((c) => {
           // 우측 정보(사업자·전화·이메일)는 이름만 링크(listRowLinked)로 분리 → 드래그·복사해도 상세로 안 들어감.
           if (c.is_artist) {
-            // 아티스트: 활동명(본명) + 배지 · 오른쪽에 전화→이메일 세로 스택(업체·연락처와 통일)
-            const badges = `<span class="badge-info">아티스트</span>${c.kind === "group" ? ` <span class="badge-neutral">그룹</span>` : ""}`;
+            // 아티스트(개인) / 그룹(밴드·아이돌) — 배지로 구분. 오른쪽에 전화→이메일 세로 스택.
+            const badges = c.kind === "group" ? `<span class="badge-info">그룹</span>` : `<span class="badge-info">아티스트</span>`;
             const right = `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}<div>${esc(c.email || "이메일 없음")}</div></div>`;
             return listRowLinked({ href: `/clients/${c.id}${fromParam}`, title: esc(personLabel(c.activity_name || c.name, c.name)), badges, right });
           }
@@ -154,7 +162,7 @@ router.get("/", (req, res) => {
       })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
-      : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "company" ? (activeKind ? esc(activeKind) + " 분류의 업체가 없습니다." : "업체가 없습니다.") : "클라이언트가 없습니다.", {
+      : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "group" ? "그룹이 없습니다." : group === "company" ? "업체가 없습니다." : "클라이언트가 없습니다.", {
           card: true,
           icon: "clients",
           cta: { href: "/clients/new", label: "+ 새 클라이언트" },
@@ -183,7 +191,10 @@ router.post("/", (req, res) => {
   const kind = normalizeClientKind(b.kind);
   const isCompany = kind === "소속사/레이블" || kind === "제작사";
   let id;
-  if (isCompany) {
+  if (kind === "그룹") {
+    // 그룹 아티스트(밴드·아이돌 그룹 등) → group party(is_artist, 사람 아님)
+    id = createGroup({ name, phone: b.phone, email: b.email, memo: b.memo, cash_receipt_no: b.cash_receipt_no });
+  } else if (isCompany) {
     id = createCompany({
       name, phone: b.phone, email: b.email, memo: b.memo,
       biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
@@ -499,7 +510,12 @@ function linkClientContact(clientId, body) {
 function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
-  const isArtist = !!c.is_artist; // 개인 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
+  const isArtist = !!c.is_artist; // 개인/그룹 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
+  // party.kind(person/company/group)를 분류 select 라벨로 매핑(편집 시 현재 분류 표시). 신규(빈 c)는 기본 아티스트.
+  const selectedKind = c.kind === "group" ? "그룹"
+    : c.kind === "company" ? (clientRoleList(c)[0] || "소속사/레이블")
+    : c.is_artist ? "아티스트"
+    : CLIENT_KINDS[0];
   const fileMap = {};
   files.forEach((f) => { fileMap[f.kind] = f; });
 
@@ -512,7 +528,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       <div>
         <label class="label">분류</label>
         <select name="kind" class="input" data-client-kind>
-          ${CLIENT_KINDS.map((k) => `<option ${k === (c.kind || CLIENT_KINDS[0]) ? "selected" : ""}>${esc(k)}</option>`).join("")}
+          ${CLIENT_KINDS.map((k) => `<option ${k === selectedKind ? "selected" : ""}>${esc(k)}</option>`).join("")}
         </select>
       </div>
       <div data-client-tax class="space-y-4"${isArtist ? " hidden" : ""}>
