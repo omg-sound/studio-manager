@@ -110,8 +110,22 @@ function getProjectForUser(user, id) {
   return { ...row, session_amount_total: sessionAmounts[row.id] || 0 };
 }
 
+/** 프로젝트 삭제. 청구된 작업·세션이 있으면 거부(매출 추적 보존, deleteTrack과 정합). */
+function deleteProject(projectId) {
+  const pid = Number(projectId);
+  const invoicedTask = db()
+    .prepare("SELECT 1 FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = ? AND t.is_invoiced = 1 LIMIT 1")
+    .get(pid);
+  const invoicedSession = db()
+    .prepare("SELECT 1 FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id WHERE s.project_id = ? LIMIT 1")
+    .get(pid);
+  if (invoicedTask || invoicedSession) throw new Error("PROJECT_HAS_INVOICED");
+  db().prepare("DELETE FROM projects WHERE id = ?").run(pid);
+}
+
 module.exports = {
   distinctProjectFields,
   listProjects,
   getProjectForUser,
+  deleteProject,
 };
