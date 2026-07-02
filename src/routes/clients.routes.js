@@ -16,6 +16,7 @@ const {
   listArtistsForAgency, resolveCompanyByName,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
+  setPartyAgency, currentAgencyId,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -231,6 +232,7 @@ router.post("/", (req, res) => {
     });
     if (b.group_id) setPartyGroup(id, b.group_id); // 아티스트 생성 시 소속 그룹 선택했으면 연결
   }
+  if (type !== "company" && b.agency_id) setPartyAgency(id, b.agency_id); // 아티스트·그룹 소속사 연결('없음'=빈값→no-op)
   if (type === "company") linkClientContact(id, b); // 업체만 담당자 연락처 연동
   res.redirect("/clients?flash=created#c" + id);
 });
@@ -267,7 +269,8 @@ router.post("/:id", (req, res) => {
     cash_receipt_no: b.cash_receipt_no,
   });
   if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 개인 아티스트의 소속 그룹 연결
-  linkClientContact(id, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
+  if (c.kind !== "company" && b.agency_id !== undefined) setPartyAgency(id, b.agency_id); // 아티스트·그룹 소속사 지정/해제('없음'=빈값)
+  if (c.kind === "company") linkClientContact(id, b); // 업체만 담당자 연락처 연동
   if (isFetch) return res.json({ ok: true }); // 자동저장 — 페이지 유지
   res.redirect(`/clients/${id}?flash=saved`); // 수동 저장(noscript): 상세로 복귀
 });
@@ -446,6 +449,7 @@ router.get("/:id", (req, res) => {
 
   // 상세로 들어오면 바로 편집 — '정보 수정' 버튼 폐기, 인라인 편집 폼(dirty 저장). 첨부·삭제는 분리 배치.
   const companies = listClients({}).filter((x) => x.kind === "company");
+  if (c.kind !== "company") c.agency_id = currentAgencyId(c.id); // 아티스트·그룹: 소속사 select 기본값
   const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
   // 폼의 대표자/담당자 datalist는 전체 연락처가 필요(상세의 contacts는 이 클라이언트 소속만이라 별도).
   const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false, listGroupsForPicker()); // withExtras=false — 첨부·삭제 제외
@@ -613,6 +617,13 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       <div>
         <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(사업자등록증 없는 경우)</span></label>
         <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
+      </div>
+      <div>
+        <label class="label">소속사 <span class="font-normal text-muted text-xs">(소속 회사 · 없으면 '없음')</span></label>
+        <select name="agency_id" class="input">
+          <option value="">없음</option>
+          ${companies.map((co) => `<option value="${co.id}"${Number(c.agency_id) === co.id ? " selected" : ""}>${esc(co.name)}</option>`).join("")}
+        </select>
       </div>` : ""}
       ${type === "artist" ? `
       <div>

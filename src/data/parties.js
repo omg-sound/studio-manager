@@ -609,6 +609,30 @@ function groupOfParty(personId) {
   return getParty(p.group_id);
 }
 
+/**
+ * 아티스트(사람)·그룹의 소속사(현재 소속) 지정/해제 — affiliations 재사용.
+ * agencyId 있으면 현재 소속이 다를 때 이직(closeCurrent) 등록, 없음(null)이면 현재 소속 종료.
+ * company 파티만 유효(아니면 무시). 소속사 상세의 '소속 아티스트'(listArtistsForAgency)에 자동 반영.
+ */
+function setPartyAgency(partyId, agencyId) {
+  const pid = Number(partyId);
+  const gid = agencyId ? Number(agencyId) : null;
+  const cur = currentAffiliation(pid);
+  if (gid) {
+    const org = db().prepare("SELECT id FROM parties WHERE id = ? AND kind = 'company'").get(gid);
+    if (!org) return; // 회사가 아니면 무시(오연결 방지)
+    if (!cur || Number(cur.org_id) !== gid) addAffiliation(pid, { org_id: gid, closeCurrent: true });
+  } else if (cur) {
+    endAffiliation(cur.id, todayYmd()); // '없음' 선택 → 현재 소속 종료(이력 보존)
+  }
+}
+
+/** 파티의 현재 소속사(company) id — 폼 select 기본값용. 없으면 null. */
+function currentAgencyId(partyId) {
+  const cur = currentAffiliation(partyId);
+  return cur && cur.org_id ? cur.org_id : null;
+}
+
 /** 그룹 선택 콤보용 — 그룹(kind='group') 목록 {id, name}. */
 function listGroupsForPicker() {
   return db().prepare("SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name FROM parties WHERE kind = 'group' ORDER BY name COLLATE NOCASE").all();
@@ -672,4 +696,6 @@ module.exports = {
   groupOfParty,
   listGroupsForPicker,
   artistPersonOptions,
+  setPartyAgency,
+  currentAgencyId,
 };
