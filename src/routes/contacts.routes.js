@@ -124,7 +124,7 @@ router.post("/", async (req, res) => {
       addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
     }
     if (!b.client_id) syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 입력 → 소속 이력 반영(업체 클라이언트 연결)
-    syncArtistClientForContact(id); // 아티스트명 입력 시 아티스트 클라이언트 등록·연동
+    // 활동명(nickname→activity_name)은 createContact가 party에 저장하며 is_artist를 자동 세팅(별도 아티스트 셸 없음).
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
       const contact = getContact(id);
@@ -161,7 +161,7 @@ router.post("/:id", async (req, res) => {
     syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 → 소속 이력 반영(현재 소속과 다르면 이직으로 등록)
     // 담당자(project_managers) 동기화: 전화(항상) + 이메일(외주만)
     syncContactToManager(id);
-    syncArtistClientForContact(id); // 아티스트명 변경 시 아티스트 클라이언트 이름·연락처 동기화
+    // 활동명 변경은 updateContact가 party activity_name·is_artist에 반영(별도 아티스트 셸 없음).
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
       const updated = getContact(id);
@@ -250,14 +250,13 @@ router.get("/:id", (req, res) => {
           : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
       }</div>`
     : "";
-  const artistClient = artistClientForContact(c.id); // 아티스트명으로 연동된 아티스트 클라이언트(양방향 링크)
   const ownerClients = clientsWithOwnerContact(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
   const cur = currentAffiliation(c.id); // 현재 소속 — 회사칸 기본값(담당자로만 등록돼 company 텍스트가 비어 있던 경우 반영)
   // 상세로 들어오면 바로 수정 가능한 화면 — 읽기전용 카드+'정보 수정' 버튼 대신 인라인 편집 폼(변경 시 하이라이트 저장).
   const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true);
   const derivedBits = [
     nameDetail && nameDetail !== c.name ? `<div><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : "",
-    c.nickname ? `<div><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${artistClient ? ` · <a href="/clients/${artistClient.id}" class="text-primary hover:underline">클라이언트 ↗</a>` : ""}</div>` : "",
+    c.nickname ? `<div><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${c.is_artist ? ` · <a href="/clients/${c.id}" class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
     ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : "",
     managerBadge,
   ].filter(Boolean).join("");
@@ -418,7 +417,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         </div>
         <div class="sm:max-w-xs"><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 클라이언트로 등록·연동)</span></label>
           <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
-          <datalist id="contact-artist-clients">${clients.filter((cl) => cl.kind === "아티스트").map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
+          <datalist id="contact-artist-clients">${clients.filter((cl) => cl.is_artist).map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">

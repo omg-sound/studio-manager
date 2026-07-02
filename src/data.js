@@ -21,6 +21,7 @@ const rooms = require("./data/rooms"); // 룸
 const rateItems = require("./data/rate-items"); // 단가표
 const taskTypes = require("./data/task-types"); // 작업 종류 카탈로그(모듈 캐시 포함)
 const parties = require("./data/parties"); // 당사자(사람·조직·그룹) 통합 마스터 — clients/contacts 대체
+const compat = require("./data/compat"); // 레거시 이름→parties 어댑터(P4에서 삭제) — 마지막에 spread
 const projects = require("./data/projects"); // 프로젝트
 const tracks = require("./data/tracks"); // 트랙/작업 CRUD
 const invoicesMod = require("./data/invoices"); // 청구(금액 파생·채번·초안/생성/삭제·목록/통계)
@@ -50,4 +51,5 @@ module.exports = {
   ...sessions, // src/data/sessions.js
   ...revenue, // src/data/revenue.js
   ...clientFiles, // src/data/client-files.js
+  ...compat, // src/data/compat.js — 레거시 이름 어댑터(마지막 spread로 우선 적용, P4 삭제)
 };

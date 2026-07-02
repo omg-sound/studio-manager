@@ -39,6 +39,9 @@ function resolveDisplayName({ name, honorific, family_name, given_name, activity
   throw new Error("PARTY_NAME_REQUIRED");
 }
 
+// 레거시 뷰 호환: 반환 행에 nickname 별칭(=activity_name) 부여(연락처 폼·상세가 c.nickname을 읽음). P4에서 제거.
+const withLegacy = (r) => (r ? { ...r, nickname: r.activity_name } : r);
+
 // ── 조회 ──
 
 /**
@@ -58,11 +61,11 @@ function listParties({ q, kind, artist, staff } = {}) {
   if (staff === true) where.push("user_id IS NOT NULL");
   else if (staff === false) where.push("user_id IS NULL");
   const sql = "SELECT * FROM parties" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY name COLLATE NOCASE";
-  return db().prepare(sql).all(...args);
+  return db().prepare(sql).all(...args).map(withLegacy);
 }
 
 function getParty(id) {
-  return db().prepare("SELECT * FROM parties WHERE id = ?").get(Number(id)) || null;
+  return withLegacy(db().prepare("SELECT * FROM parties WHERE id = ?").get(Number(id)) || null);
 }
 
 /** kind별 개수(탭 배지). person/company/group + artist(교차). */

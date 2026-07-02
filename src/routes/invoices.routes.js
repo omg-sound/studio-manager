@@ -51,22 +51,22 @@ function returnTo(req, fallback, flash, extra) {
 }
 
 function projectOptions() {
-  return db().prepare("SELECT id, title, client_id FROM projects ORDER BY created_at DESC").all();
+  return db().prepare("SELECT id, title, COALESCE(production_id, agency_id, artist_id) AS client_id FROM projects ORDER BY created_at DESC").all();
 }
 
 function resolveInvoiceRefs(body) {
+  // 청구처(payer) = parties.id. client_id·payer_contact_id 둘 다 party id(콤보가 어느 쪽에 넣든 동일 의미).
   const projectId = body.project_id ? Number(body.project_id) : null;
-  let clientId = body.client_id ? Number(body.client_id) : null;
-  if (!clientId && body.payer_contact_id) clientId = ensureClientFromContact(Number(body.payer_contact_id)); // 담당자 선택 시 개인 청구처로 변환
+  let clientId = (body.client_id ? Number(body.client_id) : null) || (body.payer_contact_id ? Number(body.payer_contact_id) : null);
 
   if (projectId) {
-    const p = db().prepare("SELECT id, client_id FROM projects WHERE id = ?").get(projectId);
+    const p = db().prepare("SELECT id, production_id, agency_id, artist_id FROM projects WHERE id = ?").get(projectId);
     if (!p) return { error: "선택한 프로젝트를 찾을 수 없습니다." };
-    if (!clientId && p.client_id) clientId = p.client_id;
+    if (!clientId) clientId = p.production_id || p.agency_id || p.artist_id || null; // 미선택 시 프로젝트에서 파생
   }
 
   if (clientId) {
-    const c = db().prepare("SELECT id FROM clients WHERE id = ?").get(clientId);
+    const c = db().prepare("SELECT id FROM parties WHERE id = ?").get(clientId);
     if (!c) return { error: "선택한 청구처를 찾을 수 없습니다." };
   }
 
@@ -174,12 +174,12 @@ router.post("/", requireBilling, (req, res) => {
   const discount = parseMoney(b.discount_amount);
   const info = db()
     .prepare(
-      `INSERT INTO invoices (project_id, client_id, title, amount, tax_amount, discount_amount, paid_amount, status, tax_status, issued_date, due_date, memo)
-       VALUES (@project_id,@client_id,@title,@amount,@tax,@discount,@paid,@status,@tax_status,@issued_date,@due_date,@memo)`
+      `INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, discount_amount, paid_amount, status, tax_status, issued_date, due_date, memo)
+       VALUES (@project_id,@payer_id,@title,@amount,@tax,@discount,@paid,@status,@tax_status,@issued_date,@due_date,@memo)`
     )
     .run({
       project_id: refs.projectId,
-      client_id: refs.clientId,
+      payer_id: refs.clientId,
       title,
       amount,
       tax: b.vat_included != null ? Math.round(amount - amount / 1.1) : 0, // 부가세 포함 체크 시 역산, 현금(미포함)이면 0
@@ -210,7 +210,7 @@ router.get("/:id", requireBilling, (req, res) => {
   const items = itemBundle ? itemBundle.rows : [];
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
   // 청구처 정보(대표자·사업자번호·담당자 연락처) — 청구처가 클라이언트일 때
-  const payerClient = inv.client_id ? getClient(inv.client_id) : null;
+  const payerClient = inv.payer_id ? getClient(inv.payer_id) : null;
   const payerCard = payerClient
     ? payerInfoCard(payerClient, listContactsForClient(payerClient.id), !!getClientFile(payerClient.id, "biz_license"))
     : "";
@@ -289,7 +289,7 @@ router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) =
   // 3종 문서(견적서·내역서·거래명세서) 모두 상태 무관 발행 허용 — 참고용 문서라 미발행 초안에서도 뽑을 수 있게(사용자 요청).
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
-  const client = inv.client_id ? getClient(inv.client_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
+  const client = inv.payer_id ? getClient(inv.payer_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
   const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
@@ -407,7 +407,7 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
     </select>`;
   // 청구처 콤보(클라이언트 + 담당자) — from-tasks와 동일 UX. 담당자 선택 시 payer_contact_id → ensureClientFromContact로 개인 청구처 변환.
   const contactOpts = contactOptions();
-  const selClient = inv.client_id ? clients.find((c) => c.id === Number(inv.client_id)) : null;
+  const selClient = inv.payer_id ? clients.find((c) => c.id === Number(inv.payer_id)) : null;
   const dlId = "dl-inv-clients";
   const clientSelect = `
     <div data-client-combo>

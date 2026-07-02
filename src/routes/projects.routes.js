@@ -21,14 +21,10 @@ const {
   deleteProject,
   clientOptions,
   contactOptions,
-  ensureClientFromContact,
-  ensureClientsFromProject,
-  artistPickerOptions,
-  resolveArtistMeta,
-  linkArtistToContact,
-  ensureGroupArtist,
-  resolveContactByName,
-  resolveContactForArtist,
+  partyOptions,
+  createGroup,
+  createCompany,
+  resolvePersonByName,
   getContact,
   listProjectManagers,
   listRateItems,
@@ -73,19 +69,53 @@ function cleanYmd(v) {
   return isValidYmd(s) ? s : null;
 }
 
-/** 프로젝트 저장 정보로 청구처를 우선순위(제작사>소속사/레이블>아티스트)로 자동 선택. ensureClientsFromProject 후 호출. */
-function resolveAutoClientId(b) {
-  const candidates = [
-    [String(b.production_company || "").trim(), "제작사"],
-    [String(b.artist_company || "").trim(), "소속사/레이블"],
-    [String(b.artist || "").trim(), "아티스트"],
-  ];
-  for (const [name, kind] of candidates) {
-    if (!name) continue;
-    const c = db().prepare("SELECT id FROM clients WHERE name = ? AND kind = ?").get(name, kind);
-    if (c) return c.id;
+/** 조직(company) party를 이름으로 찾거나 생성. 소속사/제작사 공용(roles는 첫 등록 라벨). */
+function ensureCompanyParty(name, role) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const ex = db().prepare("SELECT id FROM parties WHERE kind = 'company' AND name = ? ORDER BY id LIMIT 1").get(n);
+  return ex ? ex.id : createCompany({ name: n, roles: role });
+}
+
+/** 사람 party를 아티스트로 표시(is_artist=1, 활동명 비어 있으면 채움). 그룹은 이미 is_artist라 무해. */
+function markArtistParty(partyId, activityName) {
+  db()
+    .prepare("UPDATE parties SET is_artist = 1, activity_name = COALESCE(NULLIF(TRIM(activity_name), ''), ?) WHERE id = ?")
+    .run(String(activityName || "").trim() || null, Number(partyId));
+}
+
+/**
+ * 프로젝트 폼 → 당사자(party) 참조 해석. { contactId, artistId, agencyId, productionId }.
+ *  - 아티스트: 그룹 체크→group party / 명시 선택(artist_contact_id=party id) / 이름(본명 우선)으로 사람 party. 개인은 is_artist·활동명 세팅.
+ *  - 소속사·제작사: 조직 party 찾거나 생성. 고객측 담당자: 사람 party.
+ */
+function resolveProjectParties(b) {
+  const contactId = b.contact_id
+    ? Number(b.contact_id)
+    : String(b.contact_name || "").trim()
+      ? resolvePersonByName(b.contact_name.trim())
+      : null;
+  const artistName = String(b.artist || "").trim();
+  let artistId = null;
+  if (artistName) {
+    if (b.artist_is_group) {
+      const ex = db().prepare("SELECT id FROM parties WHERE kind = 'group' AND name = ? ORDER BY id LIMIT 1").get(artistName);
+      artistId = ex ? ex.id : createGroup({ name: artistName });
+    } else if (b.artist_contact_id) {
+      artistId = Number(b.artist_contact_id);
+      markArtistParty(artistId, artistName);
+    } else {
+      const realName = String(b.artist_real_name || "").trim();
+      artistId = resolvePersonByName(realName || artistName);
+      markArtistParty(artistId, artistName);
+    }
   }
-  return null;
+  return {
+    contactId,
+    artistId,
+    agencyId: ensureCompanyParty(b.artist_company, "소속사/레이블"),
+    productionId: ensureCompanyParty(b.production_company, "제작사"),
+  };
 }
 
 function toArray(value) {
@@ -93,14 +123,6 @@ function toArray(value) {
   return Array.isArray(value) ? value : [value];
 }
 
-/** 고객측 담당자: contact_id(목록에서 선택) 우선, 없고 contact_name(새 이름) 있으면 같은 이름 재사용 후 없으면 새 연락처 생성(자동저장 중복 방지). */
-function resolveContactId(b) {
-  if (b.contact_id) return Number(b.contact_id);
-  const name = String(b.contact_name || "").trim();
-  if (!name) return null;
-  const existing = db().prepare("SELECT id FROM contacts WHERE name = ? LIMIT 1").get(name);
-  return existing ? existing.id : createContact({ name });
-}
 
 // ── 목록(URL = 필터; 플레이북2 §3.7) ──
 router.get("/", requireAuth, (req, res) => {
@@ -258,28 +280,28 @@ router.post("/", requireEditor, (req, res) => {
   const title = String(b.title || "").trim();
   const type = normalizeProjectType(b.project_type);
   if (!title) return res.send(layout({ title: "새 프로젝트", user: req.user, current: "/projects", body: projectForm({ ...b, project_type: type, _err: "프로젝트 명을 입력하세요." }) }));
-  const contactId = resolveContactId(b);
+  const parties = resolveProjectParties(b); // 아티스트/소속사/제작사/담당자 → party 참조(+ 아티스트 표시·중복 방지)
   const info = db()
     .prepare(
-      `INSERT INTO projects (title, project_type, artist, artist_company, production_company, client_id, manager_id, contact_id, memo)
-       VALUES (@title, @project_type, @artist, @artist_company, @production_company, @client_id, @manager_id, @contact_id, @memo)`
+      `INSERT INTO projects (title, project_type, artist, artist_company, production_company,
+         artist_id, agency_id, production_id, contact_party_id, manager_id, memo)
+       VALUES (@title, @project_type, @artist, @artist_company, @production_company,
+         @artist_id, @agency_id, @production_id, @contact_party_id, @manager_id, @memo)`
     )
     .run({
       title,
       project_type: type,
+      // 표시용 denormalized TEXT 유지(목록·요약 렌더). 정체성/청구는 party 참조가 진실원천.
       artist: String(b.artist || "").trim() || null,
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
-      client_id: null,
+      artist_id: parties.artistId,
+      agency_id: parties.agencyId,
+      production_id: parties.productionId,
+      contact_party_id: parties.contactId,
       manager_id: b.manager_id ? Number(b.manager_id) : null,
-      contact_id: contactId,
       memo: String(b.memo || "").trim() || null,
     });
-  ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
-  applyArtistLink(b, contactId); // 아티스트↔사람 연결(그룹은 제외) — 중복 사람 방지
-  // 청구처는 메타 폼에서 받지 않고 항상 우선순위(제작사>소속사/레이블>아티스트)로 자동 파생
-  const autoId = resolveAutoClientId(b);
-  if (autoId) db().prepare("UPDATE projects SET client_id = ? WHERE id = ?").run(autoId, info.lastInsertRowid);
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
 });
 
@@ -457,15 +479,13 @@ router.post("/:id", requireEditor, (req, res) => {
     return renderProjectDetail(req, res, p, { ...b, id }, "프로젝트 명을 입력하세요.");
   }
   // project_type은 UPDATE에서 제외 → 기존 DB 값 보존(유형 구분은 UI에서 제거, 레거시 컬럼은 건드리지 않음).
-  ensureClientsFromProject(b); // 아티스트·소속사/레이블·제작사를 클라이언트 마스터에 자동 등록
-  const contactId = resolveContactId(b);
-  applyArtistLink(b, contactId); // 아티스트↔사람 연결(그룹 제외) — 중복 사람 방지
-  // 청구처는 메타 폼에서 받지 않고 항상 우선순위(제작사>소속사/레이블>아티스트)로 자동 파생(생성과 동일)
+  const parties = resolveProjectParties(b); // 아티스트/소속사/제작사/담당자 → party 참조
   db()
     .prepare(
       `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
-       production_company=@production_company, client_id=@client_id, manager_id=@manager_id,
-       contact_id=@contact_id, memo=@memo WHERE id=@id`
+       production_company=@production_company, artist_id=@artist_id, agency_id=@agency_id,
+       production_id=@production_id, contact_party_id=@contact_party_id, manager_id=@manager_id,
+       memo=@memo WHERE id=@id`
     )
     .run({
       id,
@@ -473,9 +493,11 @@ router.post("/:id", requireEditor, (req, res) => {
       artist: String(b.artist || "").trim() || null,
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
-      client_id: resolveAutoClientId(b),
+      artist_id: parties.artistId,
+      agency_id: parties.agencyId,
+      production_id: parties.productionId,
+      contact_party_id: parties.contactId,
       manager_id: b.manager_id ? Number(b.manager_id) : null,
-      contact_id: contactId,
       memo: String(b.memo || "").trim() || null,
     });
   if (isFetch) return res.json({ ok: true });
@@ -593,7 +615,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
       projectId: Number(req.params.id),
       taskIds: toArray(req.body.task_id),
       sessionIds: toArray(req.body.session_id),
-      clientId: req.body.client_id ? Number(req.body.client_id) : (req.body.payer_contact_id ? ensureClientFromContact(Number(req.body.payer_contact_id)) : null), // 담당자 선택 시 개인 청구처로 변환
+      clientId: (req.body.client_id ? Number(req.body.client_id) : null) || (req.body.payer_contact_id ? Number(req.body.payer_contact_id) : null), // 청구처=party id(콤보 어느 hidden이든 동일 의미)
       title: req.body.title,
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
@@ -624,7 +646,7 @@ router.post("/:id/invoices/preview.pdf", requireBilling, asyncHandler(async (req
       projectId: Number(req.params.id),
       taskIds: toArray(b.task_id),
       sessionIds: toArray(b.session_id),
-      clientId: b.client_id ? Number(b.client_id) : (b.payer_contact_id ? ensureClientFromContact(Number(b.payer_contact_id)) : null),
+      clientId: (b.client_id ? Number(b.client_id) : null) || (b.payer_contact_id ? Number(b.payer_contact_id) : null),
       title: b.title,
       issueDate: cleanYmd(b.issued_date),
       dueDate: cleanYmd(b.due_date),
@@ -676,7 +698,7 @@ function projectForm(p = {}, err = "") {
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${contactCombo(p.contact_id)}
+        ${contactCombo(p.contact_party_id)}
       </div>
       <div>
         <label class="label">프로젝트 매니저</label>
@@ -721,7 +743,7 @@ function projectEditForm(p = {}, err = "") {
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${contactCombo(p.contact_id)}
+        ${contactCombo(p.contact_party_id)}
       </div>
       <div>
         <label class="label">프로젝트 매니저</label>
@@ -745,8 +767,20 @@ function projectEditForm(p = {}, err = "") {
  * CSP-safe: 옵션은 <script type="application/json">로 정적 임베드, 상호작용은 app.js([data-artist-combo]).
  */
 function artistCombo(p = {}) {
-  const meta = resolveArtistMeta(p.artist || "");
-  const opts = artistPickerOptions();
+  // 현재 아티스트 party(있으면)에서 콤보 초기값 파생: 연결 party id·그룹 여부·본명(활동명과 다르면).
+  const artistParty = p.artist_id ? getContact(p.artist_id) : null; // getContact=getParty(compat)
+  const meta = {
+    contactId: artistParty ? artistParty.id : "",
+    isGroup: artistParty ? artistParty.kind === "group" : false,
+    realName: artistParty && artistParty.kind === "person" && artistParty.name && artistParty.name !== String(p.artist || "") ? artistParty.name : "",
+  };
+  // 아티스트 후보 = is_artist party(사람 solo + 그룹). 콤보 옵션 shape {name, contactId, isGroup, sub}.
+  const opts = partyOptions({ role: "artist" }).map((o) => ({
+    name: o.activity_name || o.name,
+    contactId: o.id,
+    isGroup: o.kind === "group" ? 1 : 0,
+    sub: o.sub,
+  }));
   const json = JSON.stringify(opts).replace(/</g, "\\u003c"); // </script> 브레이크아웃 방지
   return `
     <div data-artist-combo>
@@ -764,25 +798,6 @@ function artistCombo(p = {}) {
       <input class="input mt-1.5 py-1.5 text-sm ${meta.isGroup ? "hidden" : ""}" type="text" name="artist_real_name" value="${esc(meta.realName || "")}" data-artist-real autocomplete="off" placeholder="본명 (활동명과 다르면 입력 · 개인)" aria-label="본명" />
       <script type="application/json" data-artist-options>${json}</script>
     </div>`;
-}
-
-/**
- * 저장 시 아티스트↔사람 연결(중복 방지). managerContactId=고객측 담당자 연락처 id.
- *  - 그룹 체크: 아티스트 클라이언트를 is_group=1로(연락처 연결 없음).
- *  - 개인: 명시 선택(artist_contact_id) 우선 → 없으면 같은 이름 기존 연락처(담당자 포함) → 링크(source_contact_id로 흡수). 없으면 일반 아티스트 클라이언트 유지(ensureClient가 생성).
- */
-function applyArtistLink(b, managerContactId) {
-  const artist = String(b.artist || "").trim();
-  if (!artist) return;
-  if (b.artist_is_group) { ensureGroupArtist(artist); return; }
-  // 개인 아티스트는 항상 연락처(사람)로 등록·연결(사용자 결정 2026-07-02 — 연락처 증가는 무방).
-  //  명시 선택(artist_contact_id) 우선 → 없으면 본명(있으면)/활동명으로 연락처 찾기·생성(resolveContactByName).
-  //  연락처 name=본명(realName 있으면, 없으면 활동명), nickname=활동명(linkArtistToContact가 설정). 아티스트 클라이언트 name=활동명.
-  //  linkArtistToContact가 아티스트 클라이언트를 그 연락처(source_contact_id)로 통합 → 중복 사람 방지.
-  //  ⑤ resolveContactForArtist: 동명이인 2+면 임의 재사용 대신 새 연락처(오연결 방지). 명시 선택은 그대로 우선.
-  const realName = String(b.artist_real_name || "").trim();
-  const cid = b.artist_contact_id ? Number(b.artist_contact_id) : resolveContactForArtist(realName || artist);
-  if (cid) linkArtistToContact(artist, cid);
 }
 
 /** 아티스트·소속사/레이블·제작사 자동완성 datalist(기존 프로젝트 값 기반). */
@@ -1127,7 +1142,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
-        ${clientCombo(project.client_id)}
+        ${clientCombo(project.production_id || project.agency_id || project.artist_id)}
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>
