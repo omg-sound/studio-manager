@@ -7,7 +7,7 @@
  */
 
 const { db, getState, setState } = require("./db");
-const { todayYmd, isValidYmd, formatYmdShort, cleanTime, timeToMin, minutesBetween } = require("./lib/date");
+const { todayYmd, isValidYmd, cleanTime, timeToMin, minutesBetween } = require("./lib/date");
 const studio = require("./data/studio"); // 스튜디오 설정 도메인(분리 모듈) — 아래에서 재export
 const clientFiles = require("./data/client-files"); // 클라이언트 첨부 서류 도메인(분리 모듈) — 아래에서 재export
 const revenue = require("./data/revenue"); // 매출 집계 도메인(분리 모듈) — 아래에서 재export
@@ -18,17 +18,17 @@ const taskTypes = require("./data/task-types"); // 작업 종류 카탈로그 �
 const contacts = require("./data/contacts"); // 연락처(사람)+소속 이력+담당자연동 도메인(분리 모듈) — 아래에서 재export
 const projects = require("./data/projects"); // 프로젝트 도메인(분리 모듈) — 아래에서 재export
 const tracks = require("./data/tracks"); // 트랙/작업 CRUD 도메인(분리 모듈) — 아래에서 재export
-const { getProjectForUser } = projects; // 내부 호출 유지용(sessions·invoices 잔여 도메인)
+const invoicesMod = require("./data/invoices"); // 청구 도메인(분리 모듈) — 아래에서 재export
+const dashboard = require("./data/dashboard"); // 대시보드 통계 도메인(분리 모듈) — 아래에서 재export
+const { getProjectForUser } = projects; // 내부 호출 유지용(sessions 잔여 도메인)
+const { isSessionInvoiced } = invoicesMod; // 내부 호출 유지용(sessions 상태·삭제·목록 잠금 판별)
 const clientsMod = require("./data/clients"); // 클라이언트(거래처)+담당자 마스터 도메인(분리 모듈) — 아래에서 재export
 const { getManagerByUserId, ...clientsPublic } = clientsMod; // getManagerByUserId는 rest-spread로 공개 제외(내부전용, tracks.js가 clients를 직접 require해 사용), 나머지=공개 재export
-const { getClient } = clientsPublic; // 내부 호출 유지용(invoices invoiceDraftForPdf)
 const { createContact } = contacts; // 내부 호출 유지용(sessions resolveDirectorIds)
 const { listRooms } = rooms; // 내부 호출 유지용(세션 room_id 활성 검증)
-const { computeRatePrice } = rateItems; // 내부 호출 유지용(프로젝트 세션액 합산·sessionRateAmount)
-// 공개 재export + 내부 호출(taskTypeLabel — invoices computeInvoiceDraft) 유지.
+const { computeRatePrice } = rateItems; // 내부 호출 유지용(sessionRateAmount)
+// 공개 재export용 바인딩(taskType* 공개 export). taskTypeLabel/UnitPrice는 이제 tracks·invoices 모듈에서 직접 사용.
 const { listTaskTypes, activeTaskTypes, taskTypeLabel, taskTypeUnitPrice, createTaskType, updateTaskType, deleteTaskType } = taskTypes;
-const { parseMoney } = require("./lib/forms");
-const { canInvoice, canBill, isChief, canEdit } = require("./auth");
 const {
   normalizeSessionType,
   normalizeSessionStatus,
@@ -36,28 +36,6 @@ const {
 
 // cleanTime('HH:MM' 검증)은 lib/date로 이전(공유 헬퍼). 위 import 참조.
 
-// ── 인보이스 금액/상태 파생(플레이북2 §4 payStatus/balanceOf) ──
-
-/** 잔금(미수금) = 총액 - 입금액(음수 없음). */
-function balanceOf(inv) {
-  return Math.max((inv.amount || 0) - (inv.paid_amount || 0), 0);
-}
-
-/** 납입 상태: 미납 | 부분납 | 완납. */
-function payStatusOf(inv) {
-  const paid = inv.paid_amount || 0;
-  if (paid <= 0) return "미납";
-  if (paid >= (inv.amount || 0)) return "완납";
-  return "부분납";
-}
-
-/** 연체: 발행 상태 + 마감 경과 + 잔금 존재. */
-function isOverdue(inv) {
-  return inv.status === "발행" && !!inv.due_date && todayYmd() > inv.due_date && balanceOf(inv) > 0;
-}
-
-// 금액 파싱은 lib/forms.parseMoney로 단일화(중복 구현 제거). 내부 호출명은 parseWon 유지.
-const parseWon = parseMoney;
 
 // ── 클라이언트(거래처)+담당자 마스터 도메인은 src/data/clients.js로 분리. module.exports에서 `...clientsPublic` 재export. ──
 
@@ -70,341 +48,7 @@ const parseWon = parseMoney;
 
 // ── 트랙/작업 CRUD 도메인은 src/data/tracks.js로, deleteProject는 projects.js로 분리. module.exports에서 `...tracks` 재export. ──
 
-function listUnbilledTasksForProject(user, projectId) {
-  const project = getProjectForUser(user, projectId);
-  if (!project) return null;
-  const rows = db()
-    .prepare(
-      `SELECT t.*, tr.title AS track_title, tr.content_type, tr.project_id
-       FROM track_tasks t
-       JOIN project_tracks tr ON tr.id = t.track_id
-       WHERE tr.project_id = ?
-         AND t.is_invoiced = 0
-       ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
-    )
-    .all(project.id);
-  return { project, rows };
-}
-
-/** 청구 가능 녹음 세션(**완료**·녹음+단가+시간) 중 아직 청구/전환 안 된 것 — 세션 직접 청구 후보(완료 처리해야 노출). */
-function listBillableSessionsForProject(user, projectId) {
-  const project = getProjectForUser(user, projectId);
-  if (!project) return null;
-  const rows = db()
-    .prepare(
-      `SELECT s.* FROM sessions s
-       WHERE s.project_id = ?
-         AND s.status = '완료'
-         AND s.session_type = '녹음'
-         AND s.rate_item_id IS NOT NULL
-         AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
-         AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)
-       ORDER BY s.created_at ASC, s.id ASC`
-    )
-    .all(project.id)
-    .map((row) => ({ ...row, billing: sessionRateAmount(row) }))
-    .filter((row) => row.billing && row.billing.amount > 0);
-  return { project, rows };
-}
-
-/** 세션이 인보이스에 직접 청구되었는지(invoice_items 역참조). 세션 수정·삭제 잠금 판별. */
-function isSessionInvoiced(sessionId) {
-  return !!db().prepare("SELECT 1 FROM invoice_items WHERE session_id = ? LIMIT 1").get(sessionId);
-}
-
-function listInvoiceItemsForInvoice(user, invoiceId) {
-  const inv = getInvoiceForUser(user, invoiceId);
-  if (!inv) return null;
-  const rows = db()
-    .prepare("SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY id ASC")
-    .all(inv.id);
-  return { invoice: inv, rows };
-}
-
-function nextInvoiceNumber(issueDate) {
-  const ym = String(issueDate || todayYmd()).slice(0, 7).replace("-", "");
-  const prefix = `INV-${ym}-`;
-  const row = db()
-    .prepare("SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY invoice_number DESC LIMIT 1")
-    .get(prefix + "%");
-  const last = row && row.invoice_number ? parseInt(row.invoice_number.slice(prefix.length), 10) : 0;
-  return prefix + String((Number.isFinite(last) ? last : 0) + 1).padStart(3, "0");
-}
-
-// ── 스튜디오(공급자) 설정 도메인은 src/data/studio.js로 분리(도메인 모듈화 착수). 아래 module.exports에서 `...studio`로 재export. ──
-
-/** 발행/입금완료로 전이 시 채번 보장(수동 발행분도 INV-YYYYMM-### 부여). 거래명세서에 번호 필수. */
-function ensureInvoiceNumber(inv) {
-  if (!inv || inv.invoice_number) return inv;
-  // 청구서 발행 또는 계산서 발행/입금완료 — 어느 축이든 '발행됨'이면 채번(거래명세서/계산서 번호 필수).
-  if (inv.status !== "발행" && inv.tax_status !== "계산서 발행" && inv.tax_status !== "입금완료") return inv;
-  const number = nextInvoiceNumber(inv.issued_date || todayYmd());
-  db().prepare("UPDATE invoices SET invoice_number=? WHERE id=?").run(number, inv.id);
-  return { ...inv, invoice_number: number };
-}
-
-/**
- * 공급가·할인 기반 청구 금액 계산 헬퍼.
- * discount: 0 ~ supply 로 clamp(음수→0, 공급가 초과→공급가).
- * 반환: { discount(clamp됨), taxable, tax, total }
- * 돈=정수(원). VAT = round(taxable * 0.1).
- */
-function invoiceAmountsFromSupply(supply, discount, vatIncluded = true) {
-  const raw = Math.round(Number(discount) || 0);
-  const d = Math.min(Math.max(0, raw), supply);
-  const taxable = supply - d;
-  const tax = vatIncluded ? Math.round(taxable * 0.1) : 0; // 부가세 미포함(현금 거래) 시 VAT 0
-  const total = taxable + tax;
-  return { discount: d, taxable, tax, total };
-}
-
-/**
- * 청구 초안 계산(읽기 전용, 쓰기 없음) — 청구서 생성과 미리보기 PDF가 공유.
- * 선택 작업/세션 + 폼 입력 금액 → 라인아이템·공급가·할인·VAT·총액·청구처 계산. 반환: null(권한 없음) 또는 draft 객체.
- */
-function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true, taskAmounts = {}, sessionAmounts = {} } = {}) {
-  const project = getProjectForUser(user, projectId);
-  if (!project || !canBill(user)) return null;
-  const d = db();
-  const selectedTasks = Array.isArray(taskIds) ? taskIds.map(Number).filter(Boolean) : [];
-  const selectedSessions = Array.isArray(sessionIds) ? sessionIds.map(Number).filter(Boolean) : [];
-  if (!selectedTasks.length && !selectedSessions.length) throw new Error("TASK_IDS_REQUIRED");
-
-  let tasks = [];
-  if (selectedTasks.length) {
-    const placeholders = selectedTasks.map(() => "?").join(",");
-    tasks = d
-      .prepare(
-        `SELECT t.*, tr.title AS track_title, tr.artist AS track_artist, tr.content_type, tr.project_id
-         FROM track_tasks t
-         JOIN project_tracks tr ON tr.id = t.track_id
-         WHERE tr.project_id = ? AND t.is_invoiced = 0 AND t.id IN (${placeholders})
-         ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
-      )
-      .all(project.id, ...selectedTasks);
-    if (tasks.length !== selectedTasks.length) throw new Error("TASK_NOT_BILLABLE");
-  }
-  tasks = tasks.map((t) => {
-    const raw = taskAmounts[t.id] != null ? taskAmounts[t.id] : taskAmounts[String(t.id)];
-    const amt = raw != null && String(raw).trim() !== "" ? parseWon(raw) : (t.total_price || 0);
-    return { ...t, unit_price: amt, total_price: amt };
-  });
-
-  let billSessions = [];
-  if (selectedSessions.length) {
-    const placeholders = selectedSessions.map(() => "?").join(",");
-    const rawSessions = d
-      .prepare(
-        `SELECT s.* FROM sessions s
-         WHERE s.project_id = ? AND s.status = '완료' AND s.session_type = '녹음'
-           AND s.rate_item_id IS NOT NULL AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
-           AND s.id IN (${placeholders})
-           AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
-           AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)`
-      )
-      .all(project.id, ...selectedSessions);
-    billSessions = rawSessions.map((s) => ({ session: s, calc: sessionRateAmount(s) })).filter((x) => x.calc && x.calc.amount > 0);
-    if (billSessions.length !== selectedSessions.length) throw new Error("TASK_NOT_BILLABLE");
-    billSessions = billSessions.map((x) => {
-      const raw = sessionAmounts[x.session.id] != null ? sessionAmounts[x.session.id] : sessionAmounts[String(x.session.id)];
-      const amount = raw != null && String(raw).trim() !== "" ? parseWon(raw) : x.calc.amount;
-      return { ...x, amount };
-    });
-  }
-
-  const subtotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0) + billSessions.reduce((s, x) => s + x.amount, 0);
-  const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0, vatIncluded);
-  const issued = issueDate || todayYmd();
-  const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
-  const resolvedClientId = (clientId ? Number(clientId) : null) || project.client_id || null;
-  if (resolvedClientId && !d.prepare("SELECT 1 FROM clients WHERE id = ?").get(resolvedClientId)) throw new Error("CLIENT_NOT_FOUND");
-
-  // 라인아이템(청구서·PDF 공용). 작업=곡명 - 종류, 세션=녹음 세션 라인.
-  const items = [];
-  for (const t of tasks) {
-    items.push({ task_id: t.id, session_id: null, track_title: t.track_title, task_type: t.task_type, description: `${t.track_title} - ${taskTypeLabel(t.task_type)}`, quantity: t.quantity, unit_price: t.unit_price, amount: t.total_price });
-  }
-  for (const { session, calc, amount } of billSessions) {
-    const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
-    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `녹음 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`, quantity: 1, unit_price: amount, amount });
-  }
-  return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedClientId };
-}
-
-function createInvoiceFromTasks(user, opts = {}) {
-  const draft = computeInvoiceDraft(user, opts);
-  if (!draft) return null;
-  const d = db();
-  const invoiceNumber = nextInvoiceNumber(draft.issued);
-  d.exec("BEGIN IMMEDIATE;");
-  try {
-    const info = d
-      .prepare(
-        `INSERT INTO invoices
-         (project_id, client_id, title, invoice_number, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
-         VALUES (@project_id, @client_id, @title, @invoice_number, @amount, @tax_amount, @discount_amount, 0, '발행', @issued_date, @due_date, @memo)`
-      )
-      .run({
-        project_id: draft.project.id,
-        client_id: draft.resolvedClientId,
-        title: draft.invoiceTitle,
-        invoice_number: invoiceNumber,
-        amount: draft.total,
-        tax_amount: draft.tax,
-        discount_amount: draft.discountAmt,
-        issued_date: draft.issued,
-        due_date: draft.dueDate,
-        memo: null, // 자동 메모 제거(사용자 요청) — 필요 시 수동 인보이스에서 입력
-      });
-    const invoiceId = info.lastInsertRowid;
-    const insertItem = d.prepare(
-      `INSERT INTO invoice_items (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ?, unit_price = ?, total_price = ? WHERE id = ?");
-    for (const it of draft.items) {
-      insertItem.run(invoiceId, it.task_id, it.session_id, it.track_title, it.task_type, it.description, it.quantity, it.unit_price, it.amount);
-      if (it.task_id) markTask.run(invoiceId, it.unit_price, it.amount, it.task_id); // 청구 시 확정 금액을 작업에도 반영
-    }
-    d.exec("COMMIT;");
-    return getInvoiceForUser(user, invoiceId);
-  } catch (e) {
-    d.exec("ROLLBACK;");
-    throw e;
-  }
-}
-
-/**
- * 청구서 생성 전 미리보기 PDF용 데이터(견적서·내역서·거래명세서) — 쓰기 없음. 선택 항목·금액을 그대로 문서화.
- * 반환: { client, invoice(미발행·번호 없음), items } 또는 null.
- */
-function invoiceDraftForPdf(user, opts = {}) {
-  const draft = computeInvoiceDraft(user, opts);
-  if (!draft) return null;
-  const client = draft.resolvedClientId ? getClient(draft.resolvedClientId) : null;
-  const invoice = {
-    title: draft.invoiceTitle,
-    invoice_number: null, // 미발행(초안) — 채번 전
-    amount: draft.total,
-    tax_amount: draft.tax,
-    discount_amount: draft.discountAmt,
-    paid_amount: 0,
-    status: "미발행",
-    issued_date: draft.issued,
-    due_date: draft.dueDate,
-    client_id: draft.resolvedClientId,
-    client_name: client ? client.name : "",
-  };
-  return { project: draft.project, client: client || { name: "" }, invoice, items: draft.items };
-}
-
-/**
- * 청구 삭제. 연결된 작업의 잠금(is_invoiced)을 먼저 해제한 뒤 삭제해야 좀비 작업이 안 생긴다.
- * (FK는 invoice_id만 SET NULL로 지울 뿐 is_invoiced=1은 남으므로 명시적 UPDATE 필요.)
- */
-function deleteInvoice(user, id) {
-  if (!canBill(user)) return null;
-  const inv = db().prepare("SELECT id FROM invoices WHERE id = ?").get(id);
-  if (!inv) return null;
-  const d = db();
-  d.exec("BEGIN IMMEDIATE;");
-  try {
-    d.prepare("UPDATE track_tasks SET is_invoiced = 0, invoice_id = NULL WHERE invoice_id = ?").run(id);
-    d.prepare("DELETE FROM invoices WHERE id = ?").run(id); // invoice_items는 FK CASCADE
-    d.exec("COMMIT;");
-    return { id };
-  } catch (e) {
-    d.exec("ROLLBACK;");
-    throw e;
-  }
-}
-
-// ── 대시보드 통계 ──
-// 전 직원이 프로젝트/마감을 본다. 청구(미수금·연체)는 청구권자(치프/대표), 클라이언트 수는 치프에게 노출.
-function dashboardStats(user) {
-  const d = db();
-  const total = d.prepare("SELECT COUNT(*) AS n FROM projects").get().n;
-  const showInvoices = canInvoice(user);
-  const showClients = isChief(user);
-  return {
-    canInvoice: showInvoices,
-    isChief: showClients,
-    total,
-    clients: showClients ? d.prepare("SELECT COUNT(*) AS n FROM clients").get().n : null,
-    invoices: showInvoices ? invoiceStats(user) : null,
-  };
-}
-
-// ── 청구(invoices) — 클라이언트 범위 강제 ──
-
-/** 인보이스 목록(치프 전용 라우트에서 사용). 필터(status/overdue/clientId)는 옵션. */
-function listInvoices(_user, { status, overdue, clientId } = {}) {
-  const where = [];
-  const params = {};
-  if (status) {
-    where.push(status === "입금완료" ? "i.tax_status = @status" : "i.status = @status"); // 입금완료는 계산서·입금 축(tax_status)
-    params.status = status;
-  }
-  if (clientId) {
-    where.push("i.client_id = @clientId");
-    params.clientId = Number(clientId);
-  }
-  const sql = `
-    SELECT i.*, p.title AS project_title, c.name AS client_name
-    FROM invoices i
-    LEFT JOIN projects p ON p.id = i.project_id
-    LEFT JOIN clients c ON c.id = i.client_id
-    ${where.length ? "WHERE " + where.join(" AND ") : ""}
-    ORDER BY
-      CASE WHEN i.due_date IS NULL OR i.due_date = '' THEN 1 ELSE 0 END,
-      i.due_date ASC, i.created_at DESC`;
-  let rows = db().prepare(sql).all(params);
-  if (overdue) rows = rows.filter(isOverdue); // 연체는 파생값이라 코드에서 필터
-  return rows;
-}
-
-/** 단건 인보이스(치프 전용 라우트에서 사용). */
-function getInvoiceForUser(_user, id) {
-  const row = db()
-    .prepare(
-      `SELECT i.*, p.title AS project_title, c.name AS client_name
-       FROM invoices i
-       LEFT JOIN projects p ON p.id = i.project_id
-       LEFT JOIN clients c ON c.id = i.client_id WHERE i.id = ?`
-    )
-    .get(id);
-  return row || null;
-}
-
-/** 인보이스 요약 통계(미수금·이번 달 발행·연체). */
-function invoiceStats(user) {
-  const rows = listInvoices(user, {});
-  const receivable = rows
-    .filter((i) => i.status === "발행")
-    .reduce((s, i) => s + balanceOf(i), 0);
-  const month = todayYmd().slice(0, 7); // 'YYYY-MM'
-  const thisMonthIssued = rows
-    .filter((i) => i.status !== "미발행" && (i.issued_date || "").slice(0, 7) === month)
-    .reduce((s, i) => s + (i.amount || 0), 0);
-  const overdue = rows.filter(isOverdue);
-  const overdueAmount = overdue.reduce((s, i) => s + balanceOf(i), 0);
-  return { receivable, thisMonthIssued, overdueCount: overdue.length, overdueAmount, total: rows.length };
-}
-
-/** 프로젝트의 인보이스 목록(권한 검사). 권한 없으면 null. */
-function listInvoicesForProject(user, projectId) {
-  const project = getProjectForUser(user, projectId);
-  if (!project) return null;
-  const rows = db()
-    .prepare(
-      `SELECT i.*, c.name AS client_name FROM invoices i
-       LEFT JOIN clients c ON c.id = i.client_id
-       WHERE i.project_id = ? ORDER BY i.created_at DESC, i.id DESC`
-    )
-    .all(projectId);
-  return { project, rows };
-}
+// ── 청구(invoices) 도메인·대시보드는 src/data/{invoices,dashboard}.js로 분리. module.exports에서 `...invoicesMod`·`...dashboard` 재export. ──
 
 // ── 세션(스튜디오 일정) ──
 
@@ -779,25 +423,10 @@ module.exports = {
   deleteTaskType,
   ...projects, // 프로젝트 도메인 재export(src/data/projects.js): distinctProjectFields·listProjects·getProjectForUser·deleteProject
   ...tracks, // 트랙/작업 CRUD 도메인 재export(src/data/tracks.js): listTracksForProject·getTrackForUser·createTrack·updateTrack·deleteTrack·getTaskForUser·setTaskAmount·updateTask·deleteTask·createTask
-  listUnbilledTasksForProject,
-  listBillableSessionsForProject,
-  isSessionInvoiced,
-  listInvoiceItemsForInvoice,
-  invoiceAmountsFromSupply,
-  createInvoiceFromTasks,
-  invoiceDraftForPdf,
-  deleteInvoice,
-  dashboardStats,
+  ...invoicesMod, // 청구 도메인 재export(src/data/invoices.js): balanceOf·payStatusOf·isOverdue·listUnbilledTasksForProject·listBillableSessionsForProject·isSessionInvoiced·listInvoiceItemsForInvoice·ensureInvoiceNumber·invoiceAmountsFromSupply·createInvoiceFromTasks·invoiceDraftForPdf·deleteInvoice·listInvoices·getInvoiceForUser·invoiceStats·listInvoicesForProject
+  ...dashboard, // 대시보드 도메인 재export(src/data/dashboard.js): dashboardStats
   ...deliverables, // 자료 전달 도메인 재export(src/data/deliverables.js): listDeliverablesForProject·getDeliverableForUser·getDeliverableByToken·recentDeliverables
-  balanceOf,
-  payStatusOf,
-  isOverdue,
-  listInvoices,
-  getInvoiceForUser,
   ...studio, // 스튜디오 설정 도메인 재export(src/data/studio.js): getStudioInfo/setStudioInfo·getStudioLogo/setStudioLogo·getStudioHours/setStudioHours·getProMinutes/setProMinutes·getDefaultBooker/setDefaultBooker·studioStartSlots
-  ensureInvoiceNumber,
-  invoiceStats,
-  listInvoicesForProject,
   listSessionsForProject,
   listSessionDirectors,
   sessionAttendeeEmails,
