@@ -306,7 +306,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 6. (선택) 자료 다중 업로드(현재 단건).
 7. (선택) 청구서 클라이언트 정보 스냅샷(현재 발행 시점 실시간 조회).
 8. (선택) 백업 오프사이트 전송(현재 Render Disk 내 14일 보존만).
-9. (착수, L) **data.js 모듈 분리** — 1차 추출 완료: 스튜디오(공급자) 설정 도메인 11함수를 `src/data/studio.js`로 이관, `data.js`는 `...studio` **재export 허브**(소비자 `require("../data")` 무변경). `cleanTime`은 `lib/date`로 공유 이전. 향후 청구·세션·연락처 도메인도 동일 패턴으로 점진 이관.
+9. (진행, L) **data.js 모듈 분리** — `data.js`(2049→1682줄)는 도메인 모듈을 `...spread`로 재export하는 **허브**(소비자 `require("../data")` 무변경, **공개 export 124개 분리 전후 완전 동일**·자동 대조로 검증). 추출 완료 모듈: `studio.js`(스튜디오 설정)·`client-files.js`(첨부 서류)·`revenue.js`(매출)·`deliverables.js`(자료 전달)·`rooms.js`(룸)·`rate-items.js`(단가표·`computeRatePrice`)·`task-types.js`(작업 종류 카탈로그·**모듈 캐시 포함**). **패턴**: 완전 독립 도메인은 `db()`만 import; cross-domain 의존은 ①자주 쓰는 것은 `data.js`에서 로컬 바인딩(`const {computeRatePrice}=rateItems` — call-site 무변경) ②드물게 쓰는 것은 함수 내부 지연 `require("../data")`(로드 시 순환 회피). 내부전용 헬퍼(`normalizeTaskTypeDb`)는 로컬 바인딩만, 공개 API 미노출. **남은 코어(프로젝트·트랙/작업·청구·세션·클라이언트·연락처)는 상호결합이 강해**(금전·청구 경로) 회귀 위험이 커 사용자 참여하에 신중히 이관 예정.
 10. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 UI 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
 > ## 🏁 v1.0 마일스톤 (2026-07-01) — 한 챕터 종료
