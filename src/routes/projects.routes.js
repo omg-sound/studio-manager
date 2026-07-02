@@ -119,11 +119,18 @@ router.get("/", requireAuth, (req, res) => {
     const doneOpen = searched || ongoing.length === 0; // 검색 중이거나 진행 중이 없으면 완료 섹션을 펼침
     const doneSec = done.length
       ? `<details class="group mt-4" ${doneOpen ? "open" : ""}>
-           <summary class="mb-2 flex cursor-pointer list-none items-center justify-between gap-3">
-             <h2 class="font-display text-base font-semibold">완료 <span class="text-sm font-normal text-muted">${done.length}</span></h2>
-             ${detailsChevron()}
+           <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 transition-colors hover:border-primary/40 hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+             <span class="flex items-center gap-2">
+               <span class="font-display text-base font-semibold">완료</span>
+               <span class="badge badge-neutral">${done.length}</span>
+             </span>
+             <span class="flex items-center gap-1.5 text-sm font-medium text-muted group-hover:text-primary">
+               <span class="group-open:hidden">펼치기</span>
+               <span class="hidden group-open:inline">접기</span>
+               ${detailsChevron()}
+             </span>
            </summary>
-           ${listGroup({ rows: done.map(projectListRow) })}
+           <div class="mt-2">${listGroup({ rows: done.map(projectListRow) })}</div>
          </details>`
       : "";
     list = `${ongoingSec}${doneSec}`;
