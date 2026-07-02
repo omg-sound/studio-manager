@@ -21,6 +21,8 @@
 > - **녹음 단가 Pro 블록 과금**: 3.5h(1Pro)마다 묶어 계산(10.5h=3Pro=90만), 슬라이더 0~14h·프리셋 1~4Pro.
 > - **구글 캘린더 진단**: 연동 실패 사유 로깅 + 설정 자동연동 켜짐/꺼짐 배지('사용 안 함'=연동 끔).
 > - 시작 시간 '직접입력' 인라인 전환·전화칸 자동완성 끔·'제작사→제작사/운영사'. 테스트 `node:test` 40개 + **GitHub Actions CI**(Node 20/22: `npm test`+`build:css`).
+>
+> **🏗 당사자(Party) 모델 — 정체성 통합(2026-07-02, P1–P3 배포)**: clients/contacts 이중화(source_contact_id 셸·'기타'·is_group)를 근본 제거하고 **`parties` 한 테이블**(person·company·group, is_artist 플래그)로 통합. 역할(아티스트·청구처·담당자·디렉터·엔지니어)=`parties.id` 참조(다형 없음, 단일 FK). `invoices.payer_id`·`projects.artist_id/agency_id/production_id/contact_party_id`·`project_managers.party_id`·`session_directors.party_id`. `src/data/parties.js`(+임시 `compat.js` 어댑터, **P4에서 제거**). 이관 게이트 `party_model_v1`·`session_directors_party_v1`·`client_files_party_v1`(원자·무중단). DEV_LOGIN E2E 전 경로+거래명세서 PDF 검증, 40 테스트 통과, orphan_payer=0. **다음: P4 정리**(레거시 clients/contacts·compat·③④⑤ 헬퍼 제거). 계획=`~/.claude/plans/temporal-chasing-lighthouse.md`. ⚠️ 대규모 컷오버는 브랜치에서(중간 커밋 자동배포 주의).
 
 ---
 
