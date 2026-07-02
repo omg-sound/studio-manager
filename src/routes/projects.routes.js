@@ -27,6 +27,7 @@ const {
   resolveArtistMeta,
   linkArtistToContact,
   ensureGroupArtist,
+  resolveContactByName,
   getContact,
   listProjectManagers,
   listRateItems,
@@ -755,12 +756,11 @@ function applyArtistLink(b, managerContactId) {
   const artist = String(b.artist || "").trim();
   if (!artist) return;
   if (b.artist_is_group) { ensureGroupArtist(artist); return; }
-  let cid = b.artist_contact_id ? Number(b.artist_contact_id) : null;
-  if (!cid) {
-    const existing = db().prepare("SELECT id FROM contacts WHERE name = ? ORDER BY id LIMIT 1").get(artist);
-    cid = existing ? existing.id : null;
-  }
-  if (cid) linkArtistToContact(artist, cid); // 같은 이름 사람이 이미 있으면 그 사람의 아티스트로 통합(orphan 클라이언트 흡수)
+  // 개인 아티스트는 항상 연락처(사람)로 등록·연결(사용자 결정 2026-07-02 — 연락처 증가는 무방).
+  //  명시 선택(artist_contact_id) 우선 → 없으면 같은 이름 기존 연락처 재사용, 없으면 새 연락처 생성(resolveContactByName).
+  //  linkArtistToContact가 아티스트 클라이언트를 그 연락처(source_contact_id)로 통합 + nickname(활동명) 설정 → 중복 사람 방지.
+  const cid = b.artist_contact_id ? Number(b.artist_contact_id) : resolveContactByName(artist);
+  if (cid) linkArtistToContact(artist, cid);
 }
 
 /** 아티스트·소속사/레이블·제작사 자동완성 datalist(기존 프로젝트 값 기반). */
