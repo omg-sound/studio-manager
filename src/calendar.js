@@ -139,6 +139,12 @@ function skipReason(cal, calId, date) {
   return "";
 }
 
+/** 현재 캘린더 자동연동 준비 상태(설정 수준, 특정 날짜와 무관). { ok, reason }. ok면 세션 저장 시 자동 연동됨. */
+function syncStatus() {
+  const reason = skipReason(calendarClient(), getStudioCalendarId(), "2999-01-01");
+  return { ok: !reason, reason };
+}
+
 /** 스튜디오 캘린더에 일정 생성 → event id. 미연동/오류면 null(예약 자체는 막지 않음). */
 async function createEvent(input = {}) {
   const cal = calendarClient();
@@ -270,4 +276,5 @@ module.exports = {
   deleteEvent,
   getEvent,
   syncSessionsFromCalendar,
+  syncStatus,
 };

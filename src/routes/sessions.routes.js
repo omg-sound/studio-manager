@@ -47,19 +47,28 @@ function eventInputForSession(session, project) {
   return { title, location: calendar.getStudioLocation(), description, attendees, date: session.session_date, start: session.start_time, end: session.end_time };
 }
 
-/** 세션 저장 후 구글 캘린더 일정 동기화(생성/수정/삭제). 미연동/오류는 조용히 무시(fail-safe). */
+/**
+ * 세션 저장 후 구글 캘린더 일정 동기화(생성/수정/삭제). fail-safe(예약은 안 막힘) + 결과 반환.
+ * 반환 { synced:bool, reason?:string } — synced=false면 저장 후 사용자에게 이유 안내(설정 확인).
+ */
 async function syncSessionEvent(user, session) {
   const project = getProjectForUser(user, session.project_id);
-  if (!project) return;
+  if (!project) return { synced: false, reason: "프로젝트를 찾을 수 없음" };
   if (session.status === "취소") {
-    if (session.gcal_event_id) {
-      await calendar.deleteEvent(session.gcal_event_id);
-      setSessionEventId(session.id, null);
-    }
-    return;
+    try { if (session.gcal_event_id) { await calendar.deleteEvent(session.gcal_event_id); setSessionEventId(session.id, null); } } catch (_e) {}
+    return { synced: true }; // 취소는 삭제 동기화(또는 원래 없었음)
   }
-  const newId = await calendar.updateEvent(session.gcal_event_id || null, eventInputForSession(session, project));
-  if (newId && newId !== session.gcal_event_id) setSessionEventId(session.id, newId);
+  const st = calendar.syncStatus(); // 설정 수준 준비 상태(미연동/캘린더 미선택 등)
+  if (!st.ok) return { synced: false, reason: st.reason };
+  try {
+    const newId = await calendar.updateEvent(session.gcal_event_id || null, eventInputForSession(session, project));
+    if (newId && newId !== session.gcal_event_id) setSessionEventId(session.id, newId);
+    if (!newId) return { synced: false, reason: "구글 캘린더 API 오류(서버 로그 확인)" };
+    return { synced: true };
+  } catch (e) {
+    console.error("[sessions] 캘린더 동기화 실패 —", (e && e.message) || e);
+    return { synced: false, reason: "동기화 중 오류(서버 로그 확인)" };
+  }
 }
 
 /** 세션 시간 겹침 안내 페이지(409, 앱 내부 세션끼리 · 같은 룸). */
@@ -176,8 +185,8 @@ router.post("/sessions", requireEditor, asyncHandler(async (req, res) => {
   // 다중 룸 도입: 단일 스튜디오 캘린더는 룸을 구분하지 못해 다른 룸 일정으로 오탐 차단이 생긴다.
   // → 구글 FreeBusy 하드 차단은 비활성화하고, 룸별 겹침(앱 DB, createSession 내부 검사)을 정식 차단으로 삼는다.
   //   구글 캘린더 일정 자동 생성/수정/삭제 동기화는 그대로 유지.
-  await syncSessionEvent(req.user, s); // 구글 캘린더에 일정 자동 생성
-  res.redirect(`/projects/${s.project_id}?tab=sessions&flash=added`);
+  const cal = await syncSessionEvent(req.user, s); // 구글 캘린더에 일정 자동 생성 + 결과
+  res.redirect(`/projects/${s.project_id}?tab=sessions&flash=${cal && cal.synced === false ? "added_cal_off" : "added"}`);
 }));
 
 // ── 세션 수정 ──
@@ -193,8 +202,8 @@ router.post("/sessions/:id", requireEditor, asyncHandler(async (req, res) => {
     return sessionInputError(e, res, req.user);
   }
   if (!s) return res.status(404).send("세션을 찾을 수 없습니다.");
-  await syncSessionEvent(req.user, s); // 일정 수정(취소면 삭제, id 없으면 생성)
-  res.redirect(`/projects/${s.project_id}?tab=sessions&flash=saved`);
+  const cal = await syncSessionEvent(req.user, s); // 일정 수정(취소면 삭제, id 없으면 생성) + 결과
+  res.redirect(`/projects/${s.project_id}?tab=sessions&flash=${cal && cal.synced === false ? "saved_cal_off" : "saved"}`);
 }));
 
 // ── 상태 토글(예정 ↔ 완료 ↔ 취소) ──
