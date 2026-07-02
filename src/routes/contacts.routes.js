@@ -19,8 +19,6 @@ const {
   listProjectsForContact,
   listSessionsForContact,
   listClients,
-  syncArtistClientForContact,
-  artistClientForContact,
   clientsWithOwnerContact,
   getManagerByContactId,
   classifyContact,

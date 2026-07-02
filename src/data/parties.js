@@ -473,6 +473,27 @@ function getWorker(id) {
   return db().prepare("SELECT * FROM project_managers WHERE id = ? AND user_id IS NULL").get(Number(id)) || null;
 }
 
+/** 외주 작업자가 담당한 작업(track_tasks) + 프로젝트/트랙 — 정산. 매칭: engineer_id 우선, 폴백 engineer_name. */
+function listTasksForWorker(worker) {
+  if (!worker) return [];
+  return db()
+    .prepare(
+      `SELECT t.*, tr.title AS track_title, p.id AS project_id, p.title AS project_title
+       FROM track_tasks t
+       JOIN project_tracks tr ON tr.id = t.track_id
+       JOIN projects p ON p.id = tr.project_id
+       WHERE t.engineer_id = @id OR (t.engineer_id IS NULL AND t.engineer_name = @name)
+       ORDER BY t.created_at DESC, t.id DESC`
+    )
+    .all({ id: worker.id, name: worker.name });
+}
+
+/** 외주 작업 지급 처리/해제(정산). */
+function setTaskPayout(taskId, paid) {
+  const p = paid ? 1 : 0;
+  db().prepare("UPDATE track_tasks SET worker_paid = ?, worker_paid_date = ? WHERE id = ?").run(p, p ? todayYmd() : null, Number(taskId));
+}
+
 module.exports = {
   formatPhone,
   listParties,
@@ -509,4 +530,6 @@ module.exports = {
   resolvePersonByName,
   listProjectManagers,
   getWorker,
+  listTasksForWorker,
+  setTaskPayout,
 };

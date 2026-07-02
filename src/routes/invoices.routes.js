@@ -7,7 +7,6 @@ const { INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, normalizeInvoiceS
 const {
   clientOptions,
   contactOptions,
-  ensureClientFromContact,
   listInvoices,
   getInvoiceForUser,
   listInvoiceItemsForInvoice,

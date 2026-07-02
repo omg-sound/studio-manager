@@ -34,6 +34,10 @@ const syncContactToManager = P.syncPartyToManager;
 const resolveContactByName = P.resolvePersonByName;
 const endAffiliation = P.endAffiliation;
 const deleteAffiliation = P.deleteAffiliation;
+// 담당자↔연락처 연동(로그인·유저/외주 관리에서 호출) → party 버전 별칭.
+const ensureContactForManager = P.ensurePartyForManager;
+const ensureContactForUser = P.ensurePartyForUser;
+const syncManagerToContact = P.syncManagerToParty;
 
 // ── 사람 목록(연락처) — kind='person' 필터 ──
 function listContacts({ q, staff } = {}) {
@@ -153,4 +157,7 @@ module.exports = {
   clientOptions,
   listArtistsForAgency,
   resolveCompanyByName,
+  ensureContactForManager,
+  ensureContactForUser,
+  syncManagerToContact,
 };
