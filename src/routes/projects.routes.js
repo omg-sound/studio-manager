@@ -28,6 +28,7 @@ const {
   linkArtistToContact,
   ensureGroupArtist,
   resolveContactByName,
+  resolveContactForArtist,
   getContact,
   listProjectManagers,
   listRateItems,
@@ -761,8 +762,9 @@ function applyArtistLink(b, managerContactId) {
   //  명시 선택(artist_contact_id) 우선 → 없으면 본명(있으면)/활동명으로 연락처 찾기·생성(resolveContactByName).
   //  연락처 name=본명(realName 있으면, 없으면 활동명), nickname=활동명(linkArtistToContact가 설정). 아티스트 클라이언트 name=활동명.
   //  linkArtistToContact가 아티스트 클라이언트를 그 연락처(source_contact_id)로 통합 → 중복 사람 방지.
+  //  ⑤ resolveContactForArtist: 동명이인 2+면 임의 재사용 대신 새 연락처(오연결 방지). 명시 선택은 그대로 우선.
   const realName = String(b.artist_real_name || "").trim();
-  const cid = b.artist_contact_id ? Number(b.artist_contact_id) : resolveContactByName(realName || artist);
+  const cid = b.artist_contact_id ? Number(b.artist_contact_id) : resolveContactForArtist(realName || artist);
   if (cid) linkArtistToContact(artist, cid);
 }
 

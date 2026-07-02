@@ -480,6 +480,34 @@ function init() {
     setState("session_directors_backfill_v1", "done");
   }
 
+  // 이번 수정(2026-07-02) 전에 생긴 중복 정리: 연락처와 따로 만들어진 고아 아티스트 클라이언트
+  // (source_contact_id IS NULL·개인)를 같은 이름 연락처에 1회 연결(source_contact_id 흡수).
+  //  - 매칭: 연락처 name 또는 nickname = 아티스트명, 이미 다른 아티스트에 연결되지 않은 연락처.
+  //  - **유일 매칭일 때만** 연결(동명이인 오연결 방지 — ⑤ 정책). 2+·0 매칭은 건너뜀(수동 처리 여지).
+  //  - 연결 시 연락처 nickname(활동명)이 비면 아티스트명으로 채움. 멱등(orphan만 대상).
+  if (!getState("artist_contact_link_backfill_v1")) {
+    const orphans = d
+      .prepare("SELECT id, name FROM clients WHERE kind = '아티스트' AND source_contact_id IS NULL AND COALESCE(is_group,0) = 0")
+      .all();
+    const findContacts = d.prepare(
+      `SELECT id, nickname FROM contacts
+        WHERE (name = @nm OR nickname = @nm)
+          AND id NOT IN (SELECT source_contact_id FROM clients WHERE source_contact_id IS NOT NULL AND kind = '아티스트')`
+    );
+    const linkArtist = d.prepare("UPDATE clients SET source_contact_id = ?, is_group = 0 WHERE id = ?");
+    const setNick = d.prepare("UPDATE contacts SET nickname = ? WHERE id = ?");
+    for (const a of orphans) {
+      const nm = String(a.name || "").trim();
+      if (!nm) continue;
+      const matches = findContacts.all({ nm });
+      if (matches.length !== 1) continue; // 유일 매칭만(모호하면 병합 금지)
+      const ct = matches[0];
+      linkArtist.run(ct.id, a.id);
+      if (!String(ct.nickname || "").trim()) setNick.run(nm, ct.id);
+    }
+    setState("artist_contact_link_backfill_v1", "done");
+  }
+
   // 기존 연락처 중 성·이름이 둘 다 비어있는 행을 표시명(name)으로 1회 백필(splitKoreanName).
   // manager_contacts_backfill 뒤에 둬서 새로 만든 담당자 연락처(이미 성·이름 채워짐)는 자연히 건너뛴다.
   if (!getState("contact_family_name_backfill_v1")) {

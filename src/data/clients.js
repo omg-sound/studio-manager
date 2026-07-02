@@ -120,6 +120,10 @@ function ensureClientFromContact(contactId) {
   const id = Number(contactId);
   const c = db().prepare("SELECT id, name, phone, email FROM contacts WHERE id = ?").get(id);
   if (!c || !String(c.name || "").trim()) return null;
+  // ④ 청구처 정합: 이 연락처가 개인 아티스트(source_contact_id로 연결된 '아티스트' 클라이언트)면 그걸 청구처로 재사용.
+  //  → 개인 아티스트에게 청구할 때 아티스트 클라이언트 + '기타' 셸이 이중으로 생기던 것 방지(청구·결제가 아티스트 상세에 모임).
+  const artist = db().prepare("SELECT id FROM clients WHERE source_contact_id = ? AND kind = '아티스트'").get(id);
+  if (artist) return artist.id;
   const existing = db().prepare("SELECT id FROM clients WHERE source_contact_id = ? AND kind = '기타'").get(id); // 아티스트 링크와 분리(kind별)
   if (existing) {
     db().prepare("UPDATE clients SET name = ?, phone = ?, email = ? WHERE id = ?").run(c.name, c.phone || null, c.email || null, existing.id); // 재사용 시 연락처의 최신 이름·전화·이메일 반영(리네임 반영)
@@ -160,6 +164,20 @@ function resolveContactByName(name) {
   if (!n) return null;
   const ex = db().prepare("SELECT id FROM contacts WHERE name = ? ORDER BY id LIMIT 1").get(n);
   return ex ? ex.id : createContact({ name: n });
+}
+
+/**
+ * ⑤ 아티스트 연결 전용 연락처 해석 — 동명이인 오연결 방지.
+ *  이름 정확 일치가 **유일**할 때만 그 연락처를 재사용(같은 사람으로 통합), 2+ 동명이인이면 임의 병합 않고
+ *  **새 연락처 생성**(모호할 땐 안 합침 — 사용자 결정: 연락처 증가는 무방). 0건도 새로 생성.
+ *  일반 resolveContactByName(첫 매칭 재사용)과 달리 아티스트 identity 병합 경로에서만 보수적으로 동작.
+ */
+function resolveContactForArtist(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const rows = db().prepare("SELECT id FROM contacts WHERE name = ?").all(n);
+  if (rows.length === 1) return rows[0].id; // 유일 매칭만 재사용
+  return createContact({ name: n }); // 0 또는 2+(동명이인) → 새 연락처(오연결 금지)
 }
 
 /** 이 연락처를 대표자로 둔 클라이언트들(양방향 표시용 — 연락처 상세에서 '대표 클라이언트'). */
@@ -302,6 +320,7 @@ module.exports = {
   syncArtistClientForContact,
   artistClientForContact,
   resolveContactByName,
+  resolveContactForArtist,
   clientsWithOwnerContact,
   listArtistsForAgency,
   resolveCompanyByName,
