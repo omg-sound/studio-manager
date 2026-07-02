@@ -86,8 +86,9 @@ function clientRoleList(c) {
 
 // ── 목록(서브메뉴 = 업체/아티스트 우선 분리 + 업체 내 분류 · 이름 검색) ──
 router.get("/", (req, res) => {
-  // 당사자 모델 4분류: 업체(company) / 아티스트(개인 솔로=person·is_artist) / 그룹(밴드·아이돌 그룹=group) / 전체.
-  const group = ["artist", "company", "group"].includes(req.query.group) ? req.query.group : "";
+  // 당사자 모델 3분류(서로 섞이지 않음): 업체(company) / 아티스트(개인 솔로=person·is_artist) / 그룹(밴드·아이돌 그룹=group).
+  // '전체' 탭 폐기(2026-07-03) — 3개념 분리 철학. 기본 진입 = 업체.
+  const group = ["artist", "company", "group"].includes(req.query.group) ? req.query.group : "company";
   const activeKind = ""; // 레거시 2차 필터 제거(호환용 빈값 유지)
   const q = String(req.query.q || "").trim();
 
@@ -101,7 +102,6 @@ router.get("/", (req, res) => {
   const artistCount = allRows.filter(isSoloArtist).length;
   const groupCount = allRows.filter((c) => c.kind === "group").length;
   const companyCount = allRows.filter((c) => c.kind === "company").length;
-  const total = allRows.length;
 
   // 라우트 레벨 이름 필터(data.js 수정 없이)
   const ql = q.toLowerCase();
@@ -112,10 +112,9 @@ router.get("/", (req, res) => {
     if (q) p.push("q=" + encodeURIComponent(q));
     return p.length ? "/clients?" + p.join("&") : "/clients";
   };
-  // 1차 서브메뉴(전체/업체/아티스트) — 탭 스타일(연락처 탭과 통일)
+  // 1차 서브메뉴(업체/아티스트/그룹) — 탭 스타일(연락처 탭과 통일). '전체' 폐기.
   const groupChips = tabBar({
     tabs: [
-      { key: "", label: `전체 ${total}` },
       { key: "company", label: `업체 ${companyCount}` },
       { key: "artist", label: `아티스트 ${artistCount}` },
       { key: "group", label: `그룹 ${groupCount}` },
