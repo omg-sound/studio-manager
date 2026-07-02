@@ -23,6 +23,8 @@ const {
   getManagerByPartyId,
   classifyParty,
   syncPartyToManager,
+  listGroupsForPicker,
+  setPartyGroup,
 } = require("../data");
 const people = require("../people");
 const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron } = require("../views");
@@ -114,7 +116,7 @@ router.get("/", (req, res) => {
 
 // ── 새 연락처 ──
 router.get("/new", (req, res) => {
-  res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}, false, listClients({})) }));
+  res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}, false, listClients({}), null, false, listGroupsForPicker()) }));
 });
 
 router.post("/", async (req, res) => {
@@ -130,6 +132,7 @@ router.post("/", async (req, res) => {
       addAffiliation(id, { client_id: b.client_id || null, title: b.title, started_on: b.started_on, closeCurrent: false });
     }
     if (!b.client_id) syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 입력 → 소속 이력 반영(업체 클라이언트 연결)
+    if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 소속 그룹(밴드·아이돌) 연결
     // 활동명(nickname→activity_name)은 createPerson가 party에 저장하며 is_artist를 자동 세팅(별도 아티스트 셸 없음).
     // Google People push — fail-safe: 실패해도 앱 정상.
     try {
@@ -139,7 +142,7 @@ router.post("/", async (req, res) => {
     } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=created`);
   } catch (_e) {
-    res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({})) }));
+    res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({}), null, false, listGroupsForPicker()) }));
   }
 });
 
@@ -165,6 +168,7 @@ router.post("/:id", async (req, res) => {
       nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
     });
     syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 → 소속 이력 반영(현재 소속과 다르면 이직으로 등록)
+    if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 소속 그룹(밴드·아이돌) 연결
     // 담당자(project_managers) 동기화: 전화(항상) + 이메일(외주만)
     syncPartyToManager(id);
     // 활동명 변경은 updateParty가 party activity_name·is_artist에 반영(별도 아티스트 셸 없음).
@@ -181,7 +185,7 @@ router.post("/:id", async (req, res) => {
     } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=saved`);
   } catch (_e) {
-    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager) }));
+    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker()) }));
   }
 });
 
@@ -259,7 +263,7 @@ router.get("/:id", (req, res) => {
   const ownerClients = orgsWithOwnerParty(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
   const cur = currentAffiliation(c.id); // 현재 소속 — 회사칸 기본값(담당자로만 등록돼 company 텍스트가 비어 있던 경우 반영)
   // 상세로 들어오면 바로 수정 가능한 화면 — 읽기전용 카드+'정보 수정' 버튼 대신 인라인 편집 폼(변경 시 하이라이트 저장).
-  const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true);
+  const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker());
   const derivedBits = [
     nameDetail && nameDetail !== c.name ? `<div><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : "",
     c.nickname ? `<div><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${c.is_artist ? ` · <a href="/clients/${c.id}" class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
@@ -378,7 +382,7 @@ router.get("/:id", (req, res) => {
 });
 
 // ── 폼(추가/수정 공용) ──
-function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false) {
+function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false, groups = []) {
   const e = c._err || "";
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
   const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
@@ -421,9 +425,17 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
           <div><label class="label">이름</label><input class="input" name="given_name" value="${esc(c.given_name || "")}" placeholder="예: 지훈" /></div>
           <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
         </div>
-        <div class="sm:max-w-xs"><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 클라이언트로 등록·연동)</span></label>
-          <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
-          <datalist id="contact-artist-clients">${clients.filter((cl) => cl.is_artist).map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 클라이언트로 등록·연동)</span></label>
+            <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
+            <datalist id="contact-artist-clients">${clients.filter((cl) => cl.is_artist).map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
+          </div>
+          <div><label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때)</span></label>
+            <select name="group_id" class="input">
+              <option value="">— 소속 그룹 없음 —</option>
+              ${groups.map((g) => `<option value="${g.id}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
+            </select>
+          </div>
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">

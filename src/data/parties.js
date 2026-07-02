@@ -186,6 +186,7 @@ function deleteParty(id) {
   d.prepare("UPDATE sessions SET director_party_id = NULL WHERE director_party_id = ?").run(pid);
   d.prepare("DELETE FROM session_directors WHERE party_id = ?").run(pid);
   d.prepare("UPDATE parties SET owner_party_id = NULL WHERE owner_party_id = ?").run(pid);
+  d.prepare("UPDATE parties SET group_id = NULL WHERE group_id = ?").run(pid); // 그룹 삭제 시 멤버 소속 해제
   d.prepare("DELETE FROM parties WHERE id = ?").run(pid);
 }
 
@@ -579,6 +580,48 @@ function resolveCompanyByName(name) {
   return ex ? ex.id : null;
 }
 
+// ── 그룹 ↔ 소속 멤버 연결(parties.group_id) ──
+
+/** 사람(아티스트)의 소속 그룹 지정/해제. groupId=null이면 그룹에서 제거. group 파티만 유효(아니면 무시). */
+function setPartyGroup(personId, groupId) {
+  const pid = Number(personId);
+  let gid = groupId ? Number(groupId) : null;
+  if (gid) {
+    const g = db().prepare("SELECT id FROM parties WHERE id = ? AND kind = 'group'").get(gid);
+    if (!g) gid = null; // 그룹이 아니면 무시(오연결 방지)
+  }
+  db().prepare("UPDATE parties SET group_id = ? WHERE id = ? AND kind = 'person'").run(gid, pid);
+  return gid;
+}
+
+/** 그룹의 소속 멤버(사람) 목록 — 활동명 우선 표시. */
+function listGroupMembers(groupId) {
+  return db().prepare(
+    `SELECT id, name, activity_name, COALESCE(NULLIF(activity_name,''), name) AS display_name, phone, email
+       FROM parties WHERE group_id = ? AND kind = 'person' ORDER BY name COLLATE NOCASE`
+  ).all(Number(groupId));
+}
+
+/** 사람의 소속 그룹 파티(없으면 null). */
+function groupOfParty(personId) {
+  const p = db().prepare("SELECT group_id FROM parties WHERE id = ?").get(Number(personId));
+  if (!p || !p.group_id) return null;
+  return getParty(p.group_id);
+}
+
+/** 그룹 선택 콤보용 — 그룹(kind='group') 목록 {id, name}. */
+function listGroupsForPicker() {
+  return db().prepare("SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name FROM parties WHERE kind = 'group' ORDER BY name COLLATE NOCASE").all();
+}
+
+/** 멤버 추가 콤보용 — 개인 아티스트(사람) 목록 {id, name, group_id}. 이미 이 그룹 소속이 아닌 사람만 후보로 쓰기 좋게 group_id 포함. */
+function artistPersonOptions() {
+  return db().prepare(
+    `SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name, group_id
+       FROM parties WHERE kind = 'person' AND is_artist = 1 ORDER BY name COLLATE NOCASE`
+  ).all();
+}
+
 module.exports = {
   formatPhone,
   listParties,
@@ -624,4 +667,9 @@ module.exports = {
   clientOptions,
   listArtistsForAgency,
   resolveCompanyByName,
+  setPartyGroup,
+  listGroupMembers,
+  groupOfParty,
+  listGroupsForPicker,
+  artistPersonOptions,
 };

@@ -15,6 +15,7 @@ const {
   contactOptions, addAffiliation, listContacts, resolvePersonByName, orgsWithOwnerParty,
   listArtistsForAgency, resolveCompanyByName,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
+  listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -246,6 +247,7 @@ router.post("/:id", (req, res) => {
     activity_name: c.activity_name, is_artist: c.is_artist,
     cash_receipt_no: b.cash_receipt_no,
   });
+  if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 개인 아티스트의 소속 그룹 연결
   linkClientContact(id, b); // 담당자 연락처 입력 시 이 클라이언트 소속으로 연동
   if (isFetch) return res.json({ ok: true }); // 자동저장 — 페이지 유지
   res.redirect(`/clients/${id}?flash=saved`); // 수동 저장(noscript): 상세로 복귀
@@ -259,6 +261,23 @@ router.post("/:id/delete", (req, res) => {
   if (active) return res.status(409).send(errorPage({ code: 409, title: "청구처로 발행된 청구가 있어 삭제할 수 없습니다", message: "발행·입금완료된 청구의 청구처입니다. 관련 청구를 먼저 정리하세요(매출 추적 보존).", user: req.user }));
   deleteParty(id); // 하드 삭제(파티) — 역할 참조 정리·첨부 CASCADE
   res.redirect("/clients?flash=deleted");
+});
+
+// ── 그룹 멤버 연결/해제(그룹 아티스트 ↔ 개인 아티스트) ──
+router.post("/:id/members", (req, res) => {
+  const id = Number(req.params.id);
+  const g = getParty(id);
+  if (!g || g.kind !== "group") return res.status(404).send(errorPage({ code: 404, title: "그룹을 찾을 수 없습니다", message: "그룹 아티스트만 멤버를 가질 수 있습니다.", user: req.user }));
+  const memberId = Number(req.body.member_id);
+  if (memberId) setPartyGroup(memberId, id); // 개인 아티스트를 이 그룹 소속으로(다른 그룹이면 이동)
+  res.redirect(`/clients/${id}`);
+});
+router.post("/:id/members/:mid/remove", (req, res) => {
+  const id = Number(req.params.id);
+  const mid = Number(req.params.mid);
+  const m = getParty(mid);
+  if (m && Number(m.group_id) === id) setPartyGroup(mid, null); // 이 그룹 소속일 때만 해제
+  res.redirect(`/clients/${id}`);
 });
 
 // ── 첨부 서류 업로드(치프·스태프 — requireEditor) ──
@@ -370,6 +389,32 @@ router.get("/:id", (req, res) => {
       : emptyState("연결된 프로젝트가 없습니다.", { card: true });
   }
 
+  // 그룹(group): 소속 멤버(개인 아티스트) 목록 + 추가/제거.
+  const members = c.kind === "group" ? listGroupMembers(c.id) : [];
+  const memberCandidates = c.kind === "group" ? artistPersonOptions().filter((a) => Number(a.group_id) !== c.id) : [];
+  const memberSection = c.kind === "group"
+    ? `<div class="mb-6">
+        <h3 class="mb-2 font-display text-lg font-semibold text-fg">멤버 <span class="text-sm font-normal text-muted">· 그룹 소속 아티스트</span></h3>
+        ${members.length
+          ? listGroup({ rows: members.map((m) => listRow({
+              left: `<a href="/clients/${m.id}" class="font-medium text-fg hover:text-primary hover:underline">${esc(m.display_name)}</a>`,
+              right: `<form method="post" action="/clients/${c.id}/members/${m.id}/remove"><button class="btn-ghost btn-sm text-danger" type="submit">제거</button></form>`,
+            })) })
+          : emptyState("아직 등록된 멤버가 없습니다.", { card: true })}
+        <form method="post" action="/clients/${c.id}/members" class="card mt-2 flex items-end gap-2">
+          <div class="min-w-0 flex-1">
+            <label class="label">멤버 추가 <span class="font-normal text-muted text-xs">(개인 아티스트를 이 그룹에 연결)</span></label>
+            <select name="member_id" class="input" required>
+              <option value="">— 아티스트 선택 —</option>
+              ${memberCandidates.map((a) => `<option value="${a.id}">${esc(a.name)}${a.group_id ? " (다른 그룹 소속 → 이동)" : ""}</option>`).join("")}
+            </select>
+          </div>
+          <button class="btn-primary shrink-0" type="submit">추가</button>
+        </form>
+        <p class="mt-1 text-xs text-muted">새 아티스트는 클라이언트 목록에서 먼저 등록한 뒤 여기서 연결하세요.</p>
+      </div>`
+    : "";
+
   // 업체(company): 소속 아티스트 목록(affiliations 기반). 아티스트: 소속 업체 링크는 소속 이력에서.
   const roster = c.kind === "company" ? listArtistsForAgency(c.id) : [];
   const rosterSection = c.kind === "company" && roster.length
@@ -384,10 +429,11 @@ router.get("/:id", (req, res) => {
   const companies = listClients({}).filter((x) => x.kind === "company");
   const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
   // 폼의 대표자/담당자 datalist는 전체 연락처가 필요(상세의 contacts는 이 클라이언트 소속만이라 별도).
-  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false); // withExtras=false — 첨부·삭제 제외
+  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false, listGroupsForPicker()); // withExtras=false — 첨부·삭제 제외
   const crossRefs = [
     // 아티스트(사람) party는 연락처와 동일 레코드 — '연락처로 보기' 링크(같은 party를 연락처 화면에서).
     c.kind === "person" ? `<div><span class="text-muted">연락처로 보기</span> <a href="/contacts/${c.id}" class="text-primary hover:underline">${esc(c.name)} ↗</a></div>` : "",
+    (() => { const g = c.kind === "person" && c.is_artist ? groupOfParty(c.id) : null; return g ? `<div><span class="text-muted">소속 그룹</span> <a href="/clients/${g.id}" class="text-primary hover:underline">${esc(g.activity_name || g.name)} ↗</a></div>` : ""; })(),
     (() => { const oc = c.owner_party_id ? getParty(c.owner_party_id) : null; return oc ? `<div><span class="text-muted">대표자 연락처</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : ""; })(),
   ].filter(Boolean).join("");
   const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
@@ -403,6 +449,7 @@ router.get("/:id", (req, res) => {
     ${pageHeader({ title: c.is_artist ? personLabel(c.activity_name || c.name, c.name) : c.name, desc: c.is_artist ? (c.kind === "group" ? "그룹 아티스트" : "아티스트") : "업체", back: { href: clientsBackHref, label: "클라이언트" } })}
     ${tabBarHtml}
     ${content}
+    ${memberSection}
     <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">상세 정보</h3>
     ${editCard}
     <div class="mt-3">${filesBlock}</div>
@@ -507,10 +554,11 @@ function linkClientContact(clientId, body) {
   if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가(compat: client_id→org_id)
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true) {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true, groups = []) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   const isArtist = !!c.is_artist; // 개인/그룹 → 세금정보 숨김·현금영수증 표시(초기 렌더, app.js가 분류 변경 시 토글)
+  const showGroupSelect = c.kind === "person" && c.is_artist; // 개인 아티스트만 소속 그룹 선택(그룹 자신은 상세에서 멤버 관리)
   // party.kind(person/company/group)를 분류 select 라벨로 매핑(편집 시 현재 분류 표시). 신규(빈 c)는 기본 아티스트.
   const selectedKind = c.kind === "group" ? "그룹"
     : c.kind === "company" ? (clientRoleList(c)[0] || "소속사/레이블")
@@ -554,6 +602,14 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
           <p class="mt-1 text-xs text-muted">소속사·소속 그룹은 <span class="text-fg">소속 이력</span>(연락처)이나 프로젝트의 소속사 칸에서 관리합니다.</p>
         </div>
       </div>
+      ${showGroupSelect ? `
+      <div>
+        <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때)</span></label>
+        <select name="group_id" class="input">
+          <option value="">— 소속 그룹 없음 —</option>
+          ${groups.map((g) => `<option value="${g.id}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
+        </select>
+      </div>` : ""}
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">세금계산서 발행 이메일</label><input class="input" type="email" name="email" value="${esc(c.email || "")}" placeholder="계산서 받을 이메일" /></div>
         <div><label class="label">전화</label><input class="input" name="phone" autocomplete="off" value="${esc(c.phone || "")}" /></div>

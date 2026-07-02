@@ -224,6 +224,7 @@ function init() {
       name           TEXT NOT NULL,                    -- 사람=본명, 조직=업체명, 그룹=팀명
       activity_name  TEXT,                             -- 활동명(아티스트). 오늘 contacts.nickname / 아티스트 client.name
       is_artist      INTEGER NOT NULL DEFAULT 0,       -- 아티스트 역할 플래그(person solo·group)
+      group_id       INTEGER,                          -- 아티스트(사람)의 소속 그룹(parties.id, kind='group'). 그룹↔멤버 연결
       phone          TEXT,
       email          TEXT,
       memo           TEXT,
@@ -377,6 +378,8 @@ function init() {
   addColumn("project_managers", "party_id", "INTEGER"); // 작업 담당 엔지니어 = person party(기존 contact_id 대체)
   addColumn("sessions", "director_party_id", "INTEGER"); // 담당 디렉터 첫 명(parties.id, 레거시 director_contact_id 대체)
   addColumn("session_directors", "party_id", "INTEGER"); // 다대다 디렉터(parties.id, 기존 contact_id 대체)
+  addColumn("parties", "group_id", "INTEGER"); // 아티스트(사람)의 소속 그룹(parties.id, kind='group'). 그룹↔멤버 연결
+  d.exec("CREATE INDEX IF NOT EXISTS idx_parties_group ON parties(group_id);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_kind ON parties(kind, is_artist, name);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_user ON parties(user_id);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_affiliations_person ON affiliations(person_id, ended_on);");
