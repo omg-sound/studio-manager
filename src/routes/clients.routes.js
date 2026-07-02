@@ -140,15 +140,34 @@ router.get("/", (req, res) => {
   // 상세로 넘어갈 때 현재 필터를 from으로 전달 → 상세의 '← 클라이언트' 백링크가 같은 필터로 복귀.
   const fromQ = [group ? `group=${encodeURIComponent(group)}` : "", activeKind ? `kind=${encodeURIComponent(activeKind)}` : "", q ? `q=${encodeURIComponent(q)}` : ""].filter(Boolean).join("&");
   const fromParam = fromQ ? `?from=${encodeURIComponent(fromQ)}` : "";
+  // 아티스트/그룹 행: 이름 뒤에 소속사·소속 그룹 표시(업체 '대표'와 동일 톤). 배치 조회로 N+1 회피.
+  const artistRows = displayed.filter((c) => c.is_artist);
+  const agencyByParty = {};
+  const groupNameByParty = {};
+  if (artistRows.length) {
+    const ids = artistRows.map((c) => c.id);
+    const ph = ids.map(() => "?").join(",");
+    for (const r of db().prepare(`SELECT a.person_id AS pid, o.name AS agency FROM affiliations a JOIN parties o ON o.id = a.org_id WHERE a.ended_on IS NULL AND o.kind = 'company' AND a.person_id IN (${ph}) ORDER BY a.started_on DESC, a.id DESC`).all(...ids)) {
+      if (!agencyByParty[r.pid]) agencyByParty[r.pid] = r.agency; // 현재(최근) 소속사
+    }
+    const gids = [...new Set(artistRows.filter((c) => c.group_id).map((c) => Number(c.group_id)))];
+    if (gids.length) {
+      const gmap = {};
+      for (const g of db().prepare(`SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name FROM parties WHERE id IN (${gids.map(() => "?").join(",")})`).all(...gids)) gmap[g.id] = g.name;
+      for (const c of artistRows) if (c.group_id && gmap[c.group_id]) groupNameByParty[c.id] = gmap[c.group_id];
+    }
+  }
   const list = displayed.length
     ? listGroup({
         rows: displayed.map((c) => {
           // 우측 정보(사업자·전화·이메일)는 이름만 링크(listRowLinked)로 분리 → 드래그·복사해도 상세로 안 들어감.
           if (c.is_artist) {
-            // 아티스트(개인) / 그룹(밴드·아이돌) — 배지로 구분. 오른쪽에 전화→이메일 세로 스택.
+            // 아티스트(개인) / 그룹(밴드·아이돌) — 배지로 구분. 이름 뒤에 소속사·소속 그룹, 오른쪽에 전화→이메일.
             const badges = c.kind === "group" ? `<span class="badge-info">그룹</span>` : `<span class="badge-info">아티스트</span>`;
+            const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
+            const title = `${esc(personLabel(c.activity_name || c.name, c.name))}${meta ? ` <span class="text-xs font-normal text-muted">· ${meta}</span>` : ""}`;
             const right = `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}<div>${esc(c.email || "이메일 없음")}</div></div>`;
-            return listRowLinked({ href: `/clients/${c.id}${fromParam}`, title: esc(personLabel(c.activity_name || c.name, c.name)), badges, right });
+            return listRowLinked({ href: `/clients/${c.id}${fromParam}`, title, badges, right });
           }
           // 업체(company): 대표는 회사명 뒤에 · 오른쪽에 사업자→전화→이메일 세로 스택
           const badges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
