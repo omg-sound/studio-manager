@@ -702,6 +702,81 @@
   document.addEventListener("click", guard); // 클릭의 기본동작(summary 토글) 취소 — select 드롭다운은 mousedown이라 영향 없음
 })();
 
+// 아티스트 콤보([data-artist-combo]): 타이핑=기존 아티스트·사람 검색, 빈 입력=[검색]/[새 아티스트] 팝업(전체 목록 덤프 방지).
+// 기존 사람 선택 → hidden artist_contact_id 연결(저장 시 중복 사람 방지). '그룹' 체크는 밴드/팀(연락처 미연결).
+(function () {
+  "use strict";
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-artist-combo]"), function (root) {
+    var input = root.querySelector("[data-artist-input]");
+    var cid = root.querySelector("[data-artist-cid]");
+    var group = root.querySelector("[data-artist-group]");
+    var pop = root.querySelector("[data-artist-pop]");
+    var dataEl = root.querySelector("[data-artist-options]");
+    if (!input || !pop || !dataEl) return;
+    var opts = [];
+    try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
+    var view = []; // 현재 렌더된 후보(클릭 인덱스 매핑)
+
+    function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
+    function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); } // dirty 감지 트리거
+
+    var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+    function pickRow(o, i) {
+      return '<button type="button" class="' + rowCls + '" data-idx="' + i + '">' +
+        '<span class="truncate text-fg">' + esc(o.name) + '</span>' +
+        '<span class="shrink-0 text-xs text-muted">' + esc(o.sub || "") + '</span></button>';
+    }
+    function newRow(label) {
+      return '<button type="button" class="' + rowCls + ' text-primary" data-new="1">' +
+        '<span class="truncate">＋ ' + esc(label) + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+    }
+    function render() {
+      var q = input.value.trim().toLowerCase();
+      var html = "";
+      if (!q) {
+        view = [];
+        html = '<button type="button" class="' + rowCls + '" data-search="1"><span>🔍 이름을 입력해 검색</span><span class="shrink-0 text-xs text-muted">기존 아티스트·연락처</span></button>' +
+          newRow("새 아티스트 등록");
+      } else {
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }).slice(0, 12);
+        html = view.map(pickRow).join("");
+        var exact = view.some(function (o) { return String(o.name).toLowerCase() === q; });
+        if (!exact) html += newRow("'" + input.value.trim() + "'(으)로 새 아티스트");
+      }
+      pop.innerHTML = html;
+      show();
+    }
+    function pick(o) {
+      input.value = o.name;
+      cid.value = o.contactId || "";
+      if (group) group.checked = !!o.isGroup;
+      hide();
+      fireInput();
+    }
+    function asNew() { cid.value = ""; hide(); input.focus(); fireInput(); } // 새 아티스트: 연결 없음, 입력값 유지
+
+    input.addEventListener("focus", render);
+    input.addEventListener("click", render);
+    input.addEventListener("input", render);
+    input.addEventListener("blur", function () { setTimeout(hide, 150); }); // 항목 클릭 여유
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur 방지
+    pop.addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]);
+      else if (b.hasAttribute("data-new")) asNew();
+      else if (b.hasAttribute("data-search")) input.focus();
+    });
+    // 직접 타이핑으로 이름을 바꾸면(선택 안 함) 연결 해제 — 저장 시 이름 매칭으로만 dedup.
+    input.addEventListener("input", function () {
+      var v = input.value.trim().toLowerCase();
+      var match = opts.filter(function (o) { return String(o.name).toLowerCase() === v; })[0];
+      if (!match) cid.value = "";
+    });
+  });
+})();
+
 // 드롭존([data-dropzone]): 파일 끌어놓기 또는 클릭 선택. CSP-safe(인라인 0, 외부 JS 파일).
 // [data-dropzone] 클릭 → 내부 input[type=file].click(). dragover/drop → input.files 할당 + 파일명 표시.
 (function () {

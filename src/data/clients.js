@@ -177,6 +177,91 @@ function resolveCompanyByName(name) {
   return ex ? ex.id : null;
 }
 
+/**
+ * 아티스트 입력 콤보 옵션 — 기존 아티스트(클라이언트) + 사람(연락처)을 이름 중복 제거해 반환.
+ * 연락처(사람)는 contactId로 링크 가능(중복 방지). 표시명은 활동명(nickname) 우선.
+ * 반환: [{ name, contactId|null, sub(분류/소속 힌트) }] (이름 오름차순).
+ */
+function artistPickerOptions() {
+  const contacts = db()
+    .prepare(
+      `SELECT ct.id AS contact_id, COALESCE(NULLIF(TRIM(ct.nickname), ''), ct.name) AS name,
+              (SELECT c.name FROM contact_affiliations a LEFT JOIN clients c ON c.id = a.client_id
+               WHERE a.contact_id = ct.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS company
+       FROM contacts ct WHERE TRIM(COALESCE(ct.nickname, ct.name)) <> ''`
+    )
+    .all();
+  const seen = new Set();
+  const out = [];
+  for (const c of contacts) {
+    const key = c.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: c.name, contactId: c.contact_id, isGroup: 0, sub: c.company || "연락처" });
+  }
+  const artists = db().prepare("SELECT name, source_contact_id, is_group FROM clients WHERE kind = '아티스트'").all();
+  for (const a of artists) {
+    const nm = String(a.name || "").trim();
+    if (!nm) continue;
+    const key = nm.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: nm, contactId: a.source_contact_id || null, isGroup: a.is_group ? 1 : 0, sub: a.is_group ? "그룹" : "아티스트" });
+  }
+  out.sort((x, y) => x.name.localeCompare(y.name, "ko"));
+  return out;
+}
+
+/** 아티스트 이름 → 현재 연결 메타(콤보 초기값). { contactId, isGroup }. 없으면 미연결·비그룹. */
+function resolveArtistMeta(name) {
+  const n = String(name || "").trim();
+  if (!n) return { contactId: null, isGroup: 0 };
+  const a = db().prepare("SELECT source_contact_id, is_group FROM clients WHERE name = ? AND kind = '아티스트' ORDER BY id LIMIT 1").get(n);
+  return a ? { contactId: a.source_contact_id || null, isGroup: a.is_group ? 1 : 0 } : { contactId: null, isGroup: 0 };
+}
+
+/** 그룹·밴드 아티스트(사람 아님) 등록 — 아티스트 클라이언트를 is_group=1로 생성/표시(연락처 연결 없음). 반환: client id. */
+function ensureGroupArtist(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const ex = db().prepare("SELECT id FROM clients WHERE name = ? AND kind = '아티스트' ORDER BY (source_contact_id IS NULL) DESC, id LIMIT 1").get(n);
+  if (ex) {
+    db().prepare("UPDATE clients SET is_group = 1 WHERE id = ?").run(ex.id);
+    return ex.id;
+  }
+  return db().prepare("INSERT INTO clients (name, kind, is_group) VALUES (?, '아티스트', 1)").run(n).lastInsertRowid;
+}
+
+/**
+ * 아티스트(이름)를 연락처(사람)에 연결 — 중복 사람 방지. artistName 아티스트 클라이언트를 그 연락처의
+ * source_contact_id로 묶고, 연락처 활동명(nickname)이 비어 있으면 채운다. 반환: 아티스트 클라이언트 id.
+ *  - 이미 그 연락처에 연결된 아티스트가 있으면 이름만 갱신(재사용).
+ *  - 같은 이름의 연결 안 된(orphan) 아티스트 클라이언트가 있으면 그걸 흡수(source_contact_id 세팅) — ensureClient가 만든 중복 제거.
+ *  - 둘 다 없으면 새로 생성.
+ */
+function linkArtistToContact(artistName, contactId) {
+  const name = String(artistName || "").trim();
+  const cid = Number(contactId) || null;
+  if (!name || !cid) return null;
+  const c = db().prepare("SELECT id, nickname FROM contacts WHERE id = ?").get(cid);
+  if (!c) return null;
+  if (!String(c.nickname || "").trim()) db().prepare("UPDATE contacts SET nickname = ? WHERE id = ?").run(name, cid);
+  const linked = db().prepare("SELECT id FROM clients WHERE source_contact_id = ? AND kind = '아티스트'").get(cid);
+  if (linked) {
+    db().prepare("UPDATE clients SET name = ?, is_group = 0 WHERE id = ?").run(name, linked.id);
+    return linked.id;
+  }
+  const orphan = db()
+    .prepare("SELECT id FROM clients WHERE name = ? AND kind = '아티스트' AND source_contact_id IS NULL ORDER BY id LIMIT 1")
+    .get(name);
+  if (orphan) {
+    db().prepare("UPDATE clients SET source_contact_id = ?, is_group = 0 WHERE id = ?").run(cid, orphan.id);
+    return orphan.id;
+  }
+  const info = db().prepare("INSERT INTO clients (name, kind, source_contact_id, is_group) VALUES (?, '아티스트', ?, 0)").run(name, cid);
+  return info.lastInsertRowid;
+}
+
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
   const where = [];
   if (!includeInactive) where.push("active = 1");
@@ -209,5 +294,9 @@ module.exports = {
   clientsWithOwnerContact,
   listArtistsForAgency,
   resolveCompanyByName,
+  artistPickerOptions,
+  resolveArtistMeta,
+  linkArtistToContact,
+  ensureGroupArtist,
   listProjectManagers,
 };

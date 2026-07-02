@@ -302,6 +302,7 @@ function init() {
   addColumn("clients", "agency_name", "TEXT"); // 소속사(아티스트의 소속사·레이블. 소속그룹과 별개)
   addColumn("clients", "owner_contact_id", "INTEGER REFERENCES contacts(id) ON DELETE SET NULL"); // 대표자를 연락처(사람)와 연동 — 양방향 링크
   addColumn("clients", "roles", "TEXT"); // 업체 역할 다중(CSV: 소속사/레이블·제작사 — 겸업 대응). kind는 1차 분류로 유지
+  addColumn("clients", "is_group", "INTEGER NOT NULL DEFAULT 0"); // 아티스트가 그룹·밴드/팀(사람 아님)이면 1 → 연락처(사람) 연결 안 함. 개인 아티스트(0)는 연락처로 통합해 중복 방지
   addColumn("clients", "agency_client_id", "INTEGER REFERENCES clients(id) ON DELETE SET NULL"); // 아티스트의 소속 업체(소속사·제작사) — 업체 상세 소속 아티스트 목록
   // 거래처 외부 열람(client) 폐기 → 잔여 client 계정은 비활성화(로그인 차단).
   try {
