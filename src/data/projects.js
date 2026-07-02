@@ -74,6 +74,8 @@ function listProjects(_user, { q } = {}) {
        WHERE tr.project_id = p.id AND t.is_invoiced = 0) AS task_total,
       (SELECT COUNT(*) FROM sessions s
        WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS upcoming_cnt,
+      (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '예정') AS sess_scheduled,
+      (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '완료') AS sess_done,
       (SELECT COUNT(*) FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        WHERE tr.project_id = p.id AND t.status <> 'Completed') AS open_tasks,
@@ -126,6 +128,48 @@ function getProjectForUser(user, id) {
   return { ...row, session_amount_total: sessionAmounts[row.id] || 0 };
 }
 
+/**
+ * 프로젝트 목록 인라인 요약(펼침용) — 여러 프로젝트를 **배치 2쿼리**로 한 번에(N+1 회피).
+ * 반환: { [projectId]: { sessions:[{session_date,start_time,end_time,session_type,status}],
+ *                        tracks:[{id,title,artist,engineers:[이름...]}] } }.
+ * 세션은 취소 제외·날짜순, 트랙은 작성순 + 작업자(engineer_name) 중복 제거.
+ */
+function listProjectSummaries(projectIds) {
+  const ids = (projectIds || []).map(Number).filter(Boolean);
+  if (!ids.length) return {};
+  const ph = ids.map(() => "?").join(",");
+  const out = {};
+  for (const id of ids) out[id] = { sessions: [], tracks: [] };
+  const sessions = db()
+    .prepare(
+      `SELECT project_id, session_date, start_time, end_time, session_type, status
+       FROM sessions WHERE project_id IN (${ph}) AND status <> '취소'
+       ORDER BY session_date ASC, start_time ASC, id ASC`
+    )
+    .all(...ids);
+  for (const s of sessions) if (out[s.project_id]) out[s.project_id].sessions.push(s);
+  const taskRows = db()
+    .prepare(
+      `SELECT tr.project_id, tr.id AS track_id, tr.title, tr.artist, t.engineer_name
+       FROM project_tracks tr
+       LEFT JOIN track_tasks t ON t.track_id = tr.id
+       WHERE tr.project_id IN (${ph})
+       ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
+    )
+    .all(...ids);
+  const trackMap = {};
+  for (const r of taskRows) {
+    let tk = trackMap[r.track_id];
+    if (!tk) {
+      tk = { id: r.track_id, title: r.title, artist: r.artist, engineers: [] };
+      trackMap[r.track_id] = tk;
+      if (out[r.project_id]) out[r.project_id].tracks.push(tk);
+    }
+    if (r.engineer_name && !tk.engineers.includes(r.engineer_name)) tk.engineers.push(r.engineer_name);
+  }
+  return out;
+}
+
 /** 프로젝트 삭제. 청구된 작업·세션이 있으면 거부(매출 추적 보존, deleteTrack과 정합). */
 function deleteProject(projectId) {
   const pid = Number(projectId);
@@ -142,6 +186,7 @@ function deleteProject(projectId) {
 module.exports = {
   distinctProjectFields,
   listProjects,
+  listProjectSummaries,
   getProjectForUser,
   deleteProject,
 };

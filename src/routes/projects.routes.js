@@ -15,6 +15,7 @@ const { renderInvoicePdf } = require("../invoice-pdf");
 const { asyncHandler } = require("../lib/async");
 const {
   listProjects,
+  listProjectSummaries,
   distinctProjectFields,
   getProjectForUser,
   deleteProject,
@@ -100,6 +101,7 @@ router.get("/", requireAuth, (req, res) => {
   const canCreate = canEdit(user); // 대표(열람전용)는 새 프로젝트 버튼 숨김
   const q = (req.query.q || "").toString().trim();
   const rows = listProjects(user, { q });
+  const summaries = listProjectSummaries(rows.map((r) => r.id)); // 인라인 요약(배치 2쿼리)
 
   const searched = Boolean(q);
   // 진행 중 / 완료로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
@@ -113,7 +115,7 @@ router.get("/", requireAuth, (req, res) => {
              <span class="flex items-baseline gap-2 font-display text-base font-semibold">${title}<span class="text-sm font-normal text-muted">${arr.length}</span></span>
              ${detailsChevron()}
            </summary>
-           <div class="mt-2">${listGroup({ rows: arr.map(projectListRow) })}</div>
+           <div class="mt-2">${listGroup({ rows: arr.map((p) => projectListRow(p, summaries[p.id])) })}</div>
          </details>`
       : "";
   let list;
@@ -157,18 +159,68 @@ function trackCount(p) {
   return String(p.track_titles).split("||").map((s) => s.trim()).filter(Boolean).length;
 }
 
-/** 목록 행(listGroup 안 listRow): 제목 / 메타(아티스트·클라이언트) / 곡수 — 우측 금액·D-day(tabular). */
-function projectListRow(p) {
-  const metaLine = [p.artist, p.client_name, p.manager_name, contactMetaPart(p)].filter(Boolean).join(" · ") || "정보 미정";
+/**
+ * 목록 행 — 두 클릭 영역:
+ *  ① 상단(제목 / 아티스트·회사 / 우측 PM·금액) → 프로젝트 상세로 이동(<a>).
+ *  ② 하단 요약 줄(곡·콘텐츠·예정/완료 세션 수) → 접기 토글, 펼치면 세션 일정·곡별 작업자 인라인 요약(프로젝트 안 안 가고 미리보기).
+ */
+function projectListRow(p, summary) {
+  const metaLine = [p.artist, p.client_name, contactMetaPart(p)].filter(Boolean).join(" · ") || "정보 미정";
   const n = trackCount(p);
-  const left = `
-    <div class="truncate font-semibold">${esc(p.title)}</div>
-    <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
-    <div class="mt-0.5 text-xs text-muted">${n ? `곡·콘텐츠 ${n}` : "곡·콘텐츠 미정"}</div>`;
-  const amount = projectAmount(p)
-    ? `<div class="text-sm font-medium tabular">${formatKRW(projectAmount(p))}</div>`
+  const amt = projectAmount(p);
+  const amountLine = amt
+    ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
-  return listRow({ href: `/projects/${p.id}`, left, right: amount });
+  const pmLine = p.manager_name ? `<div class="text-xs text-muted">PM ${esc(p.manager_name)}</div>` : "";
+  const counts = [
+    n ? `곡·콘텐츠 ${n}` : "곡·콘텐츠 미정",
+    Number(p.sess_scheduled) ? `예정 세션 ${p.sess_scheduled}` : "",
+    Number(p.sess_done) ? `완료 세션 ${p.sess_done}` : "",
+  ].filter(Boolean).join(" · ");
+  return `
+    <div>
+      <a href="/projects/${p.id}" class="flex items-start justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface">
+        <div class="min-w-0">
+          <div class="truncate font-semibold">${esc(p.title)}</div>
+          <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
+        </div>
+        <div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>
+      </a>
+      <details class="group">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/70 px-4 py-2 text-xs text-muted transition-colors hover:bg-surface hover:text-fg">
+          <span>${esc(counts)}</span>
+          <svg class="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        </summary>
+        <div class="border-t border-border/60 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary)}</div>
+      </details>
+    </div>`;
+}
+
+/** 인라인 요약 본문 — 세션 일정(날짜·시간) + 곡·콘텐츠(아티스트·제목·작업자). data.listProjectSummaries 결과 1건. */
+function projectSummaryHtml(s) {
+  if (!s || (!s.sessions.length && !s.tracks.length)) {
+    return `<span class="text-muted">등록된 세션·곡·콘텐츠가 없습니다.</span>`;
+  }
+  const blocks = [];
+  if (s.sessions.length) {
+    const items = s.sessions.slice(0, 8).map((se) => {
+      const time = se.start_time ? ` ${esc(se.start_time)}${se.end_time ? "–" + esc(se.end_time) : ""}` : "";
+      const st = se.status && se.status !== "예정" ? ` <span class="text-muted">· ${esc(se.status)}</span>` : "";
+      return `<li><span class="tabular text-fg/80">${esc(formatYmdShort(se.session_date))}${time}</span> <span class="text-muted">· ${esc(se.session_type)}</span>${st}</li>`;
+    }).join("");
+    const more = s.sessions.length > 8 ? `<li class="text-muted">외 ${s.sessions.length - 8}건</li>` : "";
+    blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">세션 ${s.sessions.length}</div><ul class="space-y-0.5">${items}${more}</ul></div>`);
+  }
+  if (s.tracks.length) {
+    const items = s.tracks.slice(0, 10).map((tr) => {
+      const artist = tr.artist ? `<span class="text-muted">${esc(tr.artist)} · </span>` : "";
+      const eng = tr.engineers.length ? ` <span class="text-muted">(${esc(tr.engineers.join(", "))})</span>` : "";
+      return `<li>${artist}<span class="text-fg/80">${esc(tr.title)}</span>${eng}</li>`;
+    }).join("");
+    const more = s.tracks.length > 10 ? `<li class="text-muted">외 ${s.tracks.length - 10}곡</li>` : "";
+    blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">곡·콘텐츠 ${s.tracks.length}</div><ul class="space-y-0.5">${items}${more}</ul></div>`);
+  }
+  return `<div class="grid gap-3 sm:grid-cols-2">${blocks.join("")}</div>`;
 }
 
 // ── 새 프로젝트 폼(관리자) — 유형 구분 없음(모든 신규=세션 취급) ──
