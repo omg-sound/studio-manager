@@ -598,6 +598,22 @@
   });
 })();
 
+// [data-flash] 토스트: fixed로 떠 있어 레이아웃을 밀지 않음. 잠시 후 자동 페이드아웃·클릭 시 즉시 닫기.
+(function () {
+  "use strict";
+  var el = document.querySelector("[data-flash]");
+  if (!el) return;
+  var warn = el.getAttribute("data-flash-warn") === "1";
+  var timer;
+  function hide() {
+    if (timer) clearTimeout(timer);
+    el.style.opacity = "0";
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 320);
+  }
+  el.addEventListener("click", hide);
+  timer = setTimeout(hide, warn ? 6000 : 3500); // 경고는 조금 더 오래 유지
+})();
+
 // 검색형 콤보박스(실결제자·클라이언트/세션 디렉터 담당자): <input list> 검색값 ↔ hidden id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정.
 // 위임(delegation)으로 처리 → 동적으로 추가되는 행(세션 디렉터 '+추가')도 자동 동작.
 (function () {

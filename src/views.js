@@ -280,8 +280,11 @@ function flashBanner(query) {
   const key = query && query.flash;
   const msg = FLASH_MESSAGES[key];
   if (!msg) return "";
-  const cls = FLASH_WARN.has(key) ? "border-warning/30 bg-warning/10 text-warning" : "border-success/30 bg-success/10 text-success";
-  return `<div data-flash class="mb-4 rounded-lg border ${cls} px-4 py-2 text-sm font-medium">${esc(msg)}</div>`;
+  const warn = FLASH_WARN.has(key);
+  const tone = warn ? "border-warning/40 text-warning" : "border-success/40 text-success";
+  // 토스트: fixed로 띄워 레이아웃을 밀지 않음(내용이 밀렸다 돌아오는 현상 방지). app.js가 잠시 후 페이드아웃·클릭 시 닫기. bg-bg로 불투명.
+  return `<div data-flash data-flash-warn="${warn ? "1" : ""}" role="status" aria-live="polite"
+    class="fixed left-1/2 top-4 z-50 max-w-[90vw] -translate-x-1/2 rounded-lg border ${tone} bg-bg px-4 py-2.5 text-sm font-medium shadow-lg transition-opacity duration-300">${esc(msg)}</div>`;
 }
 
 /** 스타일이 적용된 에러 페이지(404/403/500 등). raw 텍스트 대신 일관된 화면. */
