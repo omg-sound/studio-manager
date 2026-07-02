@@ -176,7 +176,7 @@ router.get("/", (req, res) => {
             const right = (c.phone || c.email)
               ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}${c.email ? `<div>${esc(c.email)}</div>` : ""}</div>`
               : "";
-            return listRowLinked({ href: `/contacts/${c.id}`, title, badges: roleBadges, right });
+            return listRowLinked({ href: `/contacts/${c.id}${fromParam}`, title, badges: roleBadges, right }); // ?from= → 연락처 상세가 관계자 탭으로 복귀
           }
           if (c.is_artist) {
             // 아티스트(개인) / 그룹(밴드·아이돌) — 배지로 구분. 이름 뒤에 소속사·소속 그룹, 오른쪽에 전화→이메일.

@@ -367,9 +367,13 @@ router.get("/:id", (req, res) => {
       })
     : emptyState("담당 디렉터로 지정된 세션이 없습니다.", { card: true });
 
+  // 클라이언트 '관계자' 탭 등에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만). 아니면 연락처 목록.
+  const from = String(req.query.from || "");
+  const backHref = from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/contacts";
+  const backLabel = from ? "클라이언트" : "연락처";
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: personLabel(c.name, c.nickname), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: "/contacts", label: "연락처" } })}
+    ${pageHeader({ title: personLabel(c.name, c.nickname), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}
     ${infoCard}
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
     ${timeline}

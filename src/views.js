@@ -302,8 +302,8 @@ function errorPage({ code = 500, title = "오류가 발생했습니다", message
 function pageHeader({ title, desc = "", action = "", back = null }) {
   // back={href,label}: 상세 페이지에서 목록으로 돌아가는 링크(제목 위).
   const backLink = back
-    ? `<a href="${esc(back.href)}" class="mb-2 inline-flex items-center gap-1 rounded text-sm text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>${esc(back.label || "목록")}</a>`
+    ? `<a href="${esc(back.href)}" class="mb-3 inline-flex items-center gap-1.5 rounded text-base font-medium text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>${esc(back.label || "목록")}</a>`
     : "";
   return `<div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div>
