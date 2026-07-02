@@ -743,6 +743,7 @@ function artistCombo(p = {}) {
         <input type="checkbox" name="artist_is_group" value="1" ${meta.isGroup ? "checked" : ""} data-artist-group class="h-4 w-4 rounded border-border text-primary focus:ring-primary/40" />
         그룹(밴드·팀) — 개인이 아니면 체크
       </label>
+      <input class="input mt-1.5 py-1.5 text-sm ${meta.isGroup ? "hidden" : ""}" type="text" name="artist_real_name" value="${esc(meta.realName || "")}" data-artist-real autocomplete="off" placeholder="본명 (활동명과 다르면 입력 · 개인)" aria-label="본명" />
       <script type="application/json" data-artist-options>${json}</script>
     </div>`;
 }
@@ -757,9 +758,11 @@ function applyArtistLink(b, managerContactId) {
   if (!artist) return;
   if (b.artist_is_group) { ensureGroupArtist(artist); return; }
   // 개인 아티스트는 항상 연락처(사람)로 등록·연결(사용자 결정 2026-07-02 — 연락처 증가는 무방).
-  //  명시 선택(artist_contact_id) 우선 → 없으면 같은 이름 기존 연락처 재사용, 없으면 새 연락처 생성(resolveContactByName).
-  //  linkArtistToContact가 아티스트 클라이언트를 그 연락처(source_contact_id)로 통합 + nickname(활동명) 설정 → 중복 사람 방지.
-  const cid = b.artist_contact_id ? Number(b.artist_contact_id) : resolveContactByName(artist);
+  //  명시 선택(artist_contact_id) 우선 → 없으면 본명(있으면)/활동명으로 연락처 찾기·생성(resolveContactByName).
+  //  연락처 name=본명(realName 있으면, 없으면 활동명), nickname=활동명(linkArtistToContact가 설정). 아티스트 클라이언트 name=활동명.
+  //  linkArtistToContact가 아티스트 클라이언트를 그 연락처(source_contact_id)로 통합 → 중복 사람 방지.
+  const realName = String(b.artist_real_name || "").trim();
+  const cid = b.artist_contact_id ? Number(b.artist_contact_id) : resolveContactByName(realName || artist);
   if (cid) linkArtistToContact(artist, cid);
 }
 

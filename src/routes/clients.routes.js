@@ -18,7 +18,7 @@ const {
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
-const { layout, pageHeader, esc, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow, explain } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, filterChips, projectTypeBadge, listGroup, listRow, explain } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -143,7 +143,8 @@ router.get("/", (req, res) => {
         rows: displayed.map((c) => {
           const taxLine = [c.biz_no ? "사업자 " + esc(c.biz_no) : "", c.owner_name ? "대표 " + esc(c.owner_name) : ""].filter(Boolean).join(" · ");
           const badges = c.kind === "아티스트" ? `<span class="badge-neutral">아티스트</span>` : (clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(r)}</span>`).join(" ") : `<span class="badge-neutral">${esc(c.kind)}</span>`);
-          const left = `<div class="truncate font-semibold">${esc(c.name)}</div><div class="mt-1 flex flex-wrap gap-1">${badges}</div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
+          const dispName = c.kind === "아티스트" ? personLabel(c.name, c.source_contact_name) : c.name; // 아티스트=활동명(본명)
+          const left = `<div class="truncate font-semibold">${esc(dispName)}</div><div class="mt-1 flex flex-wrap gap-1">${badges}</div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
           const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
           return listRow({ href: `/clients/${c.id}${fromParam}`, left, right });
         }),
@@ -398,7 +399,7 @@ router.get("/:id", (req, res) => {
   // 섹션 순서(사용자 지정): ① 프로젝트/청구·결제 → ② 상세 정보(편집 폼) → ③ 담당자 연락처 → ④ 첨부 서류 → 삭제
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: clientsBackHref, label: "클라이언트" } })}
+    ${pageHeader({ title: c.kind === "아티스트" ? personLabel(c.name, c.source_contact_name) : c.name, desc: c.kind + (c.group_name ? ` · 소속그룹 ${c.group_name}` : "") + (c.agency_name ? ` · 소속사 ${c.agency_name}` : ""), back: { href: clientsBackHref, label: "클라이언트" } })}
     ${tabBarHtml}
     ${content}
     <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">상세 정보</h3>

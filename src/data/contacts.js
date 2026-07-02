@@ -256,6 +256,9 @@ function classifyContact(contactId, aff) {
     .prepare("SELECT 1 FROM sessions WHERE director_contact_id = @cid UNION SELECT 1 FROM session_directors WHERE contact_id = @cid LIMIT 1")
     .get({ cid: id });
   if (director) badges.push({ label: "디렉터", cls: "badge-warning" });
+  // 아티스트로 연결된 연락처(개인 아티스트 = source_contact_id로 아티스트 클라이언트와 연동)면 아티스트 배지.
+  const artist = db().prepare("SELECT 1 FROM clients WHERE source_contact_id = ? AND kind = '아티스트' LIMIT 1").get(id);
+  if (artist) badges.push({ label: "아티스트", cls: "badge-info" });
   if (!badges.length) badges.push({ label: "지인·기타", cls: "badge-neutral" });
   return badges;
 }

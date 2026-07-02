@@ -41,6 +41,13 @@ function formatKRW(amount) {
   return new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(n);
 }
 
+/** 사람 표시명: 주명(보조명) — 보조명이 있고 주명과 다르면 괄호 병기. 연락처=본명(활동명), 아티스트=활동명(본명). 반환은 raw(호출부 esc 필요). */
+function personLabel(main, alt) {
+  const m = String(main == null ? "" : main).trim();
+  const a = String(alt == null ? "" : alt).trim();
+  return a && a !== m ? `${m} (${a})` : m;
+}
+
 /** bytes → "12.3 MB" 사람이 읽는 크기. */
 function formatBytes(bytes) {
   const n = Number(bytes || 0);
@@ -423,4 +430,4 @@ function listRow({ href, left, right = "" }) {
   return `<div class="transition-colors hover:bg-surface">${inner}</div>`;
 }
 
-module.exports = { esc, formatKRW, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow };
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow };

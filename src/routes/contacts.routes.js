@@ -27,7 +27,7 @@ const {
   syncContactToManager,
 } = require("../data");
 const people = require("../people");
-const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge, tabBar, detailsChevron } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, projectTypeBadge, tabBar, detailsChevron } = require("../views");
 
 const router = express.Router();
 
@@ -80,7 +80,7 @@ router.get("/", (req, res) => {
           const cur = currentAffiliation(c.id);
           const typeBadges = classifyContact(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
           const affBadge = cur && cur.client_id ? `<span class="badge badge-neutral">${esc(cur.client_name || "")}${cur.title ? " · " + esc(cur.title) : ""}</span>` : "";
-          const left = `<div class="truncate font-semibold">${esc(c.name)}</div><div class="mt-1 flex flex-wrap gap-1">${typeBadges}${affBadge}</div>`;
+          const left = `<div class="truncate font-semibold">${esc(personLabel(c.name, c.nickname))}</div><div class="mt-1 flex flex-wrap gap-1">${typeBadges}${affBadge}</div>`;
           const right = c.phone ? `<span class="text-sm text-muted">${esc(c.phone)}</span>` : "";
           return listRow({ href: `/contacts/${c.id}`, left, right });
         }),
@@ -360,7 +360,7 @@ router.get("/:id", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: c.name, desc: `연락처 · ${classifyContact(c.id).map((t) => t.label).join(" · ")}`, back: { href: "/contacts", label: "연락처" } })}
+    ${pageHeader({ title: personLabel(c.name, c.nickname), desc: `연락처 · ${classifyContact(c.id).map((t) => t.label).join(" · ")}`, back: { href: "/contacts", label: "연락처" } })}
     ${infoCard}
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
     ${timeline}

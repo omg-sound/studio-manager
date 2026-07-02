@@ -714,9 +714,16 @@
     var pop = root.querySelector("[data-artist-pop]");
     var dataEl = root.querySelector("[data-artist-options]");
     if (!input || !pop || !dataEl) return;
+    var real = root.querySelector("[data-artist-real]"); // 본명 입력(개인만)
     var opts = [];
     try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
     var view = []; // 현재 렌더된 후보(클릭 인덱스 매핑)
+    // 그룹 체크 시 본명칸 숨김(그룹은 사람 아님).
+    if (group && real) {
+      var toggleReal = function () { real.classList.toggle("hidden", group.checked); };
+      group.addEventListener("change", toggleReal);
+      toggleReal();
+    }
 
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }

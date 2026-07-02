@@ -16,10 +16,12 @@ const { todayYmd } = require("../lib/date");
 const { createContact } = require("./contacts"); // 무순환(contacts는 clients를 호출하지 않음)
 
 function listClients({ kind } = {}) {
+  // source_contact_name = 개인 아티스트의 연결 연락처(본명) — 목록에서 "활동명(본명)" 표기용.
+  const base = "SELECT c.*, sc.name AS source_contact_name FROM clients c LEFT JOIN contacts sc ON sc.id = c.source_contact_id";
   if (kind) {
-    return db().prepare("SELECT * FROM clients WHERE kind = ? ORDER BY name COLLATE NOCASE").all(kind);
+    return db().prepare(`${base} WHERE c.kind = ? ORDER BY c.name COLLATE NOCASE`).all(kind);
   }
-  return db().prepare("SELECT * FROM clients ORDER BY name COLLATE NOCASE").all();
+  return db().prepare(`${base} ORDER BY c.name COLLATE NOCASE`).all();
 }
 
 /** 분류별 거래처 수(탭 배지용). */
@@ -30,7 +32,9 @@ function clientKindCounts() {
   return map;
 }
 function getClient(id) {
-  return db().prepare("SELECT * FROM clients WHERE id = ?").get(id);
+  return db()
+    .prepare("SELECT c.*, sc.name AS source_contact_name FROM clients c LEFT JOIN contacts sc ON sc.id = c.source_contact_id WHERE c.id = ?")
+    .get(id);
 }
 
 /** 클라이언트가 관여한 프로젝트(아티스트/소속사/제작사 이름 매칭 또는 실결제자). */
@@ -212,12 +216,19 @@ function artistPickerOptions() {
   return out;
 }
 
-/** 아티스트 이름 → 현재 연결 메타(콤보 초기값). { contactId, isGroup }. 없으면 미연결·비그룹. */
+/** 아티스트 이름(활동명) → 현재 연결 메타(콤보 초기값). { contactId, isGroup, realName(본명·연결 연락처명이 활동명과 다르면) }. */
 function resolveArtistMeta(name) {
   const n = String(name || "").trim();
-  if (!n) return { contactId: null, isGroup: 0 };
+  const empty = { contactId: null, isGroup: 0, realName: "" };
+  if (!n) return empty;
   const a = db().prepare("SELECT source_contact_id, is_group FROM clients WHERE name = ? AND kind = '아티스트' ORDER BY id LIMIT 1").get(n);
-  return a ? { contactId: a.source_contact_id || null, isGroup: a.is_group ? 1 : 0 } : { contactId: null, isGroup: 0 };
+  if (!a) return empty;
+  let realName = "";
+  if (a.source_contact_id) {
+    const c = db().prepare("SELECT name FROM contacts WHERE id = ?").get(a.source_contact_id);
+    if (c && String(c.name || "").trim() && String(c.name).trim() !== n) realName = String(c.name).trim();
+  }
+  return { contactId: a.source_contact_id || null, isGroup: a.is_group ? 1 : 0, realName };
 }
 
 /** 그룹·밴드 아티스트(사람 아님) 등록 — 아티스트 클라이언트를 is_group=1로 생성/표시(연락처 연결 없음). 반환: client id. */
