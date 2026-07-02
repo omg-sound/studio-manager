@@ -102,38 +102,29 @@ router.get("/", requireAuth, (req, res) => {
   const rows = listProjects(user, { q });
 
   const searched = Boolean(q);
-  // 진행 중(상단) / 완료(하단 접기)로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
+  // 진행 중 / 완료로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
   const ongoing = rows.filter((r) => !r.is_completed);
   const done = rows.filter((r) => r.is_completed);
-  const sectionHeading = (title, n) =>
-    `<h2 class="mb-2 font-display text-base font-semibold">${title} <span class="text-sm font-normal text-muted">${n}</span></h2>`;
+  // 두 섹션 모두 접기 가능(기본 펼침). summary는 사이드바 메뉴처럼 은은하게 — 테두리·배경 없이 옅은 hover(bg-surface)만.
+  const projectSection = (title, arr) =>
+    arr.length
+      ? `<details class="group" open>
+           <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-fg/80 transition-colors hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+             <span class="flex items-baseline gap-2 font-display text-base font-semibold">${title}<span class="text-sm font-normal text-muted">${arr.length}</span></span>
+             ${detailsChevron()}
+           </summary>
+           <div class="mt-2">${listGroup({ rows: arr.map(projectListRow) })}</div>
+         </details>`
+      : "";
   let list;
   if (!rows.length) {
     list = searched
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
   } else {
-    const ongoingSec = ongoing.length
-      ? `${sectionHeading("진행 중", ongoing.length)}${listGroup({ rows: ongoing.map(projectListRow) })}`
-      : "";
-    const doneOpen = searched || ongoing.length === 0; // 검색 중이거나 진행 중이 없으면 완료 섹션을 펼침
-    const doneSec = done.length
-      ? `<details class="group mt-4" ${doneOpen ? "open" : ""}>
-           <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 transition-colors hover:border-primary/40 hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
-             <span class="flex items-center gap-2">
-               <span class="font-display text-base font-semibold">완료</span>
-               <span class="badge badge-neutral">${done.length}</span>
-             </span>
-             <span class="flex items-center gap-1.5 text-sm font-medium text-muted group-hover:text-primary">
-               <span class="group-open:hidden">펼치기</span>
-               <span class="hidden group-open:inline">접기</span>
-               ${detailsChevron()}
-             </span>
-           </summary>
-           <div class="mt-2">${listGroup({ rows: done.map(projectListRow) })}</div>
-         </details>`
-      : "";
-    list = `${ongoingSec}${doneSec}`;
+    const ongoingSec = projectSection("진행 중", ongoing);
+    const doneSec = projectSection("완료", done);
+    list = `${ongoingSec}${doneSec ? `<div class="${ongoingSec ? "mt-4" : ""}">${doneSec}</div>` : ""}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
