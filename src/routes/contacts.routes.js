@@ -80,7 +80,7 @@ router.get("/", (req, res) => {
           const cur = currentAffiliation(c.id);
           const typeBadges = classifyContact(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
           const affBadge = cur && cur.client_id ? `<span class="badge badge-neutral">${esc(cur.client_name || "")}${cur.title ? " · " + esc(cur.title) : ""}</span>` : "";
-          const left = `<div class="flex flex-wrap items-center gap-2"><span class="font-semibold">${esc(c.name)}</span>${typeBadges}${affBadge}</div>`;
+          const left = `<div class="truncate font-semibold">${esc(c.name)}</div><div class="mt-1 flex flex-wrap gap-1">${typeBadges}${affBadge}</div>`;
           const right = c.phone ? `<span class="text-sm text-muted">${esc(c.phone)}</span>` : "";
           return listRow({ href: `/contacts/${c.id}`, left, right });
         }),

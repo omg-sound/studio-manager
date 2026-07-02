@@ -184,7 +184,8 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     <details id="inv-${inv.id}" class="group border-b border-border last:border-0"${isOpen ? " open" : ""}>
       <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-3 py-3">
         <div class="min-w-0">
-          <div class="flex items-center gap-2">${invoiceBadge(inv)}<span class="truncate font-medium">${esc(inv.title)}</span></div>
+          <div class="truncate font-medium">${esc(inv.title)}</div>
+          <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
           <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
@@ -201,7 +202,8 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
 
   // 목록 페이지: listRow 활용(listGroup 래퍼와 함께 사용)
   const left = `
-    <div class="flex items-center gap-2">${invoiceBadge(inv)}<span class="truncate font-medium">${esc(inv.title)}</span></div>
+    <div class="truncate font-medium">${esc(inv.title)}</div>
+    <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
     <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
   const right = `
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>

@@ -143,7 +143,7 @@ router.get("/", (req, res) => {
         rows: displayed.map((c) => {
           const taxLine = [c.biz_no ? "사업자 " + esc(c.biz_no) : "", c.owner_name ? "대표 " + esc(c.owner_name) : ""].filter(Boolean).join(" · ");
           const badges = c.kind === "아티스트" ? `<span class="badge-neutral">아티스트</span>` : (clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(r)}</span>`).join(" ") : `<span class="badge-neutral">${esc(c.kind)}</span>`);
-          const left = `<div class="flex items-center gap-2">${badges}<span class="font-semibold">${esc(c.name)}</span></div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
+          const left = `<div class="truncate font-semibold">${esc(c.name)}</div><div class="mt-1 flex flex-wrap gap-1">${badges}</div>${taxLine ? `<div class="mt-1 text-xs text-muted">${taxLine}</div>` : ""}`;
           const right = `<span class="text-sm text-muted">${esc(c.email || "이메일 없음")}${c.phone ? " · " + esc(c.phone) : ""}</span>`;
           return listRow({ href: `/clients/${c.id}${fromParam}`, left, right });
         }),

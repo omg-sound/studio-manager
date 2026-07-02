@@ -120,7 +120,7 @@
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
   }
   .badge {
-    @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium;
   }
   /* badge 색 변형: .badge 베이스에 색만 얹는다. */
   .badge-neutral {
