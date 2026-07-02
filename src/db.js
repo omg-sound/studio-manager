@@ -586,9 +586,17 @@ function init() {
 
   // ── 당사자(Party) 모델 이관(party_model_v1) — contacts+clients → parties, 역할 FK 재배선 ──
   // 위 모든 contacts/clients 백필 이후 실행(최종 상태를 이관). 순수 populate(읽기 경로 무변경, P2에서 전환).
+  // 원자적(BEGIN/COMMIT: 게이트+데이터 일괄) + 부팅 안전(실패해도 앱은 레거시 clients/contacts로 무중단, 재배포 시 재시도).
   if (!getState("party_model_v1")) {
-    migrateToPartyModel(d);
-    setState("party_model_v1", "done");
+    try {
+      d.exec("BEGIN IMMEDIATE;");
+      migrateToPartyModel(d);
+      setState("party_model_v1", "done"); // 같은 트랜잭션 안 — 데이터와 게이트 원자화(부분 이관 방지)
+      d.exec("COMMIT;");
+    } catch (e) {
+      try { d.exec("ROLLBACK;"); } catch (_e) { /* 이미 롤백/미개시 */ }
+      console.error("[migrate party_model_v1] 실패 — 레거시(clients/contacts)로 무중단 계속, 재배포 시 재시도:", e && e.message);
+    }
   }
 
   // ── 후속 단계 테이블 자리(스키마만; 아직 미사용) ──
