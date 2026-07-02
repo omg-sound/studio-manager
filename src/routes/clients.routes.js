@@ -481,10 +481,11 @@ function linkClientContact(clientId, body) {
     contactId = resolveContactByName(name); // 이름으로 기존 연락처 재사용 후 없으면 생성 — 자동저장 blur마다 중복 생성되던 것 방지
   }
   if (!contactId) return;
+  // 당사자 모델: 소속 이력은 affiliations(person_id, org_id). 중복(현재 소속 동일 조직)만 건너뛴다.
   const already = db()
-    .prepare("SELECT 1 FROM contact_affiliations WHERE contact_id = ? AND client_id = ? AND ended_on IS NULL LIMIT 1")
+    .prepare("SELECT 1 FROM affiliations WHERE person_id = ? AND org_id = ? AND ended_on IS NULL LIMIT 1")
     .get(contactId, Number(clientId));
-  if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가
+  if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가(compat: client_id→org_id)
 }
 
 function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true) {

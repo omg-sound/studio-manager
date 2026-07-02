@@ -13,6 +13,7 @@ const crypto = require("crypto");
 const { config } = require("./config");
 const { init, db } = require("./db");
 const { todayYmd, ymd } = require("./lib/date");
+const data = require("./data"); // 당사자(party) 함수 — 데모도 파티 모델로 시드
 
 init();
 const d = db();
@@ -23,16 +24,29 @@ function addDays(n) {
   return ymd(t);
 }
 
+// 당사자(party) 생성 — kind: 레이블/소속사→company(소속사/레이블), 대행사/제작사→company(제작사), 아티스트→person(is_artist).
 function ensureClient(name, kind, email, phone) {
-  let c = d.prepare("SELECT * FROM clients WHERE name = ?").get(name);
+  let c = d.prepare("SELECT * FROM parties WHERE name = ?").get(name);
   if (!c) {
-    const info = d
-      .prepare("INSERT INTO clients (name, kind, email, phone) VALUES (?,?,?,?)")
-      .run(name, kind, email, phone);
-    c = d.prepare("SELECT * FROM clients WHERE id = ?").get(info.lastInsertRowid);
-    console.log("  + 거래처:", name);
+    let id;
+    if (kind === "레이블" || kind === "소속사/레이블") id = data.createCompany({ name, email, phone, roles: "소속사/레이블" });
+    else if (kind === "대행사" || kind === "제작사") id = data.createCompany({ name, email, phone, roles: "제작사" });
+    else id = data.createPerson({ name, email, phone, activity_name: name }); // 아티스트
+    c = d.prepare("SELECT * FROM parties WHERE id = ?").get(id);
+    console.log("  + 당사자:", name, `(${kind})`);
   }
   return c;
+}
+
+function ensureCompanyParty(name, role) {
+  if (!name) return null;
+  const ex = d.prepare("SELECT id FROM parties WHERE kind = 'company' AND name = ? LIMIT 1").get(name);
+  return ex ? ex.id : data.createCompany({ name, roles: role });
+}
+function ensureArtistParty(name) {
+  if (!name) return null;
+  const ex = d.prepare("SELECT id FROM parties WHERE name = ? AND is_artist = 1 LIMIT 1").get(name);
+  return ex ? ex.id : data.createPerson({ name, activity_name: name });
 }
 
 function ensureUser(email, role, name) {
@@ -71,17 +85,21 @@ function ensureProject(title, artist, artistCompany, productionCompany, clientId
   const encodedServices = JSON.stringify(services || []);
   const dueDate = (services || []).map((s) => s.completed_at).filter(Boolean).sort().pop() || null;
   const rate = (services || []).reduce((sum, s) => sum + (s.amount || 0), 0);
+  // 당사자(party) 참조 해석 — clientId(레거시)는 무시하고 이름에서 파생.
+  const artistId = ensureArtistParty(artist);
+  const agencyId = ensureCompanyParty(artistCompany, "소속사/레이블");
+  const productionId = ensureCompanyParty(productionCompany, "제작사");
   if (!exists) {
     d.prepare(
-      `INSERT INTO projects (title, artist, artist_company, production_company, client_id, manager_id, services, due_date, rate, memo)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`
-    ).run(title, artist, artistCompany, productionCompany, clientId, managerId, encodedServices, dueDate, rate, memo);
+      `INSERT INTO projects (title, artist, artist_company, production_company, artist_id, agency_id, production_id, manager_id, services, due_date, rate, memo)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(title, artist, artistCompany, productionCompany, artistId, agencyId, productionId, managerId, encodedServices, dueDate, rate, memo);
     console.log("  + 프로젝트:", title);
   } else if (exists.services !== encodedServices || Number(exists.manager_id || 0) !== Number(managerId || 0)) {
     d.prepare(
-      `UPDATE projects SET artist=?, artist_company=?, production_company=?, client_id=?, manager_id=?,
+      `UPDATE projects SET artist=?, artist_company=?, production_company=?, artist_id=?, agency_id=?, production_id=?, manager_id=?,
        services=?, due_date=?, rate=?, memo=? WHERE id=?`
-    ).run(artist, artistCompany, productionCompany, clientId, managerId, encodedServices, dueDate, rate, memo, exists.id);
+    ).run(artist, artistCompany, productionCompany, artistId, agencyId, productionId, managerId, encodedServices, dueDate, rate, memo, exists.id);
   }
 }
 
@@ -138,13 +156,13 @@ ensureSampleDeliverable();
 function ensureInvoice(title, projectLike, clientName, amount, paid, status, issuedOffset, dueOffset, taxStatus = "계산서 미발행") {
   if (d.prepare("SELECT id FROM invoices WHERE title = ?").get(title)) return;
   const proj = projectLike ? d.prepare("SELECT id FROM projects WHERE title LIKE ?").get(projectLike) : null;
-  const cli = clientName ? d.prepare("SELECT id FROM clients WHERE name = ?").get(clientName) : null;
+  const payer = clientName ? d.prepare("SELECT id FROM parties WHERE name = ? LIMIT 1").get(clientName) : null;
   d.prepare(
-    `INSERT INTO invoices (project_id, client_id, title, amount, paid_amount, status, tax_status, issued_date, due_date)
+    `INSERT INTO invoices (project_id, payer_id, title, amount, paid_amount, status, tax_status, issued_date, due_date)
      VALUES (?,?,?,?,?,?,?,?,?)`
   ).run(
     proj ? proj.id : null,
-    cli ? cli.id : null,
+    payer ? payer.id : null,
     title,
     amount,
     paid,
