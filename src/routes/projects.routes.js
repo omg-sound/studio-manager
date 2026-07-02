@@ -661,7 +661,15 @@ router.post("/:id/invoices/preview.pdf", requireBilling, asyncHandler(async (req
   }
   if (!draft) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const docType = normalizeDocType(req.query.type);
-  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client: draft.client, invoice: draft.invoice, items: draft.items, docType });
+  let pdf;
+  try {
+    pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client: draft.client, invoice: draft.invoice, items: draft.items, docType });
+  } catch (e) {
+    if (e && e.message === "PDF_RENDERER_UNAVAILABLE") {
+      return res.status(503).send(errorPage({ code: 503, title: "PDF 생성 일시 불가", message: "서버 PDF 렌더러(@resvg/resvg-js)가 로드되지 않았습니다. 배포 환경의 네이티브 모듈 설치를 확인하세요.", user: req.user }));
+    }
+    throw e;
+  }
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((draft.invoice.title || docType) + ".pdf")}`);
   res.setHeader("Cache-Control", "private, no-store");

@@ -289,7 +289,15 @@ router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) =
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
   const client = inv.payer_id ? getParty(inv.payer_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
-  const pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType });
+  let pdf;
+  try {
+    pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType });
+  } catch (e) {
+    if (e && e.message === "PDF_RENDERER_UNAVAILABLE") {
+      return res.status(503).send(errorPage({ code: 503, title: "PDF 생성 일시 불가", message: "서버 PDF 렌더러(@resvg/resvg-js)가 로드되지 않았습니다. 배포 환경의 네이티브 모듈 설치를 확인하세요. 청구 내역 자체는 정상입니다.", user: req.user }));
+    }
+    throw e;
+  }
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
   res.setHeader("Cache-Control", "private, no-store");

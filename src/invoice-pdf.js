@@ -10,8 +10,20 @@
 
 const fs = require("fs");
 const path = require("path");
-const { Resvg } = require("@resvg/resvg-js");
 const { PDFDocument } = require("pdf-lib");
+
+// @resvg/resvg-js는 네이티브 모듈 — 배포 환경에 플랫폼 prebuilt가 없으면 require가 throw한다.
+// 최상단 require면 invoice-pdf/invoices 라우트 전체가 로드 실패 → 청구 화면이 통째로 안 뜬다.
+// 지연 로드로 감싸 **PDF 요청만** 명확한 에러로 실패하고 나머지 청구 기능은 정상 동작하게 한다.
+let _Resvg;
+function loadResvg() {
+  if (_Resvg === undefined) {
+    try { _Resvg = require("@resvg/resvg-js").Resvg; }
+    catch (e) { _Resvg = null; console.error("[invoice-pdf] @resvg/resvg-js 로드 실패(PDF 비활성):", e && e.message); }
+  }
+  if (!_Resvg) throw new Error("PDF_RENDERER_UNAVAILABLE");
+  return _Resvg;
+}
 
 const FONT_DIR = path.join(__dirname, "../public/fonts");
 const FONT_FAMILY = "Noto Sans KR";
@@ -186,6 +198,7 @@ function buildSvg({ studio, client, invoice, items, logo, docType }) {
 
 /** 거래명세서 PDF 버퍼 생성(메모리, 디스크 임시파일 없음 — PII 최소화). */
 async function renderInvoicePdf(data) {
+  const Resvg = loadResvg(); // 지연 로드(네이티브 모듈 부재 시 PDF_RENDERER_UNAVAILABLE)
   const svg = buildSvg(data);
   const fontFiles = bundledFontFiles();
   const resvg = new Resvg(svg, {
