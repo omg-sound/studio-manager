@@ -64,7 +64,20 @@ async function folderAlive(drive, id) {
   }
 }
 
-/** 루트 폴더(omg-studios-manager)를 lazy 생성·캐시. 캐시가 삭제/휴지통이면 무효화 후 재생성(고아 캐시로 업로드가 무한 실패/유실되던 것 방지). */
+/** 앱이 볼 수 있는(=앱이 만든, drive.file) 루트 레벨 'omg-studios-manager' 폴더 목록. 생성일 오름차순(가장 오래된=원본). */
+async function listRootFolders() {
+  const drive = driveClient();
+  const q = `name = '${ROOT_FOLDER_NAME.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'root' in parents`;
+  const { data } = await drive.files.list({ q, fields: "files(id,name,createdTime)", orderBy: "createdTime", pageSize: 50, spaces: "drive" });
+  return data.files || [];
+}
+
+/**
+ * 루트 폴더(omg-studios-manager)를 lazy 생성·캐시.
+ * 캐시가 있고 살아있으면 재사용. 캐시가 없거나 무효(삭제/휴지통/안 보임)면 **이름으로 기존 폴더를 먼저 검색**해
+ * 재사용(중복 생성 방지 — 캐시 유실/토큰 변경으로 같은 이름 폴더가 여러 개 생기던 문제). 여러 개면 가장 오래된 것(원본).
+ * 아무 것도 없을 때만 새로 만든다.
+ */
 async function ensureFolder() {
   const drive = driveClient();
   const cached = getState(STATE_ROOT_FOLDER);
@@ -75,7 +88,16 @@ async function ensureFolder() {
     }
     return cached;
   }
-  if (cached) setState(STATE_ROOT_FOLDER, null); // 무효(삭제/휴지통) 캐시 폐기
+  if (cached) setState(STATE_ROOT_FOLDER, null); // 무효(삭제/휴지통/안 보임) 캐시 폐기
+  // 새로 만들기 전에 앱이 볼 수 있는 기존 루트 폴더를 검색 — 있으면 재사용(가장 오래된 원본).
+  try {
+    const existing = await listRootFolders();
+    if (existing.length) {
+      setState(STATE_ROOT_FOLDER, existing[0].id);
+      setState(STATE_ROOT_RENAMED, "done");
+      return existing[0].id;
+    }
+  } catch (_e) { /* 검색 실패 시 생성으로 폴백 */ }
   const { data } = await drive.files.create({
     requestBody: { name: ROOT_FOLDER_NAME, mimeType: "application/vnd.google-apps.folder" },
     fields: "id",
@@ -83,6 +105,20 @@ async function ensureFolder() {
   setState(STATE_ROOT_FOLDER, data.id);
   setState(STATE_ROOT_RENAMED, "done"); // 신규 생성은 이미 새 이름
   return data.id;
+}
+
+/**
+ * 중복 루트 폴더 감지·통합: 앱이 볼 수 있는 루트 폴더 중 **가장 오래된 것(원본)** 을 정본 캐시로 지정.
+ * 이후 업로드·이관이 원본 폴더로 간다. 반환 { folders:[{id,createdTime}], canonical, duplicates }.
+ * (파일 이동은 하지 않음 — 사용자가 Drive에서 빈 중복 폴더를 확인·삭제하도록 안내.)
+ */
+async function reconcileRootFolder() {
+  const folders = await listRootFolders();
+  if (!folders.length) return { folders: [], canonical: null, duplicates: 0 };
+  const canonical = folders[0].id; // createdTime asc → 가장 오래된 원본
+  setState(STATE_ROOT_FOLDER, canonical);
+  setState(STATE_ROOT_RENAMED, "done");
+  return { folders, canonical, duplicates: folders.length - 1 };
 }
 
 /** 루트 아래 하위 폴더(이름별)를 lazy 생성·캐시. 캐시가 삭제/휴지통이면 재생성(자가치유). 반환 folder id. */
@@ -186,6 +222,8 @@ module.exports = {
   getFileMeta,
   checkFolder,
   probeUpload,
+  listRootFolders,
+  reconcileRootFolder,
   uploadFile,
   streamFile,
   deleteFile,

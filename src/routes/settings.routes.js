@@ -432,19 +432,27 @@ router.get("/drive-check", requireEditor, asyncHandler(async (req, res) => {
   const driveN = driveFileCount();
   let card;
   try {
-    const f = await drive.checkFolder(); // 폴더 없으면 생성 후 메타 반환
-    // 실제 업로드 파이프라인(첨부 저장 경로) 왕복 검증 — 폴더 접근만 보는 것보다 강함.
+    // ① 중복 루트 폴더 감지·통합 — 가장 오래된 원본을 정본 캐시로(캐시 유실/토큰 변경으로 생긴 빈 중복 방지).
+    const rec = await drive.reconcileRootFolder();
+    const dupWarn = rec.duplicates > 0
+      ? `<div class="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">
+           <p class="font-medium text-warning">⚠️ 같은 이름의 루트 폴더가 ${rec.folders.length}개 감지됐습니다.</p>
+           <p class="mt-1 text-muted">가장 <span class="text-fg">오래된 원본 폴더</span>(사업자등록증 등 기존 파일이 든 곳)를 기준으로 통합했습니다. 앞으로 업로드·이관은 이 원본으로 갑니다. Drive에서 <span class="text-fg">비어 있는 나머지 중복 폴더는 직접 삭제</span>해 주세요.</p>
+         </div>`
+      : "";
+    const f = await drive.checkFolder(); // 통합된 원본 폴더 메타
+    // ② 실제 업로드 파이프라인(첨부 저장 경로) 왕복 검증.
     let probeBadge;
     try { await drive.probeUpload(); probeBadge = '<span class="badge badge-success">업로드 테스트 통과</span>'; }
     catch (pe) { probeBadge = `<span class="badge badge-error">업로드 테스트 실패</span>`; console.warn("[drive-check] probe 실패:", pe && pe.message); }
     const link = f.webViewLink
       ? `<a href="${esc(f.webViewLink)}" target="_blank" rel="noopener" class="text-primary hover:underline">Drive에서 폴더 열기 ↗</a>`
       : `<span class="text-muted">링크 없음(폴더 ID: ${esc(f.id)})</span>`;
-    card = `<div class="card space-y-2">
+    card = `${dupWarn}<div class="card space-y-2">
       <div class="flex flex-wrap items-center gap-2"><span class="badge badge-success">폴더 확인됨</span>${probeBadge}${f.created ? '<span class="badge badge-info">방금 생성</span>' : ""}${f.trashed ? '<span class="badge badge-error">휴지통</span>' : ""}</div>
-      <div class="text-sm"><span class="text-muted">폴더명</span> <span class="font-medium">${esc(f.name)}</span></div>
+      <div class="text-sm"><span class="text-muted">폴더명</span> <span class="font-medium">${esc(f.name)}</span> <span class="text-muted">(원본 · 통합 기준)</span></div>
       <div class="text-sm"><span class="text-muted">폴더 ID</span> <code class="text-xs">${esc(f.id)}</code></div>
-      <div class="text-sm"><span class="text-muted">Drive 저장 파일</span> ${driveN}개</div>
+      <div class="text-sm"><span class="text-muted">Drive 저장 파일(앱 기록)</span> ${driveN}개</div>
       <div class="pt-1">${link}</div>
       <p class="text-xs text-muted">업로드 테스트는 작은 파일을 올렸다 즉시 삭제해 실제 첨부 저장 경로를 확인합니다.</p>
       ${f.trashed ? '<p class="text-xs text-danger">⚠️ 폴더가 휴지통에 있습니다 — Drive에서 복원하세요.</p>' : ""}
