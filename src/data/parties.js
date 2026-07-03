@@ -126,12 +126,13 @@ function createGroup(b = {}) {
   const name = String(b.name || "").trim();
   if (!name) throw new Error("PARTY_NAME_REQUIRED");
   const info = db().prepare(
-    `INSERT INTO parties (kind, name, activity_name, is_artist, phone, email, memo, cash_receipt_no)
-     VALUES ('group', @name, @activity_name, 1, @phone, @email, @memo, @cash_receipt_no)`
+    `INSERT INTO parties (kind, name, activity_name, is_artist, phone, email, memo, cash_receipt_no, contact_party_id)
+     VALUES ('group', @name, @activity_name, 1, @phone, @email, @memo, @cash_receipt_no, @contact_party_id)`
   ).run({
     name, activity_name: blankToNull(b.activity_name) || name,
     phone: formatPhone(b.phone), email: blankToNull(b.email), memo: blankToNull(b.memo),
     cash_receipt_no: blankToNull(b.cash_receipt_no),
+    contact_party_id: b.contact_party_id ? Number(b.contact_party_id) : null, // 담당자(멤버/관계자 사람)
   });
   return info.lastInsertRowid;
 }
@@ -162,14 +163,16 @@ function updateParty(id, b = {}) {
   // person / group
   const name = resolveDisplayName({ ...b, name: b.name || cur.name });
   const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (blankToNull(b.activity_name) ? 1 : cur.is_artist);
+  // 그룹 담당자(contact_party_id): 폼이 값을 보냈으면(undefined 아님) 갱신, 아니면 기존 보존(person 폼은 안 보냄).
+  const contactPartyId = b.contact_party_id !== undefined ? (b.contact_party_id ? Number(b.contact_party_id) : null) : (cur.contact_party_id || null);
   db().prepare(
     `UPDATE parties SET name=?, activity_name=?, is_artist=?, phone=?, email=?, memo=?,
-       family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=? WHERE id=?`
+       family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=?, contact_party_id=? WHERE id=?`
   ).run(
     name, blankToNull(b.activity_name), isArtist,
     formatPhone(b.phone), blankToNull(b.email), blankToNull(b.memo),
     blankToNull(b.family_name), blankToNull(b.given_name), blankToNull(b.honorific),
-    blankToNull(b.department), blankToNull(b.job_title), blankToNull(b.cash_receipt_no), Number(id)
+    blankToNull(b.department), blankToNull(b.job_title), blankToNull(b.cash_receipt_no), contactPartyId, Number(id)
   );
 }
 

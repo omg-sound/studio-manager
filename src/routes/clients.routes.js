@@ -282,6 +282,13 @@ router.get("/new", (req, res) => {
   res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
 });
 
+// 그룹 담당자(personCombo) 해석 — hidden contact_party_id 우선, 없으면 타이핑 이름으로 재사용/생성(resolvePersonByName), 비면 null.
+function resolveContactPartyId(b) {
+  if (b.contact_party_id) return Number(b.contact_party_id);
+  const nm = String(b.contact_name || "").trim();
+  return nm ? resolvePersonByName(nm) : null;
+}
+
 router.post("/", (req, res) => {
   const b = req.body;
   const type = CLIENT_TYPES.includes(b.type) ? b.type : "artist"; // 업체/아티스트/그룹(폼 hidden)
@@ -292,8 +299,8 @@ router.post("/", (req, res) => {
   }
   let id;
   if (type === "group") {
-    // 그룹 아티스트(밴드·아이돌 그룹) → group party(is_artist, 사람 아님)
-    id = createGroup({ name, phone: b.phone, email: b.email, memo: b.memo, cash_receipt_no: b.cash_receipt_no });
+    // 그룹 아티스트(밴드·아이돌 그룹) → group party(is_artist, 사람 아님). 담당자(멤버/관계자) 연결.
+    id = createGroup({ name, phone: b.phone, email: b.email, memo: b.memo, cash_receipt_no: b.cash_receipt_no, contact_party_id: resolveContactPartyId(b) });
   } else if (type === "company") {
     id = createCompany({
       name, phone: b.phone, email: b.email, memo: b.memo,
@@ -349,6 +356,8 @@ router.post("/:id", (req, res) => {
     // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신)
     activity_name: c.activity_name, is_artist: c.is_artist,
     cash_receipt_no: b.cash_receipt_no,
+    // 그룹 담당자(멤버/관계자) — 그룹일 때만 폼에서 전송(person은 undefined로 보존)
+    contact_party_id: c.kind === "group" ? resolveContactPartyId(b) : undefined,
   });
   if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 개인 아티스트의 소속 그룹 연결
   if (c.kind !== "company" && b.agency_id !== undefined) setPartyAgency(id, b.agency_id); // 아티스트·그룹 소속사 지정/해제('없음'=빈값)
@@ -725,6 +734,11 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
           <option value="" data-agency="">— 소속 그룹 없음 —</option>
           ${groups.map((g) => `<option value="${g.id}" data-agency="${g.agency_id || ""}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
         </select>
+      </div>` : ""}
+      ${type === "group" ? `
+      <div>
+        <label class="label">담당자 <span class="font-normal text-muted text-xs">(관계자 또는 멤버 중 한 명 · 선택)</span></label>
+        ${personCombo({ idField: "contact_party_id", nameField: "contact_name", selectedId: c.contact_party_id || null, options: contactOptions(), companyOptions: companies })}
       </div>` : ""}
       ${type === "group" && isEdit ? `<p class="text-xs text-muted">멤버는 아래 <span class="text-fg">멤버</span> 섹션에서 연결·관리합니다.</p>` : ""}
       <div class="grid gap-3 sm:grid-cols-2">
