@@ -873,8 +873,10 @@ function companyCombo(fieldName, value, roleKey, label) {
   const isProd = roleKey === "제작사";
   return `
     <div data-company-combo>
+      <input type="hidden" name="${fieldName}" value="${esc(value || "")}" data-cc-hidden />
       <div class="relative">
-        <input class="input pr-9" type="text" name="${fieldName}" value="${esc(value || "")}" data-cc-input autocomplete="off"
+        <!-- 보이는 입력은 name 없음(Chrome 조직 자동완성이 콤보 드롭다운 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js 동기화 -->
+        <input class="input pr-9" type="text" value="${esc(value || "")}" data-cc-input autocomplete="off"
           role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(label)} — 검색 또는 새로 등록" />
         <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-cc-pop role="listbox"></div>

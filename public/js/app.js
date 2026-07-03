@@ -827,12 +827,18 @@ function comboKbdNav(input, pop) {
       if (rs[hi] && rs[hi].scrollIntoView) rs[hi].scrollIntoView({ block: "nearest" });
     }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); } // dirty 감지 트리거
-    // 아티스트의 소속사를 프로젝트 '소속사/레이블' 필드(companyCombo input[name=artist_company])에 자동 채움(같은 폼 안에 있을 때만·비면 유지).
+    // 아티스트의 소속사를 프로젝트 '소속사/레이블' companyCombo에 자동 채움(같은 폼 안에 있을 때만·비면 유지).
+    // companyCombo는 nameless라 name=artist_company는 숨김 제출 필드 → 숨김·보이는 칸 둘 다 세팅.
     function fillAgency(name) {
       if (!name) return;
       var form = root.closest ? root.closest("form") : null;
-      var cc = (form || document).querySelector('input[name="artist_company"]');
-      if (cc) { cc.value = name; cc.dispatchEvent(new Event("change", { bubbles: true })); }
+      var hidden = (form || document).querySelector('input[name="artist_company"]');
+      if (!hidden) return;
+      hidden.value = name;
+      var combo = hidden.closest && hidden.closest("[data-company-combo]");
+      var vis = combo && combo.querySelector("[data-cc-input]");
+      if (vis) vis.value = name; // 보이는 칸도 채움(companyCombo render는 트리거 안 함)
+      hidden.dispatchEvent(new Event("change", { bubbles: true })); // dirty 감지
     }
 
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
@@ -1010,6 +1016,7 @@ function comboKbdNav(input, pop) {
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   Array.prototype.forEach.call(document.querySelectorAll("[data-company-combo]"), function (root) {
     var input = root.querySelector("[data-cc-input]");
+    var hidCC = root.querySelector("[data-cc-hidden]"); // 제출용 업체명(보이는 칸은 name 없음 — Chrome 자동완성 회피)
     var pop = root.querySelector("[data-cc-pop]");
     var dataEl = root.querySelector("[data-cc-options]");
     var modal = root.querySelector("[data-cc-modal]");
@@ -1076,7 +1083,7 @@ function comboKbdNav(input, pop) {
     }
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
-    input.addEventListener("input", render);
+    input.addEventListener("input", function () { if (hidCC) hidCC.value = input.value; render(); }); // 제출용 숨김 업체명 동기화(타이핑·pick·모달 모두 fireInput로 도달)
     input.addEventListener("blur", function () { setTimeout(hide, 150); });
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) {
