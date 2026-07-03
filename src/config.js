@@ -17,6 +17,11 @@ const config = {
 
   adminEmail: (process.env.ADMIN_EMAIL || "").trim().toLowerCase(),
 
+  // 자료 저장 Drive는 **이 계정 하나로 영구 고정**한다(치프가 바뀌어도 무관).
+  // 이 이메일로 로그인할 때만 Drive refresh token을 저장 → 항상 스튜디오 계정 Drive에 저장.
+  // 기본 studio@omgworks.kr, 배포 env(STUDIO_DRIVE_EMAIL)로만 변경(앱 UI로는 못 바꿈).
+  studioDriveEmail: (process.env.STUDIO_DRIVE_EMAIL || "studio@omgworks.kr").trim().toLowerCase(),
+
   sessionSecret: process.env.SESSION_SECRET || "dev-insecure-session-secret",
   tokenEncKey: process.env.TOKEN_ENC_KEY || "dev-insecure-token-enc-key",
 

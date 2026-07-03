@@ -56,12 +56,15 @@ router.get("/logout", (req, res) => {
 router.get("/auth/google", (req, res) => {
   if (!config.googleConfigured) return res.redirect("/login?err=" + encodeURIComponent("Google OAuth 미설정"));
   const next = safeNext(req.query.next);
+  // 자료 저장 Drive 연결(설정 버튼): 고정 스튜디오 계정을 선택하도록 계정 선택기를 강제한다.
+  // (활성 Google 세션이 다른 계정이면 자동 선택돼 Drive가 안 바뀌는 것 방지 — email 불일치로 토큰 미저장.)
+  const driveConnect = req.query.drive === "1";
   // 로그인 CSRF 방어: 랜덤 논스를 state + httpOnly 쿠키에 동시 저장 → 콜백에서 대조.
   const nonce = crypto.randomBytes(16).toString("hex");
   const client = oauthClient();
-  const url = client.generateAuthUrl({
+  const authParams = {
     access_type: "offline", // refresh token 수령
-    prompt: "consent",
+    prompt: driveConnect ? "select_account consent" : "consent", // Drive 연결 시 계정 선택기 강제
     scope: [
       "openid",
       "email",
@@ -71,7 +74,9 @@ router.get("/auth/google", (req, res) => {
       "https://www.googleapis.com/auth/contacts", // Google People API — 연락처 앱→Google push
     ],
     state: Buffer.from(JSON.stringify({ next, nonce })).toString("base64url"),
-  });
+  };
+  if (driveConnect) authParams.login_hint = config.studioDriveEmail; // 스튜디오 계정 프리셀렉트
+  const url = client.generateAuthUrl(authParams);
   res.cookie("_oauth_nonce", nonce, {
     httpOnly: true,
     secure: config.isProd,
@@ -122,11 +127,11 @@ router.get("/auth/google/callback", async (req, res) => {
       return res.redirect("/login?err=" + encodeURIComponent("로그인이 허용되지 않은 계정입니다. 치프 엔지니어에게 등록을 요청하세요."));
     }
 
-    // Drive 구동용 refresh token은 **치프 로그인일 때만** 저장한다.
-    // (이전엔 모든 로그인이 덮어써서, 스태프·대표가 로그인하면 앱 Drive가 그 사람 개인 Drive로 바뀌던 문제 —
-    //  파일이 각자 개인 Drive로 흩어지고 폴더 중복·'파일 없음'이 생기던 근본 원인.)
-    //  치프가 스튜디오 Drive 계정으로 로그인해 단일 Drive를 유지한다.
-    if (tokens.refresh_token && user.role === "chief") {
+    // Drive 구동용 refresh token은 **고정 스튜디오 계정(config.studioDriveEmail)으로 로그인할 때만** 저장한다.
+    // 치프·대표·스태프 누구로 로그인하든, 이 계정이 아니면 Drive 토큰을 건드리지 않는다 →
+    // 자료는 **항상 studio@omgworks.kr Drive 한 곳**에만 저장된다(치프가 바뀌어도 고정).
+    // (이전엔 모든/치프 로그인이 덮어써서 개인 Drive로 흩어지고 폴더 중복·'파일 없음'이 생기던 근본 원인.)
+    if (tokens.refresh_token && email === config.studioDriveEmail) {
       saveRefreshToken(tokens.refresh_token);
       setDriveAccountEmail(email); // 연결 계정 기록(설정에 표시)
     }
