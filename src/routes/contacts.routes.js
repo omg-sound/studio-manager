@@ -27,7 +27,7 @@ const {
   setPartyGroup,
 } = require("../data");
 const people = require("../people");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, copyable } = require("../views");
 
 const router = express.Router();
 
@@ -90,7 +90,7 @@ router.get("/", (req, res) => {
             orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
           }
           const right = (c.phone || c.email)
-            ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}${c.email ? `<div>${esc(c.email)}</div>` : ""}</div>`
+            ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}${c.email ? `<div>${copyable(c.email)}</div>` : ""}</div>`
             : "";
           return `<div class="flex items-start justify-between gap-4 px-4 py-3">
             <div class="min-w-0">

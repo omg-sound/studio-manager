@@ -3,7 +3,7 @@
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
 const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, DOC_TYPES } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, listRow } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, listRow, copyable } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel } = require("./lib/date");
 
@@ -19,20 +19,18 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   if (client.kind) rows.push(cell("분류", esc(client.kind)));
   if (client.owner_name) rows.push(cell("대표자", esc(client.owner_name)));
   if (client.biz_no) {
-    const bn = esc(client.biz_no);
-    // 번호 클릭 = 클립보드 복사(app.js [data-copy] + 토스트), 등록증 보기는 별도 링크로 분리.
-    const copyBtn = `<button type="button" data-copy="${bn}" class="inline-flex items-center gap-1 rounded font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" title="클릭하면 복사됩니다">${bn}<svg class="h-3.5 w-3.5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`;
+    // 번호 클릭 = 클립보드 복사, 등록증 보기는 별도 링크로 분리.
     const viewLink = hasBizFile ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" class="ml-2 whitespace-nowrap text-xs text-primary hover:underline">등록증 보기 ↗</a>` : "";
-    rows.push(cell("사업자등록번호", `${copyBtn}${viewLink}`));
+    rows.push(cell("사업자등록번호", `${copyable(client.biz_no, { cls: "font-medium" })}${viewLink}`));
   }
-  if (client.address) rows.push(cell("주소", esc(client.address)));
-  if (client.email) rows.push(cell("세금계산서 발행 이메일", `<a href="mailto:${esc(client.email)}" class="text-info">${esc(client.email)}</a>`)); // 계산서 발행처 이메일
-  if (client.cash_receipt_no) rows.push(cell("현금영수증", esc(client.cash_receipt_no))); // 개인(사업자등록증 없음)
+  if (client.address) rows.push(cell("주소", copyable(client.address, { cls: "font-medium" })));
+  if (client.email) rows.push(cell("세금계산서 발행 이메일", copyable(client.email))); // 계산서 발행처 이메일(클릭 복사)
+  if (client.cash_receipt_no) rows.push(cell("현금영수증", copyable(client.cash_receipt_no, { cls: "font-medium" }))); // 개인(사업자등록증 없음)
   if (contacts && contacts.length) {
     const c = contacts[0];
     const parts = [`<span class="font-medium">${esc(c.name)}</span>`];
-    if (c.phone) parts.push(`<a href="tel:${esc(String(c.phone).replace(/[^0-9+]/g, ""))}" class="text-info">${esc(c.phone)}</a>`);
-    if (c.email) parts.push(`<a href="mailto:${esc(c.email)}" class="text-info">${esc(c.email)}</a>`);
+    if (c.phone) parts.push(copyable(c.phone));
+    if (c.email) parts.push(copyable(c.email));
     rows.push(cell("담당자", parts.join(" · ")));
   }
   const head = `<div class="mb-1 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold">청구처 정보</h3><a href="/clients/${client.id}" class="text-xs text-muted hover:text-fg hover:underline">클라이언트 ↗</a></div>`;

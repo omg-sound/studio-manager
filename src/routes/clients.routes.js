@@ -22,7 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, personCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, personCombo, copyable } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -185,7 +185,7 @@ router.get("/", (req, res) => {
               orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
             }
             const right = (c.phone || c.email)
-              ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}${c.email ? `<div>${esc(c.email)}</div>` : ""}</div>`
+              ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}${c.email ? `<div>${copyable(c.email)}</div>` : ""}</div>`
               : "";
             return `<div class="flex items-start justify-between gap-4 px-4 py-3">
               <div class="min-w-0">
@@ -200,7 +200,7 @@ router.get("/", (req, res) => {
             const badges = c.kind === "group" ? `<span class="badge-info">그룹</span>` : `<span class="badge-info">아티스트</span>`;
             const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
             const title = `${esc(personLabel(c.activity_name || c.name, c.name))}${meta ? ` <span class="text-xs font-normal text-muted">· ${meta}</span>` : ""}`;
-            const right = `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}<div>${esc(c.email || "이메일 없음")}</div></div>`;
+            const right = `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}<div>${c.email ? copyable(c.email) : "이메일 없음"}</div></div>`;
             return listRowLinked({ href: `/clients/${c.id}${fromParam}`, title, badges, right });
           }
           // 업체(company): 회사명(→상세)·대표(→대표 연락처)를 각각 링크로 분리(밑줄도 각각). 등록증 여부 배지 + 오른쪽 사업자→전화→이메일.
@@ -214,9 +214,9 @@ router.get("/", (req, res) => {
             : "";
           const nameHtml = `<a href="/clients/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(c.name)}</a>${ownerHtml}`;
           const right = `<div class="text-sm text-muted space-y-0.5">
-            ${c.biz_no ? `<div>사업자 ${esc(c.biz_no)}</div>` : ""}
-            ${c.phone ? `<div>${esc(c.phone)}</div>` : ""}
-            <div>${esc(c.email || "이메일 없음")}</div>
+            ${c.biz_no ? `<div>사업자 ${copyable(c.biz_no)}</div>` : ""}
+            ${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}
+            <div>${c.email ? copyable(c.email) : "이메일 없음"}</div>
           </div>`;
           return `<div class="flex items-start justify-between gap-4 px-4 py-3">
             <div class="min-w-0">

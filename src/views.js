@@ -532,4 +532,17 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, payerCombo };
+/**
+ * 클릭 복사 값 — 전화·이메일·주소·사업자번호 등 식별 정보. 클릭 시 클립보드 복사 + '복사되었습니다' 토스트(app.js [data-copy]).
+ * 내부 도구라 tel:/mailto: 링크 대신 복사가 더 유용. 작은 복사 아이콘으로 복사 가능 표시. CSP-safe.
+ * @param {string} value 복사될 값(표시값과 동일, display 지정 시 표시만 다름)
+ * @param {{cls?:string, display?:string}} [opts]
+ */
+function copyable(value, { cls = "", display = "" } = {}) {
+  if (value == null || value === "") return "";
+  const v = esc(String(value));
+  const shown = display ? esc(String(display)) : v;
+  return `<button type="button" data-copy="${v}" class="inline-flex items-center gap-1 rounded text-left hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}<svg class="h-3 w-3 shrink-0 text-muted/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`;
+}
+
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, payerCombo, copyable };
