@@ -355,7 +355,7 @@ router.post("/:id", (req, res) => {
     address: b.address, roles: c.kind === "company" ? companyRolesFrom(b) : null,
     // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신)
     activity_name: c.activity_name, is_artist: c.is_artist,
-    cash_receipt_no: b.cash_receipt_no,
+    cash_receipt_no: c.kind === "group" ? c.cash_receipt_no : b.cash_receipt_no, // 그룹은 폼에 필드 없음 → 기존값 보존(개인 아티스트만 현금영수증)
     // 그룹 담당자(멤버/관계자) — 그룹일 때만 폼에서 전송(person은 undefined로 보존)
     contact_party_id: c.kind === "group" ? resolveContactPartyId(b) : undefined,
   });
@@ -716,11 +716,12 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
       </div>` : ""}
-      ${type !== "company" ? `
+      ${type === "artist" ? `
       <div>
         <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(사업자등록증 없는 경우)</span></label>
         <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
-      </div>
+      </div>` : ""}
+      ${type !== "company" ? `
       <div>
         <label class="label">소속사 <span class="font-normal text-muted text-xs">(소속 회사 · 없으면 '없음')</span></label>
         <select name="agency_id" class="input">
