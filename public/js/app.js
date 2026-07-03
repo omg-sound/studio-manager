@@ -1105,6 +1105,15 @@
       if (docLabel) docLabel.textContent = (it && !it.co) ? "(현금영수증 발행)" : "(계산서 발행)";
       if (warnEl) { if (it && it.warn) { warnEl.textContent = "⚠️ " + it.warn; warnEl.classList.remove("hidden"); } else { warnEl.classList.add("hidden"); } }
     }
+    // 청구 생성 버튼 제출 차단 — 청구처 발행 정보 누락(경고 표시 중)이면 생성 불가(PDF 프리뷰 버튼은 formaction이라 허용).
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        if (e.submitter && e.submitter.hasAttribute && e.submitter.hasAttribute("data-invoice-submit") && warnEl && !warnEl.classList.contains("hidden")) {
+          e.preventDefault();
+          window.alert((warnEl.textContent || "청구처 발행 정보가 없습니다.").replace(/^⚠️\s*/, "") + "\n\n먼저 청구처 정보를 입력한 뒤 청구할 수 있습니다.");
+        }
+      });
+    }
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }

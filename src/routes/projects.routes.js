@@ -643,7 +643,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
     // 청구 메뉴로 이탈하지 않고 프로젝트 청구 탭으로 복귀 + 방금 만든 인보이스를 펼친 채(open) 노출.
     res.redirect(`/projects/${req.params.id}?tab=invoice&open=${inv.id}&flash=created`);
   } catch (e) {
-    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다.", TASK_AMOUNT_REQUIRED: "청구할 작업·세션의 금액을 입력하세요(0원은 청구할 수 없습니다)." };
+    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다.", TASK_AMOUNT_REQUIRED: "청구할 작업·세션의 금액을 입력하세요(0원은 청구할 수 없습니다).", PAYER_TAX_INFO_REQUIRED: "청구처(회사)에 세금계산서 정보(사업자등록번호)가 없습니다. 클라이언트 상세에서 입력한 뒤 청구하세요.", PAYER_CASH_RECEIPT_REQUIRED: "청구처(개인)에 현금영수증 정보가 없습니다. 청구처 상세에서 입력한 뒤 청구하세요." };
     if (!known[e.message]) throw e; // 알 수 없는 오류(DB 등)는 전역 핸들러(500+로깅)로 — 검증 실패로 위장 방지
     return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message: known[e.message], user: req.user }));
   }
@@ -1226,7 +1226,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           </div>
         </div>
         ${explain(`<span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).`, { cls: "mb-2" })}
-        <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성 <span data-inv-doc>(계산서 발행)</span></button>
+        <button class="btn-primary w-full btn-sm" type="submit" data-invoice-submit>선택 항목으로 청구 생성 <span data-inv-doc>(계산서 발행)</span></button>
       </div>
     </form>`;
 }

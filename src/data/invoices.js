@@ -41,14 +41,27 @@ function snapshotPayer(payerId) {
 }
 
 /**
- * 청구처(payer) 후보별 서류 상태 — 회사=사업자등록증 보유 party id 집합, 개인=현금영수증 정보 보유 party id 집합.
- * 청구 생성 폼이 청구처 유형(회사=계산서 / 개인=현금영수증)·서류 누락 경고를 표시하는 데 쓴다.
- * @returns {{ bizLicenseIds: number[], cashReceiptIds: number[] }}
+ * 청구처(payer) 후보별 발행 정보 — 회사=세금계산서 정보(사업자등록번호 biz_no) 보유, 개인=현금영수증 정보(cash_receipt_no) 보유 party id 집합.
+ * 청구 생성 폼이 청구처 유형(회사=계산서 / 개인=현금영수증)·정보 누락 경고·차단에 쓴다.
+ * (사업자등록증 파일은 첨부 서류일 뿐 세금계산서 발행 필수 아님 → biz_no 기준.)
+ * @returns {{ taxInfoIds: number[], cashReceiptIds: number[] }}
  */
 function payerDocMeta() {
-  const bizLicenseIds = db().prepare("SELECT DISTINCT client_id FROM client_files WHERE kind='biz_license'").all().map((r) => r.client_id);
+  const taxInfoIds = db().prepare("SELECT id FROM parties WHERE kind='company' AND biz_no IS NOT NULL AND TRIM(biz_no) <> ''").all().map((r) => r.id);
   const cashReceiptIds = db().prepare("SELECT id FROM parties WHERE cash_receipt_no IS NOT NULL AND TRIM(cash_receipt_no) <> ''").all().map((r) => r.id);
-  return { bizLicenseIds, cashReceiptIds };
+  return { taxInfoIds, cashReceiptIds };
+}
+
+/**
+ * 청구처 발행 정보 누락 검사 — 회사에 세금계산서 정보(biz_no)가 없거나, 개인에 현금영수증 정보(cash_receipt_no)가 없으면
+ * 해당 에러 코드를 반환(청구 생성 차단용). 정보가 충분하면 null.
+ * @returns {"PAYER_TAX_INFO_REQUIRED"|"PAYER_CASH_RECEIPT_REQUIRED"|null}
+ */
+function payerDocMissing(payer) {
+  if (!payer) return null;
+  const has = (v) => !!(v && String(v).trim());
+  if (payer.kind === "company") return has(payer.biz_no) ? null : "PAYER_TAX_INFO_REQUIRED";
+  return has(payer.cash_receipt_no) ? null : "PAYER_CASH_RECEIPT_REQUIRED"; // 개인·그룹 아티스트 등 = 현금영수증
 }
 const { taskTypeLabel } = require("./task-types"); // 무순환
 
@@ -242,6 +255,11 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
 function createInvoiceFromTasks(user, opts = {}) {
   const draft = computeInvoiceDraft(user, opts);
   if (!draft) return null;
+  // 청구처 발행 정보 없으면 생성 차단(회사=세금계산서 정보 biz_no, 개인=현금영수증 정보). 폼에서도 막지만 서버가 최종 보루.
+  if (draft.resolvedPayerId) {
+    const miss = payerDocMissing(getParty(draft.resolvedPayerId));
+    if (miss) throw new Error(miss);
+  }
   const d = db();
   const invoiceNumber = nextInvoiceNumber(draft.issued);
   d.exec("BEGIN IMMEDIATE;");
@@ -412,6 +430,7 @@ module.exports = {
   createInvoiceFromTasks,
   snapshotPayer,
   payerDocMeta,
+  payerDocMissing,
   invoiceDraftForPdf,
   deleteInvoice,
   listInvoices,
