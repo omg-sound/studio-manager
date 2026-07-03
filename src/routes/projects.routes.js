@@ -212,10 +212,20 @@ function projectListRow(p, summary) {
     ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
   const pmLine = p.manager_name ? `<div class="text-xs text-muted">PM ${esc(p.manager_name)}</div>` : "";
+  // 세션(예정·완료)을 앞에, 곡·콘텐츠 뒤에. 곡·콘텐츠 있으면 작업 개수 + 상태(대기/진행중/완료) 병기.
+  const taskCnt = Number(p.task_cnt) || 0;
+  const taskStatus = [
+    Number(p.task_pending) ? `대기 ${p.task_pending}` : "",
+    Number(p.task_prog) ? `진행중 ${p.task_prog}` : "",
+    Number(p.task_done) ? `완료 ${p.task_done}` : "",
+  ].filter(Boolean).join(" · ");
+  const trackPart = n
+    ? `곡·콘텐츠 ${n}${taskCnt ? ` · 작업 ${taskCnt}${taskStatus ? ` (${taskStatus})` : ""}` : ""}`
+    : "곡·콘텐츠 미정";
   const counts = [
-    n ? `곡·콘텐츠 ${n}` : "곡·콘텐츠 미정",
     Number(p.sess_scheduled) ? `예정 세션 ${p.sess_scheduled}` : "",
     Number(p.sess_done) ? `완료 세션 ${p.sess_done}` : "",
+    trackPart,
   ].filter(Boolean).join(" · ");
   // 한 프로젝트 = 밝은 바탕(bg-surface=흰색) 라운드 블록 하나(제목행 + 요약 접기행). 블록 사이 여백(space-y)으로 구분.
   // 호버 강조는 두 영역(상단 링크 / 하단 요약 토글)에 각각 row-link(hover:bg-elevated/60)로 분리 — 위·아래가 따로 강조된다.
@@ -230,10 +240,10 @@ function projectListRow(p, summary) {
         </div>
         <div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>
       </a>
-      <details class="group">
+      <details class="group/proj">
         <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
           <span>${esc(counts)}</span>
-          <svg class="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+          <svg class="h-3.5 w-3.5 shrink-0 transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         </summary>
         <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary)}</div>
       </details>
@@ -262,7 +272,11 @@ function projectSummaryHtml(s) {
       return `<li>${artist}<span class="text-fg/80">${esc(tr.title)}</span>${eng}</li>`;
     }).join("");
     const more = s.tracks.length > 10 ? `<li class="text-muted">외 ${s.tracks.length - 10}곡</li>` : "";
-    blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">곡·콘텐츠 ${s.tracks.length}</div><ul class="space-y-0.5">${items}${more}</ul></div>`);
+    // 작업 종류별 내역(튠 1 · 믹싱 1 · 마스터링 1) — 무슨 작업인지 한눈에.
+    const typeSummary = s.taskTypes && s.taskTypes.length
+      ? `<div class="mt-1 text-fg/70"><span class="text-muted">작업</span> ${s.taskTypes.map((t) => `${esc(t.label)} ${t.count}`).join(" · ")}</div>`
+      : "";
+    blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">곡·콘텐츠 ${s.tracks.length}</div><ul class="space-y-0.5">${items}${more}</ul>${typeSummary}</div>`);
   }
   return `<div class="grid gap-3 sm:grid-cols-2">${blocks.join("")}</div>`;
 }
