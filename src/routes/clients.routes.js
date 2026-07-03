@@ -12,7 +12,7 @@ const {
   listClients, getParty, listProjectsForParty,
   listInvoicesForParty, listPersonsForOrg,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  contactOptions, addAffiliation, listContacts, listAssociates, resolvePersonByName, resolveOwnerParty,
+  contactOptions, addAffiliation, listContacts, listAssociates, resolvePersonByName, resolveOwnerParty, ensureOwnerAffiliation,
   listArtistsForAgency, currentAffiliation, classifyParty,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
@@ -302,12 +302,14 @@ router.post("/", (req, res) => {
     // 그룹 아티스트(밴드·아이돌 그룹) → group party(is_artist, 사람 아님). 담당자(멤버/관계자) 연결.
     id = createGroup({ name, phone: b.phone, email: b.email, memo: b.memo, cash_receipt_no: b.cash_receipt_no, contact_party_id: resolveContactPartyId(b) });
   } else if (type === "company") {
+    const ownerId = String(b.owner_name || "").trim() ? resolveOwnerParty(b.owner_name) : null; // 대표자 → 사람 party(호칭 '대표님')
     id = createCompany({
       name, phone: b.phone, email: b.email, memo: b.memo,
       biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
-      owner_party_id: String(b.owner_name || "").trim() ? resolveOwnerParty(b.owner_name) : null, // 대표자 → 사람 party 연동(호칭 '대표님' 세팅)
+      owner_party_id: ownerId,
       address: b.address, roles: companyRolesFrom(b),
     });
+    ensureOwnerAffiliation(ownerId, id); // 대표자의 직장(소속) = 이 회사
   } else {
     // 아티스트(개인·솔로) → 사람 party. 본명(real_name) 있으면 name=본명·활동명=입력, 없으면 name=활동명=입력.
     const realName = String(b.real_name || b.artist_real_name || "").trim();
@@ -362,6 +364,7 @@ router.post("/:id", (req, res) => {
   if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 개인 아티스트의 소속 그룹 연결
   if (c.kind !== "company" && b.agency_id !== undefined) setPartyAgency(id, b.agency_id); // 아티스트·그룹 소속사 지정/해제('없음'=빈값)
   if (c.kind === "company") linkClientContact(id, b); // 업체만 담당자 연락처 연동
+  if (c.kind === "company" && String(b.owner_name || "").trim()) ensureOwnerAffiliation(resolveOwnerParty(b.owner_name), id); // 대표자의 직장(소속) = 이 회사
   if (isFetch) return res.json({ ok: true }); // 자동저장 — 페이지 유지
   res.redirect(`/clients/${id}?flash=saved`); // 수동 저장(noscript): 상세로 복귀
 });

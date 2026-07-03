@@ -482,6 +482,16 @@ function resolveOwnerParty(name) {
   return id;
 }
 
+/**
+ * 대표자(owner)의 직장(소속)을 그 회사로 설정 — 현재 소속이 이 회사가 아니면 이직(closeCurrent)으로 등록(직함 '대표').
+ * 이미 이 회사가 현재 소속이면 no-op. 업체 등록/수정 시 대표자↔회사 소속 자동 연결용.
+ */
+function ensureOwnerAffiliation(ownerId, companyId) {
+  if (!ownerId || !companyId) return;
+  const cur = currentAffiliation(ownerId);
+  if (!cur || Number(cur.org_id) !== Number(companyId)) addAffiliation(ownerId, { org_id: companyId, title: "대표", closeCurrent: true });
+}
+
 /** 프로젝트 저장 시 아티스트/소속사/제작사를 party로 보장(이름 기반). 반환 없음(프로젝트가 party_id로 저장). */
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
   const where = [];
@@ -754,6 +764,7 @@ module.exports = {
   syncManagerToParty,
   resolvePersonByName,
   resolveOwnerParty,
+  ensureOwnerAffiliation,
   listProjectManagers,
   getWorker,
   listTasksForWorker,
