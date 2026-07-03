@@ -997,13 +997,14 @@
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
-    function subOf(o) { return [o.company, o.phone].filter(Boolean).join(" · "); }
+    function subOf(o) { return [o.group, o.company, o.phone].filter(Boolean).join(" · "); } // 소속 그룹·회사·전화로 식별
     function setInfo(o, isNew) {
       while (info.firstChild) info.removeChild(info.firstChild);
       var nodes = [];
       if (o && o.phone) { var a = document.createElement("button"); a.type = "button"; a.setAttribute("data-copy", o.phone); a.title = "클릭하면 복사됩니다"; a.textContent = "☎ " + o.phone; a.className = "font-medium text-info hover:underline"; nodes.push(a); }
       if (o && o.email) { var em = document.createElement("button"); em.type = "button"; em.setAttribute("data-copy", o.email); em.title = "클릭하면 복사됩니다"; em.textContent = "✉ " + o.email; em.className = "text-info hover:underline"; nodes.push(em); }
-      if (o && o.company) { var s = document.createElement("span"); s.textContent = "소속: " + o.company; nodes.push(s); }
+      var aff = o ? [o.group, o.company].filter(Boolean).join(" · ") : ""; // 소속 그룹 + 회사
+      if (aff) { var s = document.createElement("span"); s.textContent = "소속: " + aff; nodes.push(s); }
       if (nodes.length) { nodes.forEach(function (n, i) { if (i > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(n); }); info.classList.remove("hidden"); }
       else if (isNew) { info.textContent = "새 연락처로 등록됩니다."; info.classList.remove("hidden"); }
       else { info.classList.add("hidden"); }

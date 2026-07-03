@@ -468,7 +468,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   const companyDatalist = coListId ? `<datalist id="${coListId}">${companyOptions.map((c) => `<option value="${esc(c.name || c)}"></option>`).join("")}</datalist>` : "";
   // optionsRef 지정 시 옵션 JSON을 인라인 임베드하지 않고 페이지의 공유 스크립트(id=optionsRef)를 참조 →
   // 같은 옵션(연락처 목록)을 쓰는 콤보가 여러 개인 폼(세션 디렉터 다중 행 등)에서 중복 임베드 제거(페이지 축소).
-  const inlineJson = optionsRef ? "" : `<script type="application/json" data-pc-options>${JSON.stringify(options.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "" }))).replace(/</g, "\\u003c")}</script>`;
+  const inlineJson = optionsRef ? "" : `<script type="application/json" data-pc-options>${JSON.stringify(options.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "", group: o.group_name || o.group || "" }))).replace(/</g, "\\u003c")}</script>`;
   const inputCls = compact ? "input py-1.5 pr-9 text-sm" : "input pr-9";
   const rootCls = compact ? " class=\"min-w-0 flex-1\"" : "";
   return `
@@ -506,7 +506,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
 
 /** personCombo 공유 옵션 스크립트 — 같은 옵션을 여러 콤보가 optionsRef로 참조(중복 임베드 제거). 페이지당 1회 렌더. */
 function personComboOptionsScript(id, options) {
-  const jopts = (options || []).map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "" }));
+  const jopts = (options || []).map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "", group: o.group_name || o.group || "" }));
   return `<script type="application/json" id="${esc(id)}" data-pc-shared-options>${JSON.stringify(jopts).replace(/</g, "\\u003c")}</script>`;
 }
 
@@ -536,7 +536,10 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
       const warn = co ? (taxSet.has(Number(c.id)) ? "" : CO_WARN) : (cashSet.has(Number(c.id)) ? "" : PS_WARN);
       return { label: c.name, sub: c.kind || "", cid: c.id, pid: 0, co, warn };
     }),
-    ...contactOptions.filter((o) => !clientIds.has(Number(o.id))).map((o) => ({ label: o.name, sub: "담당자" + (o.current_client ? " · " + o.current_client : o.phone ? " · " + o.phone : ""), cid: 0, pid: o.id, co: 0, warn: cashSet.has(Number(o.id)) ? "" : PS_WARN })),
+    ...contactOptions.filter((o) => !clientIds.has(Number(o.id))).map((o) => {
+      const aff = [o.group_name, o.current_client].filter(Boolean).join(" · "); // 소속 그룹·회사로 식별
+      return { label: o.name, sub: "담당자" + (aff ? " · " + aff : o.phone ? " · " + o.phone : ""), cid: 0, pid: o.id, co: 0, warn: cashSet.has(Number(o.id)) ? "" : PS_WARN };
+    }),
   ];
   const json = JSON.stringify(items).replace(/</g, "\\u003c");
   const selLabel = sel ? (sel.kind ? `${sel.name} · ${sel.kind}` : sel.name) : "";
