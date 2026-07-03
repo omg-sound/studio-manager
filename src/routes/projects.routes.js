@@ -870,6 +870,8 @@ function artistCombo(p = {}) {
 function companyCombo(fieldName, value, roleKey, label) {
   const opts = partyOptions({ role: "company" }).map((o) => ({ name: o.name, sub: o.sub || "" }));
   const json = JSON.stringify(opts).replace(/</g, "\\u003c");
+  const ownerOpts = partyOptions({ role: "person" }).map((o) => ({ id: o.id, name: o.name })); // 대표자 미니콤보(사람 검색)
+  const ownerJson = JSON.stringify(ownerOpts).replace(/</g, "\\u003c");
   const isProd = roleKey === "제작사";
   return `
     <div data-company-combo>
@@ -895,7 +897,14 @@ function companyCombo(fieldName, value, roleKey, label) {
           </div>
           <div class="grid gap-3 sm:grid-cols-2">
             <div><label class="label">사업자등록번호</label><input class="input" data-cc-biz placeholder="000-00-00000" autocomplete="off" /></div>
-            <div><label class="label">대표자</label><input class="input" data-cc-owner autocomplete="off" /></div>
+            <div><label class="label">대표자</label>
+              <input type="hidden" data-cc-owner-id value="" />
+              <div class="relative">
+                <input class="input" data-cc-owner autocomplete="off" placeholder="이름 검색 또는 새로 등록" role="combobox" aria-expanded="false" aria-autocomplete="list" />
+                <div class="absolute left-0 right-0 z-10 mt-1 hidden max-h-40 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-cc-owner-pop role="listbox"></div>
+              </div>
+              <script type="application/json" data-cc-owner-options>${ownerJson}</script>
+            </div>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">
             <div><label class="label">이메일</label><input class="input" type="email" data-cc-email autocomplete="off" /></div>

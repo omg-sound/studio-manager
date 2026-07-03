@@ -1046,7 +1046,8 @@ function comboKbdNav(input, pop) {
     function openModal() {
       if (!modal) { hide(); return; }
       var n = modal.querySelector("[data-cc-name]"); n.value = input.value.trim();
-      ["[data-cc-biz]", "[data-cc-owner]", "[data-cc-email]", "[data-cc-phone]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      ["[data-cc-biz]", "[data-cc-owner]", "[data-cc-owner-id]", "[data-cc-email]", "[data-cc-phone]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      var ownPop0 = modal.querySelector("[data-cc-owner-pop]"); if (ownPop0) ownPop0.classList.add("hidden");
       modal.querySelector("[data-cc-err]").classList.add("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
     }
@@ -1065,6 +1066,7 @@ function comboKbdNav(input, pop) {
         if (modal.querySelector("[data-cc-prod]").checked) body.append("roles", "제작사");
         var biz = modal.querySelector("[data-cc-biz]").value.trim(); if (biz) body.append("biz_no", biz);
         var owner = modal.querySelector("[data-cc-owner]").value.trim(); if (owner) body.append("owner_name", owner);
+        var ownerIdEl = modal.querySelector("[data-cc-owner-id]"); if (ownerIdEl && ownerIdEl.value) body.append("owner_id", ownerIdEl.value); // 대표자 콤보에서 선택/등록한 사람 id(정확 연결·중복 방지)
         var email = modal.querySelector("[data-cc-email]").value.trim(); if (email) body.append("email", email);
         var phone = modal.querySelector("[data-cc-phone]").value.trim(); if (phone) body.append("phone", phone);
         cSave.disabled = true; err.classList.add("hidden");
@@ -1074,6 +1076,41 @@ function comboKbdNav(input, pop) {
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
+      // 대표자 미니콤보(모달 내부): 타이핑 검색(사람) + '＋ 새 연락처 등록'(fetch /contacts → data-cc-owner-id 채움).
+      var ownInput = modal.querySelector("[data-cc-owner]"), ownHid = modal.querySelector("[data-cc-owner-id]"),
+          ownPop = modal.querySelector("[data-cc-owner-pop]"), ownOptsEl = modal.querySelector("[data-cc-owner-options]");
+      var ownOpts = []; try { ownOpts = JSON.parse((ownOptsEl && ownOptsEl.textContent) || "[]"); } catch (e) { ownOpts = []; }
+      if (ownInput && ownHid && ownPop) {
+        var ownRowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+        var ownView = [];
+        function ownHide() { ownPop.classList.add("hidden"); }
+        function ownRender() {
+          var q = ownInput.value.trim().toLowerCase();
+          ownView = (q ? ownOpts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : ownOpts).slice(0, 10);
+          var html = ownView.map(function (o, i) { return '<button type="button" class="' + ownRowCls + '" data-owneridx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span></button>'; }).join("");
+          if (q && !ownView.some(function (o) { return String(o.name).toLowerCase() === q; })) html += '<button type="button" class="' + ownRowCls + ' text-primary" data-ownernew="1"><span class="truncate">＋ \'' + esc(ownInput.value.trim()) + '\'(으)로 새 연락처 등록</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+          ownPop.innerHTML = html || '<div class="px-3 py-2 text-sm text-muted">이름을 입력해 새 연락처로 등록</div>'; ownPop.classList.remove("hidden");
+        }
+        ownInput.addEventListener("focus", ownRender);
+        ownInput.addEventListener("click", ownRender);
+        ownInput.addEventListener("input", function () { ownHid.value = ""; ownRender(); }); // 타이핑 중 id 해제(선택·등록으로만 확정)
+        ownInput.addEventListener("blur", function () { setTimeout(ownHide, 150); });
+        ownPop.addEventListener("mousedown", function (e) { e.preventDefault(); });
+        ownPop.addEventListener("click", function (e) {
+          var b = e.target.closest("button"); if (!b) return;
+          if (b.hasAttribute("data-owneridx")) { var o = ownView[Number(b.getAttribute("data-owneridx"))]; ownInput.value = o.name; ownHid.value = o.id; ownHide(); }
+          else if (b.hasAttribute("data-ownernew")) {
+            var nm = ownInput.value.trim(); if (!nm) return;
+            b.disabled = true;
+            var body2 = new URLSearchParams(); body2.append("name", nm);
+            fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body2.toString() })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); ownHid.value = d.id; ownInput.value = d.name; ownOpts.push({ id: d.id, name: d.name }); ownHide(); })
+              .catch(function () { b.disabled = false; });
+          }
+        });
+        comboKbdNav(ownInput, ownPop); // 방향키·엔터 선택
+      }
       // 모달 안에서 엔터 → 바깥 폼 제출 방지 + '등록'(cSave) 실행
       modal.addEventListener("keydown", function (e) {
         if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 엔터(조합 확정용)는 무시
