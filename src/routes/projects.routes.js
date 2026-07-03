@@ -1136,7 +1136,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(TASK_STATUS_LABELS[task.status] || task.status)}</span>`;
       return `
         <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
-          <input class="shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${amt}" ${done ? "checked" : ""} id="task-cb-${task.id}" />
+          <input class="shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${amt}" ${done ? "checked" : "data-confirm-pending"} id="task-cb-${task.id}" />
           <label for="task-cb-${task.id}" class="min-w-0 flex-1 cursor-pointer text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</label>
           <div class="relative w-28 shrink-0">
             <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${amt || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />

@@ -132,6 +132,16 @@
     var msg = e.target.getAttribute && e.target.getAttribute("data-confirm");
     if (msg && !window.confirm(msg)) e.preventDefault();
   });
+
+  // 미완료(대기·진행중) 콘텐츠를 청구 항목으로 체크하면 완료 여부 재확인 — 아니면 선택 해제(공급가·VAT 재계산).
+  document.addEventListener("change", function (e) {
+    var cb = e.target;
+    if (!cb || cb.type !== "checkbox" || !cb.checked || !cb.hasAttribute || !cb.hasAttribute("data-confirm-pending")) return;
+    if (!window.confirm("아직 완료되지 않은(대기·진행중) 콘텐츠입니다. 완료된 콘텐츠가 맞습니까?")) {
+      cb.checked = false;
+      cb.dispatchEvent(new Event("change", { bubbles: true })); // 체크 해제 반영해 금액 미리보기 갱신
+    }
+  });
 })();
 
 // 세션 예약 폼: 세션 종류→녹음 종류 조건부 표시 + 시작 슬롯 가용성 + 소요시간 슬라이더(30분·최대 12시간, 1Pro/2Pro/직접입력 프리셋) + 예상 종료.
