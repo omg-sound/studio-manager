@@ -525,8 +525,8 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
   // 청구처 유형(co=회사 여부)·발행 정보 누락 경고(warn) — 회사=세금계산서 정보(사업자등록번호), 개인=현금영수증. app.js가 라벨·경고·차단 처리.
   const taxSet = new Set((taxInfoIds || []).map(Number));
   const cashSet = new Set((cashReceiptIds || []).map(Number));
-  const CO_WARN = "세금계산서 정보(사업자등록번호)가 없습니다 — 클라이언트 상세에서 입력하세요.";
-  const PS_WARN = "현금영수증 정보가 없습니다 — 청구처 상세에서 입력하세요.";
+  const CO_WARN = "세금계산서 정보(사업자등록번호)가 없습니다.";
+  const PS_WARN = "현금영수증 정보가 없습니다.";
   // 아티스트(개인)는 clientOptions(is_artist)에도, contactOptions(kind=person)에도 들어가 같은 party가 콤보에 두 번 뜬다 →
   // 이미 클라이언트로 노출된 사람은 담당자 중복 제외(중복 제거). 둘 다 같은 party.id라 청구처 결과는 동일.
   const clientIds = new Set(clientOptions.map((c) => Number(c.id)));

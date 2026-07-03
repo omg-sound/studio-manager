@@ -58,7 +58,7 @@ const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
 const { isValidYmd, formatYmdShort, todayYmd, daysUntilYmd } = require("../lib/date");
-const { parseMoney } = require("../lib/forms");
+const { parseMoney, formatBizNo } = require("../lib/forms");
 const { notifyInvoiceIssued } = require("../notify");
 
 const router = express.Router();
@@ -476,6 +476,22 @@ function projectAmount(project) {
 // ── 예전 수정 URL은 상세 편집 화면으로 정규화 ──
 router.get("/:id/edit", requireEditor, (req, res) => {
   res.redirect(`/projects/${Number(req.params.id)}`);
+});
+
+// 청구처 발행 정보 인라인 저장(청구 폼의 경고 아래 입력) — 회사=사업자등록번호, 개인=현금영수증 정보. requireBilling.
+// **`/:id`보다 위에 등록**(literal 라우트가 param `/:id`보다 먼저 매칭되도록).
+router.post("/payer-info", requireBilling, (req, res) => {
+  const id = Number(req.body.party_id);
+  const value = String(req.body.value || "").trim();
+  const p = id ? getParty(id) : null;
+  if (!p) return res.status(404).json({ ok: false, error: "청구처를 찾을 수 없습니다." });
+  if (!value) return res.status(400).json({ ok: false, error: "값을 입력하세요." });
+  if (p.kind === "company") {
+    db().prepare("UPDATE parties SET biz_no = ? WHERE id = ?").run(formatBizNo(value), id); // 세금계산서 정보
+    return res.json({ ok: true, field: "biz_no" });
+  }
+  db().prepare("UPDATE parties SET cash_receipt_no = ? WHERE id = ?").run(value, id); // 현금영수증(휴대폰/카드번호)
+  return res.json({ ok: true, field: "cash_receipt_no" });
 });
 
 // ── 수정 저장(관리자) ──
@@ -1179,7 +1195,14 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
         ${payerCombo({ selectedId: project.production_id || project.agency_id || project.artist_id, clientOptions: clientOptions(), contactOptions: contactOptions(), ...payerDocMeta() })}
-        <p data-payer-warn class="mt-1.5 hidden rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning"></p>
+        <div data-payer-fix class="mt-1.5 hidden rounded-lg bg-warning/10 px-3 py-2">
+          <p data-payer-warn class="text-sm text-warning"></p>
+          <div class="mt-2 flex gap-2">
+            <input type="text" data-payer-fix-input class="input flex-1 py-1.5 text-sm" autocomplete="off" />
+            <button type="button" data-payer-fix-btn class="btn-primary btn-sm shrink-0">입력</button>
+          </div>
+          <p class="mt-1 text-xs text-muted">여기에 입력하면 청구처 정보에 저장됩니다.</p>
+        </div>
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>

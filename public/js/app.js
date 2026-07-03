@@ -1098,20 +1098,54 @@
     var items = [];
     try { items = JSON.parse(dataEl.textContent || "[]"); } catch (e) { items = []; }
     var view = [];
-    // 청구처 유형에 따른 문서 라벨(회사=계산서 / 개인=현금영수증) + 서류 누락 경고(같은 폼 안 요소가 있을 때만).
+    // 청구처 유형에 따른 문서 라벨(회사=계산서 / 개인=현금영수증) + 발행 정보 누락 경고 + 인라인 입력(같은 폼 안 요소가 있을 때만).
     var form = root.closest ? root.closest("form") : null;
     var docLabel = form ? form.querySelector("[data-inv-doc]") : null;
+    var fixBox = form ? form.querySelector("[data-payer-fix]") : null; // 경고+입력 컨테이너
     var warnEl = form ? form.querySelector("[data-payer-warn]") : null;
+    var fixInput = form ? form.querySelector("[data-payer-fix-input]") : null;
+    var fixBtn = form ? form.querySelector("[data-payer-fix-btn]") : null;
     function applyDoc(it) {
       if (docLabel) docLabel.textContent = (it && !it.co) ? "(현금영수증 발행)" : "(계산서 발행)";
-      if (warnEl) { if (it && it.warn) { warnEl.textContent = "⚠️ " + it.warn; warnEl.classList.remove("hidden"); } else { warnEl.classList.add("hidden"); } }
+      if (fixBox) {
+        if (it && it.warn) {
+          if (warnEl) warnEl.textContent = "⚠️ " + it.warn;
+          if (fixInput) { fixInput.placeholder = it.co ? "사업자등록번호 (예: 000-00-00000)" : "현금영수증 정보 (휴대폰 번호 등)"; fixInput.value = ""; }
+          fixBox.classList.remove("hidden");
+        } else fixBox.classList.add("hidden");
+      }
     }
-    // 청구 생성 버튼 제출 차단 — 청구처 발행 정보 누락(경고 표시 중)이면 생성 불가(PDF 프리뷰 버튼은 formaction이라 허용).
+    // 발행 정보 인라인 저장 — 경고 아래 입력칸+버튼. 저장되면 버튼 하이라이트 후 경고 숨김·차단 해제.
+    if (fixBtn) {
+      fixBtn.addEventListener("click", function () {
+        var partyId = cid.value || pid.value;
+        var value = (fixInput && fixInput.value ? fixInput.value : "").trim();
+        if (!partyId || !value) { if (fixInput) fixInput.focus(); return; }
+        fixBtn.disabled = true;
+        var body = new URLSearchParams(); body.append("party_id", partyId); body.append("value", value);
+        fetch("/projects/payer-info", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.ok) throw new Error("fail");
+            var it = items.filter(function (x) { return (cid.value && String(x.cid) === String(cid.value)) || (pid.value && String(x.pid) === String(pid.value)); })[0];
+            if (it) it.warn = ""; // 차단 해제
+            var orig = fixBtn.textContent;
+            fixBtn.textContent = "저장됨 ✓";
+            fixBtn.style.transition = "box-shadow .2s";
+            fixBtn.style.boxShadow = "0 0 0 4px rgba(74,222,128,0.7)"; // 눈에 띄는 하이라이트 한번
+            if (window.__toast) window.__toast("청구처 정보에 저장되었습니다");
+            setTimeout(function () { fixBtn.style.boxShadow = ""; fixBtn.textContent = orig; if (fixBox) fixBox.classList.add("hidden"); }, 1300);
+          })
+          .catch(function () { if (window.__toast) window.__toast("저장 실패 — 다시 시도하세요"); })
+          .then(function () { fixBtn.disabled = false; });
+      });
+    }
+    // 청구 생성 버튼 제출 차단 — 발행 정보 누락(경고 표시 중)이면 생성 불가(PDF 프리뷰 버튼은 formaction이라 허용).
     if (form) {
       form.addEventListener("submit", function (e) {
-        if (e.submitter && e.submitter.hasAttribute && e.submitter.hasAttribute("data-invoice-submit") && warnEl && !warnEl.classList.contains("hidden")) {
+        if (e.submitter && e.submitter.hasAttribute && e.submitter.hasAttribute("data-invoice-submit") && fixBox && !fixBox.classList.contains("hidden")) {
           e.preventDefault();
-          window.alert((warnEl.textContent || "청구처 발행 정보가 없습니다.").replace(/^⚠️\s*/, "") + "\n\n먼저 청구처 정보를 입력한 뒤 청구할 수 있습니다.");
+          window.alert(((warnEl && warnEl.textContent) || "청구처 발행 정보가 없습니다.").replace(/^⚠️\s*/, "") + "\n\n아래 칸에 정보를 입력해 저장한 뒤 청구할 수 있습니다.");
         }
       });
     }
