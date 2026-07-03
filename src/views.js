@@ -461,8 +461,11 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "" } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = [] } = {}) {
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
+  // 모달 '회사' 입력 autocomplete용 datalist(기존 클라이언트 검색 → 오타·중복 방지). 유니크 id로 중복 방지.
+  const coListId = companyOptions && companyOptions.length ? "pcco_" + Math.random().toString(36).slice(2, 9) : "";
+  const companyDatalist = coListId ? `<datalist id="${coListId}">${companyOptions.map((c) => `<option value="${esc(c.name || c)}"></option>`).join("")}</datalist>` : "";
   // optionsRef 지정 시 옵션 JSON을 인라인 임베드하지 않고 페이지의 공유 스크립트(id=optionsRef)를 참조 →
   // 같은 옵션(연락처 목록)을 쓰는 콤보가 여러 개인 폼(세션 디렉터 다중 행 등)에서 중복 임베드 제거(페이지 축소).
   const inlineJson = optionsRef ? "" : `<script type="application/json" data-pc-options>${JSON.stringify(options.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "" }))).replace(/</g, "\\u003c")}</script>`;
@@ -488,7 +491,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
             <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">
-            <div><label class="label">회사</label><input class="input" data-pc-company autocomplete="off" /></div>
+            <div><label class="label">회사</label><input class="input" data-pc-company autocomplete="off"${coListId ? ` list="${coListId}" placeholder="기존 클라이언트 검색"` : ""} />${companyDatalist}</div>
             <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>
           </div>
           <div class="flex items-center gap-2 pt-1">

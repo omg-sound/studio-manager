@@ -649,7 +649,7 @@ function clientContactCombo(c, isEdit) {
   return `
     <div>
       <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 연락처에 연동)</span></label>
-      ${personCombo({ idField: "contact_id", nameField: "contact_name", selectedId: cur ? cur.id : null, options: contactOptions() })}
+      ${personCombo({ idField: "contact_id", nameField: "contact_name", selectedId: cur ? cur.id : null, options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company") })}
       ${explain(`목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.`)}
     </div>`;
 }

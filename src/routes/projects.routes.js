@@ -718,7 +718,7 @@ function projectForm(p = {}, err = "") {
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions() })}
+        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions(), companyOptions: partyOptions({ role: "company" }) })}
       </div>
       <div>
         <label class="label">프로젝트 매니저</label>
@@ -763,7 +763,7 @@ function projectEditForm(p = {}, err = "") {
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions() })}
+        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions(), companyOptions: partyOptions({ role: "company" }) })}
       </div>
       <div>
         <label class="label">프로젝트 매니저</label>
