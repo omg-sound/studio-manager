@@ -786,6 +786,7 @@ function comboKbdNav(input, pop) {
   }
   new MutationObserver(function () { if (!pop.classList.contains("hidden")) setHi(0); }).observe(pop, { childList: true });
   input.addEventListener("keydown", function (e) {
+    if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 키(엔터=조합 확정 등)는 무시
     var open = !pop.classList.contains("hidden");
     if (e.key === "ArrowDown") { e.preventDefault(); if (open) setHi(hi + 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); if (open) setHi(hi - 1); }
@@ -959,6 +960,7 @@ function comboKbdNav(input, pop) {
       }
       // 모달 안에서 엔터 → 바깥 프로젝트 폼 제출 방지 + '등록'(mSave) 실행(소속사 콤보가 이미 처리했으면 스킵)
       modal.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 엔터(조합 확정용)는 무시
         if (e.key !== "Enter" || e.defaultPrevented || (e.target && e.target.tagName === "TEXTAREA")) return;
         e.preventDefault(); mSave.click();
       });
@@ -969,6 +971,7 @@ function comboKbdNav(input, pop) {
     input.addEventListener("input", render);
     // 방향키 이동 + 엔터 선택(ESC 닫기). 드롭다운 열려 있을 때만 가로챔 — 아니면 폼 기본 동작.
     input.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 키(엔터=조합 확정 등)는 무시
       if (e.key === "ArrowDown") { e.preventDefault(); if (pop.classList.contains("hidden")) render(); else setHi(hi + 1); }
       else if (e.key === "ArrowUp") { e.preventDefault(); if (!pop.classList.contains("hidden")) setHi(hi - 1); }
       else if (e.key === "Enter" && !pop.classList.contains("hidden")) {
@@ -1066,6 +1069,7 @@ function comboKbdNav(input, pop) {
       });
       // 모달 안에서 엔터 → 바깥 폼 제출 방지 + '등록'(cSave) 실행
       modal.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 엔터(조합 확정용)는 무시
         if (e.key !== "Enter" || e.defaultPrevented || (e.target && e.target.tagName === "TEXTAREA")) return;
         e.preventDefault(); cSave.click();
       });
@@ -1172,6 +1176,7 @@ function comboKbdNav(input, pop) {
       });
       // 모달 안에서 엔터 → 바깥 폼 제출 방지 + '등록'(pSave) 실행
       modal.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 엔터(조합 확정용)는 무시
         if (e.key !== "Enter" || e.defaultPrevented || (e.target && e.target.tagName === "TEXTAREA")) return;
         e.preventDefault(); pSave.click();
       });
