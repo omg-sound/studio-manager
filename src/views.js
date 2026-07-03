@@ -545,7 +545,9 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
     }),
   ];
   const json = JSON.stringify(items).replace(/</g, "\\u003c");
-  const selLabel = sel ? (sel.kind ? `${sel.name} · ${sel.kind}` : sel.name) : "";
+  // 미리 선택된 입력칸 값도 드롭다운 항목과 동일 형식(우리 용어 + 소속)으로 — raw kind('person') 노출 방지.
+  const selItem = sel ? items.find((it) => Number(it.cid) === Number(sel.id)) : null;
+  const selLabel = selItem ? (selItem.sub ? `${selItem.label} · ${selItem.sub}` : selItem.label) : "";
   return `
     <div data-picker-combo>
       <input type="hidden" name="client_id" value="${sel ? sel.id : ""}" data-pk-cid />
