@@ -878,6 +878,7 @@
             showReal(!mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : ""); // 모달 입력 본명(개인) 표시
             fillAgency(agName); // 모달에서 지정한 소속사를 프로젝트 소속사/레이블 필드에 즉시 반영
             closeModal(); fireInput();
+            if (window.__toast) window.__toast(d.name + " 등록됨");
           })
           .catch(function () { mErr.textContent = "등록 실패 — 다시 시도하세요."; mErr.classList.remove("hidden"); })
           .then(function () { mSave.disabled = false; });
@@ -1000,7 +1001,7 @@
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; closeModal(); fireInput(); })
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); })
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
@@ -1100,7 +1101,7 @@
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); })
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); })
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
