@@ -450,4 +450,53 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked };
+/**
+ * 사람(연락처) 검색 콤보 — 통일 UX(검색 + 선택 시 닫힘 + 새로 등록 모달 + 선택 정보 표시).
+ * 프로젝트 고객측 담당자·세션 디렉터(동적 다중 행)·클라이언트 담당자 공용. CSP-safe(app.js [data-person-combo]).
+ * @param {object} o
+ * @param {string} [o.idField=contact_id] hidden id 입력 name(director_contact_id 등)
+ * @param {string} [o.nameField=contact_name] 텍스트 입력 name(director_name 등)
+ * @param {number|null} [o.selectedId] 현재 선택 party id
+ * @param {Array} [o.options] [{id,name,phone,email,current_client|company}]
+ * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
+ * @param {string} [o.placeholder]
+ */
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록" } = {}) {
+  const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
+  const jopts = options.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "" }));
+  const json = JSON.stringify(jopts).replace(/</g, "\\u003c"); // </script> 브레이크아웃 방지
+  const inputCls = compact ? "input py-1.5 pr-9 text-sm" : "input pr-9";
+  return `
+    <div data-person-combo${compact ? ' class="min-w-0 flex-1"' : ""}>
+      <input type="hidden" name="${idField}" value="${sel ? sel.id : ""}" data-pc-id />
+      <div class="relative">
+        <input class="${inputCls}" type="text" name="${nameField}" value="${sel ? esc(sel.name) : ""}" data-pc-input autocomplete="off"
+          role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(placeholder)}" />
+        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>
+      </div>
+      <div class="mt-1.5 hidden ${compact ? "text-xs" : "text-sm"} text-muted" data-pc-info></div>
+      <script type="application/json" data-pc-options>${json}</script>
+      <div data-pc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+        <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
+          <div class="font-display text-lg font-semibold">새 담당자 등록</div>
+          <div><label class="label">이름</label><input class="input" data-pc-name placeholder="담당자 이름" /></div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div><label class="label">전화</label><input class="input" data-pc-phone autocomplete="off" /></div>
+            <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div><label class="label">회사</label><input class="input" data-pc-company autocomplete="off" /></div>
+            <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>
+          </div>
+          <div class="flex items-center gap-2 pt-1">
+            <button type="button" class="btn-primary" data-pc-save>등록</button>
+            <button type="button" class="btn-ghost" data-pc-cancel>취소</button>
+            <span class="ml-1 hidden text-xs text-danger" data-pc-err></span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo };

@@ -52,7 +52,7 @@ const {
   getStudioInfo,
   getStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, personCombo } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -718,7 +718,7 @@ function projectForm(p = {}, err = "") {
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${personCombo(p.contact_party_id)}
+        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions() })}
       </div>
       <div>
         <label class="label">프로젝트 매니저</label>
@@ -763,7 +763,7 @@ function projectEditForm(p = {}, err = "") {
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${personCombo(p.contact_party_id)}
+        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions() })}
       </div>
       <div>
         <label class="label">프로젝트 매니저</label>
@@ -878,49 +878,6 @@ function companyCombo(fieldName, value, roleKey, label) {
             <button type="button" class="btn-primary" data-cc-save>등록</button>
             <button type="button" class="btn-ghost" data-cc-cancel>취소</button>
             <span class="ml-1 hidden text-xs text-danger" data-cc-err></span>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
-/**
- * 고객측 담당자(사람) 콤보 — 아티스트/업체와 동일 UX(검색 + 새로 등록 모달 + 선택 시 정보 표시).
- * hidden contact_id(party id) + contact_name 입력. 모달 등록은 fetch로 즉시 생성(POST /contacts JSON).
- * CSP-safe(app.js [data-person-combo]).
- */
-function personCombo(selectedId) {
-  const opts = contactOptions(); // {id, name, phone, email, current_client}
-  const sel = selectedId ? opts.find((o) => o.id === Number(selectedId)) : null;
-  const jopts = opts.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || "" }));
-  const json = JSON.stringify(jopts).replace(/</g, "\\u003c");
-  return `
-    <div data-person-combo>
-      <input type="hidden" name="contact_id" value="${sel ? sel.id : ""}" data-pc-id />
-      <div class="relative">
-        <input class="input pr-9" type="text" name="contact_name" value="${sel ? esc(sel.name) : ""}" data-pc-input autocomplete="off"
-          role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="담당자 — 검색 또는 새로 등록" />
-        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>
-      </div>
-      <div class="mt-1.5 hidden text-sm text-muted" data-pc-info></div>
-      <script type="application/json" data-pc-options>${json}</script>
-      <div data-pc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
-        <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
-          <div class="font-display text-lg font-semibold">새 담당자 등록</div>
-          <div><label class="label">이름</label><input class="input" data-pc-name placeholder="담당자 이름" /></div>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div><label class="label">전화</label><input class="input" data-pc-phone autocomplete="off" /></div>
-            <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
-          </div>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div><label class="label">회사</label><input class="input" data-pc-company autocomplete="off" /></div>
-            <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>
-          </div>
-          <div class="flex items-center gap-2 pt-1">
-            <button type="button" class="btn-primary" data-pc-save>등록</button>
-            <button type="button" class="btn-ghost" data-pc-cancel>취소</button>
-            <span class="ml-1 hidden text-xs text-danger" data-pc-err></span>
           </div>
         </div>
       </div>

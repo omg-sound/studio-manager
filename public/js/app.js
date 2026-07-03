@@ -961,12 +961,15 @@
   });
 })();
 
-// 고객측 담당자 콤보([data-person-combo]): 타이핑=기존 담당자 검색(전화·소속 표시), 빈 입력=[＋새 담당자 등록].
-// hidden contact_id(party id) 동기화. '새 등록'=간이 모달(fetch POST /contacts → id·이름 채움).
+// 사람(연락처) 검색 콤보([data-person-combo]): 타이핑=기존 담당자 검색(전화·소속 표시), 빈 입력=[＋새 담당자 등록].
+// 고객측 담당자·세션 디렉터(동적 다중 행)·클라이언트 담당자 공용. hidden id 동기화, '새 등록'=모달(fetch POST /contacts).
+// window.__initPersonCombos(container)로 정적/동적 행 모두 초기화(디렉터 '+추가' clone도).
 (function () {
   "use strict";
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-  Array.prototype.forEach.call(document.querySelectorAll("[data-person-combo]"), function (root) {
+  function initOne(root) {
+    if (root.__pcInit) return; // 중복 초기화 방지(동적 행 재스캔 대비)
+    root.__pcInit = true;
     var input = root.querySelector("[data-pc-input]");
     var hid = root.querySelector("[data-pc-id]");
     var pop = root.querySelector("[data-pc-pop]");
@@ -1056,7 +1059,14 @@
       else if (b.hasAttribute("data-new")) openModal();
     });
     if (hid.value) { var init = opts.filter(function (o) { return String(o.id) === String(hid.value); })[0]; if (init) setInfo(init, false); } // 편집 초기값 정보
-  });
+  }
+  // 정적 + 동적(디렉터 '+추가' clone 등) 행 모두 초기화. container 지정 시 그 안(또는 자신)의 콤보만.
+  window.__initPersonCombos = function (container) {
+    var scope = container || document;
+    Array.prototype.forEach.call(scope.querySelectorAll("[data-person-combo]"), initOne);
+    if (container && container.matches && container.matches("[data-person-combo]")) initOne(container);
+  };
+  window.__initPersonCombos(document);
 })();
 
 // 드롭존([data-dropzone]): 파일 끌어놓기 또는 클릭 선택. CSP-safe(인라인 0, 외부 JS 파일).
