@@ -590,10 +590,16 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
   const rows = FILE_KINDS.map(({ key, label }) => {
     const existing = fileMap[key];
     const ok = existing && fileOk[key] !== false; // fileOk 미확인(undefined)이면 표시(기존 동작), 명시적 false(깨진 링크)만 숨김
+    const backendTag = existing
+      ? (existing.storage_backend === "drive"
+          ? `<span class="text-xs text-muted">Drive</span>`
+          : `<span class="text-xs text-warning" title="Drive 업로드 실패로 로컬(서버 디스크)에 저장됨 — 관리 › 환경설정 › 자료 저장에서 Drive로 이관하세요">로컬 저장</span>`)
+      : "";
     const existingRow = existing && ok
-      ? `<div class="mb-2 flex items-center gap-3 text-sm">
+      ? `<div class="mb-2 flex flex-wrap items-center gap-3 text-sm">
             <a href="/clients/${c.id}/files/${key}/raw" target="_blank" rel="noopener" class="font-medium text-primary hover:underline">${esc(label)} 보기</a>
             <span class="max-w-[12rem] truncate text-xs text-muted">${esc(existing.file_name)}</span>
+            ${backendTag}
             <form method="post" action="/clients/${c.id}/files/${key}/delete" class="inline" data-confirm="${esc(label)}을 삭제할까요?">
               <button class="text-xs text-danger hover:underline" type="submit">삭제</button>
             </form>
