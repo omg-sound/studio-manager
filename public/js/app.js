@@ -820,7 +820,54 @@
       hide();
       fireInput();
     }
-    function asNew() { cid.value = ""; hide(); input.focus(); fireInput(); } // 새 아티스트: 연결 없음, 입력값 유지
+    function asNew() { cid.value = ""; hide(); input.focus(); fireInput(); } // 새 아티스트: 연결 없음, 입력값 유지(모달 없을 때 폴백)
+
+    // ── 간이 등록 모달: 프로젝트 폼 이탈 없이 새 아티스트/그룹 등록(fetch → 콤보 채움) ──
+    var modal = root.querySelector("[data-artist-modal]");
+    function openModal() {
+      if (!modal) { asNew(); return; }
+      var mName = modal.querySelector("[data-am-name]"), mGroup = modal.querySelector("[data-am-group]"),
+          mRealWrap = modal.querySelector("[data-am-real-wrap]"), mReal = modal.querySelector("[data-am-real]"),
+          mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
+          mErr = modal.querySelector("[data-am-err]");
+      mName.value = input.value.trim(); mGroup.checked = false;
+      if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mPhone) mPhone.value = "";
+      mErr.classList.add("hidden"); mRealWrap.classList.remove("hidden");
+      modal.classList.remove("hidden"); modal.classList.add("flex");
+      hide(); mName.focus();
+    }
+    if (modal) {
+      var mGroup = modal.querySelector("[data-am-group]"), mRealWrap = modal.querySelector("[data-am-real-wrap]"),
+          mSave = modal.querySelector("[data-am-save]"), mCancel = modal.querySelector("[data-am-cancel]");
+      function closeModal() { modal.classList.add("hidden"); modal.classList.remove("flex"); }
+      mGroup.addEventListener("change", function () { mRealWrap.classList.toggle("hidden", mGroup.checked); });
+      mCancel.addEventListener("click", closeModal);
+      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); }); // 배경 클릭 닫기
+      mSave.addEventListener("click", function () {
+        var mName = modal.querySelector("[data-am-name]"), mReal = modal.querySelector("[data-am-real]"),
+            mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
+            mErr = modal.querySelector("[data-am-err]");
+        var nm = mName.value.trim();
+        if (!nm) { mErr.textContent = "활동명을 입력하세요."; mErr.classList.remove("hidden"); return; }
+        mSave.disabled = true; mErr.classList.add("hidden");
+        var body = new URLSearchParams();
+        body.append("type", mGroup.checked ? "group" : "artist"); body.append("name", nm);
+        if (!mGroup.checked && mReal && mReal.value.trim()) body.append("real_name", mReal.value.trim());
+        if (mAgency && mAgency.value) body.append("agency_id", mAgency.value);
+        if (mPhone && mPhone.value.trim()) body.append("phone", mPhone.value.trim());
+        fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.ok) throw new Error("fail");
+            input.value = d.name; cid.value = d.id;
+            if (group) group.checked = d.kind === "group";
+            if (group && real) real.classList.toggle("hidden", group.checked);
+            closeModal(); fireInput();
+          })
+          .catch(function () { mErr.textContent = "등록 실패 — 다시 시도하세요."; mErr.classList.remove("hidden"); })
+          .then(function () { mSave.disabled = false; });
+      });
+    }
 
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
@@ -830,7 +877,7 @@
     pop.addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;
       if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]);
-      else if (b.hasAttribute("data-new")) asNew();
+      else if (b.hasAttribute("data-new")) openModal(); // 새 아티스트 등록 → 간이 모달
       else if (b.hasAttribute("data-search")) input.focus();
     });
     // 직접 타이핑으로 이름을 바꾸면(선택 안 함) 연결 해제 — 저장 시 이름 매칭으로만 dedup.

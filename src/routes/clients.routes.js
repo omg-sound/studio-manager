@@ -302,15 +302,20 @@ router.post("/", (req, res) => {
       address: b.address, roles: companyRolesFrom(b),
     });
   } else {
-    // 아티스트(개인·솔로) → 사람 party(활동명=이름·is_artist, 현금영수증)
+    // 아티스트(개인·솔로) → 사람 party. 본명(real_name) 있으면 name=본명·활동명=입력, 없으면 name=활동명=입력.
+    const realName = String(b.real_name || b.artist_real_name || "").trim();
     id = createPerson({
-      name, phone: b.phone, email: b.email, memo: b.memo,
+      name: realName || name, phone: b.phone, email: b.email, memo: b.memo,
       activity_name: name, is_artist: 1, cash_receipt_no: b.cash_receipt_no,
     });
     if (b.group_id) setPartyGroup(id, b.group_id); // 아티스트 생성 시 소속 그룹 선택했으면 연결
   }
   if (type !== "company" && b.agency_id) setPartyAgency(id, b.agency_id); // 아티스트·그룹 소속사 연결('없음'=빈값→no-op)
   if (type === "company") linkClientContact(id, b); // 업체만 담당자 연락처 연동
+  if (req.get("X-Requested-With") === "fetch") { // 간이 등록(프로젝트 폼 모달 등) — 리다이렉트 대신 JSON
+    const pp = getParty(id);
+    return res.json({ ok: true, id, name: pp.activity_name || pp.name, kind: pp.kind });
+  }
   res.redirect("/clients?flash=created#c" + id);
 });
 

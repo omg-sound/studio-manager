@@ -802,6 +802,7 @@ function artistCombo(p = {}) {
     sub: o.sub,
   }));
   const json = JSON.stringify(opts).replace(/</g, "\\u003c"); // </script> 브레이크아웃 방지
+  const companies = partyOptions({ role: "company" }); // 모달 소속사 select용
   return `
     <div data-artist-combo>
       <input type="hidden" name="artist_contact_id" value="${meta.contactId || ""}" data-artist-cid />
@@ -817,6 +818,23 @@ function artistCombo(p = {}) {
       </label>
       <input class="input mt-1.5 py-1.5 text-sm ${meta.isGroup ? "hidden" : ""}" type="text" name="artist_real_name" value="${esc(meta.realName || "")}" data-artist-real autocomplete="off" placeholder="본명 (활동명과 다르면 입력 · 개인)" aria-label="본명" />
       <script type="application/json" data-artist-options>${json}</script>
+      <!-- 간이 등록 모달(프로젝트 폼 이탈 없이 새 아티스트/그룹 등록). name 없음(프로젝트 폼과 분리), app.js가 fetch로 생성. -->
+      <div data-artist-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+        <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
+          <div class="font-display text-lg font-semibold">새 아티스트 등록</div>
+          <div><label class="label">활동명(이름)</label><input class="input" data-am-name placeholder="아티스트 활동명" /></div>
+          <label class="flex w-fit cursor-pointer items-center gap-1.5 text-sm text-muted"><input type="checkbox" data-am-group class="h-4 w-4 rounded border-border text-primary" /> 그룹(밴드·팀)</label>
+          <div data-am-real-wrap><label class="label">본명 <span class="text-xs font-normal text-muted">(활동명과 다르면 · 개인)</span></label><input class="input" data-am-real placeholder="본명(선택)" /></div>
+          <div><label class="label">소속사 <span class="text-xs font-normal text-muted">(선택)</span></label>
+            <select class="input" data-am-agency><option value="">없음</option>${companies.map((co) => `<option value="${co.id}">${esc(co.name)}</option>`).join("")}</select></div>
+          <div><label class="label">전화 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" data-am-phone autocomplete="off" /></div>
+          <div class="flex items-center gap-2 pt-1">
+            <button type="button" class="btn-primary" data-am-save>등록</button>
+            <button type="button" class="btn-ghost" data-am-cancel>취소</button>
+            <span class="ml-1 hidden text-xs text-danger" data-am-err></span>
+          </div>
+        </div>
+      </div>
     </div>`;
 }
 
