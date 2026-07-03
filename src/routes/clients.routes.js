@@ -528,7 +528,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
         ${members.length
           ? listGroup({ rows: members.map((m) => listRow({
               left: `<a href="/clients/${m.id}" class="font-medium text-fg hover:text-primary hover:underline">${esc(m.display_name)}</a>`,
-              right: `<form method="post" action="/clients/${c.id}/members/${m.id}/remove"><button class="btn-ghost btn-sm text-danger" type="submit">제거</button></form>`,
+              right: `<form method="post" action="/clients/${c.id}/members/${m.id}/remove" data-confirm="${esc(m.display_name)} 님을 이 그룹에서 제거할까요? (아티스트 자체는 삭제되지 않고 그룹 연결만 해제)"><button class="btn-ghost btn-sm text-danger" type="submit">제거</button></form>`,
             })) })
           : emptyState("아직 등록된 멤버가 없습니다.", { card: true })}
         <form method="post" action="/clients/${c.id}/members" class="card mt-2 flex items-end gap-2">
