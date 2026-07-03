@@ -193,9 +193,11 @@ function driveStorageSection() {
   if (!config.googleConfigured) {
     status = `<p class="text-sm text-muted">Google OAuth가 설정되지 않았습니다.</p>`;
   } else if (linked) {
-    status = `<p class="text-sm"><span class="badge badge-success">연동됨</span> 첨부 서류·자료 전달 파일이 <span class="font-medium">Google Drive</span> 앱 전용 폴더에 저장됩니다.</p>`;
+    const acct = drive.getDriveAccountEmail();
+    status = `<p class="text-sm"><span class="badge badge-success">연동됨</span> 첨부 서류·자료 전달 파일이 <span class="font-medium">Google Drive</span> 앱 전용 폴더에 저장됩니다.${acct ? ` <span class="text-muted">· 계정 <span class="font-medium text-fg">${esc(acct)}</span></span>` : ""}</p>
+      <p class="text-xs text-muted">이 계정 <span class="text-fg">한 곳</span>에만 저장됩니다. Drive 계정을 바꾸려면 <span class="text-fg">치프</span>가 원하는 구글 계정으로 다시 로그인하세요(스태프·대표 로그인은 Drive 계정을 바꾸지 않습니다).</p>`;
   } else {
-    status = `<p class="text-sm text-muted"><span class="badge badge-warning">미연동</span> 지금은 파일이 <span class="font-medium">서버 로컬 디스크</span>에 저장됩니다. <a class="text-primary hover:underline" href="/auth/google">구글 계정 연동</a> 후 Drive 저장이 켜집니다.</p>`;
+    status = `<p class="text-sm text-muted"><span class="badge badge-warning">미연동</span> 지금은 파일이 <span class="font-medium">서버 로컬 디스크</span>에 저장됩니다. <span class="text-fg">치프</span>가 스튜디오 구글 계정으로 <a class="text-primary hover:underline" href="/auth/google">로그인</a>하면 Drive 저장이 켜집니다.</p>`;
   }
   const driveN = linked ? driveFileCount() : 0;
   const migrate = linked && localN > 0

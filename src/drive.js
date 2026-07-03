@@ -35,6 +35,10 @@ function getRefreshToken() {
   return decrypt(getState(STATE_REFRESH_TOKEN));
 }
 
+const STATE_DRIVE_EMAIL = "drive_account_email"; // 현재 Drive 토큰이 어느 구글 계정 것인지(표시용, 평문)
+function setDriveAccountEmail(email) { setState(STATE_DRIVE_EMAIL, String(email || "").trim() || null); }
+function getDriveAccountEmail() { return getState(STATE_DRIVE_EMAIL) || null; }
+
 function isLinked() {
   return Boolean(config.googleConfigured && getRefreshToken());
 }
@@ -247,6 +251,8 @@ module.exports = {
   STATE_FOLDER_PREFIX,
   saveRefreshToken,
   getRefreshToken,
+  setDriveAccountEmail,
+  getDriveAccountEmail,
   isLinked,
   driveClient,
   ensureFolder,

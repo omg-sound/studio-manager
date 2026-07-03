@@ -10,7 +10,7 @@ const {
   upsertUserFromGoogle,
   oauthClient,
 } = require("../auth");
-const { saveRefreshToken } = require("../drive");
+const { saveRefreshToken, setDriveAccountEmail } = require("../drive");
 const { layout, esc } = require("../views");
 
 const router = express.Router();
@@ -122,8 +122,14 @@ router.get("/auth/google/callback", async (req, res) => {
       return res.redirect("/login?err=" + encodeURIComponent("로그인이 허용되지 않은 계정입니다. 치프 엔지니어에게 등록을 요청하세요."));
     }
 
-    // refresh token이 오면 Drive 구동용으로 암호화 저장(없으면 기존 유지)
-    if (tokens.refresh_token) saveRefreshToken(tokens.refresh_token);
+    // Drive 구동용 refresh token은 **치프 로그인일 때만** 저장한다.
+    // (이전엔 모든 로그인이 덮어써서, 스태프·대표가 로그인하면 앱 Drive가 그 사람 개인 Drive로 바뀌던 문제 —
+    //  파일이 각자 개인 Drive로 흩어지고 폴더 중복·'파일 없음'이 생기던 근본 원인.)
+    //  치프가 스튜디오 Drive 계정으로 로그인해 단일 Drive를 유지한다.
+    if (tokens.refresh_token && user.role === "chief") {
+      saveRefreshToken(tokens.refresh_token);
+      setDriveAccountEmail(email); // 연결 계정 기록(설정에 표시)
+    }
 
     setSessionCookie(res, user);
     res.redirect(stateNext);
