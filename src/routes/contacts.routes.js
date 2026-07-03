@@ -81,14 +81,24 @@ router.get("/", (req, res) => {
         rows: rows.map((c) => {
           const cur = currentAffiliation(c.id);
           const typeBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
-          // 회사(현재 소속)는 이름 뒤에 바탕 없이 텍스트로(배지 제거). 직함 있으면 병기.
-          const company = cur && cur.client_id ? esc(cur.client_name || "") + (cur.title ? " · " + esc(cur.title) : "") : "";
-          const nameLine = `${esc(personLabel(c.name, c.nickname))}${company ? ` <span class="text-xs font-normal text-muted">· ${company}</span>` : ""}`;
+          // 클라이언트 목록과 동일 흐름: 이름(→연락처)·소속 회사(→회사 상세)를 각각 링크(밑줄 분리), 직함은 텍스트.
+          // 우측 전화·이메일은 비링크 → 드래그·복사해도 상세로 안 들어감.
+          const nameLink = `<a href="/contacts/${c.id}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personLabel(c.name, c.nickname))}</a>`;
+          let orgPart = "";
+          if (cur && cur.client_id) {
+            const orgA = `<a href="/clients/${cur.client_id}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
+            orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
+          }
           const right = (c.phone || c.email)
             ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}${c.email ? `<div>${esc(c.email)}</div>` : ""}</div>`
             : "";
-          // 이름만 링크 → 오른쪽 전화·이메일 복사 시 상세로 안 들어감.
-          return listRowLinked({ href: `/contacts/${c.id}`, title: nameLine, badges: typeBadges, right });
+          return `<div class="flex items-start justify-between gap-4 px-4 py-3">
+            <div class="min-w-0">
+              <div class="truncate">${nameLink}${orgPart}</div>
+              ${typeBadges ? `<div class="mt-1 flex flex-wrap gap-1">${typeBadges}</div>` : ""}
+            </div>
+            ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
+          </div>`;
         }),
       })
     : q
