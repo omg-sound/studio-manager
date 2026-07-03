@@ -838,6 +838,8 @@ function comboKbdNav(input, pop) {
       var combo = hidden.closest && hidden.closest("[data-company-combo]");
       var vis = combo && combo.querySelector("[data-cc-input]");
       if (vis) vis.value = name; // 보이는 칸도 채움(companyCombo render는 트리거 안 함)
+      // 새로 만든 소속사를 companyCombo 옵션에 추가 → 소속사 필드 재검색 시 '새로 등록' 대신 기존 항목 인식(중복 방지)
+      if (combo && combo.__ccOpts && !combo.__ccOpts.some(function (o) { return String(o.name) === name; })) combo.__ccOpts.push({ name: name, sub: "" });
       hidden.dispatchEvent(new Event("change", { bubbles: true })); // dirty 감지
     }
 
@@ -922,7 +924,7 @@ function comboKbdNav(input, pop) {
             input.value = d.name; cid.value = d.id;
             showReal(rn); // 모달 입력 본명(개인) 표시
             fillAgency(agName); // 모달에서 지정한 소속사를 프로젝트 소속사/레이블 필드에 즉시 반영
-            closeModal(); fireInput();
+            closeModal(); fireInput(); hide(); // 등록 후 콤보 드롭다운 닫기(fireInput 재렌더로 다시 열리는 것 방지)
             if (window.__toast) window.__toast(d.name + " 등록됨");
           })
           .catch(function () { mErr.textContent = "등록 실패 — 다시 시도하세요."; mErr.classList.remove("hidden"); })
@@ -1023,6 +1025,7 @@ function comboKbdNav(input, pop) {
     if (!input || !pop || !dataEl) return;
     var opts = [];
     try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
+    root.__ccOpts = opts; // fillAgency 등 외부에서 새 소속사를 옵션에 추가할 수 있게 노출
     var view = [];
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
@@ -1072,7 +1075,7 @@ function comboKbdNav(input, pop) {
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ name: d.name, sub: "" }); input.value = d.name; closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 회사를 로컬 옵션에 추가 → 재검색 시 인식(중복 등록 방지)
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ name: d.name, sub: "" }); input.value = d.name; closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 회사를 로컬 옵션에 추가 + 드롭다운 닫기(재검색 인식·중복 방지)
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
@@ -1214,7 +1217,7 @@ function comboKbdNav(input, pop) {
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ id: d.id, name: d.name, phone: phone, email: email, company: company }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 담당자를 로컬 옵션에 추가
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ id: d.id, name: d.name, phone: phone, email: email, company: company }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 담당자를 로컬 옵션에 추가 + 드롭다운 닫기
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
