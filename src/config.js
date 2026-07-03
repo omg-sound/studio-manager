@@ -169,15 +169,14 @@ const SESSION_STATUS_BADGE = {
   취소: "bg-muted/10 text-muted",
 };
 
-const TASK_STATUSES = ["Pending", "In_Progress", "Completed"];
+// 작업 상태 = 대기/완료 2단계('진행중' 개념 폐기 — 사용자 결정 2026-07-03). 레거시 In_Progress는 normalize·마이그레이션으로 Pending 처리.
+const TASK_STATUSES = ["Pending", "Completed"];
 const TASK_STATUS_LABELS = {
   Pending: "대기",
-  In_Progress: "진행중",
   Completed: "완료",
 };
 const TASK_STATUS_BADGE = {
   Pending: "bg-muted/10 text-muted",
-  In_Progress: "bg-primary/10 text-primary",
   Completed: "bg-success/10 text-success",
 };
 

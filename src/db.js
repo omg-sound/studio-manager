@@ -128,7 +128,7 @@ function init() {
       unit_price    INTEGER NOT NULL DEFAULT 0,
       total_price   INTEGER NOT NULL DEFAULT 0,
       engineer_name TEXT,
-      status        TEXT NOT NULL DEFAULT 'Pending', -- Pending | In_Progress | Completed
+      status        TEXT NOT NULL DEFAULT 'Pending', -- Pending | Completed ('진행중' 폐기)
       is_invoiced   INTEGER NOT NULL DEFAULT 0,
       invoice_id    INTEGER REFERENCES invoices(id) ON DELETE SET NULL,
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
@@ -399,6 +399,11 @@ function init() {
     d.exec("UPDATE projects SET project_type = 'session' WHERE project_type = 'recording'");
     d.exec("UPDATE projects SET project_type = 'task' WHERE project_type = 'mixing'");
     setState("project_type_rename_v1", "done");
+  }
+  // '진행중'(In_Progress) 상태 폐기 — 대기/완료 2단계로. 기존 진행중 작업은 대기(Pending)로 승계(멱등).
+  if (!getState("task_status_drop_inprogress_v1")) {
+    d.exec("UPDATE track_tasks SET status = 'Pending' WHERE status = 'In_Progress'");
+    setState("task_status_drop_inprogress_v1", "done");
   }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.

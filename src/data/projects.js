@@ -65,7 +65,7 @@ function listProjects(_user, { q } = {}) {
 
   // 완료/진행 판정 신호:
   //  has_upcoming = 다가오는 세션(오늘 이후, 취소 제외) 존재
-  //  open_tasks   = 미완료 작업(status <> 'Completed') 수 = 대기·진행중
+  //  open_tasks   = 미완료 작업(status <> 'Completed') 수 = 대기
   //  content_cnt  = 세션+작업 총량(0이면 아직 아무 내용 없는 빈 프로젝트) → 진행 중으로 취급
   const sql = `
     SELECT p.*, c.name AS client_name, m.name AS manager_name,
@@ -86,7 +86,6 @@ function listProjects(_user, { q } = {}) {
        WHERE tr.project_id = p.id AND t.status <> 'Completed') AS open_tasks,
       (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id) AS task_cnt,
       (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id AND t.status = 'Pending') AS task_pending,
-      (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id AND t.status = 'In_Progress') AS task_prog,
       (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id AND t.status = 'Completed') AS task_done,
       ((SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id)
        + (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id)) AS content_cnt

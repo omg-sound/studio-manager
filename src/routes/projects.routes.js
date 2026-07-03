@@ -213,11 +213,10 @@ function projectListRow(p, summary) {
     ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>`
     : `<div class="text-sm text-muted">견적 미정</div>`;
   const pmLine = p.manager_name ? `<div class="text-xs text-muted">PM ${esc(p.manager_name)}</div>` : "";
-  // 세션(예정·완료)을 앞에, 곡·콘텐츠 뒤에. 곡·콘텐츠 있으면 작업 개수 + 상태(대기/진행중/완료) 병기.
+  // 세션(예정·완료)을 앞에, 곡·콘텐츠 뒤에. 곡·콘텐츠 있으면 작업 개수 + 상태(대기/완료) 병기.
   const taskCnt = Number(p.task_cnt) || 0;
   const taskStatus = [
     Number(p.task_pending) ? `대기 ${p.task_pending}` : "",
-    Number(p.task_prog) ? `진행중 ${p.task_prog}` : "",
     Number(p.task_done) ? `완료 ${p.task_done}` : "",
   ].filter(Boolean).join(" · ");
   const trackPart = n
@@ -973,10 +972,10 @@ function trackCard(track, { isAdmin, managers = [], expandTaskId = null }) {
     </div>`;
 }
 
-/** 곡의 진행 요약: 단계 그룹별 가장 진전된 상태를 한 줄로(녹음 완료 · 후반 진행중 · 믹스·마스터 대기). */
+/** 곡의 진행 요약: 단계 그룹별 가장 진전된 상태를 한 줄로(믹스 완료 · 마스터 대기). */
 function trackProgressSummary(tasks) {
   if (!tasks || !tasks.length) return "";
-  const order = { Pending: 0, In_Progress: 1, Completed: 2 };
+  const order = { Pending: 0, Completed: 1 };
   // 분류 폐기 — 작업 종류별(보컬튠·믹싱 등)로 최고 진행 상태를 요약(이전 그룹 묶음 대체).
   const byType = {};
   for (const t of tasks) {
@@ -1135,7 +1134,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   if (!tasks.length && !sessionRows.length) {
     return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-center text-sm text-muted">청구할 작업·세션이 없습니다.</div>`;
   }
-  // 세션 '완료 강제'와 규칙 통일: 완료 상태 작업만 기본 체크. 미완료(대기·진행중)는 체크 해제·흐리게(선택은 가능).
+  // 세션 '완료 강제'와 규칙 통일: 완료 상태 작업만 기본 체크. 미완료(대기)는 체크 해제·흐리게(선택은 가능).
   const isDone = (t) => t.status === "Completed";
   const hasPending = tasks.some((t) => !isDone(t));
   // 작업 예상 금액 = 확정 total_price(>0) 우선, 없으면 종류 기본단가(taskTypeUnitPrice). 프로젝트 목록 합산과 동일 규칙.
@@ -1206,7 +1205,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>
-      ${hasPending ? explain(`미완료(대기·진행중) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.`) : ""}
+      ${hasPending ? explain(`미완료(대기) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.`) : ""}
       <div class="mt-3 space-y-2">
         <div>
           <label class="label mb-1 text-xs">할인 <span class="font-normal text-muted">(선택 — 체크한 항목 공급가 기준)</span></label>
