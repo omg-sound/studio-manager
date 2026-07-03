@@ -219,9 +219,9 @@
   `session_id`는 녹음 세션에서 자동 생성된 작업 추적(부분 유니크: 세션당 1건).
 - `deliverables(project_id→projects ON DELETE CASCADE, title, version, kind, storage_backend[drive|local],
   file_id, file_name, file_size, mime_type, access_token?, expires_at?, download_count, revoked, note)`
-- `invoices(project_id?→projects SET NULL, client_id?→clients SET NULL, title, amount, paid_amount,
+- `invoices(project_id?→projects SET NULL, payer_id?→parties SET NULL, payer_snapshot?[발행 시점 청구처 JSON], title, amount, paid_amount,
   invoice_number?, tax_amount, discount_amount, status[미발행|발행], tax_status[계산서 미발행|계산서 발행|입금완료], issued_date?, due_date?, memo)` —
-  돈=정수(원), 연체·부분납은 코드 파생. `amount`는 VAT 포함 총액. **상태 2축 분리(2026-07-01)**: `status`=청구서 발행 축(미발행/발행), `tax_status`=계산서·입금 축(계산서 미발행/계산서 발행/입금완료). 두 축 독립(자유 선택). `입금완료` 선택=완납(입금액=총액), 벗어나면 입금액 0. 마이그레이션: 기존 `status='입금완료'`→`status='발행'`+`tax_status='입금완료'`. 채번은 어느 축이든 발행되면(청구서 발행 또는 계산서 발행/입금완료). `discount_amount`=청구서 할인(공급가에서 차감, `invoiceAmountsFromSupply`로 과세표준·VAT 재계산; from-tasks 주 경로).
+  돈=정수(원), 연체·부분납은 코드 파생. `amount`는 VAT 포함 총액. **청구처(payer)=`parties.id`**(당사자 모델). **`payer_snapshot`=발행 시점 청구처 정보 스냅샷 JSON**(상호·사업자번호·대표·주소·이메일·담당자) — 이후 클라이언트 정보가 바뀌어도 과거 청구서 표시·거래명세서 PDF가 발행 당시 정보로 고정(회계 정확성). 표시·PDF는 스냅샷 우선(`payerView`/`payerName`), NULL(레거시)이면 실시간 party 폴백. 발행 시 `snapshotPayer(payerId)`로 저장(from-tasks·수동 양 경로). **상태 2축 분리**: `status`=청구서 발행 축(미발행/발행), `tax_status`=계산서·입금 축(계산서 미발행/계산서 발행/입금완료). 두 축 독립(자유 선택). `입금완료` 선택=완납(입금액=총액). 채번은 어느 축이든 발행되면. `discount_amount`=청구서 할인(공급가 차감, `invoiceAmountsFromSupply`로 과세표준·VAT 재계산).
 - `invoice_items(invoice_id→invoices CASCADE, task_id?→track_tasks SET NULL, session_id?→sessions SET NULL, track_title, task_type,
   description, quantity, unit_price, amount)` — 청구서 라인아이템 스냅샷.
 - `sessions(project_id→projects CASCADE, session_type[녹음|믹싱|마스터링|기타], session_date,
@@ -306,10 +306,9 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 ## 다음 단계 TODO
 
 1. **Drive 연결(운영)** — 코드 완비. 남은 건 **studio@omgworks.kr(고정 계정)으로 로그인해 Drive 연결** 한 번(관리 > 환경설정 > 자료 저장 > 'Drive 연결', `/auth/google?drive=1`). 이후 누가 로그인하든 업로드는 그 계정 Drive 한 곳으로 저장. `config.studioDriveEmail` 참조. **Drive 연결 시 일일 DB 백업도 자동으로 Drive 'backups' 폴더에 오프사이트 사본 전송**(`drive.backupToDrive`, keep 14).
-2. (선택·회계) **청구서 클라이언트 정보 스냅샷** — 현재 발행 시점 실시간 조회(클라이언트 정보 변경 시 과거 청구서 표시도 바뀜). 발행 시점 고정 검토.
-3. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
-4. (선택) 알림 Gmail 어댑터(현재 웹훅만) · 자료 다중 업로드(현재 단건) · 콤보 옵션 JSON 중복 임베드 제거(페이지 다중 콤보 시 페이지 축소).
-5. (보류) content_type/billing_type UI 노출 — 영상 구분·과금 유형 선택, 현재 미노출/강제(향후 확장 시).
+2. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
+3. (선택) 알림 Gmail 어댑터(현재 웹훅만) · 자료 다중 업로드(현재 단건) · 콤보 옵션 JSON 중복 임베드 제거(페이지 다중 콤보 시 페이지 축소).
+4. (보류) content_type/billing_type UI 노출 — 영상 구분·과금 유형 선택, 현재 미노출/강제(향후 확장 시).
 
 > ## 🏁 v1.0 마일스톤 (2026-07-01) — 한 챕터 종료
 > 상세 변경 근거·전체 이력은 **git 커밋 메시지**에 있다(이 요약은 큰 줄기만).
