@@ -451,7 +451,7 @@ function listRow({ href, left, right = "" }) {
       ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
     </div>`;
   if (href) {
-    return `<a href="${esc(href)}" class="block transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${inner}</a>`;
+    return `<a href="${esc(href)}" class="block transition-colors hover:bg-surface active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${inner}</a>`;
   }
   return `<div class="transition-colors hover:bg-surface">${inner}</div>`;
 }

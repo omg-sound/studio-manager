@@ -93,10 +93,10 @@
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-primary text-primary-fg hover:bg-primary/90;
+    @apply btn bg-primary text-primary-fg hover:bg-primary/90 active:bg-primary/80;
   }
   .btn-ghost {
-    @apply btn border border-border bg-surface text-fg hover:bg-elevated;
+    @apply btn border border-border bg-surface text-fg hover:bg-elevated active:bg-elevated;
   }
   /* 크기 모디파이어: btn-primary/btn-ghost와 함께 사용(예: "btn-primary btn-sm"). 뒤에 정의해 패딩이 우선. */
   .btn-sm {
@@ -141,9 +141,23 @@
   .badge-info {
     @apply badge bg-info/12 text-info;
   }
-  /* 행/카드 클릭 어포던스(소비 레인이 클릭 가능한 행·카드에 적용). */
+  /* 행/카드 클릭 어포던스(소비 레인이 클릭 가능한 행·카드에 적용). 터치엔 hover가 없어 active:로 눌림 피드백. */
   .row-link {
-    @apply transition-colors hover:bg-elevated/60;
+    @apply transition-colors hover:bg-elevated/60 active:bg-elevated;
+  }
+}
+
+/* 커스텀 콤보(검색 드롭다운) 행 눌림 피드백 — 터치엔 hover 없음. 모든 pop은 role="listbox". */
+[role="listbox"] > button:active {
+  background-color: rgb(var(--color-elevated));
+}
+
+/* 터치 타깃 최소 44px(모바일 전용 — 데스크톱 밀도는 현행 유지). 언레이어드라 @layer 유틸리티(min-h-*)보다 우선. */
+@media (max-width: 639.98px) {
+  .btn,
+  .row-link,
+  [role="listbox"] > button {
+    min-height: 44px;
   }
 }
 
