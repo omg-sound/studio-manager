@@ -664,8 +664,10 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
 
 // 청구서 생성 전 미리보기 PDF 발행(견적서·내역서·거래명세서) — 청구서 레코드를 만들지 않고 선택 항목·금액을 그대로 문서화.
 // 계산서(세금계산서) 발행이 필요할 때 '선택 항목으로 청구 생성'을 눌러 인보이스를 만든다(발행=확정).
-router.post(["/:id/invoices/preview.pdf", "/:id/invoices/preview/:name"], requireBilling, asyncHandler(async (req, res) => {
-  const b = req.body;
+// GET(폼 formmethod=get)으로 받는다 — Chrome PDF 뷰어의 '다운로드'는 같은 URL을 GET 재요청하므로, GET이어야
+// 뷰·다운로드가 모두 동작한다(POST면 재요청이 404). 선택은 URL 쿼리로, 문서 유형·번호는 경로(:type/:name)로.
+router.get("/:id/invoices/preview/:type/:name", requireBilling, asyncHandler(async (req, res) => {
+  const b = req.query;
   let draft;
   try {
     draft = invoiceDraftForPdf(req.user, {
@@ -687,7 +689,7 @@ router.post(["/:id/invoices/preview.pdf", "/:id/invoices/preview/:name"], requir
     return res.status(400).send(errorPage({ code: 400, title: "문서 오류", message: known[e.message], user: req.user }));
   }
   if (!draft) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const docType = normalizeDocType(req.query.type);
+  const docType = normalizeDocType(req.params.type);
   let pdf;
   try {
     pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client: draft.client, invoice: draft.invoice, items: draft.items, docType });
@@ -1257,13 +1259,15 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <div class="mb-2">
           <div class="mb-1 text-xs text-muted">문서 발행 <span class="font-normal">— 청구서를 만들지 않고 선택 항목으로 PDF만</span></div>
           ${(() => {
-            // 미리보기 PDF 다운로드 파일명 = 문서번호(견적서=OMG-EST-…). Chrome는 inline PDF에서 URL 마지막 경로를 파일명으로 쓰므로 경로에 번호를 넣는다.
+            // 미리보기 PDF: 다운로드 파일명 = 문서번호(견적서=OMG-EST-…). Chrome는 inline PDF에서 URL 마지막 경로를
+            // 파일명으로 쓰고 '다운로드'는 같은 URL을 GET 재요청하므로, formmethod=get으로 폼을 GET 제출(선택은 쿼리로).
+            // 유형·번호는 경로(:type/:name)에 — GET은 formaction의 쿼리를 폼 데이터로 대체하므로 유형을 경로에 둔다.
             const base = peekInvoiceNumber(todayYmd());
-            const act = (t) => `/projects/${project.id}/invoices/preview/${encodeURIComponent(docNumberWithType(base, t))}.pdf?type=${encodeURIComponent(t)}`;
+            const act = (t) => `/projects/${project.id}/invoices/preview/${encodeURIComponent(t)}/${encodeURIComponent(docNumberWithType(base, t))}.pdf`;
             return `<div class="grid grid-cols-3 gap-2">
-            <button class="btn-ghost btn-sm" type="submit" formaction="${act("견적서")}" formtarget="_blank">견적서</button>
-            <button class="btn-ghost btn-sm" type="submit" formaction="${act("내역서")}" formtarget="_blank">내역서</button>
-            <button class="btn-ghost btn-sm" type="submit" formaction="${act("거래명세서")}" formtarget="_blank">거래명세서</button>
+            <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("견적서")}" formtarget="_blank">견적서</button>
+            <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("내역서")}" formtarget="_blank">내역서</button>
+            <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("거래명세서")}" formtarget="_blank">거래명세서</button>
           </div>`;
           })()}
         </div>
