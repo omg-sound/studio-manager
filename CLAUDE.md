@@ -147,7 +147,7 @@
 | 런타임 | Node ≥20, Express 4 (CommonJS) |
 | DB | SQLite — `better-sqlite3`(운영, prebuild) / `node:sqlite`(폴백) 어댑터(`src/sqlite.js`) |
 | 인증 | 전원 Google OAuth + 화이트리스트(`users` 행) → httpOnly 서명 JWT 쿠키(30일). 비밀번호 로그인 폐기 |
-| 저장소 | Google Drive(관리자 토큰 재사용, `drive.file`) — 자료 전달용. 미연동 시 로컬 디스크 폴백 |
+| 저장소 | Google Drive(**고정 스튜디오 계정** `STUDIO_DRIVE_EMAIL`=studio@omgworks.kr의 토큰만 저장, `drive.file`) — 첨부·자료 전달용. 그 계정 로그인 시에만 토큰 갱신(치프 무관·고정). 미연동/Drive 업로드 실패 시 로컬 디스크 폴백(단 Drive 연결 상태에서 실패는 예외로 알림) |
 | 캘린더 | Google Calendar(관리자 토큰, scope `calendar`) — 일정 자동 생성/수정/삭제(취소 포함). FreeBusy 하드차단은 비활성(다중 룸 도입으로 앱 DB 룸별 겹침이 정식 차단) |
 | 보안 | helmet(CSP, 인라인 스크립트 0) + express-rate-limit + 토큰 AES-256-GCM 암호화 |
 | 프론트 | 서버 렌더 HTML(`src/views.js`) + 클래식 폼 POST + 최소 JS(`public/js/app.js`), Tailwind CLI 빌드; **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용); 크림·클레이 디자인 톤; 수동 라이트/다크 테마(`html[data-theme]`+localStorage) |
@@ -248,6 +248,7 @@
 | 키 | 용도 |
 |---|---|
 | `ADMIN_EMAIL` | 부트스트랩 치프(chief) Google 이메일. 최초 로그인 시 자동 생성·chief 보장. 대표·스태프는 치프가 `/settings`에서 등록 |
+| `STUDIO_DRIVE_EMAIL` | **자료 저장 Drive 고정 계정**(기본 `studio@omgworks.kr`). **이 이메일로 로그인할 때만** Drive refresh token 저장 → 누가/어떤 역할로 로그인하든 자료는 항상 이 계정 Drive 한 곳에만. 치프가 바뀌어도 고정. UI로는 못 바꾸고 이 env로만 변경. `/auth/google?drive=1`(설정 연결 버튼)이 계정 선택기 강제+login_hint로 이 계정 선택 유도 |
 | `SESSION_SECRET` | JWT 서명 |
 | `TOKEN_ENC_KEY` | AES-256-GCM 키 파생(비밀 암호화) |
 | `GOOGLE_CLIENT_ID`/`SECRET` | OAuth(로그인 + Drive + Calendar + **People/연락처**). scope: `openid·email·profile·drive.file·calendar·contacts`(연락처 동기화는 GCP People API 활성화 + 치프 재로그인 필요) |
