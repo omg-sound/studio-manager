@@ -381,8 +381,13 @@ router.post("/:id/members", (req, res) => {
   const id = Number(req.params.id);
   const g = getParty(id);
   if (!g || g.kind !== "group") return res.status(404).send(errorPage({ code: 404, title: "그룹을 찾을 수 없습니다", message: "그룹 아티스트만 멤버를 가질 수 있습니다.", user: req.user }));
-  const memberId = Number(req.body.member_id);
-  if (memberId) setPartyGroup(memberId, id); // 개인 아티스트를 이 그룹 소속으로(다른 그룹이면 이동)
+  // personCombo: 선택 id 우선, 없으면 타이핑한 이름으로 재사용/생성(resolvePersonByName). 새 멤버 추가.
+  let memberId = Number(req.body.member_id) || 0;
+  if (!memberId) { const nm = String(req.body.member_name || "").trim(); if (nm) memberId = resolvePersonByName(nm); }
+  if (memberId) {
+    db().prepare("UPDATE parties SET is_artist = 1 WHERE id = ? AND kind = 'person'").run(memberId); // 그룹 멤버 = 개인 아티스트
+    setPartyGroup(memberId, id); // 개인 아티스트를 이 그룹 소속으로(다른 그룹이면 이동)
+  }
   res.redirect(`/clients/${id}`);
 });
 router.post("/:id/members/:mid/remove", (req, res) => {
@@ -525,15 +530,11 @@ router.get("/:id", asyncHandler(async (req, res) => {
           : emptyState("아직 등록된 멤버가 없습니다.", { card: true })}
         <form method="post" action="/clients/${c.id}/members" class="card mt-2 flex items-end gap-2">
           <div class="min-w-0 flex-1">
-            <label class="label">멤버 추가 <span class="font-normal text-muted text-xs">(개인 아티스트를 이 그룹에 연결)</span></label>
-            <select name="member_id" class="input" required>
-              <option value="">— 아티스트 선택 —</option>
-              ${memberCandidates.map((a) => `<option value="${a.id}">${esc(a.name)}${a.group_id ? " (다른 그룹 소속 → 이동)" : ""}</option>`).join("")}
-            </select>
+            <label class="label">멤버 추가 <span class="font-normal text-muted text-xs">(개인 아티스트 검색 또는 새로 등록)</span></label>
+            ${personCombo({ idField: "member_id", nameField: "member_name", options: memberCandidates, companyOptions: listClients({}).filter((x) => x.kind === "company"), entityLabel: "멤버", placeholder: "멤버 검색 또는 새로 등록" })}
           </div>
           <button class="btn-primary shrink-0" type="submit">추가</button>
         </form>
-        <p class="mt-1 text-xs text-muted">새 아티스트는 클라이언트 목록에서 먼저 등록한 뒤 여기서 연결하세요.</p>
       </div>`
     : "";
 
@@ -572,11 +573,11 @@ router.get("/:id", asyncHandler(async (req, res) => {
     ${pageHeader({ title: c.is_artist ? personLabel(c.activity_name || c.name, c.name) : c.name, desc: c.is_artist ? (c.kind === "group" ? "그룹 아티스트" : "아티스트") : "업체", back: { href: clientsBackHref, label: "클라이언트" } })}
     ${tabBarHtml}
     ${content}
-    ${memberSection}
     <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">상세 정보</h3>
     ${editCard}
     <div class="mt-3">${filesBlock}</div>
     ${crossRefBlock}
+    ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}
     ${agencyLink ? `<div class="mt-3">${agencyLink}</div>` : ""}
     ${rosterSection}
     ${deleteForm}`;

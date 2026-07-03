@@ -1010,8 +1010,9 @@
       else if (isNew) { info.textContent = "새 연락처로 등록됩니다."; info.classList.remove("hidden"); }
       else { info.classList.add("hidden"); }
     }
+    var entity = root.getAttribute("data-pc-entity") || "담당자";
     function newRow(nm) {
-      var label = nm ? "'" + esc(nm) + "'(으)로 새 담당자 등록" : "새 담당자 등록";
+      var label = nm ? "'" + esc(nm) + "'(으)로 새 " + esc(entity) + " 등록" : "새 " + esc(entity) + " 등록";
       return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
     }
     function render() {

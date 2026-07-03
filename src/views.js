@@ -461,7 +461,7 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = [] } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = [], entityLabel = "담당자" } = {}) {
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
   // 모달 '회사' 입력 autocomplete용 datalist(기존 클라이언트 검색 → 오타·중복 방지). 유니크 id로 중복 방지.
   const coListId = companyOptions && companyOptions.length ? "pcco_" + Math.random().toString(36).slice(2, 9) : "";
@@ -472,7 +472,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   const inputCls = compact ? "input py-1.5 pr-9 text-sm" : "input pr-9";
   const rootCls = compact ? " class=\"min-w-0 flex-1\"" : "";
   return `
-    <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""}>
+    <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""} data-pc-entity="${esc(entityLabel)}">
       <input type="hidden" name="${idField}" value="${sel ? sel.id : ""}" data-pc-id />
       <input type="hidden" name="${nameField}" value="${sel ? esc(sel.name) : ""}" data-pc-name-hidden />
       <div class="relative">
@@ -486,8 +486,8 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
       ${inlineJson}
       <div data-pc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
         <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
-          <div class="font-display text-lg font-semibold">새 담당자 등록</div>
-          <div><label class="label">이름</label><input class="input" data-pc-name placeholder="담당자 이름" /></div>
+          <div class="font-display text-lg font-semibold">새 ${esc(entityLabel)} 등록</div>
+          <div><label class="label">이름</label><input class="input" data-pc-name placeholder="${esc(entityLabel)} 이름" /></div>
           <div class="grid gap-3 sm:grid-cols-2">
             <div><label class="label">전화</label><input class="input" data-pc-phone autocomplete="off" /></div>
             <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
