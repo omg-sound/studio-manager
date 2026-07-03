@@ -806,13 +806,15 @@ function artistCombo(p = {}) {
   return `
     <div data-artist-combo>
       <input type="hidden" name="artist_contact_id" value="${meta.contactId || ""}" data-artist-cid />
-      <div class="relative">
-        <input class="input pr-9" type="text" name="artist" value="${esc(p.artist || "")}" data-artist-input autocomplete="off"
-          role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="아티스트명 — 검색 또는 새로 등록" />
-        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-artist-pop role="listbox"></div>
+      <div class="flex items-center gap-1.5">
+        <div class="relative min-w-0 flex-1">
+          <input class="input pr-9" type="text" name="artist" value="${esc(p.artist || "")}" data-artist-input autocomplete="off"
+            role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="아티스트명 — 검색 또는 새로 등록" />
+          <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+          <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-artist-pop role="listbox"></div>
+        </div>
+        <span class="shrink-0 whitespace-nowrap text-xs text-muted${meta.realName ? "" : " hidden"}" data-artist-realname title="본명">(<span data-artist-realname-val>${esc(meta.realName || "")}</span>)</span>
       </div>
-      <div class="mt-1 text-xs text-muted${meta.realName ? "" : " hidden"}" data-artist-realname>본명 <span class="text-fg/80" data-artist-realname-val>${esc(meta.realName || "")}</span></div>
       <script type="application/json" data-artist-options>${json}</script>
       <!-- 간이 등록 모달(프로젝트 폼 이탈 없이 새 아티스트/그룹 등록). name 없음(프로젝트 폼과 분리), app.js가 fetch로 생성. -->
       <div data-artist-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">

@@ -783,8 +783,9 @@
 
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function pickRow(o, i) {
+      var nm = esc(o.name) + (o.realName ? ' <span class="text-muted">(' + esc(o.realName) + ')</span>' : ""); // 본명 병기
       return '<button type="button" class="' + rowCls + '" data-idx="' + i + '">' +
-        '<span class="truncate text-fg">' + esc(o.name) + '</span>' +
+        '<span class="truncate text-fg">' + nm + '</span>' +
         '<span class="shrink-0 text-xs text-muted">' + esc(o.sub || "") + '</span></button>';
     }
     function newRow(label) {
@@ -798,9 +799,9 @@
         view = [];
         html = newRow("새 아티스트 등록"); // 검색 안내 줄 폐기(타이핑하면 자동 검색)
       } else {
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }).slice(0, 12);
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.realName && String(o.realName).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 활동명·본명 둘 다 검색
         html = view.map(pickRow).join("");
-        var exact = view.some(function (o) { return String(o.name).toLowerCase() === q; });
+        var exact = view.some(function (o) { return String(o.name).toLowerCase() === q || (o.realName && String(o.realName).toLowerCase() === q); });
         if (!exact) html += newRow("'" + input.value.trim() + "'(으)로 새 아티스트");
       }
       pop.innerHTML = html;
@@ -810,8 +811,8 @@
       input.value = o.name;
       cid.value = o.contactId || "";
       showReal(o.realName);
-      hide();
       fireInput();
+      hide(); // fireInput 뒤에 닫아야 재렌더로 다시 열리지 않음(선택됨이 보이게)
     }
     function asNew() { cid.value = ""; hide(); input.focus(); fireInput(); } // 새 아티스트: 연결 없음, 입력값 유지(모달 없을 때 폴백)
 
@@ -875,7 +876,7 @@
     // 직접 타이핑으로 이름을 바꾸면(선택 안 함) 연결 해제 — 저장 시 이름 매칭으로만 dedup.
     input.addEventListener("input", function () {
       var v = input.value.trim().toLowerCase();
-      var match = opts.filter(function (o) { return String(o.name).toLowerCase() === v; })[0];
+      var match = opts.filter(function (o) { return String(o.name).toLowerCase() === v || (o.realName && String(o.realName).toLowerCase() === v); })[0]; // 활동명·본명 정확 일치
       if (match) { cid.value = match.contactId || ""; showReal(match.realName); }
       else { cid.value = ""; showReal(""); }
     });
@@ -954,7 +955,7 @@
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;
-      if (b.hasAttribute("data-idx")) { input.value = view[Number(b.getAttribute("data-idx"))].name; hide(); fireInput(); }
+      if (b.hasAttribute("data-idx")) { input.value = view[Number(b.getAttribute("data-idx"))].name; fireInput(); hide(); }
       else if (b.hasAttribute("data-new")) openModal();
     });
   });
@@ -1006,7 +1007,7 @@
       }
       pop.innerHTML = html; show();
     }
-    function pick(o) { input.value = o.name; hid.value = o.id; setInfo(o, false); hide(); fireInput(); }
+    function pick(o) { input.value = o.name; hid.value = o.id; setInfo(o, false); fireInput(); hide(); }
     function openModal() {
       if (!modal) { hide(); return; }
       var n = modal.querySelector("[data-pc-name]"); n.value = input.value.trim();
