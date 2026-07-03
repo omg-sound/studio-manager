@@ -20,9 +20,10 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   if (client.owner_name) rows.push(cell("대표자", esc(client.owner_name)));
   if (client.biz_no) {
     const bn = esc(client.biz_no);
-    rows.push(cell("사업자등록번호", hasBizFile
-      ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" class="text-primary hover:underline" title="첨부된 사업자등록증 보기">${bn} <span class="text-xs">↗</span></a>`
-      : bn));
+    // 번호 클릭 = 클립보드 복사(app.js [data-copy] + 토스트), 등록증 보기는 별도 링크로 분리.
+    const copyBtn = `<button type="button" data-copy="${bn}" class="inline-flex items-center gap-1 rounded font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" title="클릭하면 복사됩니다">${bn}<svg class="h-3.5 w-3.5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`;
+    const viewLink = hasBizFile ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" class="ml-2 whitespace-nowrap text-xs text-primary hover:underline">등록증 보기 ↗</a>` : "";
+    rows.push(cell("사업자등록번호", `${copyBtn}${viewLink}`));
   }
   if (client.address) rows.push(cell("주소", esc(client.address)));
   if (client.email) rows.push(cell("세금계산서 발행 이메일", `<a href="mailto:${esc(client.email)}" class="text-info">${esc(client.email)}</a>`)); // 계산서 발행처 이메일

@@ -1,3 +1,37 @@
+// 클릭 복사([data-copy]) + 토스트 알림. 사업자등록번호 등 값을 눌러 클립보드에 복사.
+// window.__toast(msg)로 다른 곳에서도 짧은 토스트를 띄울 수 있다(CSP-safe, 인라인 0).
+(function () {
+  "use strict";
+  function showToast(msg) {
+    var t = document.createElement("div");
+    t.textContent = msg;
+    t.setAttribute("role", "status");
+    t.className = "fixed left-1/2 top-4 z-[60] -translate-x-1/2 rounded-lg border border-border bg-bg px-4 py-2 text-sm font-medium shadow-lg";
+    t.style.transition = "opacity .3s";
+    document.body.appendChild(t);
+    setTimeout(function () { t.style.opacity = "0"; setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 320); }, 1400);
+  }
+  window.__toast = showToast;
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    if (ta.parentNode) ta.parentNode.removeChild(ta);
+    return ok;
+  }
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest && e.target.closest("[data-copy]");
+    if (!el) return;
+    e.preventDefault();
+    var text = el.getAttribute("data-copy") || "";
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { showToast("클립보드에 복사되었습니다"); }).catch(function () { if (fallbackCopy(text)) showToast("클립보드에 복사되었습니다"); });
+    } else if (fallbackCopy(text)) { showToast("클립보드에 복사되었습니다"); }
+  });
+})();
+
 // 최소 클라이언트 인터랙션: 모바일 드로어 토글 + aria-expanded + 닫기 버튼.
 (function () {
   "use strict";
