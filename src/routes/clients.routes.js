@@ -205,7 +205,7 @@ router.get("/", (req, res) => {
           }
           // 업체(company): 회사명(→상세)·대표(→대표 연락처)를 각각 링크로 분리(밑줄도 각각). 등록증 여부 배지 + 오른쪽 사업자→전화→이메일.
           const roleBadges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
-          const bizBadge = bizLicenseSet.has(c.id) ? "" : `<span class="badge-neutral">등록증 없음</span>`; // 없을 때만 표기(있음 배지 폐기)
+          const bizBadge = bizLicenseSet.has(c.id) ? "" : `<span class="badge-warning">등록증 없음</span>`; // 없을 때만 표기(앰버로 눈에 띄게)
           const ownerLabel = stripTrailingTitle(c.owner_name); // '대표' 접두가 이미 있으니 말미 호칭 제거("최인구 대표님"→"최인구")
           const ownerHtml = ownerLabel
             ? (c.owner_party_id
@@ -418,7 +418,10 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
     res.redirect(`/clients/${id}?flash=saved`);
   } catch (e) {
     console.error("[client file upload]", e);
-    res.redirect(`/clients/${id}?ferr=${encodeURIComponent("업로드에 실패했습니다.")}`);
+    const msg = e && e.code === "DRIVE_UPLOAD_FAILED"
+      ? "Google Drive 업로드에 실패했습니다 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하거나 관리 › 환경설정 › 자료 저장에서 Drive 연동을 확인하세요."
+      : "업로드에 실패했습니다.";
+    res.redirect(`/clients/${id}?ferr=${encodeURIComponent(msg)}`);
   } finally {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
   }
