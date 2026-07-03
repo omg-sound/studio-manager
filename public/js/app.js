@@ -798,6 +798,10 @@ function comboKbdNav(input, pop) {
   pop.addEventListener("mousemove", function (e) { var b = e.target.closest("button"); if (!b) return; var rs = rowEls(); for (var i = 0; i < rs.length; i++) if (rs[i] === b) { if (i !== hi) setHi(i); break; } });
 }
 
+// 새 party(사람·회사·그룹) 생성 브로드캐스트 — 어느 콤보/모달에서 만들든 모든 콤보가 듣고 자기 옵션에 추가(재검색 즉시 인식·중복 방지).
+// detail: { kind:'person'|'company'|'group', id, name, isArtist?, realName?, agency?, phone?, email?, company? }
+function announceParty(detail) { if (detail && detail.id && detail.name) document.dispatchEvent(new CustomEvent("party-created", { detail: detail })); }
+
 // 아티스트 콤보([data-artist-combo]): 타이핑=기존 아티스트·사람 검색, 빈 입력=[검색]/[새 아티스트] 팝업(전체 목록 덤프 방지).
 // 기존 사람 선택 → hidden artist_contact_id 연결(저장 시 중복 사람 방지). '그룹' 체크는 밴드/팀(연락처 미연결).
 (function () {
@@ -812,6 +816,12 @@ function comboKbdNav(input, pop) {
     var realDisp = root.querySelector("[data-artist-realname]"), realVal = root.querySelector("[data-artist-realname-val]"); // 선택 아티스트 본명 표시(입력 아님)
     var opts = [];
     try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
+    // 어디서든 새 party 생성되면 아티스트·그룹은 이 콤보 옵션에 추가(재검색 인식)
+    document.addEventListener("party-created", function (e) {
+      var p = e.detail; if (!p || !(p.kind === "group" || (p.kind === "person" && p.isArtist))) return;
+      if (opts.some(function (o) { return String(o.contactId) === String(p.id); })) return;
+      opts.push({ name: p.name, contactId: p.id, realName: p.realName || "", sub: p.kind === "group" ? "그룹" : "아티스트", agency: p.agency || "" });
+    });
     var view = []; // 현재 렌더된 후보(클릭 인덱스 매핑)
     function showReal(rn) { if (!realDisp) return; if (rn) { if (realVal) realVal.textContent = rn; realDisp.classList.remove("hidden"); } else realDisp.classList.add("hidden"); }
 
@@ -920,7 +930,7 @@ function comboKbdNav(input, pop) {
           .then(function (d) {
             if (!d || !d.ok) throw new Error("fail");
             var rn = !mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : "";
-            opts.push({ name: d.name, contactId: d.id, realName: rn, sub: mGroup.checked ? "그룹" : "아티스트", agency: agName || "" }); // 새 아티스트를 로컬 옵션에 추가 → 재검색 인식(중복 방지)
+            announceParty({ kind: mGroup.checked ? "group" : "person", id: d.id, name: d.name, isArtist: true, realName: rn, agency: agName || "" }); // 전역 브로드캐스트 → 이 콤보 포함 모든 콤보 옵션에 반영
             input.value = d.name; cid.value = d.id;
             showReal(rn); // 모달 입력 본명(개인) 표시
             fillAgency(agName); // 모달에서 지정한 소속사를 프로젝트 소속사/레이블 필드에 즉시 반영
@@ -935,6 +945,7 @@ function comboKbdNav(input, pop) {
       var agInput = modal.querySelector("[data-am-agency-input]"), agHid = modal.querySelector("[data-am-agency]"),
           agPop = modal.querySelector("[data-am-agency-pop]"), agOptsEl = modal.querySelector("[data-am-agency-options]");
       var agOpts = []; try { agOpts = JSON.parse((agOptsEl && agOptsEl.textContent) || "[]"); } catch (e) { agOpts = []; }
+      document.addEventListener("party-created", function (e) { var p = e.detail; if (!p || p.kind !== "company") return; if (!agOpts.some(function (o) { return String(o.id) === String(p.id); })) agOpts.push({ id: p.id, name: p.name }); }); // 새 회사 → 소속사 미니콤보 옵션에 추가
       if (agInput && agHid && agPop) {
         var agRowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
         var agView = [];
@@ -960,7 +971,7 @@ function comboKbdNav(input, pop) {
             var body = new URLSearchParams(); body.append("type", "company"); body.append("name", nm);
             fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
               .then(function (r) { return r.ok ? r.json() : null; })
-              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); agHid.value = d.id; agInput.value = d.name; agOpts.push({ id: d.id, name: d.name }); agHide(); })
+              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); agHid.value = d.id; agInput.value = d.name; announceParty({ kind: "company", id: d.id, name: d.name }); agHide(); })
               .catch(function () { b.disabled = false; });
           }
         });
@@ -1026,6 +1037,11 @@ function comboKbdNav(input, pop) {
     var opts = [];
     try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
     root.__ccOpts = opts; // fillAgency 등 외부에서 새 소속사를 옵션에 추가할 수 있게 노출
+    document.addEventListener("party-created", function (e) { // 어디서든 새 회사 생성되면 이 콤보 옵션에 추가
+      var p = e.detail; if (!p || p.kind !== "company") return;
+      if (opts.some(function (o) { return String(o.name) === String(p.name); })) return;
+      opts.push({ name: p.name, sub: "" });
+    });
     var view = [];
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
@@ -1075,7 +1091,7 @@ function comboKbdNav(input, pop) {
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ name: d.name, sub: "" }); input.value = d.name; closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 회사를 로컬 옵션에 추가 + 드롭다운 닫기(재검색 인식·중복 방지)
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "company", id: d.id, name: d.name }); input.value = d.name; closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
@@ -1083,6 +1099,7 @@ function comboKbdNav(input, pop) {
       var ownInput = modal.querySelector("[data-cc-owner]"), ownHid = modal.querySelector("[data-cc-owner-id]"),
           ownPop = modal.querySelector("[data-cc-owner-pop]"), ownOptsEl = modal.querySelector("[data-cc-owner-options]");
       var ownOpts = []; try { ownOpts = JSON.parse((ownOptsEl && ownOptsEl.textContent) || "[]"); } catch (e) { ownOpts = []; }
+      document.addEventListener("party-created", function (e) { var p = e.detail; if (!p || p.kind !== "person") return; if (!ownOpts.some(function (o) { return String(o.id) === String(p.id); })) ownOpts.push({ id: p.id, name: p.name }); }); // 새 사람 → 대표자 미니콤보 옵션에 추가
       if (ownInput && ownHid && ownPop) {
         var ownRowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
         var ownView = [];
@@ -1108,7 +1125,7 @@ function comboKbdNav(input, pop) {
             var body2 = new URLSearchParams(); body2.append("name", nm);
             fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body2.toString() })
               .then(function (r) { return r.ok ? r.json() : null; })
-              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); ownHid.value = d.id; ownInput.value = d.name; ownOpts.push({ id: d.id, name: d.name }); ownHide(); })
+              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); ownHid.value = d.id; ownInput.value = d.name; announceParty({ kind: "person", id: d.id, name: d.name }); ownHide(); })
               .catch(function () { b.disabled = false; });
           }
         });
@@ -1156,6 +1173,11 @@ function comboKbdNav(input, pop) {
     if (!input || !hid || !pop) return; // dataEl 없어도 진행(옵션 빈 배열 — '새 등록'은 가능)
     var opts = [];
     try { opts = JSON.parse((dataEl && dataEl.textContent) || "[]"); } catch (e) { opts = []; }
+    document.addEventListener("party-created", function (e) { // 어디서든 새 사람 생성되면 이 담당자 콤보 옵션에 추가
+      var p = e.detail; if (!p || p.kind !== "person") return;
+      if (opts.some(function (o) { return String(o.id) === String(p.id); })) return;
+      opts.push({ id: p.id, name: p.name, phone: p.phone || "", email: p.email || "", company: p.company || "", group: p.group || "" });
+    });
     var view = [];
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
@@ -1217,7 +1239,7 @@ function comboKbdNav(input, pop) {
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ id: d.id, name: d.name, phone: phone, email: email, company: company }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 담당자를 로컬 옵션에 추가 + 드롭다운 닫기
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, phone: phone, email: email, company: company }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
