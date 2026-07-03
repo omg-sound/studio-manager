@@ -983,6 +983,7 @@
     root.__pcInit = true;
     var input = root.querySelector("[data-pc-input]");
     var hid = root.querySelector("[data-pc-id]");
+    var hidName = root.querySelector("[data-pc-name-hidden]"); // 제출용 이름(보이는 칸은 name 없음 — Chrome 자동완성 회피)
     var pop = root.querySelector("[data-pc-pop]");
     var info = root.querySelector("[data-pc-info]");
     // 옵션: 인라인(data-pc-options) 또는 페이지 공유 스크립트(data-pc-options-ref로 참조, 중복 임베드 제거)
@@ -1060,6 +1061,7 @@
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
     input.addEventListener("input", function () {
+      if (hidName) hidName.value = input.value; // 제출용 숨김 이름 동기화(타이핑·pick·모달 모두 fireInput로 여기 도달)
       render();
       var v = input.value.trim().toLowerCase();
       var m = opts.filter(function (o) { return String(o.name).toLowerCase() === v; })[0];

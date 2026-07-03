@@ -474,8 +474,10 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   return `
     <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""}>
       <input type="hidden" name="${idField}" value="${sel ? sel.id : ""}" data-pc-id />
+      <input type="hidden" name="${nameField}" value="${sel ? esc(sel.name) : ""}" data-pc-name-hidden />
       <div class="relative">
-        <input class="${inputCls}" type="text" name="${nameField}" value="${sel ? esc(sel.name) : ""}" data-pc-input autocomplete="off"
+        <!-- 보이는 검색칸은 name 없음(Chrome 자동완성 팝업이 앱 드롭다운을 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js가 동기화 -->
+        <input class="${inputCls}" type="text" value="${sel ? esc(sel.name) : ""}" data-pc-input autocomplete="off"
           role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(placeholder)}" />
         <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>
