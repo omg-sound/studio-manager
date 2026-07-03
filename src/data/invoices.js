@@ -144,12 +144,11 @@ function listInvoiceItemsForInvoice(user, invoiceId) {
 
 function nextInvoiceNumber(issueDate) {
   const ym = String(issueDate || todayYmd()).slice(0, 7).replace("-", "");
-  const prefix = `INV-${ym}-`;
-  const row = db()
-    .prepare("SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY invoice_number DESC LIMIT 1")
-    .get(prefix + "%");
-  const last = row && row.invoice_number ? parseInt(row.invoice_number.slice(prefix.length), 10) : 0;
-  return prefix + String((Number.isFinite(last) ? last : 0) + 1).padStart(3, "0");
+  // 채번 = OMG-YYYYMM-###. 기존 INV-·신규 OMG- 접두 모두 고려해 최대 일련번호+1(접두 전환에도 번호 연속·중복 없음).
+  const rows = db().prepare("SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? OR invoice_number LIKE ?").all(`INV-${ym}-%`, `OMG-${ym}-%`);
+  let max = 0;
+  for (const r of rows) { const m = String(r.invoice_number || "").match(/-(\d+)$/); if (m) max = Math.max(max, parseInt(m[1], 10)); }
+  return `OMG-${ym}-${String(max + 1).padStart(3, "0")}`;
 }
 
 /** 발행/입금완료로 전이 시 채번 보장(수동 발행분도 INV-YYYYMM-### 부여). 거래명세서에 번호 필수. */
@@ -314,7 +313,7 @@ function invoiceDraftForPdf(user, opts = {}) {
   const client = draft.resolvedPayerId ? getParty(draft.resolvedPayerId) : null;
   const invoice = {
     title: draft.invoiceTitle,
-    invoice_number: null, // 미발행(초안) — 채번 전
+    invoice_number: nextInvoiceNumber(draft.issued), // 미리보기(청구 생성 전)도 다음 번호를 표기(peek — 소비 안 함). PDF에서 유형 코드 삽입.
     amount: draft.total,
     tax_amount: draft.tax,
     discount_amount: draft.discountAmt,

@@ -10,7 +10,7 @@ const assert = require("node:assert");
 
 const { db, init } = require("../src/db");
 // ensureInvoiceNumber 는 내부의 nextInvoiceNumber 채번 로직을 통해
-// 미발행→발행 전이 시 INV-YYYYMM-### 를 부여한다(nextInvoiceNumber 는 미export → 이 경로로 검증).
+// 미발행→발행 전이 시 OMG-YYYYMM-### 를 부여한다(nextInvoiceNumber 는 미export → 이 경로로 검증).
 const { ensureInvoiceNumber } = require("../src/data");
 
 init();
@@ -28,30 +28,30 @@ function seedInvoice({ status = "발행", taxStatus = "계산서 미발행", iss
 
 test.after(() => cleanupDb(process.env.DB_PATH, db()));
 
-test("형식: INV-YYYYMM-001 (issued_date 의 연·월)", () => {
+test("형식: OMG-YYYYMM-001 (issued_date 의 연·월)", () => {
   const inv = ensureInvoiceNumber(seedInvoice({ issued: "2026-06-15" }));
-  assert.match(inv.invoice_number, /^INV-202606-\d{3}$/);
-  assert.strictEqual(inv.invoice_number, "INV-202606-001");
+  assert.match(inv.invoice_number, /^OMG-202606-\d{3}$/);
+  assert.strictEqual(inv.invoice_number, "OMG-202606-001");
 });
 
 test("같은 달 연속 증가: 001 → 002 → 003", () => {
   const a = ensureInvoiceNumber(seedInvoice({ issued: "2026-07-01" }));
   const b = ensureInvoiceNumber(seedInvoice({ issued: "2026-07-20" }));
   const c = ensureInvoiceNumber(seedInvoice({ issued: "2026-07-31" }));
-  assert.strictEqual(a.invoice_number, "INV-202607-001");
-  assert.strictEqual(b.invoice_number, "INV-202607-002");
-  assert.strictEqual(c.invoice_number, "INV-202607-003");
+  assert.strictEqual(a.invoice_number, "OMG-202607-001");
+  assert.strictEqual(b.invoice_number, "OMG-202607-002");
+  assert.strictEqual(c.invoice_number, "OMG-202607-003");
 });
 
 test("월이 바뀌면 일련번호 리셋: 다른 달은 001 부터", () => {
   const aug = ensureInvoiceNumber(seedInvoice({ issued: "2026-08-10" }));
-  assert.strictEqual(aug.invoice_number, "INV-202608-001");
+  assert.strictEqual(aug.invoice_number, "OMG-202608-001");
 });
 
 test("중복 없음: 같은 달 다건 채번이 모두 유일", () => {
   for (let i = 0; i < 5; i++) ensureInvoiceNumber(seedInvoice({ issued: "2026-09-05" }));
   const rows = db()
-    .prepare("SELECT invoice_number FROM invoices WHERE invoice_number LIKE 'INV-202609-%'")
+    .prepare("SELECT invoice_number FROM invoices WHERE invoice_number LIKE 'OMG-202609-%'")
     .all()
     .map((r) => r.invoice_number);
   assert.strictEqual(rows.length, 5);
@@ -68,10 +68,10 @@ test("가드: 이미 번호가 있으면 그대로 반환(재채번 안 함)", (
   const once = ensureInvoiceNumber(row);
   const twice = ensureInvoiceNumber(once); // 이미 번호 있음
   assert.strictEqual(once.invoice_number, twice.invoice_number);
-  assert.strictEqual(twice.invoice_number, "INV-202611-001");
+  assert.strictEqual(twice.invoice_number, "OMG-202611-001");
 });
 
 test("계산서 입금완료면 청구서 미발행이어도 채번 대상", () => {
   const inv = ensureInvoiceNumber(seedInvoice({ status: "미발행", taxStatus: "입금완료", issued: "2026-12-24" }));
-  assert.strictEqual(inv.invoice_number, "INV-202612-001");
+  assert.strictEqual(inv.invoice_number, "OMG-202612-001");
 });

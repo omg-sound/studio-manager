@@ -11,6 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument } = require("pdf-lib");
+const { docNumberWithType } = require("./config"); // 문서 유형별 번호(견적서=OMG-Q-…·내역서=OMG-L-…·거래명세서=OMG-…)
 
 // @resvg/resvg-js는 네이티브 모듈 — 배포 환경에 플랫폼 prebuilt가 없으면 require가 throw한다.
 // 최상단 require면 invoice-pdf/invoices 라우트 전체가 로드 실패 → 청구 화면이 통째로 안 뜬다.
@@ -134,7 +135,7 @@ function buildSvg({ studio, client, invoice, items, logo, docType }) {
   svg += text(M + 26, boxY + 88, truncate(client.name || "—", 28), { size: 26, weight: 700 });
   const metaLabelX = right - 320;
   svg += text(metaLabelX, boxY + 42, `${title} 번호`, { size: 17, color: "#8a8678" });
-  svg += text(right - 26, boxY + 42, invoice.invoice_number || "—", { size: 19, weight: 600, anchor: "end" });
+  svg += text(right - 26, boxY + 42, docNumberWithType(invoice.invoice_number, docType) || "—", { size: 19, weight: 600, anchor: "end" });
   svg += text(metaLabelX, boxY + 90, "발행됨", { size: 17, color: "#8a8678" });
   svg += text(right - 26, boxY + 90, invoice.issued_date || "—", { size: 19, weight: 500, anchor: "end" });
 
@@ -217,7 +218,7 @@ async function renderInvoicePdf(data) {
   const page = doc.addPage(A4);
   const img = await doc.embedPng(png);
   page.drawImage(img, { x: 0, y: 0, width: A4[0], height: A4[1] });
-  doc.setTitle(`${data.docType || "거래명세서"} ${data.invoice.invoice_number || ""}`.trim());
+  doc.setTitle(`${data.docType || "거래명세서"} ${docNumberWithType(data.invoice.invoice_number, data.docType) || ""}`.trim());
   return Buffer.from(await doc.save());
 }
 
