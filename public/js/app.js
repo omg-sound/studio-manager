@@ -910,8 +910,10 @@ function comboKbdNav(input, pop) {
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
             if (!d || !d.ok) throw new Error("fail");
+            var rn = !mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : "";
+            opts.push({ name: d.name, contactId: d.id, realName: rn, sub: mGroup.checked ? "그룹" : "아티스트", agency: agName || "" }); // 새 아티스트를 로컬 옵션에 추가 → 재검색 인식(중복 방지)
             input.value = d.name; cid.value = d.id;
-            showReal(!mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : ""); // 모달 입력 본명(개인) 표시
+            showReal(rn); // 모달 입력 본명(개인) 표시
             fillAgency(agName); // 모달에서 지정한 소속사를 프로젝트 소속사/레이블 필드에 즉시 반영
             closeModal(); fireInput();
             if (window.__toast) window.__toast(d.name + " 등록됨");
@@ -1052,7 +1054,7 @@ function comboKbdNav(input, pop) {
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); })
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ name: d.name, sub: "" }); input.value = d.name; closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 회사를 로컬 옵션에 추가 → 재검색 시 인식(중복 등록 방지)
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
@@ -1153,7 +1155,7 @@ function comboKbdNav(input, pop) {
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); })
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ id: d.id, name: d.name, phone: phone, email: email, company: company }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 담당자를 로컬 옵션에 추가
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
