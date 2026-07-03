@@ -840,7 +840,13 @@ function artistCombo(p = {}) {
           <label class="flex w-fit cursor-pointer items-center gap-1.5 text-sm text-muted"><input type="checkbox" data-am-group class="h-4 w-4 rounded border-border text-primary" /> 그룹(밴드·팀)</label>
           <div data-am-real-wrap><label class="label">본명 <span class="text-xs font-normal text-muted">(활동명과 다르면 · 개인)</span></label><input class="input" data-am-real placeholder="본명(선택)" /></div>
           <div><label class="label">소속사 <span class="text-xs font-normal text-muted">(선택)</span></label>
-            <select class="input" data-am-agency><option value="">없음</option>${companies.map((co) => `<option value="${co.id}">${esc(co.name)}</option>`).join("")}</select></div>
+            <input type="hidden" data-am-agency value="" />
+            <div class="relative">
+              <input class="input" data-am-agency-input autocomplete="off" placeholder="소속사 검색 또는 새로 등록" role="combobox" aria-expanded="false" aria-autocomplete="list" />
+              <div class="absolute left-0 right-0 z-10 mt-1 hidden max-h-40 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-am-agency-pop role="listbox"></div>
+            </div>
+            <script type="application/json" data-am-agency-options>${JSON.stringify(companies.map((co) => ({ id: co.id, name: co.name }))).replace(/</g, "\\u003c")}</script>
+          </div>
           <div><label class="label">전화 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" data-am-phone autocomplete="off" /></div>
           <div class="flex items-center gap-2 pt-1">
             <button type="button" class="btn-primary" data-am-save>등록</button>

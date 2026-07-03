@@ -834,9 +834,10 @@
       var mName = modal.querySelector("[data-am-name]"), mGroup = modal.querySelector("[data-am-group]"),
           mRealWrap = modal.querySelector("[data-am-real-wrap]"), mReal = modal.querySelector("[data-am-real]"),
           mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
+          mAgencyInput = modal.querySelector("[data-am-agency-input]"),
           mErr = modal.querySelector("[data-am-err]");
       mName.value = input.value.trim(); mGroup.checked = false;
-      if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mPhone) mPhone.value = "";
+      if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = "";
       mErr.classList.add("hidden"); mRealWrap.classList.remove("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex");
       hide(); mName.focus();
@@ -871,6 +872,41 @@
           .catch(function () { mErr.textContent = "등록 실패 — 다시 시도하세요."; mErr.classList.remove("hidden"); })
           .then(function () { mSave.disabled = false; });
       });
+
+      // 소속사 미니 콤보(모달 내부): 타이핑 검색 + '＋ 새 소속사 등록'(fetch → data-am-agency hidden id 채움).
+      var agInput = modal.querySelector("[data-am-agency-input]"), agHid = modal.querySelector("[data-am-agency]"),
+          agPop = modal.querySelector("[data-am-agency-pop]"), agOptsEl = modal.querySelector("[data-am-agency-options]");
+      var agOpts = []; try { agOpts = JSON.parse((agOptsEl && agOptsEl.textContent) || "[]"); } catch (e) { agOpts = []; }
+      if (agInput && agHid && agPop) {
+        var agRowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+        var agView = [];
+        function agHide() { agPop.classList.add("hidden"); }
+        function agRender() {
+          var q = agInput.value.trim().toLowerCase();
+          agView = (q ? agOpts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : agOpts).slice(0, 10);
+          var html = agView.map(function (o, i) { return '<button type="button" class="' + agRowCls + '" data-agidx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span></button>'; }).join("");
+          if (q && !agView.some(function (o) { return String(o.name).toLowerCase() === q; })) html += '<button type="button" class="' + agRowCls + ' text-primary" data-agnew="1"><span class="truncate">＋ \'' + esc(agInput.value.trim()) + '\'(으)로 새 소속사 등록</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+          agPop.innerHTML = html || '<div class="px-3 py-2 text-sm text-muted">이름을 입력해 새 소속사로 등록</div>'; agPop.classList.remove("hidden");
+        }
+        agInput.addEventListener("focus", agRender);
+        agInput.addEventListener("click", agRender);
+        agInput.addEventListener("input", function () { agHid.value = ""; agRender(); }); // 타이핑 중 id 해제(선택·등록으로만 확정)
+        agInput.addEventListener("blur", function () { setTimeout(agHide, 150); });
+        agPop.addEventListener("mousedown", function (e) { e.preventDefault(); });
+        agPop.addEventListener("click", function (e) {
+          var b = e.target.closest("button"); if (!b) return;
+          if (b.hasAttribute("data-agidx")) { var o = agView[Number(b.getAttribute("data-agidx"))]; agInput.value = o.name; agHid.value = o.id; agHide(); }
+          else if (b.hasAttribute("data-agnew")) {
+            var nm = agInput.value.trim(); if (!nm) return;
+            b.disabled = true;
+            var body = new URLSearchParams(); body.append("type", "company"); body.append("name", nm);
+            fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); agHid.value = d.id; agInput.value = d.name; agOpts.push({ id: d.id, name: d.name }); agHide(); })
+              .catch(function () { b.disabled = false; });
+          }
+        });
+      }
     }
 
     input.addEventListener("focus", render);
