@@ -906,10 +906,6 @@ function companyCombo(fieldName, value, roleKey, label) {
               <script type="application/json" data-cc-owner-options>${ownerJson}</script>
             </div>
           </div>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div><label class="label">이메일</label><input class="input" type="email" data-cc-email autocomplete="off" /></div>
-            <div><label class="label">전화</label><input class="input" data-cc-phone autocomplete="off" /></div>
-          </div>
           <div class="flex items-center gap-2 pt-1">
             <button type="button" class="btn-primary" data-cc-save>등록</button>
             <button type="button" class="btn-ghost" data-cc-cancel>취소</button>

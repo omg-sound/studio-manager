@@ -1065,7 +1065,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function openModal() {
       if (!modal) { hide(); return; }
       var n = modal.querySelector("[data-cc-name]"); n.value = input.value.trim();
-      ["[data-cc-biz]", "[data-cc-owner]", "[data-cc-owner-id]", "[data-cc-email]", "[data-cc-phone]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      ["[data-cc-biz]", "[data-cc-owner]", "[data-cc-owner-id]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
       var ownPop0 = modal.querySelector("[data-cc-owner-pop]"); if (ownPop0) ownPop0.classList.add("hidden");
       modal.querySelector("[data-cc-err]").classList.add("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
@@ -1086,8 +1086,6 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         var biz = modal.querySelector("[data-cc-biz]").value.trim(); if (biz) body.append("biz_no", biz);
         var owner = modal.querySelector("[data-cc-owner]").value.trim(); if (owner) body.append("owner_name", owner);
         var ownerIdEl = modal.querySelector("[data-cc-owner-id]"); if (ownerIdEl && ownerIdEl.value) body.append("owner_id", ownerIdEl.value); // 대표자 콤보에서 선택/등록한 사람 id(정확 연결·중복 방지)
-        var email = modal.querySelector("[data-cc-email]").value.trim(); if (email) body.append("email", email);
-        var phone = modal.querySelector("[data-cc-phone]").value.trim(); if (phone) body.append("phone", phone);
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
