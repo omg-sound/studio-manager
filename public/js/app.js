@@ -1089,7 +1089,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "company", id: d.id, name: d.name }); input.value = d.name; closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "company", id: d.id, name: d.name }); if (ownerIdEl && ownerIdEl.value && owner) announceParty({ kind: "person", id: ownerIdEl.value, name: owner, company: d.name, job_title: "대표" }); input.value = d.name; closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 회사 + 대표자 소속·직책(대표) 브로드캐스트
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
@@ -1171,10 +1171,11 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     if (!input || !hid || !pop) return; // dataEl 없어도 진행(옵션 빈 배열 — '새 등록'은 가능)
     var opts = [];
     try { opts = JSON.parse((dataEl && dataEl.textContent) || "[]"); } catch (e) { opts = []; }
-    document.addEventListener("party-created", function (e) { // 어디서든 새 사람 생성되면 이 담당자 콤보 옵션에 추가
+    document.addEventListener("party-created", function (e) { // 어디서든 새 사람 생성/갱신되면 이 담당자 콤보 옵션에 반영
       var p = e.detail; if (!p || p.kind !== "person") return;
-      if (opts.some(function (o) { return String(o.id) === String(p.id); })) return;
-      opts.push({ id: p.id, name: p.name, phone: p.phone || "", email: p.email || "", company: p.company || "", group: p.group || "" });
+      var ex = opts.filter(function (o) { return String(o.id) === String(p.id); })[0];
+      if (ex) { if (p.company) ex.company = p.company; if (p.job_title) ex.job_title = p.job_title; if (p.phone) ex.phone = p.phone; return; } // 기존 항목 갱신(소속·직책 등)
+      opts.push({ id: p.id, name: p.name, phone: p.phone || "", email: p.email || "", company: p.company || "", job_title: p.job_title || "", group: p.group || "" });
     });
     var view = [];
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
@@ -1187,7 +1188,9 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var nodes = [];
       if (o && o.phone) { var a = document.createElement("button"); a.type = "button"; a.setAttribute("data-copy", o.phone); a.title = "클릭하면 복사됩니다"; a.textContent = "☎ " + o.phone; a.className = "font-medium text-info hover:underline"; nodes.push(a); }
       if (o && o.email) { var em = document.createElement("button"); em.type = "button"; em.setAttribute("data-copy", o.email); em.title = "클릭하면 복사됩니다"; em.textContent = "✉ " + o.email; em.className = "text-info hover:underline"; nodes.push(em); }
-      var aff = o ? [o.group, o.company].filter(Boolean).join(" · ") : ""; // 소속 그룹 + 회사
+      // 소속 = 그룹 또는 회사 + 직책(예: '(주)크레오엔터테인먼트 대표')
+      var org = o ? (o.group || o.company || "") : "";
+      var aff = (org + (o && o.job_title ? " " + o.job_title : "")).trim();
       if (aff) { var s = document.createElement("span"); s.textContent = "소속: " + aff; nodes.push(s); }
       if (nodes.length) { nodes.forEach(function (n, i) { if (i > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(n); }); info.classList.remove("hidden"); }
       else if (isNew) { info.textContent = "새 연락처로 등록됩니다."; info.classList.remove("hidden"); }

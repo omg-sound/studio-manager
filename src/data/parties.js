@@ -589,6 +589,8 @@ function contactOptions() {
       `SELECT p.id, p.name, p.phone, p.email,
               (SELECT o.name FROM affiliations a LEFT JOIN parties o ON o.id = a.org_id
                 WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS current_client,
+              (SELECT a.title FROM affiliations a
+                WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS current_title,
               (SELECT g.name FROM parties g WHERE g.id = p.group_id AND g.kind = 'group') AS group_name
          FROM parties p WHERE p.kind = 'person' ORDER BY p.name COLLATE NOCASE`
     )
