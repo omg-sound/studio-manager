@@ -15,7 +15,30 @@ const { todayYmd, formatYmdShort } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
 const { canBill, canInvoice } = require("../auth");
 const { getProjectForUser } = require("./projects"); // 무순환
-const { getParty } = require("./parties"); // 무순환 — 청구처(payer)=parties.id
+const { getParty, listPersonsForOrg } = require("./parties"); // 무순환 — 청구처(payer)=parties.id
+
+/**
+ * 발행 시점 청구처(payer) 정보 스냅샷(JSON 문자열). 이후 클라이언트 정보가 바뀌어도 과거 청구서 표시/PDF가
+ * 발행 당시 정보로 고정된다(회계·법적 기록 정확성). 표시·PDF는 스냅샷 우선, 없으면(레거시) 실시간 폴백.
+ */
+function snapshotPayer(payerId) {
+  if (!payerId) return null;
+  const p = getParty(payerId);
+  if (!p) return null;
+  const contacts = (listPersonsForOrg(payerId) || []).slice(0, 1);
+  const c0 = contacts[0];
+  return JSON.stringify({
+    id: p.id,
+    name: p.name || "",
+    kind: p.kind || null,
+    owner_name: p.owner_name || null,
+    biz_no: p.biz_no || null,
+    address: p.address || null,
+    email: p.email || null,
+    cash_receipt_no: p.cash_receipt_no || null,
+    contacts: c0 ? [{ name: c0.name, phone: c0.phone || null, email: c0.email || null }] : [],
+  });
+}
 const { taskTypeLabel } = require("./task-types"); // 무순환
 
 const parseWon = parseMoney; // 내부 호출명 parseWon 유지
@@ -215,12 +238,13 @@ function createInvoiceFromTasks(user, opts = {}) {
     const info = d
       .prepare(
         `INSERT INTO invoices
-         (project_id, payer_id, title, invoice_number, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
-         VALUES (@project_id, @payer_id, @title, @invoice_number, @amount, @tax_amount, @discount_amount, 0, '발행', @issued_date, @due_date, @memo)`
+         (project_id, payer_id, payer_snapshot, title, invoice_number, amount, tax_amount, discount_amount, paid_amount, status, issued_date, due_date, memo)
+         VALUES (@project_id, @payer_id, @payer_snapshot, @title, @invoice_number, @amount, @tax_amount, @discount_amount, 0, '발행', @issued_date, @due_date, @memo)`
       )
       .run({
         project_id: draft.project.id,
         payer_id: draft.resolvedPayerId,
+        payer_snapshot: snapshotPayer(draft.resolvedPayerId), // 발행 시점 청구처 정보 고정
         title: draft.invoiceTitle,
         invoice_number: invoiceNumber,
         amount: draft.total,
@@ -374,6 +398,7 @@ module.exports = {
   ensureInvoiceNumber,
   invoiceAmountsFromSupply,
   createInvoiceFromTasks,
+  snapshotPayer,
   invoiceDraftForPdf,
   deleteInvoice,
   listInvoices,

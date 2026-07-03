@@ -19,6 +19,7 @@ const {
   getParty,
   getClientFile,
   listPersonsForOrg,
+  snapshotPayer,
   ensureInvoiceNumber,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup, explain, payerCombo } = require("../views");
@@ -173,12 +174,13 @@ router.post("/", requireBilling, (req, res) => {
   const discount = parseMoney(b.discount_amount);
   const info = db()
     .prepare(
-      `INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, discount_amount, paid_amount, status, tax_status, issued_date, due_date, memo)
-       VALUES (@project_id,@payer_id,@title,@amount,@tax,@discount,@paid,@status,@tax_status,@issued_date,@due_date,@memo)`
+      `INSERT INTO invoices (project_id, payer_id, payer_snapshot, title, amount, tax_amount, discount_amount, paid_amount, status, tax_status, issued_date, due_date, memo)
+       VALUES (@project_id,@payer_id,@payer_snapshot,@title,@amount,@tax,@discount,@paid,@status,@tax_status,@issued_date,@due_date,@memo)`
     )
     .run({
       project_id: refs.projectId,
       payer_id: refs.clientId,
+      payer_snapshot: snapshotPayer(refs.clientId), // 발행 시점 청구처 정보 고정
       title,
       amount,
       tax: b.vat_included != null ? Math.round(amount - amount / 1.1) : 0, // 부가세 포함 체크 시 역산, 현금(미포함)이면 0
@@ -200,6 +202,17 @@ router.post("/", requireBilling, (req, res) => {
 });
 
 // ── 상세 ──
+// 청구처 정보: 발행 시점 스냅샷(payer_snapshot) 우선 — 이후 클라이언트 정보가 바뀌어도 과거 청구서 표시/PDF 고정.
+// 없으면(레거시 청구서) 실시간 party 폴백. { client, contacts } 반환.
+function payerView(inv) {
+  if (inv && inv.payer_snapshot) {
+    try { const s = JSON.parse(inv.payer_snapshot); return { client: s, contacts: s.contacts || [] }; }
+    catch (_e) { /* 파싱 실패 시 실시간 폴백 */ }
+  }
+  const client = inv && inv.payer_id ? getParty(inv.payer_id) : null;
+  return { client, contacts: client ? listPersonsForOrg(client.id) : [] };
+}
+
 router.get("/:id", requireBilling, (req, res) => {
   const inv = getInvoiceForUser(req.user, Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
@@ -208,10 +221,10 @@ router.get("/:id", requireBilling, (req, res) => {
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
-  // 청구처 정보(대표자·사업자번호·담당자 연락처) — 청구처가 클라이언트일 때
-  const payerClient = inv.payer_id ? getParty(inv.payer_id) : null;
+  // 청구처 정보(대표자·사업자번호·담당자 연락처) — 발행 시점 스냅샷 우선(payerView). biz_license 파일 링크만 실시간(현재 첨부).
+  const { client: payerClient, contacts: payerContacts } = payerView(inv);
   const payerCard = payerClient
-    ? payerInfoCard(payerClient, listPersonsForOrg(payerClient.id), !!getClientFile(payerClient.id, "biz_license"))
+    ? payerInfoCard(payerClient, payerContacts, payerClient.id ? !!getClientFile(payerClient.id, "biz_license") : false)
     : "";
 
   const row = (label, value) =>
@@ -255,7 +268,7 @@ router.get("/:id", requireBilling, (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: inv.title, desc: inv.client_name || "청구처 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
+    ${pageHeader({ title: inv.title, desc: (payerClient && payerClient.name) || inv.client_name || "청구처 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
     <div class="card">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
       ${row("총액", formatKRW(inv.amount))}
@@ -288,7 +301,7 @@ router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) =
   // 3종 문서(견적서·내역서·거래명세서) 모두 상태 무관 발행 허용 — 참고용 문서라 미발행 초안에서도 뽑을 수 있게(사용자 요청).
   const bundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = bundle ? bundle.rows : [];
-  const client = inv.payer_id ? getParty(inv.payer_id) || { name: inv.client_name || "" } : { name: inv.client_name || "" };
+  const client = payerView(inv).client || { name: inv.client_name || "" }; // 발행 시점 스냅샷 우선(레거시=실시간/JOIN 폴백)
   let pdf;
   try {
     pdf = await renderInvoicePdf({ studio: getStudioInfo(), logo: getStudioLogo(), client, invoice: inv, items, docType });

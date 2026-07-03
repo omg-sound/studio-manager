@@ -159,12 +159,19 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
   return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${amountGrid}${payer}${itemList}${adminControls}${pdfAndFull}</div>`;
 }
 
+/** 청구서 표시 청구처명: 발행 시점 스냅샷(payer_snapshot.name) 우선, 없으면(레거시) 실시간 client_name. */
+function payerName(inv) {
+  if (inv && inv.payer_snapshot) { try { const n = JSON.parse(inv.payer_snapshot).name; if (n) return n; } catch (_e) { /* 파싱 실패 폴백 */ } }
+  return inv.client_name || "";
+}
+
 /** 목록 행(링크 카드). compact=프로젝트 상세 청구 탭용 — 클릭하면 그 자리에서 펼침(페이지 이동 없음). */
 function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnTo = "", openId = null } = {}) {
   const bal = balanceOf(inv);
+  const pname = payerName(inv);
   const sub = compact
-    ? esc(inv.client_name || "청구처 미지정")
-    : `${esc(inv.project_title || "프로젝트 없음")}${inv.client_name ? " · " + esc(inv.client_name) : ""}`;
+    ? esc(pname || "청구처 미지정")
+    : `${esc(inv.project_title || "프로젝트 없음")}${pname ? " · " + esc(pname) : ""}`;
   const dueLine = inv.due_date
     ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}`
     : "마감 미정";

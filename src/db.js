@@ -371,6 +371,7 @@ function init() {
   addColumn("contacts", "user_id", "INTEGER"); // 녹음실 스태프(로그인 계정)와 연결. FK 없음(ALTER 한계). null=외부/고객측 연락처. owner 포함 전 직원이 연락처에 노출
   // ── 당사자 모델 역할 참조 컬럼(party_model_v1, 휴면) — P1은 populate만, 읽기 경로는 P2에서 전환 ──
   addColumn("invoices", "payer_id", "INTEGER"); // 청구처 = parties.id(기존 client_id 대체). FK 없음(ALTER 한계)
+  addColumn("invoices", "payer_snapshot", "TEXT"); // 발행 시점 청구처 정보 스냅샷(JSON) — 이후 클라이언트 정보 변경돼도 과거 청구서 표시 고정. NULL=레거시(실시간 폴백)
   addColumn("projects", "artist_id", "INTEGER"); // 공연 당사자(parties.id)
   addColumn("projects", "agency_id", "INTEGER"); // 소속사/레이블(parties.id, 기존 artist_company TEXT 대체)
   addColumn("projects", "production_id", "INTEGER"); // 제작사(parties.id, 기존 production_company TEXT 대체)
