@@ -22,7 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, personCombo } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -643,27 +643,14 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
   </section>`;
 }
 
-/** 클라이언트 담당자 연락처 콤보 — 이름 선택/입력 시 연락처에 연동(이 클라이언트 소속으로). 프로젝트 contactCombo와 동일 패턴(app.js 처리). */
+/** 클라이언트 담당자 연락처 콤보 — 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). 저장 시 이 클라이언트 소속으로 연동(linkClientContact). */
 function clientContactCombo(c, isEdit) {
-  const opts = contactOptions();
   const cur = isEdit && c.id ? (listPersonsForOrg(c.id)[0] || null) : null;
-  // 현재 담당자의 전화·소속을 서버에서 미리 채워 로드 즉시 표시(이름 뒤에 번호). app.js가 변경 시 갱신.
-  const curInfo = cur
-    ? [cur.phone ? `☎ ${esc(cur.phone)}` : "", `소속: ${esc(c.name)}`].filter(Boolean).join(" · ")
-    : "";
   return `
     <div>
       <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 연락처에 연동)</span></label>
-      <div data-contact-combo>
-        <input type="hidden" name="contact_id" value="${cur ? cur.id : ""}" data-contact-id />
-        <input class="input" type="text" name="contact_name" list="dl-client-contacts" data-contact-search autocomplete="off"
-          placeholder="이름 입력 — 목록에서 선택하거나 새 이름" value="${cur ? esc(cur.name) : ""}" aria-label="담당자 검색" />
-        <datalist id="dl-client-contacts">
-          ${opts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
-        </datalist>
-        <div class="mt-1 text-sm text-muted${curInfo ? "" : " hidden"}" data-contact-info>${curInfo}</div>
-        ${explain(`목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.`)}
-      </div>
+      ${personCombo({ idField: "contact_id", nameField: "contact_name", selectedId: cur ? cur.id : null, options: contactOptions() })}
+      ${explain(`목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.`)}
     </div>`;
 }
 
