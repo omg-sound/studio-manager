@@ -201,6 +201,37 @@ async function deleteFile(fileId) {
   await drive.files.update({ fileId, requestBody: { trashed: true } });
 }
 
+/**
+ * DB 백업 파일을 Drive 'backups' 하위 폴더로 오프사이트 전송(Render 디스크 단일 장애점 완화).
+ * 같은 이름(같은 날) 기존본은 교체, 이름(=날짜) 사전순 최신 keep개만 보존. 미연동이면 skip.
+ * @returns {Promise<{ok?:boolean, skipped?:boolean, reason?:string, fileId?:string, pruned?:number}>}
+ */
+async function backupToDrive(filePath, { keep = 14 } = {}) {
+  if (!filePath || !isLinked()) return { skipped: true, reason: "no-drive" };
+  const path = require("path");
+  const drive = driveClient();
+  const parent = await ensureSubfolder("backups");
+  const name = path.basename(filePath);
+  const { data } = await drive.files.list({
+    q: `'${parent}' in parents and trashed = false`,
+    fields: "files(id,name)", orderBy: "name", pageSize: 200, spaces: "drive",
+  });
+  const files = (data.files || []).filter((f) => /^app-\d.*\.db$/.test(f.name));
+  for (const f of files) { if (f.name === name) { try { await deleteFile(f.id); } catch (_e) {} } } // 같은 날 재실행 중복 제거
+  const { data: up } = await drive.files.create({
+    requestBody: { name, parents: [parent] },
+    media: { mimeType: "application/x-sqlite3", body: fs.createReadStream(filePath) },
+    fields: "id",
+  });
+  // 정리: 이름(app-YYYY-MM-DD.db) 사전순 = 날짜순 → 최신 keep개만 보존, 나머지 휴지통.
+  const remaining = files.filter((f) => f.name !== name).map((f) => ({ id: f.id, name: f.name }));
+  remaining.push({ id: up.id, name });
+  remaining.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  let pruned = 0;
+  for (const f of remaining.slice(0, Math.max(0, remaining.length - keep))) { try { await deleteFile(f.id); pruned++; } catch (_e) {} }
+  return { ok: true, fileId: up.id, pruned };
+}
+
 /** 캐시된 폴더 id(첫 업로드 전이면 null). 점검용 — 생성은 안 함. */
 function getFolderId() {
   return getState(STATE_ROOT_FOLDER) || null;
@@ -267,4 +298,5 @@ module.exports = {
   uploadFile,
   streamFile,
   deleteFile,
+  backupToDrive,
 };

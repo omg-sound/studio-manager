@@ -7,6 +7,7 @@
 const crypto = require("crypto");
 const express = require("express");
 const { config } = require("../config");
+const { asyncHandler } = require("../lib/async");
 const { runDailyMaintenance, overdueSummary } = require("../lib/maintenance");
 
 const router = express.Router();
@@ -40,14 +41,16 @@ function tokenGate(req, res, next) {
 }
 
 // 일일 유지보수: DB 백업(VACUUM INTO) + 연체 스캔. Render cron이 트리거.
-router.post("/internal/cron/daily", tokenGate, (req, res) => {
-  const result = runDailyMaintenance();
+router.post("/internal/cron/daily", tokenGate, asyncHandler(async (req, res) => {
+  const result = await runDailyMaintenance();
   const backupInfo = result.backup ? `${result.backup.file} (${result.backup.sizeBytes}B, pruned ${result.backup.pruned.length})` : `FAILED: ${result.backupError}`;
+  const d = result.driveBackup;
+  const driveInfo = d ? (d.skipped ? `drive=skip(${d.reason})` : d.ok ? `drive=ok(pruned ${d.pruned})` : `drive=ERR:${d.error}`) : "drive=none";
   // 로그에는 집계 수치만(고객명·잔액 등 PII는 응답 JSON에만, 토큰 보유자에게만).
   const overdueInfo = result.overdue ? `overdue=${result.overdue.count} due=${result.overdue.totalDue}` : `overdue=ERR:${result.overdueError}`;
-  console.log(`[cron] daily — ${overdueInfo} backup=${backupInfo}`);
+  console.log(`[cron] daily — ${overdueInfo} backup=${backupInfo} ${driveInfo}`);
   res.status(result.ok ? 200 : 500).json(result);
-});
+}));
 
 // 연체만 조회(부수효과 없음, 모니터링/디버그용).
 router.get("/internal/cron/overdue", tokenGate, (req, res) => {

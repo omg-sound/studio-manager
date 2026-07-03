@@ -7,6 +7,7 @@ const { config } = require("../config");
 const { todayYmd } = require("./date");
 const { listInvoices, balanceOf } = require("../data");
 const { notifyAsync } = require("../notify");
+const drive = require("../drive");
 
 // 백업 디렉터리: DB와 같은 (영속) 디스크. 프로덕션 /var/data/backups, 로컬 ./data/backups.
 function backupDir() {
@@ -114,7 +115,7 @@ function pruneOldBackups(dir, keep) {
  * 백업(내구성 핵심)을 먼저, 그리고 두 작업을 각자 try/catch로 격리한다 → 한쪽 실패가 다른 쪽을
  * 막지 않는다(연체 읽기 오류로 백업이 건너뛰는 우선순위 역전 방지). ok는 백업 성공 기준.
  */
-function runDailyMaintenance(opts = {}) {
+async function runDailyMaintenance(opts = {}) {
   const ranAt = new Date().toISOString();
   let backup = null;
   let backupError = null;
@@ -122,6 +123,13 @@ function runDailyMaintenance(opts = {}) {
     backup = backupDatabase(opts);
   } catch (e) {
     backupError = e && e.message ? e.message : String(e);
+  }
+  // 오프사이트: DB 백업을 Drive로 사본 전송(Render 디스크가 유일 백업처인 단일 장애점 완화). fail-safe·비차단.
+  let driveBackup = null;
+  try {
+    if (backup && backup.file) driveBackup = await drive.backupToDrive(backup.file, { keep: KEEP_BACKUPS });
+  } catch (e) {
+    driveBackup = { ok: false, error: e && e.message ? e.message : String(e) };
   }
   // 첨부 파일 스냅샷(DB 백업과 별개·격리). 실패해도 DB 백업/연체엔 영향 없음.
   let uploadsBackup = null;
@@ -150,7 +158,7 @@ function runDailyMaintenance(opts = {}) {
       })),
     });
   }
-  return { ok: !backupError, ranAt, backup, backupError, uploadsBackup, uploadsBackupError, overdue, overdueError };
+  return { ok: !backupError, ranAt, backup, backupError, driveBackup, uploadsBackup, uploadsBackupError, overdue, overdueError };
 }
 
 module.exports = {
