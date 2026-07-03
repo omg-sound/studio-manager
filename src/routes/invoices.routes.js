@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireBilling, canBill } = require("../auth");
-const { INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, normalizeInvoiceStatus, normalizeTaxStatus, normalizeDocType, DOC_TYPES } = require("../config");
+const { INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, normalizeInvoiceStatus, normalizeTaxStatus, normalizeDocType, DOC_TYPES, docNumberWithType } = require("../config");
 const {
   clientOptions,
   contactOptions,
@@ -284,7 +284,7 @@ router.get("/:id", requireBilling, (req, res) => {
     ${payerCard}
     <div class="mt-3 flex flex-wrap items-center gap-1.5">
         <span class="text-xs text-muted">PDF 발행:</span>
-        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
+        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement/${encodeURIComponent(docNumberWithType(inv.invoice_number, t) || t)}.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
       </div>
     ${invoiceItemsCard(items)}
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
@@ -293,7 +293,7 @@ router.get("/:id", requireBilling, (req, res) => {
 });
 
 // ── 거래명세서 PDF (발행/입금완료 또는 견적서 타입은 미발행도 허용. PII → 인증 필수·no-store·즉석 스트리밍) ──
-router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) => {
+router.get(["/:id/statement.pdf", "/:id/statement/:name"], requireBilling, asyncHandler(async (req, res) => {
   let inv = getInvoiceForUser(req.user, Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const docType = normalizeDocType(req.query.type);
@@ -312,7 +312,8 @@ router.get("/:id/statement.pdf", requireBilling, asyncHandler(async (req, res) =
     throw e;
   }
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((inv.invoice_number || "statement") + ".pdf")}`);
+  const fname = (docNumberWithType(inv.invoice_number, docType) || docType) + ".pdf"; // 다운로드 파일명 = 문서번호(견적서=OMG-EST-…), 미발행 초안은 유형명
+  res.setHeader("Content-Disposition", `inline; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
   res.setHeader("Cache-Control", "private, no-store");
   res.send(pdf);
 }));

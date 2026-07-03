@@ -427,6 +427,7 @@ module.exports = {
   isSessionInvoiced,
   listInvoiceItemsForInvoice,
   ensureInvoiceNumber,
+  peekInvoiceNumber: nextInvoiceNumber, // 청구 생성 전 미리보기 PDF 파일명(다음 번호 peek — 소비 안 함)
   invoiceAmountsFromSupply,
   createInvoiceFromTasks,
   snapshotPayer,

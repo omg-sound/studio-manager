@@ -123,10 +123,10 @@ const TAX_STATUSES = ["계산서 미발행", "계산서 발행", "입금완료"]
 // 청구 PDF 문서 제목 — 발행 시 골라서(내용 동일, 제목·일부 문구만 분기).
 const DOC_TYPES = ["견적서", "내역서", "거래명세서"];
 // 문서 유형별 번호 — 기준 채번(OMG-YYYYMM-### 또는 레거시 INV-)에 유형 코드 삽입.
-// 견적서=OMG-Q-…, 내역서=OMG-L-…, 거래명세서=기준번호(OMG-…). 미리보기(청구 생성 전)도 다음 번호로 표기.
+// 견적서=OMG-EST-…, 내역서=OMG-L-…, 거래명세서=기준번호(OMG-…). 미리보기(청구 생성 전)도 다음 번호로 표기.
 function docNumberWithType(baseNumber, docType) {
   if (!baseNumber) return "";
-  const code = docType === "견적서" ? "Q-" : docType === "내역서" ? "L-" : "";
+  const code = docType === "견적서" ? "EST-" : docType === "내역서" ? "L-" : "";
   return String(baseNumber).replace(/^(OMG|INV)-/, "OMG-" + code);
 }
 const TRACK_CONTENT_TYPES = ["Music", "Video_Post"];

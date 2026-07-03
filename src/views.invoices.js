@@ -2,7 +2,7 @@
 
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
-const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, DOC_TYPES } = require("./config");
+const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, DOC_TYPES, docNumberWithType } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, listRow, copyable } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel } = require("./lib/date");
@@ -150,7 +150,7 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
     <div class="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
       <span class="text-xs text-muted">PDF</span>
       ${pdfTypes
-        .map((t) => `<a href="/invoices/${inv.id}/statement.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`)
+        .map((t) => `<a href="/invoices/${inv.id}/statement/${encodeURIComponent(docNumberWithType(inv.invoice_number, t) || t)}.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`)
         .join("")}
       <a href="/invoices/${inv.id}" class="ml-auto text-xs text-muted hover:text-fg hover:underline">전체 화면으로 ↗</a>
     </div>`;

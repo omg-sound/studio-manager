@@ -9,6 +9,7 @@ const {
   TASK_STATUS_BADGE,
   normalizeProjectType,
   normalizeDocType,
+  docNumberWithType,
 } = require("../config");
 const { config } = require("../config");
 const { renderInvoicePdf } = require("../invoice-pdf");
@@ -48,6 +49,7 @@ const {
   createInvoiceFromTasks,
   payerDocMeta,
   invoiceDraftForPdf,
+  peekInvoiceNumber,
   getClientFile,
   listPersonsForOrg,
   getStudioInfo,
@@ -662,7 +664,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
 
 // 청구서 생성 전 미리보기 PDF 발행(견적서·내역서·거래명세서) — 청구서 레코드를 만들지 않고 선택 항목·금액을 그대로 문서화.
 // 계산서(세금계산서) 발행이 필요할 때 '선택 항목으로 청구 생성'을 눌러 인보이스를 만든다(발행=확정).
-router.post("/:id/invoices/preview.pdf", requireBilling, asyncHandler(async (req, res) => {
+router.post(["/:id/invoices/preview.pdf", "/:id/invoices/preview/:name"], requireBilling, asyncHandler(async (req, res) => {
   const b = req.body;
   let draft;
   try {
@@ -696,7 +698,8 @@ router.post("/:id/invoices/preview.pdf", requireBilling, asyncHandler(async (req
     throw e;
   }
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent((draft.invoice.title || docType) + ".pdf")}`);
+  const fname = (docNumberWithType(draft.invoice.invoice_number, docType) || docType) + ".pdf"; // 다운로드 파일명 = 문서번호(ASCII)
+  res.setHeader("Content-Disposition", `inline; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(fname)}`);
   res.setHeader("Cache-Control", "private, no-store");
   res.send(pdf);
 }));
@@ -1253,11 +1256,16 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         </div>
         <div class="mb-2">
           <div class="mb-1 text-xs text-muted">문서 발행 <span class="font-normal">— 청구서를 만들지 않고 선택 항목으로 PDF만</span></div>
-          <div class="grid grid-cols-3 gap-2">
-            <button class="btn-ghost btn-sm" type="submit" formaction="/projects/${project.id}/invoices/preview.pdf?type=${encodeURIComponent("견적서")}" formtarget="_blank">견적서</button>
-            <button class="btn-ghost btn-sm" type="submit" formaction="/projects/${project.id}/invoices/preview.pdf?type=${encodeURIComponent("내역서")}" formtarget="_blank">내역서</button>
-            <button class="btn-ghost btn-sm" type="submit" formaction="/projects/${project.id}/invoices/preview.pdf?type=${encodeURIComponent("거래명세서")}" formtarget="_blank">거래명세서</button>
-          </div>
+          ${(() => {
+            // 미리보기 PDF 다운로드 파일명 = 문서번호(견적서=OMG-EST-…). Chrome는 inline PDF에서 URL 마지막 경로를 파일명으로 쓰므로 경로에 번호를 넣는다.
+            const base = peekInvoiceNumber(todayYmd());
+            const act = (t) => `/projects/${project.id}/invoices/preview/${encodeURIComponent(docNumberWithType(base, t))}.pdf?type=${encodeURIComponent(t)}`;
+            return `<div class="grid grid-cols-3 gap-2">
+            <button class="btn-ghost btn-sm" type="submit" formaction="${act("견적서")}" formtarget="_blank">견적서</button>
+            <button class="btn-ghost btn-sm" type="submit" formaction="${act("내역서")}" formtarget="_blank">내역서</button>
+            <button class="btn-ghost btn-sm" type="submit" formaction="${act("거래명세서")}" formtarget="_blank">거래명세서</button>
+          </div>`;
+          })()}
         </div>
         ${explain(`<span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).`, { cls: "mb-2" })}
         <button class="btn-primary w-full btn-sm" type="submit" data-invoice-submit>선택 항목으로 청구 생성 <span data-inv-doc>(계산서 발행)</span></button>
