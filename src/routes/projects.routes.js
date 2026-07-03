@@ -805,10 +805,12 @@ function projectEditForm(p = {}, err = "") {
 function artistCombo(p = {}) {
   // 현재 아티스트 party(있으면)에서 콤보 초기값 파생: 연결 party id·그룹 여부·본명(활동명과 다르면).
   const artistParty = p.artist_id ? getParty(p.artist_id) : null; // getParty=getParty(compat)
+  // 표시 이름 = artist TEXT 우선, 없으면 party 활동명/본명 폴백(TEXT denorm 비어도 콤보에 이름 표시).
+  const artistName = p.artist || (artistParty ? artistParty.activity_name || artistParty.name || "" : "");
   const meta = {
     contactId: artistParty ? artistParty.id : "",
     isGroup: artistParty ? artistParty.kind === "group" : false,
-    realName: artistParty && artistParty.kind === "person" && artistParty.name && artistParty.name !== String(p.artist || "") ? artistParty.name : "",
+    realName: artistParty && artistParty.kind === "person" && artistParty.name && artistParty.name !== artistName ? artistParty.name : "",
   };
   // 아티스트 후보 = is_artist party(사람 solo + 그룹). 콤보 옵션 shape {name, contactId, realName, sub}.
   const opts = partyOptions({ role: "artist" }).map((o) => ({
@@ -823,7 +825,7 @@ function artistCombo(p = {}) {
     <div data-artist-combo>
       <input type="hidden" name="artist_contact_id" value="${meta.contactId || ""}" data-artist-cid />
       <div class="relative">
-        <input class="input pr-9" type="text" name="artist" value="${esc(p.artist || "")}" data-artist-input autocomplete="off"
+        <input class="input pr-9" type="text" name="artist" value="${esc(artistName)}" data-artist-input autocomplete="off"
           role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="아티스트명 — 검색 또는 새로 등록" />
         <span class="pointer-events-none absolute right-9 top-1/2 max-w-[45%] -translate-y-1/2 truncate text-sm text-muted${meta.realName ? "" : " hidden"}" data-artist-realname title="본명">(<span data-artist-realname-val>${esc(meta.realName || "")}</span>)</span>
         <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
@@ -939,8 +941,8 @@ function trackCreateForm(project) {
   return `
     <form method="post" action="/projects/${project.id}/tracks" class="rounded-lg border border-border bg-bg p-3 space-y-2">
       <div>
-        <label class="label mb-1 text-xs">아티스트 <span class="font-normal text-muted">— 비우면 프로젝트 아티스트</span></label>
-        <input class="input py-1.5 text-sm" name="artist" list="dl-artists" autocomplete="off" value="${esc(project.artist || "")}" placeholder="이 곡·콘텐츠의 아티스트" />
+        <label class="label mb-1 text-xs">아티스트 <span class="font-normal text-muted">— 기본=프로젝트 아티스트(검색·새 등록 가능)</span></label>
+        ${artistCombo({ artist: project.artist, artist_id: project.artist_id })}
       </div>
       <div>
         <label class="label mb-1 text-xs">곡·콘텐츠 이름 <span class="font-normal text-muted">— 여러 곡은 줄바꿈으로 구분(같은 아티스트)</span></label>
@@ -949,7 +951,6 @@ function trackCreateForm(project) {
           <button class="btn-primary shrink-0 self-end px-4 py-1.5 text-sm" type="submit">추가</button>
         </div>
       </div>
-      ${projectFieldDatalists()}
     </form>`;
 }
 
