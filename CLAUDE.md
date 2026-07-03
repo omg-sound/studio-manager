@@ -307,7 +307,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 
 1. **Drive 연결(운영)** — 코드 완비. 남은 건 **studio@omgworks.kr(고정 계정)으로 로그인해 Drive 연결** 한 번(관리 > 환경설정 > 자료 저장 > 'Drive 연결', `/auth/google?drive=1`). 이후 누가 로그인하든 업로드는 그 계정 Drive 한 곳으로 저장. `config.studioDriveEmail` 참조. **Drive 연결 시 일일 DB 백업도 자동으로 Drive 'backups' 폴더에 오프사이트 사본 전송**(`drive.backupToDrive`, keep 14).
 2. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
-3. (선택) 알림 Gmail 어댑터(현재 웹훅만) · 자료 다중 업로드(현재 단건) · 콤보 옵션 JSON 중복 임베드 제거(페이지 다중 콤보 시 페이지 축소).
+3. (선택) 알림 Gmail 어댑터(현재 웹훅만) · 자료 다중 업로드(현재 단건).
 4. (보류) content_type/billing_type UI 노출 — 영상 구분·과금 유형 선택, 현재 미노출/강제(향후 확장 시).
 
 > ## 🏁 v1.0 마일스톤 (2026-07-01) — 한 챕터 종료
