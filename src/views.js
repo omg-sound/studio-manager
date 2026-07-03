@@ -542,7 +542,8 @@ function copyable(value, { cls = "", display = "" } = {}) {
   if (value == null || value === "") return "";
   const v = esc(String(value));
   const shown = display ? esc(String(display)) : v;
-  return `<button type="button" data-copy="${v}" class="inline-flex items-center gap-1 rounded text-left hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}<svg class="h-3 w-3 shrink-0 text-muted/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`;
+  // 아이콘 없이 값만 — 클릭 시 복사(hover 밑줄로 복사 가능 암시, title 툴팁). app.js [data-copy].
+  return `<button type="button" data-copy="${v}" class="rounded text-left hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}</button>`;
 }
 
 module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, payerCombo, copyable };
