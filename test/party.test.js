@@ -177,3 +177,17 @@ test("그룹 소속사: 멤버 상속·따르던 멤버 전파·개별 오버라
   const rosterC = D.listArtistsForAgency(C).map((r) => r.id);
   assert.ok(rosterC.includes(g) && rosterC.includes(kim), "레이블C 소속에 그룹·김");
 });
+
+// ── 회귀: 클라이언트 상세 '연결된 프로젝트' — 제작사/소속사/아티스트로 연결된 프로젝트를 찾는다 ──
+// (버그: clients.routes가 listProjectsForParty에 party '객체'를 넘겨 Number(obj)=NaN → 매칭 0.
+//  호출부는 c.id를 넘겨야 함. 아래는 쿼리 계약 + 객체 인자 함정을 문서화한다.)
+test("listProjectsForParty(id): 제작사(production_id)·소속사(agency_id)로 연결된 프로젝트를 찾는다", () => {
+  const coId = db().prepare("INSERT INTO parties (kind, name) VALUES ('company','회귀제작사')").run().lastInsertRowid;
+  db().prepare("INSERT INTO projects (title, project_type, production_id) VALUES ('제작사연결','session',?)").run(coId);
+  db().prepare("INSERT INTO projects (title, project_type, agency_id) VALUES ('소속사연결','session',?)").run(coId);
+  const titles = D.listProjectsForParty(coId).map((r) => r.title);
+  assert.ok(titles.includes("제작사연결"), "production_id로 연결된 프로젝트 노출");
+  assert.ok(titles.includes("소속사연결"), "agency_id로 연결된 프로젝트 노출");
+  // 함정 가드: id가 아닌 party 객체를 넘기면 Number(obj)=NaN → 0행(호출부가 c 대신 c.id를 넘겨야 하는 이유).
+  assert.equal(D.listProjectsForParty(D.getParty(coId)).length, 0, "party 객체 인자는 매칭 0(NaN)");
+});

@@ -463,8 +463,8 @@ router.get("/:id", asyncHandler(async (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tab = req.query.tab === "invoices" ? "invoices" : "projects";
-  const projects = listProjectsForParty(c);
-  const invoices = listInvoicesForParty(c);
+  const projects = listProjectsForParty(c.id); // c.id(숫자)를 넘겨야 함 — 객체를 넘기면 Number(c)=NaN이라 매칭 0(연결 프로젝트/청구 안 뜨던 버그)
+  const invoices = listInvoicesForParty(c.id);
   const files = listClientFiles(c.id);
   // 첨부 파일 실제 접근 가능 여부(깨진 링크는 '있음'으로 안 보이게). 확실한 부재(404/휴지통)만 false, 불확실은 true.
   const fileOk = {};
