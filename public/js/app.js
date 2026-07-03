@@ -989,8 +989,8 @@
     function setInfo(o, isNew) {
       while (info.firstChild) info.removeChild(info.firstChild);
       var nodes = [];
-      if (o && o.phone) { var a = document.createElement("a"); a.href = "tel:" + o.phone.replace(/[^0-9+]/g, ""); a.textContent = "☎ " + o.phone; a.className = "font-medium text-info"; nodes.push(a); }
-      if (o && o.email) { var em = document.createElement("a"); em.href = "mailto:" + o.email; em.textContent = "✉ " + o.email; em.className = "text-info"; nodes.push(em); }
+      if (o && o.phone) { var a = document.createElement("button"); a.type = "button"; a.setAttribute("data-copy", o.phone); a.title = "클릭하면 복사됩니다"; a.textContent = "☎ " + o.phone; a.className = "font-medium text-info hover:underline"; nodes.push(a); }
+      if (o && o.email) { var em = document.createElement("button"); em.type = "button"; em.setAttribute("data-copy", o.email); em.title = "클릭하면 복사됩니다"; em.textContent = "✉ " + o.email; em.className = "text-info hover:underline"; nodes.push(em); }
       if (o && o.company) { var s = document.createElement("span"); s.textContent = "소속: " + o.company; nodes.push(s); }
       if (nodes.length) { nodes.forEach(function (n, i) { if (i > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(n); }); info.classList.remove("hidden"); }
       else if (isNew) { info.textContent = "새 연락처로 등록됩니다."; info.classList.remove("hidden"); }
