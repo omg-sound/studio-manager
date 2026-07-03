@@ -31,4 +31,18 @@ function splitKoreanName(full) {
   return { family: s, given: "" };
 }
 
-module.exports = { splitKoreanName };
+/**
+ * 표시명 말미의 호칭·직함만 제거(성명 분리 없이). "최인구 대표님"→"최인구", "김준상님"→"김준상", "유진오"→"유진오".
+ * '대표 {이름}'처럼 앞에 직함이 이미 있어 뒤 호칭이 중복될 때 표시용.
+ */
+function stripTrailingTitle(full) {
+  let s = String(full || "").trim();
+  if (!s) return "";
+  let tokens = s.split(/\s+/);
+  while (tokens.length > 1 && TRAILING_TITLES.has(tokens[tokens.length - 1])) tokens.pop();
+  s = tokens.join(" ");
+  if (!s.includes(" ") && s.length >= 3 && s.endsWith("님")) s = s.slice(0, -1);
+  return s;
+}
+
+module.exports = { splitKoreanName, stripTrailingTitle };

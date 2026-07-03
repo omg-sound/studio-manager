@@ -21,6 +21,7 @@ const {
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
+const { stripTrailingTitle } = require("../lib/korean-name");
 const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
@@ -205,10 +206,11 @@ router.get("/", (req, res) => {
           // 업체(company): 회사명(→상세)·대표(→대표 연락처)를 각각 링크로 분리(밑줄도 각각). 등록증 여부 배지 + 오른쪽 사업자→전화→이메일.
           const roleBadges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
           const bizBadge = bizLicenseSet.has(c.id) ? `<span class="badge-success">등록증 ✓</span>` : `<span class="badge-neutral">등록증 없음</span>`;
-          const ownerHtml = c.owner_name
+          const ownerLabel = stripTrailingTitle(c.owner_name); // '대표' 접두가 이미 있으니 말미 호칭 제거("최인구 대표님"→"최인구")
+          const ownerHtml = ownerLabel
             ? (c.owner_party_id
-                ? ` <a href="/contacts/${c.owner_party_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">· 대표 ${esc(c.owner_name)}</a>`
-                : ` <span class="text-xs font-normal text-muted">· 대표 ${esc(c.owner_name)}</span>`)
+                ? ` <a href="/contacts/${c.owner_party_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">· 대표 ${esc(ownerLabel)}</a>`
+                : ` <span class="text-xs font-normal text-muted">· 대표 ${esc(ownerLabel)}</span>`)
             : "";
           const nameHtml = `<a href="/clients/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(c.name)}</a>${ownerHtml}`;
           const right = `<div class="text-sm text-muted space-y-0.5">
