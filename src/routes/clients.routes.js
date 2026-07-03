@@ -12,7 +12,7 @@ const {
   listClients, getParty, listProjectsForParty,
   listInvoicesForParty, listPersonsForOrg,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  contactOptions, addAffiliation, listContacts, listAssociates, resolvePersonByName,
+  contactOptions, addAffiliation, listContacts, listAssociates, resolvePersonByName, resolveOwnerParty,
   listArtistsForAgency, currentAffiliation, classifyParty,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
@@ -305,7 +305,7 @@ router.post("/", (req, res) => {
     id = createCompany({
       name, phone: b.phone, email: b.email, memo: b.memo,
       biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
-      owner_party_id: String(b.owner_name || "").trim() ? resolvePersonByName(b.owner_name) : null, // 대표자 → 사람 party 연동
+      owner_party_id: String(b.owner_name || "").trim() ? resolveOwnerParty(b.owner_name) : null, // 대표자 → 사람 party 연동(호칭 '대표님' 세팅)
       address: b.address, roles: companyRolesFrom(b),
     });
   } else {
@@ -351,7 +351,7 @@ router.post("/:id", (req, res) => {
     name, phone: b.phone, email: b.email, memo: b.memo,
     // company 필드
     biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
-    owner_party_id: String(b.owner_name || "").trim() ? resolvePersonByName(b.owner_name) : (c.owner_party_id || null),
+    owner_party_id: String(b.owner_name || "").trim() ? resolveOwnerParty(b.owner_name) : (c.owner_party_id || null),
     address: b.address, roles: c.kind === "company" ? companyRolesFrom(b) : null,
     // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신)
     activity_name: c.activity_name, is_artist: c.is_artist,

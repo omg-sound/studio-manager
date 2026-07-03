@@ -469,6 +469,19 @@ function resolvePersonByName(name, { createIfMissing = true } = {}) {
   return createPerson({ name: n });
 }
 
+/**
+ * 대표자(회사 owner) → 사람 party 해석 + 호칭 '대표님' 세팅. 이름 기반 재사용/생성(resolvePersonByName와 동일 매칭 → 중복 없음).
+ * 호칭이 비어 있을 때만 '대표님'을 넣는다(기존 호칭 존중). 이름 필드는 그대로(재조회 매칭 유지).
+ */
+function resolveOwnerParty(name) {
+  const id = resolvePersonByName(name);
+  if (id) {
+    const p = db().prepare("SELECT honorific FROM parties WHERE id = ? AND kind = 'person'").get(id);
+    if (p && !String(p.honorific || "").trim()) db().prepare("UPDATE parties SET honorific = '대표님' WHERE id = ?").run(id);
+  }
+  return id;
+}
+
 /** 프로젝트 저장 시 아티스트/소속사/제작사를 party로 보장(이름 기반). 반환 없음(프로젝트가 party_id로 저장). */
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
   const where = [];
@@ -740,6 +753,7 @@ module.exports = {
   syncPartyToManager,
   syncManagerToParty,
   resolvePersonByName,
+  resolveOwnerParty,
   listProjectManagers,
   getWorker,
   listTasksForWorker,
