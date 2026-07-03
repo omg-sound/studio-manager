@@ -975,11 +975,13 @@
     var hid = root.querySelector("[data-pc-id]");
     var pop = root.querySelector("[data-pc-pop]");
     var info = root.querySelector("[data-pc-info]");
-    var dataEl = root.querySelector("[data-pc-options]");
+    // 옵션: 인라인(data-pc-options) 또는 페이지 공유 스크립트(data-pc-options-ref로 참조, 중복 임베드 제거)
+    var refId = root.getAttribute("data-pc-options-ref");
+    var dataEl = refId ? document.getElementById(refId) : root.querySelector("[data-pc-options]");
     var modal = root.querySelector("[data-pc-modal]");
-    if (!input || !hid || !pop || !dataEl) return;
+    if (!input || !hid || !pop) return; // dataEl 없어도 진행(옵션 빈 배열 — '새 등록'은 가능)
     var opts = [];
-    try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
+    try { opts = JSON.parse((dataEl && dataEl.textContent) || "[]"); } catch (e) { opts = []; }
     var view = [];
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }

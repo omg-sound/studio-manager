@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, personCombo } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, listSessionDirectors } = require("./data");
 
@@ -150,15 +150,18 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
   // 동적 clone 행은 app.js window.__initPersonCombos(new row)로 초기화(디렉터 add/remove 핸들러).
   const allContacts = contactOptions();
+  // 옵션 중복 임베드 제거: 이 폼의 디렉터 콤보(행·템플릿·동적 추가)가 공유 옵션 스크립트 1개를 참조(optionsRef).
+  const dirOptsId = "__dir_opts_" + (s && s.id ? s.id : "new");
   const dirRow = (d) => `
         <div class="mt-1 flex items-start gap-2" data-director-row>
-          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, options: allContacts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
+          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, optionsRef: dirOptsId, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
           <button type="button" class="btn-ghost btn-xs shrink-0 text-danger mt-1" data-director-remove aria-label="디렉터 제거">✕</button>
         </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
   const directorField = `
     <div class="mt-2" data-director-wrap>
       <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자, 여러 명 가능 · 선택)</span></label>
+      ${personComboOptionsScript(dirOptsId, allContacts)}
       <div data-director-list>
         ${(currentDirectors.length ? currentDirectors : [null]).map((d) => dirRow(d)).join("")}
       </div>

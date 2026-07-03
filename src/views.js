@@ -461,13 +461,15 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록" } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "" } = {}) {
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
-  const jopts = options.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "" }));
-  const json = JSON.stringify(jopts).replace(/</g, "\\u003c"); // </script> 브레이크아웃 방지
+  // optionsRef 지정 시 옵션 JSON을 인라인 임베드하지 않고 페이지의 공유 스크립트(id=optionsRef)를 참조 →
+  // 같은 옵션(연락처 목록)을 쓰는 콤보가 여러 개인 폼(세션 디렉터 다중 행 등)에서 중복 임베드 제거(페이지 축소).
+  const inlineJson = optionsRef ? "" : `<script type="application/json" data-pc-options>${JSON.stringify(options.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "" }))).replace(/</g, "\\u003c")}</script>`;
   const inputCls = compact ? "input py-1.5 pr-9 text-sm" : "input pr-9";
+  const rootCls = compact ? " class=\"min-w-0 flex-1\"" : "";
   return `
-    <div data-person-combo${compact ? ' class="min-w-0 flex-1"' : ""}>
+    <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""}>
       <input type="hidden" name="${idField}" value="${sel ? sel.id : ""}" data-pc-id />
       <div class="relative">
         <input class="${inputCls}" type="text" name="${nameField}" value="${sel ? esc(sel.name) : ""}" data-pc-input autocomplete="off"
@@ -476,7 +478,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
         <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>
       </div>
       <div class="mt-1.5 hidden ${compact ? "text-xs" : "text-sm"} text-muted" data-pc-info></div>
-      <script type="application/json" data-pc-options>${json}</script>
+      ${inlineJson}
       <div data-pc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
         <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
           <div class="font-display text-lg font-semibold">새 담당자 등록</div>
@@ -497,6 +499,12 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
         </div>
       </div>
     </div>`;
+}
+
+/** personCombo 공유 옵션 스크립트 — 같은 옵션을 여러 콤보가 optionsRef로 참조(중복 임베드 제거). 페이지당 1회 렌더. */
+function personComboOptionsScript(id, options) {
+  const jopts = (options || []).map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "" }));
+  return `<script type="application/json" id="${esc(id)}" data-pc-shared-options>${JSON.stringify(jopts).replace(/</g, "\\u003c")}</script>`;
 }
 
 /**
@@ -546,4 +554,4 @@ function copyable(value, { cls = "", display = "" } = {}) {
   return `<button type="button" data-copy="${v}" class="rounded text-left hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}</button>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, payerCombo, copyable };
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, copyable };
