@@ -132,25 +132,12 @@ router.get("/sessions", requireAuth, (req, res) => {
     content = `${searchBox}${resultNote}${upList}${pastList}`;
   }
 
-  // 캘린더 역방향 동기화 버튼 — 편집자 + 스튜디오 캘린더 연동 시(구글에서 직접 삭제/시간변경한 것 앱 반영).
-  const calSyncBtn = editable && calendar.getStudioCalendarId()
-    ? `<form method="post" action="/sessions/sync-calendar" class="inline"><button class="btn-ghost btn-sm" type="submit" title="구글 캘린더에서 직접 바꾼 삭제·시간을 앱에 반영">캘린더 동기화</button></form>`
-    : "";
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)", action: `<div class="flex flex-wrap items-center gap-2">${calSyncBtn}${viewToggle}</div>` })}
+    ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)", action: viewToggle })}
     ${content}`;
   res.send(layout({ title: "일정", user: req.user, current: "/sessions", body }));
 });
-
-// ── 캘린더 역방향 동기화(수동): 구글에서 직접 삭제→세션 취소, 시간변경→세션 갱신(청구된 세션 제외) ──
-router.post("/sessions/sync-calendar", requireEditor, asyncHandler(async (req, res) => {
-  const r = await calendar.syncSessionsFromCalendar();
-  let notice, warn = false;
-  if (r.skipped) { notice = "미연동(설정에서 스튜디오 캘린더 선택 후 재시도)"; warn = true; }
-  else notice = `캘린더 동기화 — 취소 ${r.cancelled} · 시간변경 ${r.updated} (확인 ${r.checked})`;
-  res.redirect(`/sessions?notice=${encodeURIComponent(notice)}${warn ? "&notice_warn=1" : ""}`);
-}));
 
 // ── 시간 슬롯 가용성(JSON) — 시작 버튼 그리드 비활성 표시용 ──
 // 그 날짜에 이미 예약된(앱 DB 세션 + 구글 캘린더) 30분 슬롯을 반환. 외부 캘린더 오류는 fail-open([]).
