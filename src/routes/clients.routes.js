@@ -174,15 +174,25 @@ router.get("/", (req, res) => {
         rows: displayed.map((c) => {
           // 우측 정보(사업자·전화·이메일)는 이름만 링크(listRowLinked)로 분리 → 드래그·복사해도 상세로 안 들어감.
           if (group === "associate") {
-            // 관계자(사람·비아티스트): 역할 배지(담당자·디렉터 등)·현재 소속 회사 뒤 병기 · 상세는 연락처(/contacts/:id)
+            // 관계자(사람·비아티스트): 이름(→연락처)·소속 회사(→회사 상세) 각각 링크(밑줄 분리). 직함 텍스트 + 역할 배지.
             const cur = currentAffiliation(c.id);
             const roleBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
-            const company = cur && cur.client_id ? esc(cur.client_name || "") + (cur.title ? " · " + esc(cur.title) : "") : "";
-            const title = `${esc(personLabel(c.name, c.activity_name))}${company ? ` <span class="text-xs font-normal text-muted">· ${company}</span>` : ""}`;
+            const nameLink = `<a href="/contacts/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personLabel(c.name, c.activity_name))}</a>`;
+            let orgPart = "";
+            if (cur && cur.client_id) {
+              const orgA = `<a href="/clients/${cur.client_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
+              orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
+            }
             const right = (c.phone || c.email)
               ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}${c.email ? `<div>${esc(c.email)}</div>` : ""}</div>`
               : "";
-            return listRowLinked({ href: `/contacts/${c.id}${fromParam}`, title, badges: roleBadges, right }); // ?from= → 연락처 상세가 관계자 탭으로 복귀
+            return `<div class="flex items-start justify-between gap-4 px-4 py-3">
+              <div class="min-w-0">
+                <div class="truncate">${nameLink}${orgPart}</div>
+                ${roleBadges ? `<div class="mt-1 flex flex-wrap gap-1">${roleBadges}</div>` : ""}
+              </div>
+              ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
+            </div>`;
           }
           if (c.is_artist) {
             // 아티스트(개인) / 그룹(밴드·아이돌) — 배지로 구분. 이름 뒤에 소속사·소속 그룹, 오른쪽에 전화→이메일.
