@@ -280,9 +280,12 @@ const FLASH_MESSAGES = {
 const FLASH_WARN = new Set(["last_chief", "drive_partial", "drive_unlinked", "added_cal_off", "saved_cal_off"]);
 function flashBanner(query) {
   const key = query && query.flash;
-  const msg = FLASH_MESSAGES[key];
+  // notice = 자유 문구(동기화 결과 등 동적 메시지). FLASH_MESSAGES 키가 아니므로 별도 처리 — esc로 이스케이프하고 길이 제한(배너 남용·깨짐 방지).
+  // notice_warn=1이면 경고 톤. (이전엔 sync 라우트가 flash에 자유 문구를 넣어 FLASH_MESSAGES 조회 실패로 배너가 조용히 안 뜨던 버그를 이 경로로 해결.)
+  const notice = query && typeof query.notice === "string" ? query.notice.slice(0, 200) : "";
+  const msg = FLASH_MESSAGES[key] || notice;
   if (!msg) return "";
-  const warn = FLASH_WARN.has(key);
+  const warn = FLASH_WARN.has(key) || (notice && query.notice_warn === "1");
   const tone = warn ? "border-warning/40 text-warning" : "border-success/40 text-success";
   // 토스트: fixed로 띄워 레이아웃을 밀지 않음(내용이 밀렸다 돌아오는 현상 방지). app.js가 잠시 후 페이드아웃·클릭 시 닫기. bg-bg로 불투명.
   return `<div data-flash data-flash-warn="${warn ? "1" : ""}" role="status" aria-live="polite"

@@ -350,10 +350,12 @@
   try {
     if (window.history && window.history.replaceState) {
       var url = new URL(window.location.href);
-      if (url.searchParams.has("flash")) {
-        url.searchParams.delete("flash");
-        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
-      }
+      // flash(키형) + notice/notice_warn(자유 문구형: 동기화 결과 등) 모두 URL에서 제거(새로고침 시 배너 잔존 방지).
+      var changed = false;
+      ["flash", "notice", "notice_warn"].forEach(function (k) {
+        if (url.searchParams.has(k)) { url.searchParams.delete(k); changed = true; }
+      });
+      if (changed) window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     }
   } catch (err) {}
   setTimeout(function () {

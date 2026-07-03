@@ -146,10 +146,10 @@ router.get("/sessions", requireAuth, (req, res) => {
 // ── 캘린더 역방향 동기화(수동): 구글에서 직접 삭제→세션 취소, 시간변경→세션 갱신(청구된 세션 제외) ──
 router.post("/sessions/sync-calendar", requireEditor, asyncHandler(async (req, res) => {
   const r = await calendar.syncSessionsFromCalendar();
-  let flash;
-  if (r.skipped) flash = "미연동(설정에서 스튜디오 캘린더 선택 후 재시도)";
-  else flash = `캘린더 동기화 — 취소 ${r.cancelled} · 시간변경 ${r.updated} (확인 ${r.checked})`;
-  res.redirect(`/sessions?flash=${encodeURIComponent(flash)}`);
+  let notice, warn = false;
+  if (r.skipped) { notice = "미연동(설정에서 스튜디오 캘린더 선택 후 재시도)"; warn = true; }
+  else notice = `캘린더 동기화 — 취소 ${r.cancelled} · 시간변경 ${r.updated} (확인 ${r.checked})`;
+  res.redirect(`/sessions?notice=${encodeURIComponent(notice)}${warn ? "&notice_warn=1" : ""}`);
 }));
 
 // ── 시간 슬롯 가용성(JSON) — 시작 버튼 그리드 비활성 표시용 ──

@@ -38,15 +38,15 @@ router.use(requireEditor);
 // ── Google 연락처 역방향 동기화(수동 트리거) ──
 router.post("/sync", asyncHandler(async (req, res) => {
   const r = await people.syncFromGoogle();
-  let flash;
+  let notice, warn = false;
   if (r.skipped) {
-    flash = "미연동(Google 계정 연결 후 재시도)";
+    notice = "미연동(Google 계정 연결 후 재시도)"; warn = true;
   } else if (r.error) {
-    flash = `동기화 오류: ${r.error}`;
+    notice = `동기화 오류: ${r.error}`; warn = true;
   } else {
-    flash = `동기화 완료 — 생성 ${r.created} · 수정 ${r.updated} · 삭제 ${r.deleted}`;
+    notice = `동기화 완료 — 생성 ${r.created} · 수정 ${r.updated} · 삭제 ${r.deleted}`;
   }
-  res.redirect(`/contacts?flash=${encodeURIComponent(flash)}`);
+  res.redirect(`/contacts?notice=${encodeURIComponent(notice)}${warn ? "&notice_warn=1" : ""}`);
 }));
 
 // ── 목록(이름·현재소속·전화 + ?q= 검색) ──
