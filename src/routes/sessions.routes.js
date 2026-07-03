@@ -89,7 +89,7 @@ router.get("/sessions", requireAuth, (req, res) => {
   const view = req.query.view === "calendar" ? "calendar" : "list";
   const viewTab = (v, label) =>
     `<a href="/sessions?view=${v}" class="rounded-md px-3 py-1 text-sm ${view === v ? "bg-primary text-primary-fg" : "text-muted hover:text-fg"}">${label}</a>`;
-  const viewToggle = `<div class="flex gap-0.5 rounded-lg border border-border p-0.5">${viewTab("list", "목록")}${viewTab("calendar", "캘린더")}</div>`;
+  const viewToggle = `<div class="ml-auto flex gap-0.5 rounded-lg border border-border p-0.5">${viewTab("list", "목록")}${viewTab("calendar", "캘린더")}</div>`;
 
   let content;
   if (view === "calendar") {

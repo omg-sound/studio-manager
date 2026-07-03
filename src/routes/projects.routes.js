@@ -181,7 +181,7 @@ router.get("/", requireAuth, (req, res) => {
 
 /** "+ 새 프로젝트" 버튼 — 유형 구분 없이 단일 진입(모든 프로젝트가 세션 일정+곡·콘텐츠 동일). */
 function newProjectMenu() {
-  return `<a href="/projects/new" class="btn-primary">+ 새 프로젝트</a>`;
+  return `<a href="/projects/new" class="btn-primary ml-auto">+ 새 프로젝트</a>`;
 }
 
 /**
