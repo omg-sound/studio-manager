@@ -89,13 +89,13 @@ function sizeOf(backend, fileId) {
 async function exists(backend, fileId) {
   if (!fileId) return false;
   if (backend === "drive") {
+    // drive.file 범위는 앱이 만든 파일만 접근 → 재인증(토큰 변경)·권한으로 404가 '삭제'인지 '접근 불가'인지 구분 불가.
+    // 유효 파일을 잘못 숨기지 않도록 **명시적 휴지통(trashed)만 없음**으로 판정, 404/오류는 존재로 간주.
     try {
       const m = await drive.getFileMeta(fileId);
-      return !m.trashed; // 휴지통이면 없는 것으로 취급
-    } catch (e) {
-      const status = (e && (e.code || (e.response && e.response.status))) || 0;
-      if (status === 404 || status === 410 || /not ?found|does not exist/i.test(String((e && e.message) || ""))) return false;
-      return true; // 불확실(권한/네트워크) → 있음으로 간주
+      return !m.trashed;
+    } catch (_e) {
+      return true; // 404/권한/네트워크 → 불확실 → 존재로 간주(Drive 파일 오탐 방지)
     }
   }
   try { return fs.existsSync(localPath(fileId)); } catch (_e) { return true; }
