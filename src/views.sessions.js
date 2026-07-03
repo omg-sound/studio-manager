@@ -328,7 +328,7 @@ function monthCalendar(ym, sessions) {
   const dows = ["일", "월", "화", "수", "목", "금", "토"];
 
   let cells = "";
-  for (let i = 0; i < startDow; i++) cells += `<div class="min-h-[88px] rounded-md border border-border/40 bg-bg/40"></div>`;
+  for (let i = 0; i < startDow; i++) cells += `<div class="min-h-[88px] min-w-0 rounded-md border border-border/40 bg-bg/40"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${y}-${pad2(mo)}-${pad2(d)}`;
     const ds = byDate[date] || [];
@@ -339,7 +339,7 @@ function monthCalendar(ym, sessions) {
         return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded ${calendarChipColor(s.status)} px-1 py-0.5 text-[11px] hover:opacity-80" title="${esc(s.session_type)} · ${esc(s.project_title || "")}">${t}${esc(s.session_type)}</a>`;
       })
       .join("");
-    cells += `<div class="min-h-[88px] rounded-md border ${isToday ? "border-primary" : "border-border/40"} p-1">
+    cells += `<div class="min-h-[88px] min-w-0 rounded-md border ${isToday ? "border-primary" : "border-border/40"} p-1">
       <div class="mb-0.5 text-xs ${isToday ? "font-semibold text-primary" : "text-muted"}">${d}</div>
       <div class="space-y-0.5">${items}</div>
     </div>`;

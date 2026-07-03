@@ -1256,7 +1256,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             // 유형·번호는 경로(:type/:name)에 — GET은 formaction의 쿼리를 폼 데이터로 대체하므로 유형을 경로에 둔다.
             const base = peekInvoiceNumber(todayYmd());
             const act = (t) => `/projects/${project.id}/invoices/preview/${encodeURIComponent(t)}/${encodeURIComponent(docNumberWithType(base, t))}.pdf`;
-            return `<div class="grid grid-cols-3 gap-2">
+            return `<div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("견적서")}" formtarget="_blank">견적서</button>
             <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("내역서")}" formtarget="_blank">내역서</button>
             <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("거래명세서")}" formtarget="_blank">거래명세서</button>

@@ -319,7 +319,7 @@ function pageHeader({ title, desc = "", action = "", back = null }) {
       <h1 class="font-display text-2xl font-semibold text-fg">${esc(title)}</h1>
       ${desc ? `<p class="mt-1 text-sm text-muted">${esc(desc)}</p>` : ""}
     </div>
-    ${action ? `<div class="shrink-0">${action}</div>` : ""}
+    ${action ? `<div class="flex flex-wrap items-center gap-2 sm:shrink-0">${action}</div>` : ""}
   </div>`;
 }
 

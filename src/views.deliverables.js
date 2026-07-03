@@ -43,7 +43,7 @@ function deliverableRow(dv, { isAdmin, baseUrl }) {
       ${
         dv.access_token
           ? `<div class="flex items-center gap-2">
-               <input class="input flex-1 text-xs" readonly value="${esc(shareUrl)}" />
+               <input class="input min-w-0 flex-1 text-xs" readonly value="${esc(shareUrl)}" />
                <button type="button" class="btn-ghost btn-xs" data-copy="${esc(shareUrl)}">복사</button>
              </div>
              <div class="text-xs ${status.cls}">${status.label} · 다운로드 ${dv.download_count}회</div>`
