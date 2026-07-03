@@ -771,6 +771,32 @@
   document.addEventListener("click", guard); // 클릭의 기본동작(summary 토글) 취소 — select 드롭다운은 mousedown이라 영향 없음
 })();
 
+// 콤보 공용 키보드 내비게이션(방향키 이동·엔터 선택·ESC 닫기). 하이라이트 항목을 click 시뮬레이션 →
+// 각 콤보의 기존 click 핸들러가 선택 처리(콤보별 pick 로직 몰라도 동작). pop 재렌더(MutationObserver)마다 첫 항목 하이라이트.
+function comboKbdNav(input, pop) {
+  if (!input || !pop) return;
+  var hi = -1;
+  function rowEls() { return pop.querySelectorAll("button"); }
+  function setHi(i) {
+    var rs = rowEls();
+    if (!rs.length) { hi = -1; return; }
+    hi = Math.max(0, Math.min(i, rs.length - 1));
+    Array.prototype.forEach.call(rs, function (b, idx) { b.classList.toggle("bg-elevated", idx === hi); });
+    if (rs[hi] && rs[hi].scrollIntoView) rs[hi].scrollIntoView({ block: "nearest" });
+  }
+  new MutationObserver(function () { if (!pop.classList.contains("hidden")) setHi(0); }).observe(pop, { childList: true });
+  input.addEventListener("keydown", function (e) {
+    var open = !pop.classList.contains("hidden");
+    if (e.key === "ArrowDown") { e.preventDefault(); if (open) setHi(hi + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (open) setHi(hi - 1); }
+    else if (e.key === "Enter" && open) {
+      var rs = rowEls();
+      if (hi >= 0 && rs[hi]) { e.preventDefault(); rs[hi].dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); rs[hi].click(); }
+    } else if (e.key === "Escape") { pop.classList.add("hidden"); }
+  });
+  pop.addEventListener("mousemove", function (e) { var b = e.target.closest("button"); if (!b) return; var rs = rowEls(); for (var i = 0; i < rs.length; i++) if (rs[i] === b) { if (i !== hi) setHi(i); break; } });
+}
+
 // 아티스트 콤보([data-artist-combo]): 타이핑=기존 아티스트·사람 검색, 빈 입력=[검색]/[새 아티스트] 팝업(전체 목록 덤프 방지).
 // 기존 사람 선택 → hidden artist_contact_id 연결(저장 시 중복 사람 방지). '그룹' 체크는 밴드/팀(연락처 미연결).
 (function () {
@@ -790,6 +816,15 @@
 
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    var hi = -1; // 키보드 하이라이트 인덱스(방향키 이동, -1=없음)
+    function rowEls() { return pop.querySelectorAll("button"); }
+    function setHi(i) {
+      var rs = rowEls();
+      if (!rs.length) { hi = -1; return; }
+      hi = Math.max(0, Math.min(i, rs.length - 1));
+      Array.prototype.forEach.call(rs, function (b, idx) { b.classList.toggle("bg-elevated", idx === hi); });
+      if (rs[hi] && rs[hi].scrollIntoView) rs[hi].scrollIntoView({ block: "nearest" });
+    }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); } // dirty 감지 트리거
     // 아티스트의 소속사를 프로젝트 '소속사/레이블' 필드(companyCombo input[name=artist_company])에 자동 채움(같은 폼 안에 있을 때만·비면 유지).
     function fillAgency(name) {
@@ -824,6 +859,7 @@
       }
       pop.innerHTML = html;
       show();
+      setHi(0); // 첫 후보 하이라이트(방향키·엔터 대비)
     }
     function pick(o) {
       input.value = o.name;
@@ -923,8 +959,23 @@
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
     input.addEventListener("input", render);
+    // 방향키 이동 + 엔터 선택(ESC 닫기). 드롭다운 열려 있을 때만 가로챔 — 아니면 폼 기본 동작.
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { e.preventDefault(); if (pop.classList.contains("hidden")) render(); else setHi(hi + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); if (!pop.classList.contains("hidden")) setHi(hi - 1); }
+      else if (e.key === "Enter" && !pop.classList.contains("hidden")) {
+        var rs = rowEls();
+        if (hi >= 0 && rs[hi]) {
+          e.preventDefault(); // 폼 제출 방지하고 하이라이트 항목 선택
+          var b = rs[hi];
+          if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]);
+          else if (b.hasAttribute("data-new")) openModal();
+        }
+      } else if (e.key === "Escape") { hide(); }
+    });
     input.addEventListener("blur", function () { setTimeout(hide, 150); }); // 항목 클릭 여유
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur 방지
+    pop.addEventListener("mousemove", function (e) { var b = e.target.closest("button"); if (!b) return; var rs = rowEls(); for (var i = 0; i < rs.length; i++) if (rs[i] === b && i !== hi) { setHi(i); break; } }); // 마우스 올린 항목으로 하이라이트 동기화
     pop.addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;
       if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]);
@@ -1016,6 +1067,7 @@
       if (b.hasAttribute("data-idx")) { input.value = view[Number(b.getAttribute("data-idx"))].name; fireInput(); hide(); }
       else if (b.hasAttribute("data-new")) openModal();
     });
+    comboKbdNav(input, pop); // 방향키 이동·엔터 선택
   });
 })();
 
@@ -1122,6 +1174,7 @@
       if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]);
       else if (b.hasAttribute("data-new")) openModal();
     });
+    comboKbdNav(input, pop); // 방향키 이동·엔터 선택
     if (hid.value) { var init = opts.filter(function (o) { return String(o.id) === String(hid.value); })[0]; if (init) setInfo(init, false); } // 편집 초기값 정보
   }
   // 정적 + 동적(디렉터 '+추가' clone 등) 행 모두 초기화. container 지정 시 그 안(또는 자신)의 콤보만.
@@ -1225,6 +1278,7 @@
     input.addEventListener("blur", function () { setTimeout(hide, 150); });
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]); });
+    comboKbdNav(input, pop); // 방향키 이동·엔터 선택
     // 초기 선택(서버 렌더된 기본 청구처)에 맞춰 문서 라벨·경고 표시
     applyDoc(items.filter(function (it) { return (cid.value && String(it.cid) === String(cid.value)) || (pid.value && String(it.pid) === String(pid.value)); })[0]);
   });
