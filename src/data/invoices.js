@@ -270,7 +270,8 @@ function createInvoiceFromTasks(user, opts = {}) {
       `INSERT INTO invoice_items (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ?, unit_price = ?, total_price = ? WHERE id = ?");
+    // 청구 시 작업 잠금·확정 금액 반영 + 상태를 '완료'로(청구=완료 처리; 미완료 선택 시 폼에서 확인받음).
+    const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ?, unit_price = ?, total_price = ?, status = 'Completed' WHERE id = ?");
     for (const it of draft.items) {
       insertItem.run(invoiceId, it.task_id, it.session_id, it.track_title, it.task_type, it.description, it.quantity, it.unit_price, it.amount);
       if (it.task_id) markTask.run(invoiceId, it.unit_price, it.amount, it.task_id); // 청구 시 확정 금액을 작업에도 반영

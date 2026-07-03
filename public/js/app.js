@@ -137,7 +137,7 @@
   document.addEventListener("change", function (e) {
     var cb = e.target;
     if (!cb || cb.type !== "checkbox" || !cb.checked || !cb.hasAttribute || !cb.hasAttribute("data-confirm-pending")) return;
-    if (!window.confirm("아직 완료되지 않은(대기·진행중) 콘텐츠입니다. 완료된 콘텐츠가 맞습니까?")) {
+    if (!window.confirm("아직 완료되지 않은(대기·진행중) 콘텐츠입니다. 청구하면서 '완료'로 바꿀까요?")) {
       cb.checked = false;
       cb.dispatchEvent(new Event("change", { bubbles: true })); // 체크 해제 반영해 금액 미리보기 갱신
     }
