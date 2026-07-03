@@ -101,6 +101,7 @@
 
 ### 배포 · 운영
 - Render Blueprint(web + cron) + Disk. 일일 백업(`VACUUM INTO`·14일 보존 + **첨부 uploads 폴더 날짜별 스냅샷** `backups/uploads-YYYY-MM-DD/`·14일)·연체 스캔 cron(`/internal/cron/daily`, `BACKUP_TOKEN`).
+  **DB 백업 오프사이트**: Drive 연결 시 일일 DB 백업을 Drive `backups` 폴더로 사본 전송(`drive.backupToDrive`, 최신 14개 보존, fail-safe — 미연동/오류면 skip). Render 디스크 단일 장애점 완화.
   정적 자산 캐시 버스팅(`?v=` mtime+size).
 - **알림(웹훅)**: 연체·청구 발행·자료 공유 시 Slack/Discord 등 팀 알림(`src/notify.js`, fail-safe·비차단, 미설정 시 무음).
   URL은 환경설정에서 암호화 저장 또는 `ALERT_WEBHOOK`. 자료 공유는 공개 토큰 대신 내부 프로젝트 링크로 통지(PII 보호).
@@ -304,12 +305,11 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 
 ## 다음 단계 TODO
 
-1. **Drive 연결(운영)** — 코드 완비. 남은 건 **studio@omgworks.kr(고정 계정)으로 로그인해 Drive 연결** 한 번(관리 > 환경설정 > 자료 저장 > 'Drive 연결', `/auth/google?drive=1`). 이후 누가 로그인하든 업로드는 그 계정 Drive 한 곳으로 저장. `config.studioDriveEmail` 참조.
-2. (선택·데이터안전) **백업 오프사이트** — 현재 Render Disk 내 14일 보존만(단일 장애점). Drive/GCS로 사본 전송 검토.
-3. (선택·회계) **청구서 클라이언트 정보 스냅샷** — 현재 발행 시점 실시간 조회(클라이언트 정보 변경 시 과거 청구서 표시도 바뀜). 발행 시점 고정 검토.
-4. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
-5. (선택) 알림 Gmail 어댑터(현재 웹훅만) · 자료 다중 업로드(현재 단건).
-6. (보류) content_type/billing_type UI 노출 — 영상 구분·과금 유형 선택, 현재 미노출/강제(향후 확장 시).
+1. **Drive 연결(운영)** — 코드 완비. 남은 건 **studio@omgworks.kr(고정 계정)으로 로그인해 Drive 연결** 한 번(관리 > 환경설정 > 자료 저장 > 'Drive 연결', `/auth/google?drive=1`). 이후 누가 로그인하든 업로드는 그 계정 Drive 한 곳으로 저장. `config.studioDriveEmail` 참조. **Drive 연결 시 일일 DB 백업도 자동으로 Drive 'backups' 폴더에 오프사이트 사본 전송**(`drive.backupToDrive`, keep 14).
+2. (선택·회계) **청구서 클라이언트 정보 스냅샷** — 현재 발행 시점 실시간 조회(클라이언트 정보 변경 시 과거 청구서 표시도 바뀜). 발행 시점 고정 검토.
+3. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
+4. (선택) 알림 Gmail 어댑터(현재 웹훅만) · 자료 다중 업로드(현재 단건) · 콤보 옵션 JSON 중복 임베드 제거(페이지 다중 콤보 시 페이지 축소).
+5. (보류) content_type/billing_type UI 노출 — 영상 구분·과금 유형 선택, 현재 미노출/강제(향후 확장 시).
 
 > ## 🏁 v1.0 마일스톤 (2026-07-01) — 한 챕터 종료
 > 상세 변경 근거·전체 이력은 **git 커밋 메시지**에 있다(이 요약은 큰 줄기만).
