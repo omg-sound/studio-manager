@@ -11,7 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument } = require("pdf-lib");
-const { docNumberWithType } = require("./config"); // 문서 유형별 번호(견적서=OMG-Q-…·내역서=OMG-L-…·거래명세서=OMG-…)
+const { docNumberWithType } = require("./config"); // 문서 유형별 번호(견적서=OMG-EST-…·내역서=OMG-L-…·거래명세서=OMG-…)
 
 // @resvg/resvg-js는 네이티브 모듈 — 배포 환경에 플랫폼 prebuilt가 없으면 require가 throw한다.
 // 최상단 require면 invoice-pdf/invoices 라우트 전체가 로드 실패 → 청구 화면이 통째로 안 뜬다.
