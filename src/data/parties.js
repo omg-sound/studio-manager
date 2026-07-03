@@ -336,6 +336,7 @@ function partyOptions({ role } = {}) {
        FROM parties p` + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY p.name COLLATE NOCASE";
   return db().prepare(sql).all().map((p) => ({
     id: p.id, name: p.name, activity_name: p.activity_name, kind: p.kind, is_artist: p.is_artist,
+    company: p.company || "", // 현재 소속사(affiliation) — 아티스트 선택 시 소속사 필드 자동 채움용
     sub: p.kind === "company" ? "조직" : p.kind === "group" ? "그룹" : (p.is_artist ? "아티스트" : (p.company || "사람")),
   }));
 }

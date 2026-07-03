@@ -818,6 +818,7 @@ function artistCombo(p = {}) {
     contactId: o.id,
     realName: o.kind === "person" && o.activity_name && o.name && o.name !== o.activity_name ? o.name : "", // 본명(활동명과 다를 때)
     sub: o.sub,
+    agency: o.company || "", // 현재 소속사 → 아티스트 선택 시 소속사/레이블 필드 자동 채움
   }));
   const json = JSON.stringify(opts).replace(/</g, "\\u003c"); // </script> 브레이크아웃 방지
   const companies = partyOptions({ role: "company" }); // 모달 소속사 select용

@@ -791,6 +791,13 @@
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); } // dirty 감지 트리거
+    // 아티스트의 소속사를 프로젝트 '소속사/레이블' 필드(companyCombo input[name=artist_company])에 자동 채움(같은 폼 안에 있을 때만·비면 유지).
+    function fillAgency(name) {
+      if (!name) return;
+      var form = root.closest ? root.closest("form") : null;
+      var cc = (form || document).querySelector('input[name="artist_company"]');
+      if (cc) { cc.value = name; cc.dispatchEvent(new Event("change", { bubbles: true })); }
+    }
 
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function pickRow(o, i) {
@@ -822,6 +829,7 @@
       input.value = o.name;
       cid.value = o.contactId || "";
       showReal(o.realName);
+      fillAgency(o.agency); // 소속사/레이블 자동 채움(그 아티스트의 현재 소속사)
       fireInput();
       hide(); // fireInput 뒤에 닫아야 재렌더로 다시 열리지 않음(선택됨이 보이게)
     }
@@ -852,7 +860,8 @@
       mSave.addEventListener("click", function () {
         var mName = modal.querySelector("[data-am-name]"), mReal = modal.querySelector("[data-am-real]"),
             mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
-            mErr = modal.querySelector("[data-am-err]");
+            mAgencyInput = modal.querySelector("[data-am-agency-input]"), mErr = modal.querySelector("[data-am-err]");
+        var agName = mAgencyInput ? mAgencyInput.value.trim() : ""; // 모달에서 입력·선택한 소속사명 → 등록 후 프로젝트 소속사 필드에 반영
         var nm = mName.value.trim();
         if (!nm) { mErr.textContent = "활동명을 입력하세요."; mErr.classList.remove("hidden"); return; }
         mSave.disabled = true; mErr.classList.add("hidden");
@@ -867,6 +876,7 @@
             if (!d || !d.ok) throw new Error("fail");
             input.value = d.name; cid.value = d.id;
             showReal(!mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : ""); // 모달 입력 본명(개인) 표시
+            fillAgency(agName); // 모달에서 지정한 소속사를 프로젝트 소속사/레이블 필드에 즉시 반영
             closeModal(); fireInput();
           })
           .catch(function () { mErr.textContent = "등록 실패 — 다시 시도하세요."; mErr.classList.remove("hidden"); })
