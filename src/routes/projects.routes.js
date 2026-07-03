@@ -17,7 +17,6 @@ const { asyncHandler } = require("../lib/async");
 const {
   listProjects,
   listProjectSummaries,
-  distinctProjectFields,
   getProjectForUser,
   deleteProject,
   clientOptions,
@@ -35,6 +34,7 @@ const {
   listDeliverablesForProject,
   listInvoicesForProject,
   listInvoiceItemsForInvoice,
+  listPayments,
   listTracksForProject,
   listUnbilledTasksForProject,
   listBillableSessionsForProject,
@@ -384,6 +384,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
           return {
             ...r,
             items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [],
+            payments: listPayments(r.id), // 입금 이력(청구 탭 펼침에서 추가·삭제). 프로젝트당 인보이스 소수라 N+1 무해.
             // 청구처 정보(대표자·사업자번호·담당자) 카드 — 청구 탭 펼침에서 바로 확인. 프로젝트당 인보이스 소수라 N+1 무해.
             payerCard: pc ? payerInfoCard(pc, listPersonsForOrg(pc.id), !!getClientFile(pc.id, "biz_license"), { compact: true }) : "",
           };
@@ -747,7 +748,6 @@ function projectForm(p = {}, err = "") {
         <label class="label">메모</label>
         <textarea class="input" name="memo" rows="3" placeholder="비고">${esc(p.memo || "")}</textarea>
       </div>
-      ${projectFieldDatalists()}
       <div class="flex items-center justify-between gap-3 pt-1">
         <a href="/projects" class="btn-ghost btn-sm">취소</a>
         <button class="btn-primary" type="submit">추가</button>
@@ -792,7 +792,6 @@ function projectEditForm(p = {}, err = "") {
         <label class="label">메모</label>
         <textarea class="input" name="memo" rows="3">${esc(p.memo || "")}</textarea>
       </div>
-      ${projectFieldDatalists()}
       ${dirtyActionRow({ deleteFormId: `del-proj-${p.id}`, deleteLabel: "프로젝트 삭제" })}
     </form>`;
 }
@@ -916,13 +915,6 @@ function companyCombo(fieldName, value, roleKey, label) {
     </div>`;
 }
 
-/** 아티스트·소속사/레이블·제작사 자동완성 datalist(기존 프로젝트 값 기반). */
-function projectFieldDatalists() {
-  const f = distinctProjectFields();
-  const dl = (id, values) => `<datalist id="${id}">${values.map((v) => `<option value="${esc(v)}"></option>`).join("")}</datalist>`;
-  return dl("dl-artists", f.artists) + dl("dl-companies", f.companies) + dl("dl-productions", f.productions);
-}
-
 /** 내부 담당자(프로젝트 매니저) 선택 — 하우스/외주 엔지니어 목록. 고객측 담당자(personCombo)와 별개 필드. */
 function managerSelect(selectedId) {
   const opts = listProjectManagers();
@@ -948,7 +940,6 @@ function tracksSection({ project, tracks, isAdmin, managers = [], expandTaskId =
       ${hint}
       <div class="space-y-3">${list}</div>
       ${isAdmin ? `<div class="border-t border-border pt-4"><div class="mb-2 text-sm font-medium text-muted">곡·콘텐츠 추가</div>${trackCreateForm(project)}</div>` : ""}
-      ${isAdmin ? projectFieldDatalists() : ""}
     </section>`;
 }
 
@@ -1007,7 +998,7 @@ function trackEditMenu(track, hasInvoiced) {
     <details class="group shrink-0 text-right">
       <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
       <form method="post" action="/projects/tracks/${track.id}" class="mt-2 space-y-2 rounded-lg border border-border bg-surface p-3 text-left">
-        <div><label class="label mb-0.5 text-xs">아티스트</label><input class="input py-1.5 text-sm" name="artist" list="dl-artists" autocomplete="off" value="${esc(track.artist || "")}" placeholder="비우면 프로젝트 아티스트" /></div>
+        <div><label class="label mb-0.5 text-xs">아티스트</label>${artistCombo({ artist: track.artist })}</div>
         <div class="flex gap-2"><input class="input flex-1 py-1.5 text-sm" name="title" value="${esc(track.title)}" required />
         <button class="btn-primary shrink-0 btn-xs self-end" type="submit">저장</button></div>
       </form>
