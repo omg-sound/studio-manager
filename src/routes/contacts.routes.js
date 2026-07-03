@@ -27,6 +27,7 @@ const {
   setPartyGroup,
 } = require("../data");
 const people = require("../people");
+const { asyncHandler } = require("../lib/async"); // async 라우트 예외를 전역 핸들러로 전달(People API throw 시 요청 행 방지)
 const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, copyable } = require("../views");
 
 const router = express.Router();
@@ -35,7 +36,7 @@ const router = express.Router();
 router.use(requireEditor);
 
 // ── Google 연락처 역방향 동기화(수동 트리거) ──
-router.post("/sync", async (req, res) => {
+router.post("/sync", asyncHandler(async (req, res) => {
   const r = await people.syncFromGoogle();
   let flash;
   if (r.skipped) {
@@ -46,7 +47,7 @@ router.post("/sync", async (req, res) => {
     flash = `동기화 완료 — 생성 ${r.created} · 수정 ${r.updated} · 삭제 ${r.deleted}`;
   }
   res.redirect(`/contacts?flash=${encodeURIComponent(flash)}`);
-});
+}));
 
 // ── 목록(이름·현재소속·전화 + ?q= 검색) ──
 router.get("/", (req, res) => {
@@ -129,7 +130,7 @@ router.get("/new", (req, res) => {
   res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}, false, listClients({}), null, false, listGroupsForPicker()) }));
 });
 
-router.post("/", async (req, res) => {
+router.post("/", asyncHandler(async (req, res) => {
   const b = req.body;
   try {
     const id = createPerson({
@@ -159,14 +160,14 @@ router.post("/", async (req, res) => {
     if (req.get("X-Requested-With") === "fetch") return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({}), null, false, listGroupsForPicker()) }));
   }
-});
+}));
 
 // ── 수정: 이제 상세(GET /:id)가 인라인 편집 화면이므로 옛 편집 경로는 상세로 리다이렉트(북마크 호환).
 router.get("/:id/edit", (req, res) => {
   res.redirect(`/contacts/${Number(req.params.id)}`);
 });
 
-router.post("/:id", async (req, res) => {
+router.post("/:id", asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const c = getParty(id);
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
@@ -202,10 +203,10 @@ router.post("/:id", async (req, res) => {
   } catch (_e) {
     res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker()) }));
   }
-});
+}));
 
 // ── 삭제(하드: affiliations CASCADE, projects.contact_id SET NULL) ──
-router.post("/:id/delete", async (req, res) => {
+router.post("/:id/delete", asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   // DB 삭제 전 resourceName 확보 — 삭제 후에는 조회 불가.
   const contact = getParty(id);
@@ -216,7 +217,7 @@ router.post("/:id/delete", async (req, res) => {
     try { await people.deletePerson(resourceName); } catch (_e) {}
   }
   res.redirect("/contacts?flash=deleted");
-});
+}));
 
 // ── 소속 이력: 추가/이직 · 종료 · 삭제 ──
 router.post("/:id/affiliations", (req, res) => {
