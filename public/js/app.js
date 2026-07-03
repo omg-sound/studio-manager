@@ -133,11 +133,11 @@
     if (msg && !window.confirm(msg)) e.preventDefault();
   });
 
-  // 미완료(대기) 콘텐츠를 청구 항목으로 체크하면 완료 여부 재확인 — 아니면 선택 해제(공급가·VAT 재계산).
+  // 미완료(대기 작업·예정 세션)를 청구 항목으로 체크하면 완료 여부 재확인 — 아니면 선택 해제(공급가·VAT 재계산).
   document.addEventListener("change", function (e) {
     var cb = e.target;
     if (!cb || cb.type !== "checkbox" || !cb.checked || !cb.hasAttribute || !cb.hasAttribute("data-confirm-pending")) return;
-    if (!window.confirm("아직 완료되지 않은(대기) 콘텐츠입니다. 청구하면서 '완료'로 바꿀까요?")) {
+    if (!window.confirm("아직 완료되지 않은 항목입니다. 청구하면서 '완료'로 바꿀까요?")) {
       cb.checked = false;
       cb.dispatchEvent(new Event("change", { bubbles: true })); // 체크 해제 반영해 금액 미리보기 갱신
     }

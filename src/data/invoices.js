@@ -114,7 +114,7 @@ function listBillableSessionsForProject(user, projectId) {
     .prepare(
       `SELECT s.* FROM sessions s
        WHERE s.project_id = ?
-         AND s.status = '완료'
+         AND s.status <> '취소'
          AND s.session_type = '녹음'
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
@@ -216,7 +216,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
     const rawSessions = d
       .prepare(
         `SELECT s.* FROM sessions s
-         WHERE s.project_id = ? AND s.status = '완료' AND s.session_type = '녹음'
+         WHERE s.project_id = ? AND s.status <> '취소' AND s.session_type = '녹음'
            AND s.rate_item_id IS NOT NULL AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
            AND s.id IN (${placeholders})
            AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
@@ -290,9 +290,11 @@ function createInvoiceFromTasks(user, opts = {}) {
     );
     // 청구 시 작업 잠금·확정 금액 반영 + 상태를 '완료'로(청구=완료 처리; 미완료 선택 시 폼에서 확인받음).
     const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ?, unit_price = ?, total_price = ?, status = 'Completed' WHERE id = ?");
+    const markSession = d.prepare("UPDATE sessions SET status = '완료' WHERE id = ? AND status <> '취소'"); // 청구 시 녹음 세션도 완료 처리(예정→완료)
     for (const it of draft.items) {
       insertItem.run(invoiceId, it.task_id, it.session_id, it.track_title, it.task_type, it.description, it.quantity, it.unit_price, it.amount);
       if (it.task_id) markTask.run(invoiceId, it.unit_price, it.amount, it.task_id); // 청구 시 확정 금액을 작업에도 반영
+      if (it.session_id) markSession.run(it.session_id); // 청구=완료(예정 세션도 완료로)
     }
     d.exec("COMMIT;");
     return getInvoiceForUser(user, invoiceId);

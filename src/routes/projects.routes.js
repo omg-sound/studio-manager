@@ -1146,12 +1146,12 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   }
   // 세션 '완료 강제'와 규칙 통일: 완료 상태 작업만 기본 체크. 미완료(대기)는 체크 해제·흐리게(선택은 가능).
   const isDone = (t) => t.status === "Completed";
-  const hasPending = tasks.some((t) => !isDone(t));
+  const hasPending = tasks.some((t) => !isDone(t)) || sessionRows.some((s) => s.status !== "완료"); // 미완료 작업(대기) 또는 예정 세션
   // 작업 예상 금액 = 확정 total_price(>0) 우선, 없으면 종류 기본단가(taskTypeUnitPrice). 프로젝트 목록 합산과 동일 규칙.
   const taskAmt = (t) => (t.total_price > 0 ? t.total_price : taskTypeUnitPrice(t.task_type));
   const subtotal =
     tasks.filter(isDone).reduce((sum, task) => sum + taskAmt(task), 0) +
-    sessionRows.reduce((sum, s) => sum + (s.billing ? s.billing.amount : 0), 0);
+    sessionRows.filter((s) => s.status === "완료").reduce((sum, s) => sum + (s.billing ? s.billing.amount : 0), 0); // 완료 세션만 기본 집계(예정은 체크 시 합산)
   const tax = Math.round(subtotal * 0.1);
   const taskList = tasks
     .map((task) => {
@@ -1170,18 +1170,20 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         </div>`;
     })
     .join("");
-  // 녹음 세션 직접 청구 후보(곡·콘텐츠/버튼 없이 자동 노출). 체크하면 인보이스 라인으로 들어간다.
+  // 녹음 세션 직접 청구 후보(곡·콘텐츠/버튼 없이 자동 노출). 완료 세션은 기본 체크, 예정은 흐리게·체크 시 완료 확인(작업과 동일 규칙).
   const sessionList = sessionRows
     .map((s) => {
+      const done = s.status === "완료";
       const mins = s.billing.minutes;
       const dur = `${Math.floor(mins / 60)}시간${mins % 60 ? " " + (mins % 60) + "분" : ""}`;
       const time = [s.start_time, s.end_time].filter(Boolean).join("–");
       const label = `녹음 세션 ${formatYmdShort(s.session_date)} · ${s.billing.item.name}`;
+      const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(s.status)}</span>`;
       return `
-        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0" data-line-row>
-          <input class="shrink-0" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" checked id="session-cb-${s.id}" />
+        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
+          <input class="shrink-0" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" ${done ? "checked" : "data-confirm-pending"} id="session-cb-${s.id}" />
           <label for="session-cb-${s.id}" class="min-w-0 flex-1 cursor-pointer">
-            <span class="block text-sm font-medium">${esc(label)}</span>
+            <span class="block text-sm font-medium">${esc(label)}${statusTag}</span>
             <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}</span>
           </label>
           <div class="relative w-28 shrink-0">
@@ -1215,7 +1217,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>
-      ${hasPending ? explain(`미완료(대기) 작업은 기본 선택에서 제외됩니다. 필요하면 직접 체크하세요.`) : ""}
+      ${hasPending ? explain(`미완료 항목(대기 작업·예정 세션)은 기본 선택에서 제외됩니다. 체크하면 완료로 바꿀지 확인 후 청구·완료 처리됩니다.`) : ""}
       <div class="mt-3 space-y-2">
         <div>
           <label class="label mb-1 text-xs">할인 <span class="font-normal text-muted">(선택 — 체크한 항목 공급가 기준)</span></label>
