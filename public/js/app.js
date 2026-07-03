@@ -768,20 +768,14 @@
   Array.prototype.forEach.call(document.querySelectorAll("[data-artist-combo]"), function (root) {
     var input = root.querySelector("[data-artist-input]");
     var cid = root.querySelector("[data-artist-cid]");
-    var group = root.querySelector("[data-artist-group]");
     var pop = root.querySelector("[data-artist-pop]");
     var dataEl = root.querySelector("[data-artist-options]");
     if (!input || !pop || !dataEl) return;
-    var real = root.querySelector("[data-artist-real]"); // 본명 입력(개인만)
+    var realDisp = root.querySelector("[data-artist-realname]"), realVal = root.querySelector("[data-artist-realname-val]"); // 선택 아티스트 본명 표시(입력 아님)
     var opts = [];
     try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
     var view = []; // 현재 렌더된 후보(클릭 인덱스 매핑)
-    // 그룹 체크 시 본명칸 숨김(그룹은 사람 아님).
-    if (group && real) {
-      var toggleReal = function () { real.classList.toggle("hidden", group.checked); };
-      group.addEventListener("change", toggleReal);
-      toggleReal();
-    }
+    function showReal(rn) { if (!realDisp) return; if (rn) { if (realVal) realVal.textContent = rn; realDisp.classList.remove("hidden"); } else realDisp.classList.add("hidden"); }
 
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
@@ -815,7 +809,7 @@
     function pick(o) {
       input.value = o.name;
       cid.value = o.contactId || "";
-      if (group) group.checked = !!o.isGroup;
+      showReal(o.realName);
       hide();
       fireInput();
     }
@@ -859,8 +853,7 @@
           .then(function (d) {
             if (!d || !d.ok) throw new Error("fail");
             input.value = d.name; cid.value = d.id;
-            if (group) group.checked = d.kind === "group";
-            if (group && real) real.classList.toggle("hidden", group.checked);
+            showReal(!mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : ""); // 모달 입력 본명(개인) 표시
             closeModal(); fireInput();
           })
           .catch(function () { mErr.textContent = "등록 실패 — 다시 시도하세요."; mErr.classList.remove("hidden"); })
@@ -883,7 +876,8 @@
     input.addEventListener("input", function () {
       var v = input.value.trim().toLowerCase();
       var match = opts.filter(function (o) { return String(o.name).toLowerCase() === v; })[0];
-      if (!match) cid.value = "";
+      if (match) { cid.value = match.contactId || ""; showReal(match.realName); }
+      else { cid.value = ""; showReal(""); }
     });
   });
 })();
