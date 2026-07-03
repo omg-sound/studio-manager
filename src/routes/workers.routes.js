@@ -2,16 +2,18 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireEditor, canEdit } = require("../auth");
+const { requireInvoice, requireChief, isChief } = require("../auth");
 const { listProjectManagers, getWorker, listTasksForWorker, setTaskPayout, taskTypeLabel, syncManagerToParty, ensurePartyForManager, formatPhone } = require("../data");
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE } = require("../config");
 
 const router = express.Router();
-// 열람·마스터 추가/삭제/정보수정·정산(지급) = 편집자(치프·스태프, requireEditor). 매출만 치프·대표.
+// 권한 분리(2026-07-03, 사용자 결정): 열람·상세·정산(지급 처리/취소) = 치프·대표(requireInvoice, 재무 성격),
+// 마스터(추가·삭제·정보수정) = 치프(requireChief). 스태프는 /workers 미노출 — 외주 지급단가(worker_rate)는
+// 작업 편집(requireEditor)에서 입력하고, 실제 지급/정산은 대표·치프가 이 화면에서 실행한다.
 
 // ── 외주 작업자 목록(치프는 추가 폼도) ──
-router.get("/", requireEditor, (req, res) => {
+router.get("/", requireInvoice, (req, res) => {
   const workers = listProjectManagers({ includeInactive: true, externalOnly: true });
   const list = workers.length
     ? workers
@@ -26,7 +28,7 @@ router.get("/", requireEditor, (req, res) => {
         </a>`
         )
         .join("")
-    : emptyState(`등록된 외주 작업자가 없습니다.${canEdit(req.user) ? " 아래에서 추가하세요." : ""}`, { card: true });
+    : emptyState(`등록된 외주 작업자가 없습니다.${isChief(req.user) ? " 아래에서 추가하세요." : ""}`, { card: true });
 
   const addForm = `
     <form method="post" action="/workers" class="card mt-3 space-y-2">
@@ -43,11 +45,11 @@ router.get("/", requireEditor, (req, res) => {
     ${flashBanner(req.query)}
     ${pageHeader({ title: "외주 작업자", desc: "로그인 없이 작업 담당자로 쓰는 외부 인력. 작업 히스토리·정산 관리." })}
     ${list}
-    ${canEdit(req.user) ? addForm : ""}`;
+    ${isChief(req.user) ? addForm : ""}`;
   res.send(layout({ title: "외주 작업자", user: req.user, current: "/workers", body }));
 });
 
-router.post("/", requireEditor, (req, res) => {
+router.post("/", requireChief, (req, res) => {
   const name = String(req.body.name || "").trim();
   if (name) {
     const info = db()
@@ -58,13 +60,13 @@ router.post("/", requireEditor, (req, res) => {
   res.redirect("/workers?flash=created");
 });
 
-router.post("/:id/delete", requireEditor, (req, res) => {
+router.post("/:id/delete", requireChief, (req, res) => {
   db().prepare("DELETE FROM project_managers WHERE id = ? AND user_id IS NULL").run(Number(req.params.id));
   res.redirect("/workers?flash=deleted");
 });
 
 // 외주 작업자 정보 수정(이름·전화·이메일) — 치프만(마스터 관리). user_id IS NULL로 외주만.
-router.post("/:id/edit", requireEditor, (req, res) => {
+router.post("/:id/edit", requireChief, (req, res) => {
   const id = Number(req.params.id);
   const name = String(req.body.name || "").trim();
   if (name) {
@@ -78,7 +80,7 @@ router.post("/:id/edit", requireEditor, (req, res) => {
 });
 
 // ── 외주 작업자 상세(작업 히스토리 / 정산) ──
-router.get("/:id", requireEditor, (req, res) => {
+router.get("/:id", requireInvoice, (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send(errorPage({ code: 404, title: "외주 작업자를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tab = req.query.tab === "payout" ? "payout" : "tasks";
@@ -142,7 +144,7 @@ router.get("/:id", requireEditor, (req, res) => {
     content = `<div class="space-y-2">${rows}</div>`;
   }
 
-  const editForm = canEdit(req.user)
+  const editForm = isChief(req.user)
     ? `<details class="card mb-3">
         <summary class="cursor-pointer text-sm font-medium text-muted hover:text-fg">정보 수정 (이름 · 전화 · 이메일)</summary>
         <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3">
@@ -155,7 +157,7 @@ router.get("/:id", requireEditor, (req, res) => {
     : "";
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: canEdit(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
+    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
     ${editForm}
     ${tabBarHtml}
     ${content}`;
@@ -163,7 +165,7 @@ router.get("/:id", requireEditor, (req, res) => {
 });
 
 // ── 작업 지급 처리/해제(정산) ──
-router.post("/:id/payout/:taskId", requireEditor, (req, res) => {
+router.post("/:id/payout/:taskId", requireInvoice, (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
   // 소속 확인: engineer_id 우선(rename 내성), 폴백 (engineer_id IS NULL AND engineer_name = 이름)(레거시·미매칭분).
