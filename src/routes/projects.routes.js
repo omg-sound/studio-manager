@@ -52,7 +52,7 @@ const {
   getStudioInfo,
   getStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, personCombo } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, personCombo, payerCombo } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -891,39 +891,7 @@ function projectFieldDatalists() {
   return dl("dl-artists", f.artists) + dl("dl-companies", f.companies) + dl("dl-productions", f.productions);
 }
 
-/** 청구처 콤보 라벨: "이름 · 분류"(분류로 동명 구분, 검색 시 분류로도 좁혀짐). */
-function clientComboLabel(c) {
-  return c.kind ? `${c.name} · ${c.kind}` : c.name;
-}
-
-/**
- * 청구처 검색형 콤보박스: <input list>+<datalist>로 이름 일부만 입력해 필터, 선택값은 hidden client_id로 app.js가 동기화.
- * 클라이언트가 많아도 타이핑으로 좁힌다. 목록에 없으면 비워 두면 저장 시 자동 매칭(resolveAutoClientId: 제작사>소속사>아티스트).
- * CSP-safe: datalist/hidden은 정적, 값 동기화는 외부 app.js([data-client-combo]).
- */
-function clientCombo(selectedId) {
-  const opts = clientOptions();
-  const contactOpts = contactOptions(); // 담당자(연락처)도 청구처로 선택 가능
-  const sel = selectedId ? opts.find((c) => c.id === Number(selectedId)) : null;
-  return `
-    <div data-client-combo>
-      <input type="hidden" name="client_id" value="${sel ? sel.id : ""}" data-client-id />
-      <input type="hidden" name="payer_contact_id" value="" data-payer-contact-id />
-      <input class="input" type="text" list="dl-payer-clients" data-client-search autocomplete="off"
-        placeholder="클라이언트·담당자 이름 일부 입력 후 선택…" value="${sel ? esc(clientComboLabel(sel)) : ""}" aria-label="청구처 검색" />
-      <datalist id="dl-payer-clients">
-        ${opts.map((c) => `<option value="${esc(clientComboLabel(c))}" data-id="${c.id}"></option>`).join("")}
-        ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자${o.current_client ? " · " + esc(o.current_client) : o.phone ? " · " + esc(o.phone) : " #" + o.id}" data-contact-id="${o.id}"></option>`).join("")}
-      </datalist>
-      ${explain(`클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.`)}
-    </div>`;
-}
-
-/**
- * 클라이언트 담당자(연락처) 검색형 콤보박스: clientCombo와 동일 패턴.
- * <input list>+<datalist>로 이름 일부만 입력해 필터, 선택값은 hidden contact_id로 app.js([data-contact-combo])가 동기화.
- * 내부 담당자(managerSelect)와 별개 필드. 비워 두면 미연결. CSP-safe: datalist/hidden은 정적, 값 동기화는 외부 app.js.
- */
+/** 내부 담당자(프로젝트 매니저) 선택 — 하우스/외주 엔지니어 목록. 고객측 담당자(personCombo)와 별개 필드. */
 function managerSelect(selectedId) {
   const opts = listProjectManagers();
   return `
@@ -1209,7 +1177,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
-        ${clientCombo(project.production_id || project.agency_id || project.artist_id)}
+        ${payerCombo({ selectedId: project.production_id || project.agency_id || project.artist_id, clientOptions: clientOptions(), contactOptions: contactOptions() })}
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>

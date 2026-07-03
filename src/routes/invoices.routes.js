@@ -21,7 +21,7 @@ const {
   listPersonsForOrg,
   ensureInvoiceNumber,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup, explain } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup, explain, payerCombo } = require("../views");
 const { invoiceRow, invoiceBadge, payerInfoCard } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
@@ -412,22 +412,9 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
       <option value="">프로젝트 미지정</option>
       ${projects.map((p) => `<option value="${p.id}" ${Number(inv.project_id) === p.id ? "selected" : ""}>${esc(p.title)}</option>`).join("")}
     </select>`;
-  // 청구처 콤보(클라이언트 + 담당자) — from-tasks와 동일 UX. 담당자 선택 시 payer_contact_id → ensureClientFromContact로 개인 청구처 변환.
+  // 청구처 콤보(클라이언트 + 담당자) — from-tasks와 동일 공용 payerCombo. 담당자 선택 시 payer_contact_id → ensureClientFromContact로 개인 청구처 변환.
   const contactOpts = contactOptions();
-  const selClient = inv.payer_id ? clients.find((c) => c.id === Number(inv.payer_id)) : null;
-  const dlId = "dl-inv-clients";
-  const clientSelect = `
-    <div data-client-combo>
-      <input type="hidden" name="client_id" value="${selClient ? selClient.id : ""}" data-client-id />
-      <input type="hidden" name="payer_contact_id" value="" data-payer-contact-id />
-      <input class="input" type="text" list="${dlId}" data-client-search autocomplete="off"
-        placeholder="클라이언트·담당자 이름 일부 입력 후 선택…" value="${selClient ? esc(selClient.name + (selClient.kind ? " · " + selClient.kind : "")) : ""}" aria-label="청구처 검색" />
-      <datalist id="${dlId}">
-        ${clients.map((c) => `<option value="${esc(c.name + (c.kind ? " · " + c.kind : ""))}" data-id="${c.id}"></option>`).join("")}
-        ${contactOpts.map((o) => `<option value="${esc(o.name)} · 담당자${o.current_client ? " · " + esc(o.current_client) : o.phone ? " · " + esc(o.phone) : " #" + o.id}" data-contact-id="${o.id}"></option>`).join("")}
-      </datalist>
-      ${explain(`클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.`)}
-    </div>`;
+  const clientSelect = payerCombo({ selectedId: inv.payer_id, clientOptions: clients, contactOptions: contactOpts, hint: `클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.` });
   const retHidden = returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : "";
   const errBox = e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : "";
   const payField = `<div class="grid gap-3 sm:grid-cols-2"><div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div></div>`;

@@ -614,45 +614,7 @@
   timer = setTimeout(hide, warn ? 6000 : 3500); // 경고는 조금 더 오래 유지
 })();
 
-// 검색형 콤보박스(실결제자·클라이언트/세션 디렉터 담당자): <input list> 검색값 ↔ hidden id 동기화. 목록 라벨과 정확히 일치할 때만 id 설정.
-// 위임(delegation)으로 처리 → 동적으로 추가되는 행(세션 디렉터 '+추가')도 자동 동작.
-(function () {
-  "use strict";
-  function syncCombo(wrap) {
-    var search = wrap.querySelector("[data-client-search], [data-contact-search]");
-    var hidden = wrap.querySelector("[data-client-id], [data-contact-id]");
-    var listEl = search ? document.getElementById(search.getAttribute("list")) : null;
-    var info = wrap.querySelector("[data-contact-info]"); // 고객측 담당자 콤보에만(전화·이메일·소속 표시)
-    var payerContact = wrap.querySelector("[data-payer-contact-id]"); // 청구처 콤보에만
-    if (!search || !hidden || !listEl) return;
-    var v = search.value.trim();
-    var id = "", contactId = "", matched = null;
-    for (var i = 0; i < listEl.options.length; i++) {
-      if (listEl.options[i].value === v) { matched = listEl.options[i]; id = matched.getAttribute("data-id") || ""; contactId = matched.getAttribute("data-contact-id") || ""; break; }
-    }
-    hidden.value = id;
-    if (payerContact) payerContact.value = contactId;
-    if (info) {
-      while (info.firstChild) info.removeChild(info.firstChild); // CSP-safe
-      if (matched) {
-        var ph = matched.getAttribute("data-phone"), em = matched.getAttribute("data-email"), cl = matched.getAttribute("data-client");
-        var nodes = [];
-        if (ph) { var an = document.createElement("a"); an.href = "tel:" + ph.replace(/[^0-9+]/g, ""); an.textContent = "☎ " + ph; an.className = "font-medium text-info"; nodes.push(an); }
-        if (em) { var ae = document.createElement("a"); ae.href = "mailto:" + em; ae.textContent = "✉ " + em; ae.className = "text-info"; nodes.push(ae); }
-        if (cl) { var sp = document.createElement("span"); sp.textContent = "소속: " + cl; nodes.push(sp); }
-        nodes.forEach(function (node, idx) { if (idx > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(node); });
-        info.classList.toggle("hidden", nodes.length === 0);
-      } else if (v) { info.textContent = "목록에 없는 이름 — 저장 시 새 연락처로 등록됩니다."; info.classList.remove("hidden"); }
-      else { info.classList.add("hidden"); }
-    }
-  }
-  function comboOf(el) { return el && el.closest ? el.closest("[data-client-combo], [data-contact-combo]") : null; }
-  function isSearch(el) { return el && el.matches && el.matches("[data-client-search], [data-contact-search]"); }
-  document.addEventListener("input", function (e) { if (isSearch(e.target)) { var w = comboOf(e.target); if (w) syncCombo(w); } });
-  document.addEventListener("change", function (e) { if (isSearch(e.target)) { var w = comboOf(e.target); if (w) syncCombo(w); } });
-  document.addEventListener("blur", function (e) { if (isSearch(e.target)) { var w = comboOf(e.target); if (w) syncCombo(w); } }, true); // blur는 캡처
-  Array.prototype.forEach.call(document.querySelectorAll("[data-client-combo], [data-contact-combo]"), syncCombo); // 초기값 표시
-})();
+// (옛 datalist 기반 syncCombo 콤보는 personCombo/payerCombo 커스텀 팝업으로 전면 대체 — 제거.)
 
 // 세션 담당 디렉터 반복 입력([data-director-list]): '+ 디렉터 추가'로 행 복제(template), '✕'로 제거.
 (function () {
@@ -1072,6 +1034,49 @@
     if (container && container.matches && container.matches("[data-person-combo]")) initOne(container);
   };
   window.__initPersonCombos(document);
+})();
+
+// 청구처 콤보([data-picker-combo]): 클라이언트+담당자 검색, 선택 시 client_id 또는 payer_contact_id 세팅(다른 쪽 클리어)·닫힘.
+// 다른 콤보와 동일 UX지만 '새로 등록'은 없음(청구처는 기존에서 고름). 정확 일치 없으면 둘 다 비움(서버 자동 매칭).
+(function () {
+  "use strict";
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-picker-combo]"), function (root) {
+    var input = root.querySelector("[data-pk-input]");
+    var cid = root.querySelector("[data-pk-cid]");
+    var pid = root.querySelector("[data-pk-pid]");
+    var pop = root.querySelector("[data-pk-pop]");
+    var dataEl = root.querySelector("[data-pk-options]");
+    if (!input || !cid || !pid || !pop || !dataEl) return;
+    var items = [];
+    try { items = JSON.parse(dataEl.textContent || "[]"); } catch (e) { items = []; }
+    var view = [];
+    var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+    function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
+    function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
+    function labelFull(it) { return it.sub ? it.label + " · " + it.sub : it.label; }
+    function render() {
+      var q = input.value.trim().toLowerCase();
+      view = (q ? items.filter(function (it) { return String(it.label).toLowerCase().indexOf(q) !== -1 || String(it.sub || "").toLowerCase().indexOf(q) !== -1; }) : items).slice(0, 15);
+      pop.innerHTML = view.length
+        ? view.map(function (it, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(it.label) + '</span><span class="shrink-0 text-xs text-muted">' + esc(it.sub || "") + '</span></button>'; }).join("")
+        : '<div class="px-3 py-2 text-sm text-muted">검색 결과 없음 · 비워 두면 자동 연결</div>';
+      show();
+    }
+    function pick(it) { if (!it) return; input.value = labelFull(it); cid.value = it.cid || ""; pid.value = it.pid || ""; fireInput(); hide(); }
+    input.addEventListener("focus", render);
+    input.addEventListener("click", render);
+    input.addEventListener("input", function () {
+      render();
+      var v = input.value.trim().toLowerCase();
+      var m = items.filter(function (it) { return labelFull(it).toLowerCase() === v || String(it.label).toLowerCase() === v; })[0];
+      if (m) { cid.value = m.cid || ""; pid.value = m.pid || ""; } else { cid.value = ""; pid.value = ""; } // 정확 일치 아니면 비움(자동 매칭)
+    });
+    input.addEventListener("blur", function () { setTimeout(hide, 150); });
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    pop.addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]); });
+  });
 })();
 
 // 드롭존([data-dropzone]): 파일 끌어놓기 또는 클릭 선택. CSP-safe(인라인 0, 외부 JS 파일).

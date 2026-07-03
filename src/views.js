@@ -499,4 +499,37 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo };
+/**
+ * 청구처(payer) 검색 콤보 — 클라이언트(업체/아티스트) + 담당자(연락처)를 함께 검색, 선택 시 닫힘.
+ * 다른 콤보와 동일 UX(커스텀 팝업). 단 '새로 등록'은 없음(청구처는 기존에서 고름). 선택 시 client_id 또는
+ * payer_contact_id 하나만 세팅(다른 쪽 클리어). 비워 두면 서버 자동 매칭. CSP-safe(app.js [data-picker-combo]).
+ * @param {object} o
+ * @param {number|null} [o.selectedId] 현재 청구처 party id(클라이언트)
+ * @param {Array} [o.clientOptions] [{id,name,kind}]
+ * @param {Array} [o.contactOptions] [{id,name,current_client,phone}]
+ * @param {string} [o.hint] explain 안내문(생략 시 기본)
+ */
+function payerCombo({ selectedId = null, clientOptions = [], contactOptions = [], hint = "" } = {}) {
+  const sel = selectedId ? clientOptions.find((c) => Number(c.id) === Number(selectedId)) : null;
+  const items = [
+    ...clientOptions.map((c) => ({ label: c.name, sub: c.kind || "", cid: c.id, pid: 0 })),
+    ...contactOptions.map((o) => ({ label: o.name, sub: "담당자" + (o.current_client ? " · " + o.current_client : o.phone ? " · " + o.phone : ""), cid: 0, pid: o.id })),
+  ];
+  const json = JSON.stringify(items).replace(/</g, "\\u003c");
+  const selLabel = sel ? (sel.kind ? `${sel.name} · ${sel.kind}` : sel.name) : "";
+  return `
+    <div data-picker-combo>
+      <input type="hidden" name="client_id" value="${sel ? sel.id : ""}" data-pk-cid />
+      <input type="hidden" name="payer_contact_id" value="" data-pk-pid />
+      <div class="relative">
+        <input class="input pr-9" type="text" data-pk-input autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
+          placeholder="클라이언트·담당자 검색…" value="${esc(selLabel)}" aria-label="청구처 검색" />
+        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pk-pop role="listbox"></div>
+      </div>
+      <script type="application/json" data-pk-options>${json}</script>
+      ${explain(hint || `클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.`)}
+    </div>`;
+}
+
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, payerCombo };
