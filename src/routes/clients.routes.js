@@ -163,6 +163,12 @@ router.get("/", (req, res) => {
       for (const c of artistRows) if (c.group_id && gmap[c.group_id]) groupNameByParty[c.id] = gmap[c.group_id];
     }
   }
+  // 업체 행: 사업자등록증(client_files kind='biz_license') 업로드 여부 배치 조회(있음/없음 배지). 목록은 기록 존재만 확인(파일 실제 접근은 상세에서).
+  const bizLicenseSet = new Set();
+  const companyIds = displayed.filter((c) => c.kind === "company").map((c) => c.id);
+  if (companyIds.length) {
+    for (const r of db().prepare(`SELECT DISTINCT client_id FROM client_files WHERE kind = 'biz_license' AND client_id IN (${companyIds.map(() => "?").join(",")})`).all(...companyIds)) bizLicenseSet.add(r.client_id);
+  }
   const list = displayed.length
     ? listGroup({
         rows: displayed.map((c) => {
@@ -186,15 +192,27 @@ router.get("/", (req, res) => {
             const right = `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${esc(c.phone)}</div>` : ""}<div>${esc(c.email || "이메일 없음")}</div></div>`;
             return listRowLinked({ href: `/clients/${c.id}${fromParam}`, title, badges, right });
           }
-          // 업체(company): 대표는 회사명 뒤에 · 오른쪽에 사업자→전화→이메일 세로 스택
-          const badges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
-          const nameLine = `${esc(c.name)}${c.owner_name ? ` <span class="text-xs font-normal text-muted">· 대표 ${esc(c.owner_name)}</span>` : ""}`;
+          // 업체(company): 회사명(→상세)·대표(→대표 연락처)를 각각 링크로 분리(밑줄도 각각). 등록증 여부 배지 + 오른쪽 사업자→전화→이메일.
+          const roleBadges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
+          const bizBadge = bizLicenseSet.has(c.id) ? `<span class="badge-success">등록증 ✓</span>` : `<span class="badge-neutral">등록증 없음</span>`;
+          const ownerHtml = c.owner_name
+            ? (c.owner_party_id
+                ? ` <a href="/contacts/${c.owner_party_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">· 대표 ${esc(c.owner_name)}</a>`
+                : ` <span class="text-xs font-normal text-muted">· 대표 ${esc(c.owner_name)}</span>`)
+            : "";
+          const nameHtml = `<a href="/clients/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(c.name)}</a>${ownerHtml}`;
           const right = `<div class="text-sm text-muted space-y-0.5">
             ${c.biz_no ? `<div>사업자 ${esc(c.biz_no)}</div>` : ""}
             ${c.phone ? `<div>${esc(c.phone)}</div>` : ""}
             <div>${esc(c.email || "이메일 없음")}</div>
           </div>`;
-          return listRowLinked({ href: `/clients/${c.id}${fromParam}`, title: nameLine, badges, right });
+          return `<div class="flex items-start justify-between gap-4 px-4 py-3">
+            <div class="min-w-0">
+              <div class="truncate">${nameHtml}</div>
+              <div class="mt-1 flex flex-wrap gap-1">${roleBadges} ${bizBadge}</div>
+            </div>
+            <div class="shrink-0 text-right">${right}</div>
+          </div>`;
         }),
       })
     : q
