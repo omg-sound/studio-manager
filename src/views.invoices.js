@@ -5,7 +5,7 @@
 const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, DOC_TYPES, docNumberWithType } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, listRow, copyable } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
-const { formatYmdShort, ddayLabel } = require("./lib/date");
+const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
 /**
  * 청구처(클라이언트) 정보 카드 — 대표자·사업자등록번호(첨부 사업자등록증 링크)·주소·담당자 연락처.
@@ -94,20 +94,26 @@ function paymentHistory(inv, payments = [], { ret = "", compact = false } = {}) 
         )
         .join("")
     : `<div class="text-xs text-muted">입금 내역 없음</div>`;
+  const bal = balanceOf(inv);
+  const settled = bal <= 0 && (inv.paid_amount || 0) > 0; // 완납(잔금 0 + 입금 있음)
+  // 완납이면 추가 폼 대신 '완납 완료'만 — 초과 입금 방지. 정정은 이력 삭제로 재개.
+  const addForm = settled
+    ? `<div class="flex items-center gap-1.5 pt-1 text-xs text-success"><svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-8"/></svg>완납 완료 — 정정하려면 위 이력을 삭제하세요.</div>`
+    : `<form method="post" action="/invoices/${inv.id}/pay" class="flex flex-wrap items-stretch gap-2 pt-1">
+        ${retHidden}
+        <input class="input ${sz} min-w-0 flex-1 text-right tabular" name="amount" inputmode="numeric" placeholder="입금액(원)" />
+        <input class="input ${sz} w-36" type="date" name="paid_on" value="${todayYmd()}" aria-label="입금일" />
+        <button class="btn-ghost ${btn} shrink-0" type="submit">입금 추가</button>
+        <button class="btn-primary ${btn} shrink-0" name="full" value="1" title="남은 잔금 ${formatKRW(bal)}을 전액 입금 처리">완납</button>
+      </form>`;
   return `
     <div class="space-y-1">
       <div class="flex items-center justify-between gap-2">
         <label class="label mb-0 text-xs">입금 이력</label>
-        <span class="text-xs text-muted">받은 총액 <b class="tabular text-fg">${formatKRW(inv.paid_amount)}</b></span>
+        <span class="text-xs text-muted">받은 총액 <b class="tabular text-fg">${formatKRW(inv.paid_amount)}</b>${bal > 0 ? ` · 미수 <b class="tabular text-danger">${formatKRW(bal)}</b>` : ""}</span>
       </div>
       <div class="space-y-0.5 rounded-lg border border-border bg-surface/40 p-2">${rows}</div>
-      <form method="post" action="/invoices/${inv.id}/pay" class="flex flex-wrap items-stretch gap-2 pt-1">
-        ${retHidden}
-        <input class="input ${sz} min-w-0 flex-1" name="amount" inputmode="numeric" placeholder="입금액(원)" />
-        <input class="input ${sz} w-36" type="date" name="paid_on" aria-label="입금일" />
-        <button class="btn-ghost ${btn} shrink-0" type="submit">입금 추가</button>
-        <button class="btn-primary ${btn} shrink-0" name="full" value="1" title="남은 잔금 전액을 입금 처리">완납</button>
-      </form>
+      ${addForm}
     </div>`;
 }
 
