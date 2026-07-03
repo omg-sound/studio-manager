@@ -39,6 +39,17 @@ function snapshotPayer(payerId) {
     contacts: c0 ? [{ name: c0.name, phone: c0.phone || null, email: c0.email || null }] : [],
   });
 }
+
+/**
+ * 청구처(payer) 후보별 서류 상태 — 회사=사업자등록증 보유 party id 집합, 개인=현금영수증 정보 보유 party id 집합.
+ * 청구 생성 폼이 청구처 유형(회사=계산서 / 개인=현금영수증)·서류 누락 경고를 표시하는 데 쓴다.
+ * @returns {{ bizLicenseIds: number[], cashReceiptIds: number[] }}
+ */
+function payerDocMeta() {
+  const bizLicenseIds = db().prepare("SELECT DISTINCT client_id FROM client_files WHERE kind='biz_license'").all().map((r) => r.client_id);
+  const cashReceiptIds = db().prepare("SELECT id FROM parties WHERE cash_receipt_no IS NOT NULL AND TRIM(cash_receipt_no) <> ''").all().map((r) => r.id);
+  return { bizLicenseIds, cashReceiptIds };
+}
 const { taskTypeLabel } = require("./task-types"); // 무순환
 
 const parseWon = parseMoney; // 내부 호출명 parseWon 유지
@@ -399,6 +410,7 @@ module.exports = {
   invoiceAmountsFromSupply,
   createInvoiceFromTasks,
   snapshotPayer,
+  payerDocMeta,
   invoiceDraftForPdf,
   deleteInvoice,
   listInvoices,

@@ -520,11 +520,20 @@ function personComboOptionsScript(id, options) {
  * @param {Array} [o.contactOptions] [{id,name,current_client,phone}]
  * @param {string} [o.hint] explain 안내문(생략 시 기본)
  */
-function payerCombo({ selectedId = null, clientOptions = [], contactOptions = [], hint = "" } = {}) {
+function payerCombo({ selectedId = null, clientOptions = [], contactOptions = [], hint = "", bizLicenseIds = [], cashReceiptIds = [] } = {}) {
   const sel = selectedId ? clientOptions.find((c) => Number(c.id) === Number(selectedId)) : null;
+  // 청구처 유형(co=회사 여부)·서류 누락 경고(warn) — 회사=사업자등록증, 개인=현금영수증. app.js가 선택 시 버튼 라벨·경고 갱신.
+  const bizSet = new Set((bizLicenseIds || []).map(Number));
+  const cashSet = new Set((cashReceiptIds || []).map(Number));
+  const CO_WARN = "사업자등록증이 등록되어 있지 않습니다 — 클라이언트 상세에서 등록하세요.";
+  const PS_WARN = "현금영수증 정보가 없습니다 — 청구처 상세에서 입력하세요.";
   const items = [
-    ...clientOptions.map((c) => ({ label: c.name, sub: c.kind || "", cid: c.id, pid: 0 })),
-    ...contactOptions.map((o) => ({ label: o.name, sub: "담당자" + (o.current_client ? " · " + o.current_client : o.phone ? " · " + o.phone : ""), cid: 0, pid: o.id })),
+    ...clientOptions.map((c) => {
+      const co = c.kind === "company" ? 1 : 0;
+      const warn = co ? (bizSet.has(Number(c.id)) ? "" : CO_WARN) : (cashSet.has(Number(c.id)) ? "" : PS_WARN);
+      return { label: c.name, sub: c.kind || "", cid: c.id, pid: 0, co, warn };
+    }),
+    ...contactOptions.map((o) => ({ label: o.name, sub: "담당자" + (o.current_client ? " · " + o.current_client : o.phone ? " · " + o.phone : ""), cid: 0, pid: o.id, co: 0, warn: cashSet.has(Number(o.id)) ? "" : PS_WARN })),
   ];
   const json = JSON.stringify(items).replace(/</g, "\\u003c");
   const selLabel = sel ? (sel.kind ? `${sel.name} · ${sel.kind}` : sel.name) : "";

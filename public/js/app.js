@@ -1087,6 +1087,14 @@
     var items = [];
     try { items = JSON.parse(dataEl.textContent || "[]"); } catch (e) { items = []; }
     var view = [];
+    // 청구처 유형에 따른 문서 라벨(회사=계산서 / 개인=현금영수증) + 서류 누락 경고(같은 폼 안 요소가 있을 때만).
+    var form = root.closest ? root.closest("form") : null;
+    var docLabel = form ? form.querySelector("[data-inv-doc]") : null;
+    var warnEl = form ? form.querySelector("[data-payer-warn]") : null;
+    function applyDoc(it) {
+      if (docLabel) docLabel.textContent = (it && !it.co) ? "(현금영수증 발행)" : "(계산서 발행)";
+      if (warnEl) { if (it && it.warn) { warnEl.textContent = "⚠️ " + it.warn; warnEl.classList.remove("hidden"); } else { warnEl.classList.add("hidden"); } }
+    }
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
@@ -1100,7 +1108,7 @@
         : '<div class="px-3 py-2 text-sm text-muted">검색 결과 없음 · 비워 두면 자동 연결</div>';
       show();
     }
-    function pick(it) { if (!it) return; input.value = labelFull(it); cid.value = it.cid || ""; pid.value = it.pid || ""; fireInput(); hide(); }
+    function pick(it) { if (!it) return; input.value = labelFull(it); cid.value = it.cid || ""; pid.value = it.pid || ""; applyDoc(it); fireInput(); hide(); }
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
     input.addEventListener("input", function () {
@@ -1108,10 +1116,13 @@
       var v = input.value.trim().toLowerCase();
       var m = items.filter(function (it) { return labelFull(it).toLowerCase() === v || String(it.label).toLowerCase() === v; })[0];
       if (m) { cid.value = m.cid || ""; pid.value = m.pid || ""; } else { cid.value = ""; pid.value = ""; } // 정확 일치 아니면 비움(자동 매칭)
+      applyDoc(m);
     });
     input.addEventListener("blur", function () { setTimeout(hide, 150); });
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]); });
+    // 초기 선택(서버 렌더된 기본 청구처)에 맞춰 문서 라벨·경고 표시
+    applyDoc(items.filter(function (it) { return (cid.value && String(it.cid) === String(cid.value)) || (pid.value && String(it.pid) === String(pid.value)); })[0]);
   });
 })();
 

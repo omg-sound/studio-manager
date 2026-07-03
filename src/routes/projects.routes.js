@@ -46,6 +46,7 @@ const {
   setTaskAmount,
   deleteTask,
   createInvoiceFromTasks,
+  payerDocMeta,
   invoiceDraftForPdf,
   getClientFile,
   listPersonsForOrg,
@@ -1177,7 +1178,8 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
-        ${payerCombo({ selectedId: project.production_id || project.agency_id || project.artist_id, clientOptions: clientOptions(), contactOptions: contactOptions() })}
+        ${payerCombo({ selectedId: project.production_id || project.agency_id || project.artist_id, clientOptions: clientOptions(), contactOptions: contactOptions(), ...payerDocMeta() })}
+        <p data-payer-warn class="mt-1.5 hidden rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning"></p>
       </div>
       <div class="label mb-1 text-xs">청구 항목</div>
       <div class="rounded-lg border border-border bg-surface px-3">${sessionList}${taskList}</div>
@@ -1224,7 +1226,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           </div>
         </div>
         ${explain(`<span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).`, { cls: "mb-2" })}
-        <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성 (계산서 발행)</button>
+        <button class="btn-primary w-full btn-sm" type="submit">선택 항목으로 청구 생성 <span data-inv-doc>(계산서 발행)</span></button>
       </div>
     </form>`;
 }
