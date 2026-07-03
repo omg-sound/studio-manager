@@ -211,16 +211,31 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
     : `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
   const directors = listSessionDirectors(s.id);
-  const people = [
+  // 하위 정보를 줄 단위로 쌓는다(사용자 요청): 회사 / 아티스트 / (예약·엔지니어 한 줄) / 디렉터 / 메모.
+  const company = String(s.production_company || s.artist_company || "").trim(); // 제작사 우선, 없으면 소속사
+  const artist = String(s.artist || "").trim();
+  const projLink = (text) => `<a href="/projects/${s.project_id}" class="text-primary hover:underline">${esc(text)}</a>`;
+  const infoLines = [];
+  if (showProject) {
+    // 회사·아티스트를 별도 줄로. 프로젝트 링크는 회사(없으면 아티스트, 둘 다 없으면 제목)에 건다.
+    if (company) {
+      infoLines.push(projLink(company));
+      if (artist) infoLines.push(`<span class="text-fg/80">${esc(artist)}</span>`);
+    } else if (artist) {
+      infoLines.push(projLink(artist));
+    } else if (s.project_title) {
+      infoLines.push(projLink(s.project_title));
+    }
+  }
+  const bookerEng = [
     s.booker_name ? `예약 ${esc(s.booker_name)}` : "",
     s.engineer_name ? `엔지니어 ${esc(s.engineer_name)}` : "",
-    directors.length ? `디렉터 ${directors.map((d) => esc(d.name)).join(", ")}` : "",
-  ].filter(Boolean).join(" · ") || "담당자 미정";
-  const sub = [
-    showProject && s.project_title ? `<a href="/projects/${s.project_id}" class="text-primary hover:underline">${esc(s.project_title)}</a>` : "",
-    people,
-    s.memo ? esc(s.memo) : "",
   ].filter(Boolean).join(" · ");
+  if (bookerEng) infoLines.push(bookerEng); // 예약 담당자 · 담당 엔지니어 = 같은 줄
+  if (directors.length) infoLines.push(`디렉터 ${directors.map((d) => esc(d.name)).join(", ")}`); // 디렉터 = 다음 줄
+  if (!bookerEng && !directors.length) infoLines.push("담당자 미정");
+  if (s.memo) infoLines.push(esc(s.memo));
+  const sub = infoLines.map((l) => `<div class="truncate">${l}</div>`).join("");
   // 녹음 세션은 청구 탭에서 직접 청구된다(곡·콘텐츠/버튼 없음). 여기선 예상액·청구상태만 표시.
   const billStatus = s.invoiced
     ? ' · <span class="text-muted">청구됨</span>'
@@ -244,7 +259,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
             <span class="font-medium tabular">${esc(formatYmdShort(s.session_date))}</span>
             <span class="text-xs text-muted tabular">${timeLabel(s)}${dday}</span>
           </div>
-          <div class="mt-0.5 text-xs text-muted">${sub}</div>
+          <div class="mt-0.5 space-y-0.5 text-xs text-muted">${sub}</div>
           ${billLine}
           ${reasonLine}
         </div>`;

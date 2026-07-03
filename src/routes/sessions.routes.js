@@ -104,7 +104,7 @@ router.get("/sessions", requireAuth, (req, res) => {
     const ql = q.toLowerCase();
     const matchesQ = (s) =>
       !ql ||
-      [s.project_title, s.booker_name, s.engineer_name, s.session_type, s.memo]
+      [s.project_title, s.artist, s.artist_company, s.production_company, s.booker_name, s.engineer_name, s.session_type, s.memo]
         .filter(Boolean).join(" ").toLowerCase().includes(ql);
     const up = upcomingSessions(req.user, { limit: 50 }).filter(matchesQ);
     const past = pastSessions(req.user, { limit: 20 }).filter(matchesQ);
