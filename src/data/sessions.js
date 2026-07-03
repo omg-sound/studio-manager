@@ -242,7 +242,9 @@ function findSessionConflict({ date, start, end, excludeId = null, room = null }
   return null;
 }
 
-function assertNoSessionConflict(f, excludeId) {
+function assertNoSessionConflict(f, excludeId, allowConflict = false) {
+  // 사용자가 '그래도 등록'을 확인하면(override) 겹침을 허용해 예약을 진행한다(같은 룸 더블부킹 명시 승인).
+  if (allowConflict) return;
   // 취소된 세션은 룸을 점유하지 않으므로 겹침 검사 제외(점유 슬롯에도 취소 세션 기록·다른 활성 세션과의 오탐 차단 허용).
   if (f.status === "취소") return;
   const conflict = findSessionConflict({ date: f.session_date, start: f.start_time, end: f.end_time, excludeId, room: f.room_id });
@@ -253,13 +255,18 @@ function assertNoSessionConflict(f, excludeId) {
   }
 }
 
+/** 폼의 override_conflict 플래그(="1")면 겹침을 허용(사용자가 '그래도 등록' 확인). */
+function conflictOverride(input) {
+  return String(input && input.override_conflict) === "1";
+}
+
 function createSession(user, projectId, input = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
   f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
-  assertNoSessionConflict(f, null);
+  assertNoSessionConflict(f, null, conflictOverride(input));
   // 세션 행 + 다대다 디렉터를 한 트랜잭션으로 — 중간 실패 시 반쪽 세션(디렉터 없는)이 남지 않게.
   const d = db();
   let newId;
@@ -289,7 +296,7 @@ function updateSession(user, sessionId, input = {}) {
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
   f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
-  assertNoSessionConflict(f, s.id);
+  assertNoSessionConflict(f, s.id, conflictOverride(input));
   // UPDATE + 디렉터 교체를 한 트랜잭션으로(디렉터만 지워지고 세션은 옛값으로 남는 반쪽 갱신 방지).
   const d = db();
   d.exec("BEGIN IMMEDIATE;");

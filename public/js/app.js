@@ -164,6 +164,8 @@
   var sessionTypeSel = form.querySelector('select[name="session_type"]');
   var roomSel = form.querySelector('select[name="room_id"]');
   var showWhenRec = form.querySelectorAll('[data-show-when="rec"]');
+  var conflictWarn = form.querySelector("[data-conflict-warn]");
+  var overrideField = form.querySelector("[data-override-conflict]");
   var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 840 : 840;
   var busy = {};
 
@@ -224,13 +226,39 @@
     if (durLabel) durLabel.textContent = fmtDuration(durationMinutes());
     updatePreview();
   }
-  // 시작 시간 가용성: 예약된(busy) 슬롯만 비활성.
+  // 시작 시간 가용성: 예약된(busy) 슬롯을 '주황(slot-busy)'으로 표시 — 비활성이 아니라 선택 가능(확인 후 등록).
   function applyStartState() {
     if (grid) Array.prototype.forEach.call(grid.querySelectorAll("input[data-slot]"), function (inp) {
-      var dis = !!busy[inp.getAttribute("data-slot")];
-      inp.disabled = dis;
-      if (dis && inp.checked) inp.checked = false;
+      var b = !!busy[inp.getAttribute("data-slot")];
+      var span = inp.nextElementSibling; // 라디오 다음 형제 = 표시용 span
+      if (span) span.classList.toggle("slot-busy", b);
     });
+    updateConflictWarn();
+  }
+  // 시작(HH:MM) → 자정 기준 분. 무효면 null.
+  function toMin(hhmm) {
+    var p = String(hhmm || "").split(":");
+    if (p.length !== 2) return null;
+    var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+    return isNaN(h) || isNaN(m) ? null : h * 60 + m;
+  }
+  // 선택한 시작+소요 구간이 예약된 30분 슬롯(busy) 중 하나와 겹치는가(클라이언트 근사 — 서버가 최종 판정).
+  function overlapDetected() {
+    var start = currentStart();
+    var sMin = toMin(start);
+    if (sMin == null) return false;
+    var dur = durationMinutes();
+    var eMin = sMin + (dur > 0 ? dur : 30); // 소요 미설정이면 30분 블록으로 간주
+    for (var slot in busy) {
+      if (!busy[slot]) continue;
+      var m = toMin(slot);
+      if (m == null) continue;
+      if (sMin < m + 30 && m < eMin) return true; // busy 슬롯 [m,m+30)과 겹침
+    }
+    return false;
+  }
+  function updateConflictWarn() {
+    if (conflictWarn) conflictWarn.hidden = !overlapDetected();
   }
   // 세션 종류=녹음일 때만 [data-show-when="rec"] 요소 표시(녹음 종류 select 등).
   function syncRecFields() {
@@ -265,6 +293,7 @@
     } else {
       preview.textContent = "";
     }
+    updateConflictWarn();
   }
   function refreshAvailability() {
     if (!grid || !dateInput || !dateInput.value) return;
@@ -330,6 +359,19 @@
       if (customStart) { customStart.value = ""; customStart.hidden = true; } // 그리드 고르면 직접입력 칸 닫고
       if (customStartToggle) customStartToggle.hidden = false; // '직접입력' 버튼 복원
       updatePreview();
+    }
+  });
+  // 겹침이 감지되면 제출 직전 확인 → 승인 시 override_conflict=1로 그대로 등록(서버가 겹침 허용). 취소면 제출 중단.
+  form.addEventListener("submit", function (e) {
+    if (!overrideField) return;
+    if (overlapDetected()) {
+      if (!window.confirm("이미 스케쥴이 있습니다. 그래도 등록하시겠습니까?")) {
+        e.preventDefault();
+        return;
+      }
+      overrideField.value = "1";
+    } else {
+      overrideField.value = "";
     }
   });
 

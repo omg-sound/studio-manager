@@ -181,8 +181,10 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
     ${typeRateRow}
     ${directorField}
     <div class="mt-3">
-      <label class="label-sm">시작 시간 <span class="font-normal text-muted">(회색 = 이미 예약됨)</span></label>
+      <label class="label-sm">시작 시간 <span class="font-normal text-muted">(주황 = 이미 예약됨 · 선택 시 확인 후 등록)</span></label>
       ${startSlotGrid(s.start_time || "")}
+      <p class="mt-1.5 text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다. 등록 시 확인을 거칩니다.</p>
+      <input type="hidden" name="override_conflict" value="" data-override-conflict />
     </div>
     <div class="mt-3">
       <label class="label-sm">소요 시간 <span class="font-normal text-muted">(녹음=1Pro 기준 · 믹싱 등은 기본 세션 시간)</span></label>

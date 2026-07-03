@@ -145,6 +145,11 @@
   .row-link {
     @apply transition-colors hover:bg-elevated/60 active:bg-elevated;
   }
+  /* 이미 예약된 시작 슬롯 — 비활성(회색·클릭 불가) 대신 주황으로 '예약됨'을 표시하되 선택은 가능(확인 후 등록).
+     components 레이어라, 선택 시 utilities의 peer-checked(테두리/배경) 스타일이 위에서 우선한다. */
+  .slot-busy {
+    @apply border-warning/50 bg-warning/10 text-warning;
+  }
 }
 
 /* 커스텀 콤보(검색 드롭다운) 행 눌림 피드백 — 터치엔 hover 없음. 모든 pop은 role="listbox". */

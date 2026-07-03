@@ -59,6 +59,19 @@ test("같은 룸 + 겹치는 시간 → 충돌(상대 행 반환)", () => {
   assert.strictEqual(conflict.id, a.id, "충돌 행은 먼저 만든 세션이어야 한다");
 });
 
+test("override_conflict=1이면 겹쳐도 등록 허용('그래도 등록')", () => {
+  const a = create({ room: roomA, start: "14:00", end: "16:00", date: "2026-06-20" });
+  assert.ok(a && a.id);
+  // 확인(override) 없이는 충돌
+  expectConflict(() => create({ room: roomA, start: "15:00", end: "17:00", date: "2026-06-20" }));
+  // override_conflict="1"이면 같은 룸·겹치는 시간이라도 생성된다.
+  const b = createSession(CHIEF, projectId, {
+    session_type: "녹음", session_date: "2026-06-20", start_time: "15:00", end_time: "17:00",
+    room_id: roomA, status: "예정", override_conflict: "1",
+  });
+  assert.ok(b && b.id, "override 시 겹쳐도 세션이 생성되어야 한다");
+});
+
 test("다른 룸 + 같은 시간 → 충돌 없음(병렬 허용)", () => {
   create({ room: roomA, start: "14:00", end: "16:00", date: "2026-06-02" });
   const b = create({ room: roomB, start: "14:00", end: "16:00", date: "2026-06-02" });
