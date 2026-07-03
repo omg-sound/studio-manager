@@ -140,8 +140,13 @@ router.post("/", async (req, res) => {
       const ref = await people.createPerson(contact);
       if (ref) setPartyGoogleRef(id, ref.resourceName, ref.etag);
     } catch (_e) {}
+    if (req.get("X-Requested-With") === "fetch") { // 간이 등록(프로젝트 폼 모달) — 리다이렉트 대신 JSON
+      const pp = getParty(id);
+      return res.json({ ok: true, id, name: pp.name });
+    }
     res.redirect(`/contacts/${id}?flash=created`);
   } catch (_e) {
+    if (req.get("X-Requested-With") === "fetch") return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({}), null, false, listGroupsForPicker()) }));
   }
 });

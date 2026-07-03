@@ -966,6 +966,104 @@
   });
 })();
 
+// 고객측 담당자 콤보([data-person-combo]): 타이핑=기존 담당자 검색(전화·소속 표시), 빈 입력=[＋새 담당자 등록].
+// hidden contact_id(party id) 동기화. '새 등록'=간이 모달(fetch POST /contacts → id·이름 채움).
+(function () {
+  "use strict";
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-person-combo]"), function (root) {
+    var input = root.querySelector("[data-pc-input]");
+    var hid = root.querySelector("[data-pc-id]");
+    var pop = root.querySelector("[data-pc-pop]");
+    var info = root.querySelector("[data-pc-info]");
+    var dataEl = root.querySelector("[data-pc-options]");
+    var modal = root.querySelector("[data-pc-modal]");
+    if (!input || !hid || !pop || !dataEl) return;
+    var opts = [];
+    try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
+    var view = [];
+    var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+    function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
+    function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
+    function subOf(o) { return [o.company, o.phone].filter(Boolean).join(" · "); }
+    function setInfo(o, isNew) {
+      while (info.firstChild) info.removeChild(info.firstChild);
+      var nodes = [];
+      if (o && o.phone) { var a = document.createElement("a"); a.href = "tel:" + o.phone.replace(/[^0-9+]/g, ""); a.textContent = "☎ " + o.phone; a.className = "font-medium text-info"; nodes.push(a); }
+      if (o && o.email) { var em = document.createElement("a"); em.href = "mailto:" + o.email; em.textContent = "✉ " + o.email; em.className = "text-info"; nodes.push(em); }
+      if (o && o.company) { var s = document.createElement("span"); s.textContent = "소속: " + o.company; nodes.push(s); }
+      if (nodes.length) { nodes.forEach(function (n, i) { if (i > 0) info.appendChild(document.createTextNode("   ·   ")); info.appendChild(n); }); info.classList.remove("hidden"); }
+      else if (isNew) { info.textContent = "새 연락처로 등록됩니다."; info.classList.remove("hidden"); }
+      else { info.classList.add("hidden"); }
+    }
+    function newRow(nm) {
+      var label = nm ? "'" + esc(nm) + "'(으)로 새 담당자 등록" : "새 담당자 등록";
+      return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+    }
+    function render() {
+      var q = input.value.trim().toLowerCase();
+      var html = "";
+      if (!q) { view = []; html = newRow(""); }
+      else {
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }).slice(0, 12);
+        html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
+        if (!view.some(function (o) { return String(o.name).toLowerCase() === q; })) html += newRow(input.value.trim());
+      }
+      pop.innerHTML = html; show();
+    }
+    function pick(o) { input.value = o.name; hid.value = o.id; setInfo(o, false); hide(); fireInput(); }
+    function openModal() {
+      if (!modal) { hide(); return; }
+      var n = modal.querySelector("[data-pc-name]"); n.value = input.value.trim();
+      ["[data-pc-phone]", "[data-pc-email]", "[data-pc-company]", "[data-pc-job]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      modal.querySelector("[data-pc-err]").classList.add("hidden");
+      modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
+    }
+    if (modal) {
+      var pSave = modal.querySelector("[data-pc-save]"), pCancel = modal.querySelector("[data-pc-cancel]");
+      var closeModal = function () { modal.classList.add("hidden"); modal.classList.remove("flex"); };
+      pCancel.addEventListener("click", closeModal);
+      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+      pSave.addEventListener("click", function () {
+        var nm = modal.querySelector("[data-pc-name]").value.trim();
+        var err = modal.querySelector("[data-pc-err]");
+        if (!nm) { err.textContent = "이름을 입력하세요."; err.classList.remove("hidden"); return; }
+        var phone = modal.querySelector("[data-pc-phone]").value.trim(), email = modal.querySelector("[data-pc-email]").value.trim(),
+            company = modal.querySelector("[data-pc-company]").value.trim(), job = modal.querySelector("[data-pc-job]").value.trim();
+        pSave.disabled = true; err.classList.add("hidden");
+        var body = new URLSearchParams();
+        body.append("name", nm);
+        if (phone) body.append("phone", phone);
+        if (email) body.append("email", email);
+        if (company) body.append("company", company);
+        if (job) body.append("job_title", job);
+        fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); })
+          .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
+          .then(function () { pSave.disabled = false; });
+      });
+    }
+    input.addEventListener("focus", render);
+    input.addEventListener("click", render);
+    input.addEventListener("input", function () {
+      render();
+      var v = input.value.trim().toLowerCase();
+      var m = opts.filter(function (o) { return String(o.name).toLowerCase() === v; })[0];
+      if (m) { hid.value = m.id; setInfo(m, false); } else { hid.value = ""; setInfo(null, !!v); }
+    });
+    input.addEventListener("blur", function () { setTimeout(hide, 150); });
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    pop.addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]);
+      else if (b.hasAttribute("data-new")) openModal();
+    });
+    if (hid.value) { var init = opts.filter(function (o) { return String(o.id) === String(hid.value); })[0]; if (init) setInfo(init, false); } // 편집 초기값 정보
+  });
+})();
+
 // 드롭존([data-dropzone]): 파일 끌어놓기 또는 클릭 선택. CSP-safe(인라인 0, 외부 JS 파일).
 // [data-dropzone] 클릭 → 내부 input[type=file].click(). dragover/drop → input.files 할당 + 파일명 표시.
 (function () {
