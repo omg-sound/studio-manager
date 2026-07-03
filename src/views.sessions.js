@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, personCombo, personComboOptionsScript } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, listSessionDirectors } = require("./data");
 
@@ -259,9 +259,8 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
       </div>`;
   }
   // 편집 가능: 행 헤더 전체가 접기 토글. 오른쪽 끝 접기 버튼(chevron), 그 앞에 상태 배지.
-  // 예정 세션은 펼치지 않고 1클릭 '완료' 토글(POST /sessions/:id/status)을 상태 배지 옆에 노출.
+  // 예정 세션은 펼치지 않고 1클릭 '완료' 버튼(POST /sessions/:id/status)을 상태 배지 옆에 노출.
   // (summary 안 button은 자기 활성화만 일어나 details 토글을 유발하지 않으며, POST→리다이렉트라 전이 상태도 무관.)
-  const toggleTo = s.status === "완료" ? "예정" : "완료";
   const quickComplete = s.status === "예정"
     ? `<form method="post" action="/sessions/${s.id}/status">
             <input type="hidden" name="status" value="완료" />
@@ -275,20 +274,11 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
         <span class="flex shrink-0 items-center gap-2">${quickComplete}${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
+        <form id="del-sess-${s.id}" method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?" class="hidden"></form>
         <form method="post" action="/sessions/${s.id}" data-session-form data-session-id="${s.id}" data-dirty-form>
           ${sessionBookingFields(s, managers, rateItems, rooms)}
-          <p class="mt-3 text-center text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</p>
-          <button class="btn-primary mt-2 w-full py-2.5 text-base transition" type="submit" data-dirty-save>세션 저장</button>
+          ${dirtyActionRow({ deleteFormId: `del-sess-${s.id}`, deleteLabel: "삭제", saveLabel: "세션 저장" })}
         </form>
-        <div class="mt-2 flex gap-2">
-          <form method="post" action="/sessions/${s.id}/status">
-            <input type="hidden" name="status" value="${toggleTo}" />
-            <button class="btn-ghost btn-xs" type="submit">${toggleTo} 처리</button>
-          </form>
-          <form method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?">
-            <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
-          </form>
-        </div>
       </div>
     </details>`;
 }
