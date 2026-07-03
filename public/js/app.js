@@ -802,8 +802,7 @@
       var html = "";
       if (!q) {
         view = [];
-        html = '<button type="button" class="' + rowCls + '" data-search="1"><span>🔍 이름을 입력해 검색</span><span class="shrink-0 text-xs text-muted">기존 아티스트·연락처</span></button>' +
-          newRow("새 아티스트 등록");
+        html = newRow("새 아티스트 등록"); // 검색 안내 줄 폐기(타이핑하면 자동 검색)
       } else {
         view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }).slice(0, 12);
         html = view.map(pickRow).join("");
@@ -885,6 +884,84 @@
       var v = input.value.trim().toLowerCase();
       var match = opts.filter(function (o) { return String(o.name).toLowerCase() === v; })[0];
       if (!match) cid.value = "";
+    });
+  });
+})();
+
+// 업체 콤보([data-company-combo]): 소속사/레이블·제작사/운영사 — 타이핑=기존 업체 검색, 빈 입력=[＋새 등록].
+// 값은 업체명 TEXT(저장 시 ensureCompanyParty가 찾/생성). '새 등록'=간이 모달(fetch 생성 → 이름 채움).
+(function () {
+  "use strict";
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-company-combo]"), function (root) {
+    var input = root.querySelector("[data-cc-input]");
+    var pop = root.querySelector("[data-cc-pop]");
+    var dataEl = root.querySelector("[data-cc-options]");
+    var modal = root.querySelector("[data-cc-modal]");
+    if (!input || !pop || !dataEl) return;
+    var opts = [];
+    try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
+    var view = [];
+    var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+    function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
+    function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
+    function newRow(nm) {
+      var label = nm ? "'" + esc(nm) + "'(으)로 새 업체 등록" : "새 업체 등록";
+      return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+    }
+    function render() {
+      var q = input.value.trim().toLowerCase();
+      var html = "";
+      if (!q) { view = []; html = newRow(""); }
+      else {
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }).slice(0, 12);
+        html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span><span class="shrink-0 text-xs text-muted">' + esc(o.sub || "") + '</span></button>'; }).join("");
+        if (!view.some(function (o) { return String(o.name).toLowerCase() === q; })) html += newRow(input.value.trim());
+      }
+      pop.innerHTML = html; show();
+    }
+    function openModal() {
+      if (!modal) { hide(); return; }
+      var n = modal.querySelector("[data-cc-name]"); n.value = input.value.trim();
+      ["[data-cc-biz]", "[data-cc-owner]", "[data-cc-email]", "[data-cc-phone]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      modal.querySelector("[data-cc-err]").classList.add("hidden");
+      modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
+    }
+    if (modal) {
+      var cSave = modal.querySelector("[data-cc-save]"), cCancel = modal.querySelector("[data-cc-cancel]");
+      var closeModal = function () { modal.classList.add("hidden"); modal.classList.remove("flex"); };
+      cCancel.addEventListener("click", closeModal);
+      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+      cSave.addEventListener("click", function () {
+        var nm = modal.querySelector("[data-cc-name]").value.trim();
+        var err = modal.querySelector("[data-cc-err]");
+        if (!nm) { err.textContent = "업체명을 입력하세요."; err.classList.remove("hidden"); return; }
+        var body = new URLSearchParams();
+        body.append("type", "company"); body.append("name", nm);
+        if (modal.querySelector("[data-cc-agency]").checked) body.append("roles", "소속사/레이블");
+        if (modal.querySelector("[data-cc-prod]").checked) body.append("roles", "제작사");
+        var biz = modal.querySelector("[data-cc-biz]").value.trim(); if (biz) body.append("biz_no", biz);
+        var owner = modal.querySelector("[data-cc-owner]").value.trim(); if (owner) body.append("owner_name", owner);
+        var email = modal.querySelector("[data-cc-email]").value.trim(); if (email) body.append("email", email);
+        var phone = modal.querySelector("[data-cc-phone]").value.trim(); if (phone) body.append("phone", phone);
+        cSave.disabled = true; err.classList.add("hidden");
+        fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); input.value = d.name; closeModal(); fireInput(); })
+          .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
+          .then(function () { cSave.disabled = false; });
+      });
+    }
+    input.addEventListener("focus", render);
+    input.addEventListener("click", render);
+    input.addEventListener("input", render);
+    input.addEventListener("blur", function () { setTimeout(hide, 150); });
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    pop.addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      if (b.hasAttribute("data-idx")) { input.value = view[Number(b.getAttribute("data-idx"))].name; hide(); fireInput(); }
+      else if (b.hasAttribute("data-new")) openModal();
     });
   });
 })();
