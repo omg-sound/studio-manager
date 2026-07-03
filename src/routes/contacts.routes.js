@@ -28,7 +28,7 @@ const {
 } = require("../data");
 const people = require("../people");
 const { asyncHandler } = require("../lib/async"); // async 라우트 예외를 전역 핸들러로 전달(People API throw 시 요청 행 방지)
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, copyable } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable } = require("../views");
 
 const router = express.Router();
 
@@ -288,12 +288,7 @@ router.get("/:id", (req, res) => {
   ].filter(Boolean).join("");
   const infoCard = `
     ${editCard}
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-      <div class="space-y-1 text-sm">${derivedBits}</div>
-      <form method="post" action="/contacts/${c.id}/delete" data-confirm="${esc(c.name)} 연락처를 삭제할까요? 소속 이력도 함께 삭제됩니다.">
-        <button class="btn-ghost btn-sm text-danger" type="submit">삭제</button>
-      </form>
-    </div>`;
+    ${derivedBits ? `<div class="mt-3 space-y-1 text-sm">${derivedBits}</div>` : ""}`;
 
   const timeline = affs.length
     ? `<div class="space-y-2">${affs
@@ -475,11 +470,11 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
       </div>
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       ${affBlock}
-      <div class="flex items-center gap-2">
-        <button class="btn-primary transition" type="submit"${isEdit ? " data-dirty-save" : ""}>${isEdit ? "저장" : "추가"}</button>
-        ${isEdit ? `<span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>` : `<a href="${cancelHref}" class="btn-ghost">취소</a>`}
-      </div>
-    </form>`;
+      ${isEdit
+        ? dirtyActionRow({ deleteFormId: `del-contact-${c.id}`, deleteLabel: "연락처 삭제" })
+        : dirtyActionRow({ cancelHref: cancelHref, saveLabel: "추가", dirty: false })}
+    </form>
+    ${isEdit ? `<form id="del-contact-${c.id}" method="post" action="/contacts/${c.id}/delete" data-confirm="${esc(c.name)} 연락처를 삭제할까요? 소속 이력도 함께 삭제됩니다." class="hidden"></form>` : ""}`;
 }
 
 module.exports = router;

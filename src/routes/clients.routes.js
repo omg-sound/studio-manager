@@ -22,7 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, personCombo, copyable } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -565,10 +565,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
   ].filter(Boolean).join("");
   const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
   const filesBlock = clientFilesBlock(c, files, fileErr, fileOk); // 자체 '첨부 서류' 헤딩 포함 · 깨진 링크는 경고
-  const deleteForm = `
-    <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-4">
-      <button class="btn-ghost text-danger btn-sm" type="submit">클라이언트 삭제</button>
-    </form>`;
+  // 삭제는 편집 폼(clientForm)의 저장 줄 왼쪽 버튼으로 이동(UI 통일: 저장 우측·삭제 좌측·같은 줄).
 
   // 섹션 순서(사용자 지정): ① 프로젝트/청구·결제 → ② 상세 정보(편집 폼) → ③ 담당자 연락처 → ④ 첨부 서류 → 삭제
   const body = `
@@ -582,8 +579,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
     ${crossRefBlock}
     ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}
     ${agencyLink ? `<div class="mt-3">${agencyLink}</div>` : ""}
-    ${rosterSection}
-    ${deleteForm}`;
+    ${rosterSection}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
 }));
 
@@ -752,17 +748,12 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       </div>
       ${type === "company" ? clientContactCombo(c, isEdit) : ""}
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
-      <div class="flex items-center gap-2">
-        ${isEdit
-          ? `<button class="btn-primary transition" type="submit" data-dirty-save>저장</button><span class="ml-1 text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>`
-          : `<button class="btn-primary" type="submit">추가</button><a href="/clients/new" class="btn-ghost">취소</a>`}
-      </div>
+      ${isEdit
+        ? dirtyActionRow({ deleteFormId: `del-client-${c.id}`, deleteLabel: "클라이언트 삭제" })
+        : dirtyActionRow({ cancelHref: "/clients/new", saveLabel: "추가", dirty: false })}
     </form>
     ${withExtras && isEdit && canFiles && type === "company" ? `<div>${clientFileSection(c, fileMap, fileErr)}</div>` : ""}
-    ${withExtras && isEdit ? `
-    <form method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="mt-3">
-      <button class="btn-ghost text-danger" type="submit">클라이언트 삭제</button>
-    </form>` : ""}`;
+    ${isEdit ? `<form id="del-client-${c.id}" method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="hidden"></form>` : ""}`;
 }
 
 /** 첨부 서류 카드(상세에서 분리 배치용). 업체(company)만 표시(아티스트·그룹은 첨부 없음). fileOk=실제 접근 가능 여부(깨진 링크 경고). */

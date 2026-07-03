@@ -53,7 +53,7 @@ const {
   getStudioInfo,
   getStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, personCombo, payerCombo } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -456,12 +456,8 @@ function projectMetaReadonly(p) {
 function projectMetaCard(p, err = "") {
   return `
     <div class="card">
+      <form id="del-proj-${p.id}" method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?" class="hidden"></form>
       ${projectEditForm(p, err)}
-      <div class="mt-4 border-t border-border pt-4">
-        <form method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?">
-          <button class="btn-ghost btn-xs text-danger" type="submit">프로젝트 삭제</button>
-        </form>
-      </div>
     </div>`;
 }
 
@@ -714,15 +710,17 @@ function projectForm(p = {}, err = "") {
     <form method="post" action="${action}" class="card space-y-3">
       <input type="hidden" name="project_type" value="session" />
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
-      <div>
-        <label class="label">프로젝트 명</label>
-        <input class="input" name="title" value="${esc(p.title || "")}" placeholder="예: OOO 세션 (가제)" required />
-      </div>
-      <div class="grid gap-3 sm:grid-cols-3">
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label">프로젝트 명</label>
+          <input class="input" name="title" value="${esc(p.title || "")}" placeholder="예: OOO 세션 (가제)" required />
+        </div>
         <div>
           <label class="label">아티스트</label>
           ${artistCombo(p)}
         </div>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">소속사/레이블</label>
           ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속사/레이블")}
@@ -745,9 +743,9 @@ function projectForm(p = {}, err = "") {
         <textarea class="input" name="memo" rows="3" placeholder="비고">${esc(p.memo || "")}</textarea>
       </div>
       ${projectFieldDatalists()}
-      <div class="flex gap-2">
+      <div class="flex items-center justify-between gap-3 pt-1">
+        <a href="/projects" class="btn-ghost btn-sm">취소</a>
         <button class="btn-primary" type="submit">추가</button>
-        <a href="/projects" class="btn-ghost">취소</a>
       </div>
     </form>`;
 }
@@ -790,10 +788,7 @@ function projectEditForm(p = {}, err = "") {
         <textarea class="input" name="memo" rows="3">${esc(p.memo || "")}</textarea>
       </div>
       ${projectFieldDatalists()}
-      <div class="flex items-center justify-end gap-3">
-        <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
-        <button type="submit" class="btn-primary transition" data-dirty-save>저장</button>
-      </div>
+      ${dirtyActionRow({ deleteFormId: `del-proj-${p.id}`, deleteLabel: "프로젝트 삭제" })}
     </form>`;
 }
 

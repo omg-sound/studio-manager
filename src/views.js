@@ -359,6 +359,24 @@ function explain(content, { label = "설명", cls = "mt-1" } = {}) {
 }
 
 /**
+ * 편집 폼 하단 버튼 줄 — UI 통일: **저장은 오른쪽, 삭제(파괴적 동작)는 왼쪽**, 같은 줄.
+ * 삭제는 별도 hidden `<form id=deleteFormId>`에 `form=` 속성으로 연결(폼 중첩 회피). deleteFormId 없으면 저장만(오른쪽).
+ * dirty 저장 패턴(data-dirty-save/hint)과 함께 쓴다. cancelHref 있으면 삭제 자리에 '취소' 링크.
+ */
+function dirtyActionRow({ deleteFormId = "", deleteLabel = "삭제", saveLabel = "저장", cancelHref = "", dirty = true } = {}) {
+  const left = deleteFormId
+    ? `<button type="submit" form="${esc(deleteFormId)}" class="btn-ghost btn-sm text-danger">${esc(deleteLabel)}</button>`
+    : cancelHref
+      ? `<a href="${esc(cancelHref)}" class="btn-ghost btn-sm">취소</a>`
+      : `<span></span>`;
+  const saveBtn = dirty
+    ? `<button type="submit" class="btn-primary transition" data-dirty-save>${esc(saveLabel)}</button>`
+    : `<button type="submit" class="btn-primary">${esc(saveLabel)}</button>`;
+  const hint = dirty ? `<span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>` : "";
+  return `<div class="flex items-center justify-between gap-3 pt-1">${left}<div class="flex items-center gap-3">${hint}${saveBtn}</div></div>`;
+}
+
+/**
  * 프로젝트 유형 배지 HTML.
  * @param {string} type "session" | "task" | 기타
  * @returns {string} HTML — .badge-primary(세션) | .badge-neutral(작업/미정)
@@ -579,4 +597,4 @@ function copyable(value, { cls = "", display = "" } = {}) {
   return `<button type="button" data-copy="${v}" class="rounded text-left hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}</button>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, copyable };
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, copyable };
