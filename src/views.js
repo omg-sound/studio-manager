@@ -527,13 +527,16 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
   const cashSet = new Set((cashReceiptIds || []).map(Number));
   const CO_WARN = "세금계산서 정보(사업자등록번호)가 없습니다 — 클라이언트 상세에서 입력하세요.";
   const PS_WARN = "현금영수증 정보가 없습니다 — 청구처 상세에서 입력하세요.";
+  // 아티스트(개인)는 clientOptions(is_artist)에도, contactOptions(kind=person)에도 들어가 같은 party가 콤보에 두 번 뜬다 →
+  // 이미 클라이언트로 노출된 사람은 담당자 중복 제외(중복 제거). 둘 다 같은 party.id라 청구처 결과는 동일.
+  const clientIds = new Set(clientOptions.map((c) => Number(c.id)));
   const items = [
     ...clientOptions.map((c) => {
       const co = c.kind === "company" ? 1 : 0;
       const warn = co ? (taxSet.has(Number(c.id)) ? "" : CO_WARN) : (cashSet.has(Number(c.id)) ? "" : PS_WARN);
       return { label: c.name, sub: c.kind || "", cid: c.id, pid: 0, co, warn };
     }),
-    ...contactOptions.map((o) => ({ label: o.name, sub: "담당자" + (o.current_client ? " · " + o.current_client : o.phone ? " · " + o.phone : ""), cid: 0, pid: o.id, co: 0, warn: cashSet.has(Number(o.id)) ? "" : PS_WARN })),
+    ...contactOptions.filter((o) => !clientIds.has(Number(o.id))).map((o) => ({ label: o.name, sub: "담당자" + (o.current_client ? " · " + o.current_client : o.phone ? " · " + o.phone : ""), cid: 0, pid: o.id, co: 0, warn: cashSet.has(Number(o.id)) ? "" : PS_WARN })),
   ];
   const json = JSON.stringify(items).replace(/</g, "\\u003c");
   const selLabel = sel ? (sel.kind ? `${sel.name} · ${sel.kind}` : sel.name) : "";
