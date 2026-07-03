@@ -955,7 +955,13 @@ function comboKbdNav(input, pop) {
               .catch(function () { b.disabled = false; });
           }
         });
+        comboKbdNav(agInput, agPop); // 소속사 미니콤보도 방향키·엔터 선택
       }
+      // 모달 안에서 엔터 → 바깥 프로젝트 폼 제출 방지 + '등록'(mSave) 실행(소속사 콤보가 이미 처리했으면 스킵)
+      modal.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" || e.defaultPrevented || (e.target && e.target.tagName === "TEXTAREA")) return;
+        e.preventDefault(); mSave.click();
+      });
     }
 
     input.addEventListener("focus", render);
@@ -1058,6 +1064,11 @@ function comboKbdNav(input, pop) {
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
+      // 모달 안에서 엔터 → 바깥 폼 제출 방지 + '등록'(cSave) 실행
+      modal.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" || e.defaultPrevented || (e.target && e.target.tagName === "TEXTAREA")) return;
+        e.preventDefault(); cSave.click();
+      });
     }
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
@@ -1158,6 +1169,11 @@ function comboKbdNav(input, pop) {
           .then(function (d) { if (!d || !d.ok) throw new Error("fail"); opts.push({ id: d.id, name: d.name, phone: phone, email: email, company: company }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 새 담당자를 로컬 옵션에 추가
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
+      });
+      // 모달 안에서 엔터 → 바깥 폼 제출 방지 + '등록'(pSave) 실행
+      modal.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" || e.defaultPrevented || (e.target && e.target.tagName === "TEXTAREA")) return;
+        e.preventDefault(); pSave.click();
       });
     }
     input.addEventListener("focus", render);
