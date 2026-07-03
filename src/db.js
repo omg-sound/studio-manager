@@ -207,6 +207,16 @@ function init() {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 입금 이력(payments_table_v1) — 청구 1건에 부분납 여러 건. invoices.paid_amount는 SUM(payments.amount) 파생 캐시(add/deletePayment가 유지).
+    CREATE TABLE IF NOT EXISTS payments (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_id  INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      amount      INTEGER NOT NULL DEFAULT 0, -- 입금액(원)
+      paid_on     TEXT,                       -- 'YYYY-MM-DD' 입금일
+      memo        TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- 앱 전역 상태(키-값): drive folder_id 캐시, refresh token(암호화), 테마 등.
     CREATE TABLE IF NOT EXISTS admin_state (
       key   TEXT PRIMARY KEY,
@@ -405,6 +415,16 @@ function init() {
   if (!getState("task_status_drop_inprogress_v1")) {
     d.exec("UPDATE track_tasks SET status = 'Pending' WHERE status = 'In_Progress'");
     setState("task_status_drop_inprogress_v1", "done");
+  }
+  // 입금 이력 분리(payments_table_v1): 기존 paid_amount>0을 payments 이력 1건으로 백필(이력 없는 인보이스만). 이후 paid_amount는 SUM(payments) 파생 캐시.
+  if (!getState("payments_backfill_v1")) {
+    d.prepare(
+      `INSERT INTO payments (invoice_id, amount, paid_on, memo)
+       SELECT i.id, i.paid_amount, COALESCE(i.issued_date, date('now')), '기존 입금 이관'
+       FROM invoices i
+       WHERE i.paid_amount > 0 AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.invoice_id = i.id)`
+    ).run();
+    setState("payments_backfill_v1", "done");
   }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.

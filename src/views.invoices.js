@@ -72,7 +72,46 @@ function invoiceBadge(inv) {
  * @param {object} inv 인보이스(+ paid_amount, tax_amount, discount_amount, status …)
  * @param {object} opts items=청구 항목, isAdmin=청구권자(폼 노출), returnTo=복귀 경로(open 포함)
  */
-function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } = {}) {
+/**
+ * 입금 이력 블록(이력 목록 + '입금 추가' 폼 + '완납'). 전체 화면·청구 탭 펼침 공용.
+ * paid_amount는 SUM(payments) 파생이라 이 블록이 입금의 단일 편집 지점(추가·삭제).
+ */
+function paymentHistory(inv, payments = [], { ret = "", compact = false } = {}) {
+  const sz = compact ? "py-1.5 text-sm" : "";
+  const btn = compact ? "btn-sm" : "";
+  const retHidden = ret ? `<input type="hidden" name="return" value="${esc(ret)}" />` : "";
+  const rows = payments.length
+    ? payments
+        .map(
+          (p) => `
+        <div class="flex items-center justify-between gap-2 py-0.5">
+          <div class="min-w-0 text-xs text-muted">${p.paid_on ? esc(formatYmdShort(p.paid_on)) : "날짜 미상"}${p.memo ? " · " + esc(p.memo) : ""}</div>
+          <div class="flex shrink-0 items-center gap-2">
+            <span class="tabular text-sm font-medium">${formatKRW(p.amount)}</span>
+            <form method="post" action="/invoices/${inv.id}/payments/${p.id}/delete" data-confirm="이 입금 기록을 삭제할까요?">${retHidden}<button class="text-xs text-danger hover:underline" type="submit">삭제</button></form>
+          </div>
+        </div>`
+        )
+        .join("")
+    : `<div class="text-xs text-muted">입금 내역 없음</div>`;
+  return `
+    <div class="space-y-1">
+      <div class="flex items-center justify-between gap-2">
+        <label class="label mb-0 text-xs">입금 이력</label>
+        <span class="text-xs text-muted">받은 총액 <b class="tabular text-fg">${formatKRW(inv.paid_amount)}</b></span>
+      </div>
+      <div class="space-y-0.5 rounded-lg border border-border bg-surface/40 p-2">${rows}</div>
+      <form method="post" action="/invoices/${inv.id}/pay" class="flex flex-wrap items-stretch gap-2 pt-1">
+        ${retHidden}
+        <input class="input ${sz} min-w-0 flex-1" name="amount" inputmode="numeric" placeholder="입금액(원)" />
+        <input class="input ${sz} w-36" type="date" name="paid_on" aria-label="입금일" />
+        <button class="btn-ghost ${btn} shrink-0" type="submit">입금 추가</button>
+        <button class="btn-primary ${btn} shrink-0" name="full" value="1" title="남은 잔금 전액을 입금 처리">완납</button>
+      </form>
+    </div>`;
+}
+
+function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, returnTo = "" } = {}) {
   const bal = balanceOf(inv);
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행(미발행 초안도 견적서·내역서·거래명세서)
   const ret = esc(returnTo);
@@ -127,15 +166,7 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "" } =
              <noscript><button class="btn-ghost btn-sm">변경</button></noscript>
            </form>
          </div>
-         <form method="post" action="/invoices/${inv.id}/pay" class="space-y-1">
-           <input type="hidden" name="return" value="${ret}" />
-           <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
-           <div class="flex items-stretch gap-2">
-             <input class="input py-1.5 text-sm flex-1" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
-             <button class="btn-ghost btn-sm shrink-0" type="submit">입력액으로 갱신</button>
-             <button class="btn-primary btn-sm shrink-0" name="full" value="1">완납 처리</button>
-           </div>
-         </form>
+         ${paymentHistory(inv, payments, { ret, compact: true })}
          <div class="flex items-center gap-2 pt-0.5">
            <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다.">
              <input type="hidden" name="return" value="${ret}" />
@@ -202,7 +233,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
           ${detailsChevron()}
         </div>
       </summary>
-      ${invoiceExpandBody(inv, { items, isAdmin, returnTo })}
+      ${invoiceExpandBody(inv, { items, payments: inv.payments || [], isAdmin, returnTo })}
     </details>`;
   }
 
@@ -284,4 +315,4 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </div>`;
 }
 
-module.exports = { invoiceBadge, invoiceRow, invoicesSection, displayStatus, payerInfoCard };
+module.exports = { invoiceBadge, invoiceRow, invoicesSection, displayStatus, payerInfoCard, paymentHistory };

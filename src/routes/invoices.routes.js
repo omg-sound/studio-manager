@@ -21,9 +21,12 @@ const {
   listPersonsForOrg,
   snapshotPayer,
   ensureInvoiceNumber,
+  listPayments,
+  addPayment,
+  deletePayment,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup, explain, payerCombo } = require("../views");
-const { invoiceRow, invoiceBadge, payerInfoCard } = require("../views.invoices");
+const { invoiceRow, invoiceBadge, payerInfoCard, paymentHistory } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
 const { asyncHandler } = require("../lib/async");
@@ -220,6 +223,7 @@ router.get("/:id", requireBilling, (req, res) => {
   const bal = balanceOf(inv);
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
+  const payments = admin ? listPayments(inv.id) : [];
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
   // 청구처 정보(대표자·사업자번호·담당자 연락처) — 발행 시점 스냅샷 우선(payerView). biz_license 파일 링크만 실시간(현재 첨부).
   const { client: payerClient, contacts: payerContacts } = payerView(inv);
@@ -250,15 +254,7 @@ router.get("/:id", requireBilling, (req, res) => {
           <noscript><button class="btn-ghost">변경</button></noscript>
         </form>
       </div>
-      <form method="post" action="/invoices/${inv.id}/pay" class="space-y-1">
-        <label class="label mb-0.5 text-xs">지금까지 받은 총액(원)</label>
-        <div class="flex items-stretch gap-2">
-          <input class="input flex-1" name="paid_amount" inputmode="numeric" value="${inv.paid_amount || ""}" placeholder="0" />
-          <button class="btn-ghost shrink-0" type="submit">입력액으로 갱신</button>
-          <button class="btn-primary shrink-0" name="full" value="1">완납 처리</button>
-        </div>
-        <p class="text-[11px] text-muted">누적 입금액 기준(부분납 가능)</p>
-      </form>
+      ${paymentHistory(inv, payments, {})}
       <div class="flex items-center gap-2 pt-1">
         <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다."><button class="btn-ghost text-danger">삭제</button></form>
         <span class="text-xs text-muted">수정이 필요하면 삭제 후 다시 발행하세요.</span>
@@ -345,26 +341,33 @@ function invoiceItemsCard(items) {
 
 // ── 수정 라우트 없음: 발행=확정 원칙. 발행된 청구의 내용 변경은 삭제(POST /:id/delete) 후 다시 발행한다. ──
 
-// ── 입금 처리(관리자) ── 계산서·입금 축(tax_status)만 조정. 청구서 발행 상태(status)는 건드리지 않는다.
+// ── 입금 추가(관리자) ── 입금 1건을 이력(payments)에 추가한다(부분납 누적). paid_amount는 SUM(payments) 파생.
 router.post("/:id/pay", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const paid = req.body.full === "1" ? inv.amount : parseMoney(req.body.paid_amount);
-  // 완납이면 계산서·입금 축을 입금완료로. 미완납인데 기존이 입금완료면 계산서 발행으로 강등(완납 취소 정합성). 그 외는 유지.
-  let tax = inv.tax_status;
-  if (inv.amount > 0 && paid >= inv.amount) tax = "입금완료";
-  else if (inv.tax_status === "입금완료") tax = "계산서 발행";
-  const d = db();
-  d.exec("BEGIN IMMEDIATE");
-  try {
-    d.prepare("UPDATE invoices SET paid_amount=?, tax_status=? WHERE id=?").run(paid, tax, inv.id);
-    ensureInvoiceNumber({ ...inv, tax_status: tax }); // 입금완료/계산서 발행이면 채번 보장
-    d.exec("COMMIT");
-  } catch (e) {
-    try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
-    throw e;
+  // '완납 처리'=남은 잔금 한 건 입금. 그 외=입력액 1건. 이력 방식이라 기존 입금은 그대로 두고 더한다.
+  const add = req.body.full === "1" ? balanceOf(inv) : parseMoney(req.body.amount);
+  const paid = addPayment(inv.id, { amount: add, paid_on: cleanYmd(req.body.paid_on), memo: req.body.pay_memo });
+  // 완납이면 계산서·입금 축을 입금완료로 자동 승격(강등은 이력 삭제 시). 누적 입금이 총액 이상.
+  if (inv.amount > 0 && paid >= inv.amount && inv.tax_status !== "입금완료") {
+    db().prepare("UPDATE invoices SET tax_status='입금완료' WHERE id=?").run(inv.id);
+    ensureInvoiceNumber({ ...inv, tax_status: "입금완료" });
   }
   res.redirect(returnTo(req, `/invoices/${inv.id}`, "paid"));
+});
+
+// ── 입금 이력 1건 삭제(관리자) ── 삭제 후 잔금이 생기면 입금완료→계산서 발행으로 강등(완납 취소 정합성).
+router.post("/:id/payments/:pid/delete", requireBilling, (req, res) => {
+  const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const p = db().prepare("SELECT invoice_id FROM payments WHERE id = ?").get(Number(req.params.pid));
+  if (p && Number(p.invoice_id) === inv.id) {
+    const r = deletePayment(req.params.pid);
+    if (r && inv.tax_status === "입금완료" && r.paid < inv.amount) {
+      db().prepare("UPDATE invoices SET tax_status='계산서 발행' WHERE id=?").run(inv.id);
+    }
+  }
+  res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
 });
 
 // ── 청구서 상태 변경(관리자) ── 미발행 ↔ 발행. 계산서·입금과 독립.
@@ -391,14 +394,14 @@ router.post("/:id/tax-status", requireBilling, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tax = normalizeTaxStatus(req.body.tax_status);
-  let paid = inv.paid_amount;
-  if (tax === "입금완료") paid = inv.amount; // 입금완료 선택 → 완납(입금액=총액)
-  // 입금완료에서 다른 계산서 상태로 옮겨도 입금액은 보존한다(문서 단계 변경이 실제 입금 기록을 지우면 안 됨).
-  // 완납 취소가 필요하면 '입금 처리'의 입력액 0/완납 취소로 명시 조정한다.
+  // 입금완료 선택 → 완납. 잔금이 있으면 그만큼 입금 이력 1건 추가(paid_amount는 SUM(payments)로 자동 반영).
+  if (tax === "입금완료") { const bal = balanceOf(inv); if (bal > 0) addPayment(inv.id, { amount: bal, memo: "입금완료 처리" }); }
+  // 입금완료에서 다른 계산서 상태로 옮겨도 입금 이력은 보존한다(문서 단계 변경이 실제 입금 기록을 지우면 안 됨).
+  // 완납 취소가 필요하면 입금 이력에서 해당 건을 삭제한다.
   const d = db();
   d.exec("BEGIN IMMEDIATE");
   try {
-    d.prepare("UPDATE invoices SET tax_status=?, paid_amount=? WHERE id=?").run(tax, paid, inv.id);
+    d.prepare("UPDATE invoices SET tax_status=? WHERE id=?").run(tax, inv.id);
     ensureInvoiceNumber({ ...inv, tax_status: tax }); // 계산서 발행/입금완료면 채번 보장
     d.exec("COMMIT");
   } catch (e) {

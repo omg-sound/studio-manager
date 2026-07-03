@@ -13,7 +13,7 @@
 > **디자인**: **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용), 쿨톤 info색(`badge-info`), 사이드바 그룹화(운영/청구/관리), 수동 테마 토글(크림 기본, `html[data-theme]`+localStorage), `listGroup`/`listRow`/`emptyState` 공통 헬퍼 +
 > **보안 하드닝**: CSRF 기본거부·OAuth 논스·SSRF 차단·로고 매직바이트.
 > **용어**: 프로젝트 = **유형 구분 없음**(`project_type` 레거시) / **청구처**(=실결제자, `client_id` — 청구 시점 결정, 메타엔 자동파생 기본값) / 녹음 종류 = 단가표 항목(rate_item) / 세션 종류 = session_type / 룸 = rooms / 클라이언트(회사)·**연락처(담당자·소속이력)**·고객 담당자(`contact_id`)·담당 엔지니어(`manager_id`).
-> 미완(검증): 프로덕션에서 PDF 렌더·알림 웹훅 동작 확인(Drive 실연동은 라이브 완료). 선택: 구글 캘린더 역방향 동기화·알림 Gmail 어댑터·입금 이력 분리.
+> 미완(검증): 프로덕션에서 PDF 렌더·알림 웹훅 동작 확인(Drive 실연동은 라이브 완료). 선택: 구글 캘린더 역방향 동기화·알림 Gmail 어댑터. (**입금 이력 분리·인라인 아티스트 콤보 통일 = 2026-07-03 완료**)
 >
 > **🏁 v1.0 마무리(2026-07-01) — 위 스냅샷의 최신 패러다임(이전 인라인 서술보다 우선)**:
 > - **저장 = 명시적 dirty 버튼**(자동저장 전면 폐기): 편집 폼 전부 `[data-dirty-form]`+`[data-dirty-save]`(변경 없으면 흐리게·비활성, 변경 시 하이라이트). 프로젝트 메타·세션·곡·콘텐츠 작업·연락처·클라이언트·단가표·작업 종류 모두 적용.
@@ -26,7 +26,7 @@
 >
 > **후속 마무리(2026-07-02)**: 파티 모델 `node:test` 12개 추가(총 52) · 소소한 정리(clientForm 잔재 필드·Google 회사↔소속이력 동기화·CLAUDE 문서) · **거래명세서 PDF 견고화**(@resvg/resvg-js 지연 로드 — 네이티브 부재 시 청구 라우트 무중단·PDF만 503) · **구글 캘린더 역방향 동기화**(`/sessions` 수동 버튼: 구글 삭제→세션 취소·시간변경→갱신, 청구 세션 제외·루프 방지·KST 정규화).
 >
-> **클라이언트/연락처 UX·그룹 개편(2026-07-02)**: **Drive 루트 폴더 중복 방지**(이름 검색 폴백 + `/drive-check` reconcile·drive.file 토큰 변경 시 원본 미검색 해결). 연락처 3탭(외부/외주/스태프)·클라이언트 필터→탭. 목록 행 정보 재배치(회사/대표 text-xs·전화 위·이메일 아래·업체는 사업자→전화→이메일)·**이름만 링크**(`listRowLinked`, 우측 연락처 복사 시 상세 미이동). **클라이언트 '그룹' 분류 표면화**(kind='group' 탭·배지) → **그룹↔소속 멤버 연결**(`parties.group_id`·그룹 상세 멤버 관리·아티스트/연락처 상세 소속 그룹 select·`POST /clients/:id/members`) + **새 클라이언트 유형 3택 흐름**(업체/아티스트/그룹, `clientForm(formType)`·kind select 제거·'기타' 폐기·'제작사'→'제작사/운영사' 표기[저장값 유지]). 잔여 TODO=선택 항목뿐(입금 이력 분리·Gmail 어댑터·인라인 아티스트 콤보 통일). **Drive 실연동 라이브 완료**(studio@omgworks.kr 고정, 업로드·일일 백업 오프사이트 정상).
+> **클라이언트/연락처 UX·그룹 개편(2026-07-02)**: **Drive 루트 폴더 중복 방지**(이름 검색 폴백 + `/drive-check` reconcile·drive.file 토큰 변경 시 원본 미검색 해결). 연락처 3탭(외부/외주/스태프)·클라이언트 필터→탭. 목록 행 정보 재배치(회사/대표 text-xs·전화 위·이메일 아래·업체는 사업자→전화→이메일)·**이름만 링크**(`listRowLinked`, 우측 연락처 복사 시 상세 미이동). **클라이언트 '그룹' 분류 표면화**(kind='group' 탭·배지) → **그룹↔소속 멤버 연결**(`parties.group_id`·그룹 상세 멤버 관리·아티스트/연락처 상세 소속 그룹 select·`POST /clients/:id/members`) + **새 클라이언트 유형 3택 흐름**(업체/아티스트/그룹, `clientForm(formType)`·kind select 제거·'기타' 폐기·'제작사'→'제작사/운영사' 표기[저장값 유지]). 잔여 TODO=선택 항목뿐(Gmail 어댑터 등; 입금 이력 분리·인라인 아티스트 콤보 통일은 2026-07-03 완료). **Drive 실연동 라이브 완료**(studio@omgworks.kr 고정, 업로드·일일 백업 오프사이트 정상).
 
 ---
 
@@ -97,7 +97,8 @@ DEV_LOGIN=1 npm run dev     # build:css 후 서버 (http://localhost:3000)
 | `project_tracks` | **곡·콘텐츠**. `content_type[Music\|Video_Post]` 상수·정규화는 있으나 **UI 미노출 → 현재 전부 Music** |
 | `track_tasks` | **작업**. `task_type`·`billing_type`·`unit_price`·`engineer_name`·`engineer_id`→PM·`worker_rate`(외주 지급단가)·`status`·`is_invoiced`·`session_id`(세션 직접 청구)·`worker_paid`/`worker_paid_date`(외주 정산). 정산 합계=Σ`worker_rate` |
 | `sessions` | **세션(일정)**. `session_type`·`session_date`·`start_time`/`end_time`·`booker_name`·`engineer_name`·`status`·`rate_item_id`·`room_id`→rooms·`gcal_event_id` |
-| `invoices` / `invoice_items` | 청구 + 라인아이템 스냅샷. 채번 원자화(BEGIN/COMMIT) |
+| `invoices` / `invoice_items` | 청구 + 라인아이템 스냅샷. 채번 원자화(BEGIN/COMMIT). `paid_amount`=**`SUM(payments)` 파생 캐시** |
+| `payments` | **입금 이력**(청구 1건에 부분납 여러 건, `invoice_id`·`amount`·`paid_on`·`memo`). `paid_amount`의 단일 편집 지점(add/deletePayment·recomputePaid). `payments_backfill_v1`로 기존 paid_amount 백필 |
 | `project_managers` | **담당자 마스터**. `user_id` 링크=하우스 엔지니어(로그인 자동 연계), null=외주 작업자. 세션·작업 담당 select 출처. 외주 작업자는 **`/workers` 메뉴**(목록·작업 히스토리·정산)에서만 관리(일원화 완료) |
 | `task_types` | **작업 종류 카탈로그**(곡·콘텐츠 후반작업). config `TASK_TYPES` 1회 시드 후 DB 단일 출처. `track_tasks.task_type`이 key 보관(FK 아님), 라벨/그룹은 data.js 캐시. 삭제-only |
 | `project_service_items` | 레거시(구 services JSON 라벨 호환). 관리 UI 폐기(작업 종류 카탈로그가 대체), 테이블만 잔존 |
@@ -179,7 +180,7 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 2. ~~Drive 실연동 검증~~ **완료 — 라이브**(업로드·일일 백업 오프사이트 정상).
 3. (선택) 구글 캘린더 역방향 동기화(캘린더 삭제→앱 반영) — 보류 중.
 4. (선택) 알림 Gmail 어댑터(현재 웹훅만; `notify.js` 어댑터 슬롯).
-5. (선택) 입금 이력 분리(`payments` 테이블) — 현재 `paid_amount` 단일 컬럼으로 부분납 처리.
+5. ~~입금 이력 분리(`payments` 테이블)~~ **완료(2026-07-03)** — `payments` 테이블 + `paid_amount` 파생 캐시(SUM). 입금 건별 추가·이력 삭제·완납, `payments_backfill_v1` 백필. `paymentHistory` UI(전체화면·청구 탭 공용).
 6. (선택) 자료 다중 업로드·백업 오프사이트 전송.
 7. ✅ (완료) **data.js 모듈 분리** — 2049→58줄 순수 재export 허브 + 14개 도메인 모듈(`src/data/*.js`). 공개 export 124개 분리 전후 동일(매 커밋 대조). 상호의존(invoices↔sessions)만 지연 require, 나머지는 형제 모듈 직접 require. CLAUDE.md TODO 9 참조.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.

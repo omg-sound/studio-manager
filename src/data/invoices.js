@@ -87,6 +87,57 @@ function isOverdue(inv) {
   return inv.status === "발행" && !!inv.due_date && todayYmd() > inv.due_date && balanceOf(inv) > 0;
 }
 
+// ── 입금 이력(payments) ── invoices.paid_amount는 SUM(payments.amount) 파생 캐시. 모든 add/delete가 recomputePaid로 동기화한다.
+
+/** 청구 1건의 입금 이력(입금일 오름차순). */
+function listPayments(invoiceId) {
+  return db()
+    .prepare("SELECT * FROM payments WHERE invoice_id = ? ORDER BY COALESCE(paid_on, '') ASC, id ASC")
+    .all(Number(invoiceId));
+}
+
+/** invoices.paid_amount = SUM(payments). 반환=새 누적 입금액. */
+function recomputePaid(invoiceId) {
+  const sum = db().prepare("SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE invoice_id = ?").get(Number(invoiceId)).s;
+  db().prepare("UPDATE invoices SET paid_amount = ? WHERE id = ?").run(sum, Number(invoiceId));
+  return sum;
+}
+
+/** 입금 1건 추가(원자적으로 이력 INSERT + paid_amount 재계산). amount<=0이면 무시. 반환=새 누적 입금액. */
+function addPayment(invoiceId, { amount, paid_on, memo } = {}) {
+  const amt = Math.max(0, parseMoney(amount));
+  if (amt <= 0) return db().prepare("SELECT paid_amount FROM invoices WHERE id = ?").get(Number(invoiceId)).paid_amount || 0;
+  const d = db();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare("INSERT INTO payments (invoice_id, amount, paid_on, memo) VALUES (?, ?, ?, ?)")
+      .run(Number(invoiceId), amt, paid_on || todayYmd(), memo || null);
+    const sum = recomputePaid(invoiceId);
+    d.exec("COMMIT");
+    return sum;
+  } catch (e) {
+    try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
+    throw e;
+  }
+}
+
+/** 입금 이력 1건 삭제 + paid_amount 재계산. 반환={invoiceId, paid} 또는 null(없음). */
+function deletePayment(paymentId) {
+  const p = db().prepare("SELECT * FROM payments WHERE id = ?").get(Number(paymentId));
+  if (!p) return null;
+  const d = db();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare("DELETE FROM payments WHERE id = ?").run(p.id);
+    const paid = recomputePaid(p.invoice_id);
+    d.exec("COMMIT");
+    return { invoiceId: p.invoice_id, paid };
+  } catch (e) {
+    try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
+    throw e;
+  }
+}
+
 // ── 청구 후보(프로젝트 단위) + 채번 + 스냅샷 조회 ──
 
 function listUnbilledTasksForProject(user, projectId) {
@@ -439,4 +490,8 @@ module.exports = {
   getInvoiceForUser,
   invoiceStats,
   listInvoicesForProject,
+  listPayments,
+  addPayment,
+  deletePayment,
+  recomputePaid,
 };

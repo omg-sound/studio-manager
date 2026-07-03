@@ -171,6 +171,12 @@ function ensureInvoice(title, projectLike, clientName, amount, paid, status, iss
     issuedOffset == null ? null : addDays(issuedOffset),
     dueOffset == null ? null : addDays(dueOffset)
   );
+  // 입금 이력(payments)도 함께 시드 — paid_amount는 SUM(payments) 파생이라 정합 유지. seed는 init 이후라 백필 게이트가 못 잡음.
+  if (paid > 0) {
+    const inv = d.prepare("SELECT id FROM invoices WHERE title = ?").get(title);
+    d.prepare("INSERT INTO payments (invoice_id, amount, paid_on, memo) VALUES (?, ?, ?, ?)")
+      .run(inv.id, paid, addDays(issuedOffset == null ? 0 : issuedOffset), "샘플 입금");
+  }
   console.log("  + 청구:", title, `(청구서 ${status} · ${taxStatus})`);
 }
 
