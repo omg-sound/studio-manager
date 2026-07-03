@@ -664,7 +664,12 @@
       var wrap = addBtn.closest("[data-director-wrap]");
       var list = wrap && wrap.querySelector("[data-director-list]");
       var tpl = wrap && wrap.querySelector("[data-director-template]");
-      if (list && tpl && tpl.content) { list.appendChild(tpl.content.cloneNode(true)); var last = list.lastElementChild; var inp = last && last.querySelector("[data-contact-search]"); if (inp) inp.focus(); }
+      if (list && tpl && tpl.content) {
+        list.appendChild(tpl.content.cloneNode(true));
+        var last = list.lastElementChild;
+        if (window.__initPersonCombos) window.__initPersonCombos(last); // 새 행의 personCombo 초기화(검색·모달·선택 닫힘)
+        var inp = last && last.querySelector("[data-pc-input]"); if (inp) inp.focus();
+      }
       return;
     }
     var rmBtn = e.target.closest && e.target.closest("[data-director-remove]");
@@ -676,7 +681,7 @@
       // 마지막 행까지 지우면 빈 행 하나 남겨 계속 추가 가능하게
       if (list2 && !list2.querySelector("[data-director-row]")) {
         var t = wrap2.querySelector("[data-director-template]");
-        if (t && t.content) list2.appendChild(t.content.cloneNode(true));
+        if (t && t.content) { list2.appendChild(t.content.cloneNode(true)); if (window.__initPersonCombos) window.__initPersonCombos(list2.lastElementChild); }
       }
     }
   });

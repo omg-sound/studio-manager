@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, personCombo } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, listSessionDirectors } = require("./data");
 
@@ -147,16 +147,13 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
          ${engineerField}
        </div>
        ${explain(`청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
-  // 담당 디렉터 — 다대다(여러 명). 각 행이 contactCombo(data-contact-combo, app.js 위임 처리). '디렉터 추가'로 행 복제(template).
+  // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
+  // 동적 clone 행은 app.js window.__initPersonCombos(new row)로 초기화(디렉터 add/remove 핸들러).
   const allContacts = contactOptions();
-  const dlId = "dl-session-directors-" + (s && s.id ? s.id : "new"); // 폼별 유니크 — 한 페이지에 여러 세션 편집 폼이 있어도 datalist id 중복 방지
   const dirRow = (d) => `
-        <div class="mt-1 flex items-center gap-2" data-contact-combo data-director-row>
-          <input type="hidden" name="director_contact_id" value="${d ? d.id : ""}" data-contact-id />
-          <input class="input flex-1 py-1.5 text-sm" type="text" name="director_name" list="${dlId}"
-            data-contact-search autocomplete="off" placeholder="이름 입력 — 선택 또는 새 이름"
-            value="${d ? esc(d.name) : ""}" aria-label="담당 디렉터 검색" />
-          <button type="button" class="btn-ghost btn-xs shrink-0 text-danger" data-director-remove aria-label="디렉터 제거">✕</button>
+        <div class="mt-1 flex items-start gap-2" data-director-row>
+          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, options: allContacts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
+          <button type="button" class="btn-ghost btn-xs shrink-0 text-danger mt-1" data-director-remove aria-label="디렉터 제거">✕</button>
         </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
   const directorField = `
@@ -167,9 +164,6 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
       </div>
       <template data-director-template>${dirRow(null)}</template>
       <button type="button" class="btn-ghost btn-xs mt-1" data-director-add>+ 디렉터 추가</button>
-      <datalist id="${dlId}">
-        ${allContacts.map((o) => `<option value="${esc(o.name)}" data-id="${o.id}" data-phone="${esc(o.phone || "")}" data-email="${esc(o.email || "")}" data-client="${esc(o.current_client || "")}"></option>`).join("")}
-      </datalist>
       ${explain(`목록에 없는 이름을 입력하면 저장 시 새 연락처로 등록됩니다. 비워 둔 행은 무시됩니다.`)}
     </div>`;
   return `
