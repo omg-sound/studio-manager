@@ -530,11 +530,14 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
   // 아티스트(개인)는 clientOptions(is_artist)에도, contactOptions(kind=person)에도 들어가 같은 party가 콤보에 두 번 뜬다 →
   // 이미 클라이언트로 노출된 사람은 담당자 중복 제외(중복 제거). 둘 다 같은 party.id라 청구처 결과는 동일.
   const clientIds = new Set(clientOptions.map((c) => Number(c.id)));
+  const kindLabel = (k) => (k === "company" ? "업체" : k === "group" ? "그룹" : "아티스트"); // 내부 kind(person 등) 대신 우리 용어. person client=아티스트
   const items = [
     ...clientOptions.map((c) => {
       const co = c.kind === "company" ? 1 : 0;
       const warn = co ? (taxSet.has(Number(c.id)) ? "" : CO_WARN) : (cashSet.has(Number(c.id)) ? "" : PS_WARN);
-      return { label: c.name, sub: c.kind || "", cid: c.id, pid: 0, co, warn };
+      const aff = [c.group_name, c.current_client].filter(Boolean).join(" · "); // 소속 그룹·회사로 식별
+      const sub = kindLabel(c.kind) + (aff ? " · " + aff : "");
+      return { label: c.name, sub, cid: c.id, pid: 0, co, warn };
     }),
     ...contactOptions.filter((o) => !clientIds.has(Number(o.id))).map((o) => {
       const aff = [o.group_name, o.current_client].filter(Boolean).join(" · "); // 소속 그룹·회사로 식별

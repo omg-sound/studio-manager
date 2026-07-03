@@ -571,8 +571,11 @@ function contactOptions() {
 function clientOptions() {
   return db()
     .prepare(
-      `SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name, kind FROM parties
-        WHERE kind IN ('company','group') OR is_artist = 1 ORDER BY name COLLATE NOCASE`
+      `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name, p.kind,
+              (SELECT g.name FROM parties g WHERE g.id = p.group_id AND g.kind = 'group') AS group_name,
+              (SELECT o.name FROM affiliations a LEFT JOIN parties o ON o.id = a.org_id
+                WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS current_client
+         FROM parties p WHERE p.kind IN ('company','group') OR p.is_artist = 1 ORDER BY name COLLATE NOCASE`
     )
     .all();
 }

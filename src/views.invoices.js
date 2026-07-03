@@ -16,7 +16,7 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   const cell = (label, value) =>
     `<div class="flex items-start justify-between gap-3 py-0.5"><span class="text-xs text-muted">${esc(label)}</span><span class="text-right text-sm font-medium">${value}</span></div>`;
   const rows = [];
-  if (client.kind) rows.push(cell("분류", esc(client.kind)));
+  if (client.kind) rows.push(cell("분류", client.kind === "company" ? "업체" : client.kind === "group" ? "그룹" : "개인")); // 내부 kind(company 등) 대신 우리 용어
   if (client.owner_name) rows.push(cell("대표자", esc(client.owner_name)));
   if (client.biz_no) {
     // 번호 클릭 = 클립보드 복사, 등록증 보기는 별도 링크로 분리.
