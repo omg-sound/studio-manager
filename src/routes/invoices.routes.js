@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireBilling, requireInvoice, canBill, canInvoice } = require("../auth");
-const { TAX_STATUSES, normalizeInvoiceStatus, normalizeTaxStatus, normalizeDocType, DOC_TYPES, docNumberWithType } = require("../config");
+const { TAX_STATUSES, normalizeTaxStatus, normalizeDocType, DOC_TYPES, docNumberWithType } = require("../config");
 const {
   clientOptions,
   contactOptions,
@@ -365,24 +365,7 @@ router.post("/:id/payments/:pid/delete", requireInvoice, (req, res) => {
   res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
 });
 
-// ── 청구서 상태 변경(관리자) ── 미발행 ↔ 발행. 계산서·입금과 독립.
-router.post("/:id/status", requireBilling, (req, res) => {
-  const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
-  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const status = normalizeInvoiceStatus(req.body.status); // 미발행 | 발행
-  const d = db();
-  d.exec("BEGIN IMMEDIATE");
-  try {
-    d.prepare("UPDATE invoices SET status=? WHERE id=?").run(status, inv.id);
-    ensureInvoiceNumber({ ...inv, status }); // 청구서 발행 시 채번 보장
-    d.exec("COMMIT");
-  } catch (e) {
-    try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
-    throw e;
-  }
-  if (inv.status === "미발행" && status === "발행") notifyInvoiceIssued(getInvoiceForUser(req.user, inv.id)); // 청구서 미발행→발행 첫 전이 알림
-  res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
-});
+// (청구서 상태 변경 라우트 폐기 — 생성=발행 단일 흐름이라 미발행↔발행 전환 UI·호출부 없음, 2026-07-04 죽은 라우트 제거)
 
 // ── 계산서·입금 상태 변경(관리자) ── 계산서 미발행 → 계산서 발행 → 입금완료(자유 선택). 입금완료 선택=완납, 벗어나면 입금액 0.
 router.post("/:id/tax-status", requireInvoice, (req, res) => {

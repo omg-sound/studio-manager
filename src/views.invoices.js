@@ -331,4 +331,4 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </div>`;
 }
 
-module.exports = { invoiceBadge, invoiceRow, invoicesSection, displayStatus, payerInfoCard, paymentHistory };
+module.exports = { invoiceBadge, invoiceRow, invoicesSection, payerInfoCard, paymentHistory }; // displayStatus는 내부 전용(외부 소비자 없음, 2026-07-04 표면 축소)

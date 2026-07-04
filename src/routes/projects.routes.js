@@ -1209,7 +1209,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const mins = s.billing.minutes;
       const dur = `${Math.floor(mins / 60)}시간${mins % 60 ? " " + (mins % 60) + "분" : ""}`;
       const time = [s.start_time, s.end_time].filter(Boolean).join("–");
-      const label = `녹음 세션 ${formatYmdShort(s.session_date)} · ${s.billing.item.name}`;
+      const label = `${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)} · ${s.billing.item.name}`; // 촬영 세션도 실제 종류로 표기
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(s.status)}</span>`;
       return `
         <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
@@ -1229,7 +1229,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   return `
     <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3" data-discount-form data-supply="${subtotal}">
       <div class="mb-2">
-        <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 녹음 세션)</span></h3>
+        <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 세션)</span></h3>
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구 제목</label>

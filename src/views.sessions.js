@@ -260,7 +260,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
     : "";
   // 청구 결핍 사유: 완료된 녹음 세션이 단가항목/시간이 없어 산정 불가하면 침묵하지 않고 사유를 옅게 안내(미청구·미전환 한정).
   const billReason = !s.billing && RENTAL_SESSION_TYPES.includes(s.session_type) && s.status === "완료" && !s.invoiced && !s.billed_task_id
-    ? (!s.rate_item_id ? "청구하려면 녹음 단가 항목을 선택하세요" : "청구하려면 시작·소요 시간을 입력하세요")
+    ? (!s.rate_item_id ? "청구하려면 단가 항목을 선택하세요" : "청구하려면 시작·소요 시간을 입력하세요")
     : "";
   const reasonLine = billReason ? `<div class="mt-0.5 text-xs text-muted/70">${esc(billReason)}</div>` : "";
   const header = `
@@ -418,4 +418,4 @@ function monthCalendar(ym, sessions) {
     </div>`;
 }
 
-module.exports = { sessionRow, sessionProjectCard, sessionsSection, sessionCreateForm, monthCalendar };
+module.exports = { sessionProjectCard, sessionsSection, monthCalendar }; // sessionRow·sessionCreateForm은 내부 전용(외부 소비자 없음, 2026-07-04 표면 축소)

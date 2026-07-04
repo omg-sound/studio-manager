@@ -297,7 +297,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
   }
   for (const { session, calc, amount } of billSessions) {
     const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
-    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `녹음 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`, quantity: 1, unit_price: amount, amount });
+    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `${session.session_type || "녹음"} 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`, quantity: 1, unit_price: amount, amount }); // 촬영 세션도 실제 종류로 스냅샷(거래명세서 품목명)
   }
   return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedPayerId };
 }
