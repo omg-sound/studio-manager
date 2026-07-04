@@ -42,7 +42,8 @@ function listRateItems({ includeInactive = false } = {}) {
 function createRateItem(input = {}) {
   const f = rateFields(input);
   if (!f.name) throw new Error("RATE_NAME_REQUIRED");
-  if (!f.base_price && !f.extra_price) throw new Error("RATE_PRICE_REQUIRED"); // 기준가·초과가 모두 0인 단가 항목 생성 방지
+  // 시간제(기준 시간 있음)는 가격 필수. 정액(기준 시간 0=회당)은 가격 0 허용 — '금액 미정' 항목(예: 플레이백 세션), 청구 시 금액 입력(2026-07-04 사용자 결정).
+  if (f.base_minutes > 0 && !f.base_price && !f.extra_price) throw new Error("RATE_PRICE_REQUIRED");
   const info = db()
     .prepare(
       `INSERT INTO rate_items (name, category, base_minutes, base_price, extra_minutes, extra_price, active)
@@ -55,7 +56,8 @@ function createRateItem(input = {}) {
 function updateRateItem(id, input = {}) {
   const f = rateFields(input);
   if (!f.name) throw new Error("RATE_NAME_REQUIRED");
-  if (!f.base_price && !f.extra_price) throw new Error("RATE_PRICE_REQUIRED"); // 기준가·초과가 모두 0인 단가 항목 생성 방지
+  // 시간제(기준 시간 있음)는 가격 필수. 정액(기준 시간 0=회당)은 가격 0 허용 — '금액 미정' 항목(예: 플레이백 세션), 청구 시 금액 입력(2026-07-04 사용자 결정).
+  if (f.base_minutes > 0 && !f.base_price && !f.extra_price) throw new Error("RATE_PRICE_REQUIRED");
   db()
     .prepare(
       `UPDATE rate_items SET name=@name, category=@category, base_minutes=@base_minutes, base_price=@base_price,

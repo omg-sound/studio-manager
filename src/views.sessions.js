@@ -252,7 +252,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
         : '<span class="whitespace-nowrap text-muted">완료 시 청구</span>';
   const billLine = s.billing
     ? `<div class="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 break-keep text-xs tabular">
-         <span class="whitespace-nowrap text-success">예상 청구액 ${formatKRW(s.billing.amount)}</span>
+         ${s.billing.amount > 0 ? `<span class="whitespace-nowrap text-success">예상 청구액 ${formatKRW(s.billing.amount)}</span>` : `<span class="whitespace-nowrap text-muted">청구액 미정 <span class="text-muted/70">(청구 시 입력)</span></span>`}
          <span class="break-keep text-muted">${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)}</span>
          ${billStatusChunk}
        </div>`

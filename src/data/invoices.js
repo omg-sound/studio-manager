@@ -177,7 +177,7 @@ function listBillableSessionsForProject(user, projectId) {
     )
     .all(project.id)
     .map((row) => ({ ...row, billing: sessionRateAmount(row) }))
-    .filter((row) => row.billing && row.billing.amount > 0);
+    .filter((row) => row.billing); // 산정액 0(정액 '금액 미정' 항목)도 후보에 노출 — 청구 폼에서 금액 입력(0원은 생성 시 차단)
   return { project, rows };
 }
 
@@ -275,7 +275,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
            AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)`
       )
       .all(project.id, ...selectedSessions);
-    billSessions = rawSessions.map((s) => ({ session: s, calc: sessionRateAmount(s) })).filter((x) => x.calc && x.calc.amount > 0);
+    billSessions = rawSessions.map((s) => ({ session: s, calc: sessionRateAmount(s) })).filter((x) => x.calc); // 산정액 0(금액 미정 정액)도 허용 — 입력 금액으로 확정
     if (billSessions.length !== selectedSessions.length) throw new Error("TASK_NOT_BILLABLE");
     billSessions = billSessions.map((x) => {
       const raw = sessionAmounts[x.session.id] != null ? sessionAmounts[x.session.id] : sessionAmounts[String(x.session.id)];
@@ -283,6 +283,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
       return { ...x, amount };
     });
   }
+
 
   const subtotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0) + billSessions.reduce((s, x) => s + x.amount, 0);
   const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0, vatIncluded);
@@ -307,6 +308,9 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
 function createInvoiceFromTasks(user, opts = {}) {
   const draft = computeInvoiceDraft(user, opts);
   if (!draft) return null;
+  // 0원 라인 차단(TASK_AMOUNT_REQUIRED) — 발행 시 작업·세션 모두 금액 > 0 필수(금액 미정 정액 항목은 폼에서 입력).
+  // 미리보기 PDF(invoiceDraftForPdf)는 참고용이라 0원 라인 허용(가드는 실제 발행에만).
+  if (draft.items.some((it) => !(it.amount > 0))) throw new Error("TASK_AMOUNT_REQUIRED");
   // 청구처 발행 정보 없으면 생성 차단(회사=세금계산서 정보 biz_no, 개인=현금영수증 정보). 폼에서도 막지만 서버가 최종 보루.
   if (draft.resolvedPayerId) {
     const miss = payerDocMissing(getParty(draft.resolvedPayerId));

@@ -139,7 +139,7 @@ function contentTab() {
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">단가표 · 녹음/촬영 종류</h2>
-          ${explain(`대관 세션(녹음·촬영)의 시간제 단가 항목을 분류(스튜디오/로케이션 녹음·촬영)별로 추가합니다. 세션 폼의 '단가 항목'에 세션 종류(녹음/촬영)에 맞춰 분류로 묶여 표시됩니다. 기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금.`)}
+          ${explain(`대관 세션(녹음·촬영)의 시간제 단가 항목을 분류(스튜디오/로케이션 녹음·촬영)별로 추가합니다. 세션 폼의 '단가 항목'에 세션 종류(녹음/촬영)에 맞춰 분류로 묶여 표시됩니다. 기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금. <b>기준 시간을 비우면 정액(회당)</b> — 시간과 무관하게 1회 = 기준 가격이며, 가격까지 비우면 <b>금액 미정</b>(플레이백 세션처럼 회당 가격이 매번 다른 항목 — 청구 생성 시 금액을 입력해 확정).`)}
         </div>
         <form method="post" action="/settings/rate-items" class="space-y-2 rounded-lg border border-border bg-bg p-3">
           <div class="grid gap-2 sm:grid-cols-2">
@@ -737,7 +737,7 @@ function rateItemRow(r) {
   const extraHours = r.extra_minutes ? r.extra_minutes / 60 : 1;
   const summary = r.base_minutes
     ? `기준 ${hourLabel(r.base_minutes)} · ${formatKRW(r.base_price)} · 초과 ${hourLabel(r.extra_minutes)}당 ${formatKRW(r.extra_price)}`
-    : `정액 ${formatKRW(r.base_price)}`;
+    : r.base_price > 0 ? `정액(회당) ${formatKRW(r.base_price)}` : `정액(회당) · 금액 미정 — 청구 시 입력`;
   const cat = r.category || RECORDING_CATEGORIES[0];
   return `
     <div class="rounded-lg border border-border bg-bg p-3 ${r.active ? "" : "opacity-60"}">

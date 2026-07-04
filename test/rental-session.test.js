@@ -50,6 +50,20 @@ test("sessionRateAmount: 녹음·촬영은 산정, 그 외 종류는 null", () =
   }
 });
 
+test("정액(회당)·가격 미정 항목: 산정 0원이지만 청구 후보 유지(null 아님) — 청구 시 금액 입력", () => {
+  const flatId = Number(
+    db()
+      .prepare(
+        `INSERT INTO rate_items (name, category, base_minutes, base_price, extra_minutes, extra_price, active)
+         VALUES ('플레이백(금액 미정)', '공연', 0, 0, 60, 0, 1)`
+      )
+      .run().lastInsertRowid
+  );
+  const b = sessionRateAmount({ session_type: "공연", rate_item_id: flatId, start_time: "18:00", end_time: "20:00" });
+  assert.ok(b, "billing 객체 반환(후보 노출)");
+  assert.equal(b.amount, 0, "산정액 0 = 금액 미정(발행은 TASK_AMOUNT_REQUIRED 가드)");
+});
+
 test("sessionRateAmount: 단가 미선택·시간 없음은 null(결핍 사유 안내 대상)", () => {
   assert.equal(sessionRateAmount({ session_type: "촬영", rate_item_id: null, start_time: "10:00", end_time: "14:00" }), null);
   assert.equal(sessionRateAmount({ session_type: "촬영", rate_item_id: rateId, start_time: null, end_time: null }), null);
