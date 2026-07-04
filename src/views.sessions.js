@@ -315,13 +315,13 @@ function sessionProjectCard(sessions, { isAdmin = false, managers = [], rateItem
   const meta = [artist, company].filter(Boolean).join(" · ");
   return `
     <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
-      <a href="/projects/${p.project_id}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
+      <div class="flex items-start justify-between gap-3 px-4 py-3">
         <div class="min-w-0">
           <div class="truncate font-semibold">${esc(p.project_title || "(제목 없음)")}</div>
           ${meta ? `<div class="mt-0.5 truncate text-sm text-fg/80">${esc(meta)}</div>` : ""}
         </div>
         <span class="shrink-0 pl-2 text-sm text-muted">세션 ${sessions.length}</span>
-      </a>
+      </div>
       <div class="space-y-2 border-t border-border/40 p-3">
         ${sessions.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms, showProject: false })).join("")}
       </div>
