@@ -94,11 +94,8 @@ function listProjects(_user, { q } = {}) {
     LEFT JOIN project_managers m ON m.id = p.manager_id
     ${where.length ? "WHERE " + where.join(" AND ") : ""}
     ORDER BY
-      -- 다가오는 세션 임박순(가까운 방문이 위)을 우선, 예정 세션 없으면 최근 생성순.
-      -- (레거시 due_date 정렬 폐기 — 마감일 개념이 사라져 남은 값이 엉뚱하게 상단으로 튀던 문제 수정)
-      CASE WHEN next_session_date IS NULL THEN 1 ELSE 0 END,
-      next_session_date ASC,
-      p.created_at DESC`;
+      -- 생성일 순(최신 생성이 위, 2026-07-04 사용자 요청). 동일 생성일은 id 역순으로 안정 정렬.
+      p.created_at DESC, p.id DESC`;
   const rows = db().prepare(sql).all(params);
   if (!rows.length) return rows;
   const sessionAmounts = sessionAmountsByProject(rows.map((r) => r.id));
