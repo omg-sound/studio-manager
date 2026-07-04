@@ -237,10 +237,10 @@ router.get("/", (req, res) => {
     <details class="relative inline-block" data-menu>
       <summary class="btn-primary cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">+ 새 클라이언트</summary>
       <div class="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-bg py-1 text-left shadow-lg">
-        <a href="/clients/new?type=company" class="block px-4 py-2 text-sm hover:bg-surface"><span class="font-medium text-fg">업체</span> <span class="text-xs text-muted">소속사·제작사</span></a>
-        <a href="/contacts/new" class="block px-4 py-2 text-sm hover:bg-surface"><span class="font-medium text-fg">관계자</span> <span class="text-xs text-muted">대표·A&amp;R·디렉터 등</span></a>
-        <a href="/clients/new?type=artist" class="block px-4 py-2 text-sm hover:bg-surface"><span class="font-medium text-fg">아티스트</span> <span class="text-xs text-muted">개인·솔로</span></a>
-        <a href="/clients/new?type=group" class="block px-4 py-2 text-sm hover:bg-surface"><span class="font-medium text-fg">그룹</span> <span class="text-xs text-muted">밴드·아이돌</span></a>
+        <a href="/clients/new?type=company" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">업체</span> <span class="text-xs text-muted">소속사·제작사</span></a>
+        <a href="/contacts/new" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">관계자</span> <span class="text-xs text-muted">대표·A&amp;R·디렉터 등</span></a>
+        <a href="/clients/new?type=artist" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">아티스트</span> <span class="text-xs text-muted">개인·솔로</span></a>
+        <a href="/clients/new?type=group" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">그룹</span> <span class="text-xs text-muted">밴드·아이돌</span></a>
       </div>
     </details>`;
   const body = `

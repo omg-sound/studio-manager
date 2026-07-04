@@ -109,7 +109,7 @@ function paymentHistory(inv, payments = [], { ret = "", compact = false } = {}) 
         <input class="input ${sz} min-w-0 flex-1 text-right tabular" name="amount" inputmode="numeric" placeholder="입금액(원)" />
         <input class="input ${sz} w-36" type="date" name="paid_on" value="${todayYmd()}" aria-label="입금일" />
         <button class="btn-ghost ${btn} shrink-0" type="submit">입금 추가</button>
-        <button class="btn-primary ${btn} shrink-0" name="full" value="1" title="남은 잔금 ${formatKRW(bal)}을 전액 입금 처리">완납</button>
+        <button class="btn-ghost ${btn} shrink-0 border-success/40 bg-success/10 text-success" name="full" value="1" title="남은 잔금 ${formatKRW(bal)}을 전액 입금 처리">완납</button>
       </form>`;
   return `
     <div class="space-y-1">
@@ -258,7 +258,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     ${balLine}
     <div class="text-[11px] text-muted">${dueLine}</div>`;
   // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(청구서 발행 권한자만).
-  // 상태 반영(불): 완료=btn-primary(켜짐), 미완료=btn-ghost(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다(사용자 요청).
+  // 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다(사용자 요청).
   // 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
   const retPath = ret || "/invoices";
   const retHidden = `<input type="hidden" name="return" value="${esc(retPath)}" />`;

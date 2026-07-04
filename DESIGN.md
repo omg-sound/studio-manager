@@ -77,7 +77,7 @@ components:
 ## Colors
 
 - **역할 토큰**(`--color-*`, R G B 채널) → Tailwind 이름(`bg`/`surface`/`elevated`/`border`/`muted`/`fg`/`primary`/`primary-fg`/`success`/`warning`/`danger`/`info`).
-- **뷰 코드에 hex 인라인 금지** — 항상 토큰 이름(`bg-surface`, `text-muted`, `bg-primary`, `text-success`…).
+- **뷰 코드에 hex 인라인 금지** — 항상 토큰 이름(`bg-surface`, `text-muted`, `bg-primary`, `text-success`…). **유일 예외**: `<meta name="theme-color">`(CSS 변수 불가라 hex가 유일한 방법, 라이트 `#faf9f5`·다크 `#1e1d1b`).
 - **라이트가 기본 정체성.** 다크는 `html[data-theme]`(수동 토글) 또는 `[data-theme]` 없을 때 OS 추종. 크림 라이트는 OS가 다크여도 `data-theme="light"`로 유지 가능.
 - `muted`는 **AA 하한(5.15:1)** 이다. 더 밝히지 말 것.
 - 배지 색 변형은 `bg-*/12` 불투명도를 쓰므로 `tailwind.config.js`의 `opacity.12`가 반드시 있어야 함(없으면 빌드에서 클래스 제거됨).

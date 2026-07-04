@@ -230,7 +230,7 @@ function layout({ title, user, current = "", body, full = false }) {
       <!-- 모바일 드로어 헤더: 로고 + 닫기(X) 버튼 -->
       <div class="mb-4 flex items-center justify-between sm:hidden">
         ${WORDMARK}
-        <button id="navDrawerClose" class="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label="닫기">
+        <button id="navDrawerClose" class="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-fg active:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label="닫기">
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -241,7 +241,7 @@ function layout({ title, user, current = "", body, full = false }) {
       <div class="mt-8 hidden border-t border-border pt-4 text-xs text-muted sm:block">
         <div class="mb-2 px-2">${who}</div>
         <!-- 테마 토글: 마크업만(아이콘+라벨). 토글 로직=app.js([data-theme-toggle]), 다크 분기=src.css. CSP-safe(인라인 onclick 없음). -->
-        <button type="button" data-theme-toggle aria-label="테마 전환" class="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 font-medium text-muted transition-colors hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+        <button type="button" data-theme-toggle aria-label="테마 전환" class="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 font-medium text-muted transition-colors hover:bg-surface hover:text-fg active:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
           <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/></svg>
           <span data-theme-label>테마</span>
         </button>
@@ -474,7 +474,7 @@ function listRow({ href, left, right = "" }) {
   if (href) {
     return `<a href="${esc(href)}" class="block transition-colors hover:bg-surface active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${inner}</a>`;
   }
-  return `<div class="transition-colors hover:bg-surface">${inner}</div>`;
+  return `<div class="transition-colors hover:bg-surface active:bg-surface">${inner}</div>`;
 }
 
 /**
