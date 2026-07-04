@@ -174,7 +174,7 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
     </div>`;
 
   const payer = inv.payerCard || ""; // 라우트가 첨부한 청구처 정보 카드(compact)
-  return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${amountGrid}${payer}${itemList}${adminControls}${pdfAndFull}</div>`;
+  return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${amountGrid}${payer}${itemList}${pdfAndFull}${adminControls}</div>`;
 }
 
 /** 청구서 표시 청구처명: 발행 시점 스냅샷(payer_snapshot.name) 우선, 없으면(레거시) 실시간 client_name. */
