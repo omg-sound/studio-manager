@@ -450,7 +450,23 @@
     if (isMoney(el) && el.value) el.value = fmt(el.value);
   });
   document.addEventListener("input", function (e) {
-    if (isMoney(e.target)) e.target.value = fmt(e.target.value);
+    var el = e.target;
+    if (!isMoney(el)) return;
+    // 캐럿 위치 보존: 콤마 재포맷 후 커서가 끝으로 튀지 않게, 커서 앞 '숫자 개수'를 세어 재포맷 후 같은 숫자 위치로 복원.
+    // (예: 1,800,000에서 8을 지우면 커서가 그 자리에 남아 5를 그 자리에 넣을 수 있음 — 끝으로 점프 방지.)
+    var caret = el.selectionStart === el.selectionEnd ? el.selectionStart : null;
+    var digitsBefore = caret == null ? -1 : el.value.slice(0, caret).replace(/[^\d]/g, "").length;
+    el.value = fmt(el.value);
+    if (digitsBefore >= 0) {
+      var pos = 0, seen = 0;
+      if (digitsBefore > 0) {
+        pos = el.value.length;
+        for (var i = 0; i < el.value.length; i++) {
+          if (/\d/.test(el.value.charAt(i))) { seen++; if (seen >= digitsBefore) { pos = i + 1; break; } }
+        }
+      }
+      try { el.setSelectionRange(pos, pos); } catch (err) {}
+    }
   });
   // 제출 직전 콤마 제거(capture 단계에서 먼저 정리; 서버 parseWon도 방어하지만 amount 등 안전).
   document.addEventListener("submit", function (e) {
