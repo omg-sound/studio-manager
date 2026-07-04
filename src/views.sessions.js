@@ -208,8 +208,8 @@ function sessionCreateForm(project, managers, rateItems = [], rooms, defaultBook
 /** 세션 한 행. showProject=true면 프로젝트명 링크 표시(전역 일정). tracks 전달 시 청구 작업 생성 폼 노출. */
 function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, showProject = false, projectTitle = "" } = {}) {
   const typeBadge = `<span class="badge bg-bg text-muted">${esc(s.session_type)}</span>`;
-  // 상태 배지: '예정'은 배지 없음(완료 버튼 누르기 전 기본 상태 — 라벨 불필요). 완료/취소만 배지 표시.
-  const statusBadge = s.status === "예정"
+  // 상태 배지: 예정·완료는 배지 없음(완료 버튼 토글이 상태를 나타냄 — 라벨 불필요). 취소 등만 배지 표시.
+  const statusBadge = s.status === "예정" || s.status === "완료"
     ? ""
     : `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
@@ -276,20 +276,21 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
         </div>
       </div>`;
   }
-  // 편집 가능: 행 헤더 전체가 접기 토글. 오른쪽 끝 접기 버튼(chevron), 그 앞에 상태 배지.
-  // 예정 세션은 펼치지 않고 1클릭 '완료' 버튼(POST /sessions/:id/status)을 상태 배지 옆에 노출.
+  // 편집 가능: 행 헤더 전체가 접기 토글. 오른쪽 끝 접기 버튼(chevron), 그 앞에 완료 토글.
+  // '완료' 버튼 = 토글: 예정일 때 누르면 완료(활성), 완료일 때 다시 누르면 예정으로 되돌림(비활성). 상태 배지 대신 버튼 상태가 완료 여부를 표시.
   // (summary 안 button은 자기 활성화만 일어나 details 토글을 유발하지 않으며, POST→리다이렉트라 전이 상태도 무관.)
-  const quickComplete = s.status === "예정"
+  const isDone = s.status === "완료";
+  const completeToggle = s.status === "예정" || s.status === "완료"
     ? `<form method="post" action="/sessions/${s.id}/status">
-            <input type="hidden" name="status" value="완료" />
-            <button class="btn-ghost btn-xs text-success" type="submit">완료</button>
+            <input type="hidden" name="status" value="${isDone ? "예정" : "완료"}" />
+            <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}">${isDone ? "✓ 완료" : "완료"}</button>
           </form>`
     : "";
   return `
     <details class="group overflow-hidden rounded-lg border border-border bg-surface">
       <summary class="row-link flex cursor-pointer list-none items-start justify-between gap-2 p-3">
         ${header}
-        <span class="flex shrink-0 items-center gap-2">${quickComplete}${statusBadge}${detailsChevron()}</span>
+        <span class="flex shrink-0 items-center gap-2">${completeToggle}${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
         <form id="del-sess-${s.id}" method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?" class="hidden"></form>
