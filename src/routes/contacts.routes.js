@@ -142,6 +142,7 @@ router.post("/", asyncHandler(async (req, res) => {
       name: b.name, phone: b.phone, email: b.email, memo: b.memo,
       family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
       nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
+      cash_receipt_no: b.cash_receipt_no, // 개인 청구처 → 현금영수증 발행 정보
     });
     // 생성 폼에서 현재 소속(회사/직함)을 같이 받았으면 첫 소속으로 등록.
     if (b.client_id || (b.title && String(b.title).trim())) {
@@ -187,6 +188,7 @@ router.post("/:id", asyncHandler(async (req, res) => {
       memo: b.memo,
       family_name: b.family_name, given_name: b.given_name, honorific: b.honorific,
       nickname: b.nickname, company: b.company, job_title: b.job_title, department: b.department,
+      cash_receipt_no: b.cash_receipt_no, // 개인 청구처 → 현금영수증 발행 정보
     });
     syncCompanyAffiliation(id, b.company, b.job_title); // '회사' 텍스트 → 소속 이력 반영(현재 소속과 다르면 이직으로 등록)
     if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 소속 그룹(밴드·아이돌) 연결
@@ -407,24 +409,9 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
   const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
   const isHouseEngineer = manager && manager.user_id != null;
-  // 생성 시에만 '현재 소속'을 같이 입력(첫 소속 등록). 수정 시 소속은 상세의 이력에서 관리(이직 등).
-  const affBlock = isEdit ? "" : `
-      <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
-        <div class="text-sm font-medium">현재 소속 <span class="font-normal text-muted">— 선택(나중에 상세에서 추가·이직 가능)</span></div>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label class="label">소속 회사</label>
-            <select class="input" name="client_id">
-              <option value="">무소속 (프리·지인)</option>
-              ${clients.map((cl) => `<option value="${cl.id}" ${String(c.client_id || "") === String(cl.id) ? "selected" : ""}>${esc(cl.name)} · ${esc(cl.kind)}</option>`).join("")}
-            </select>
-          </div>
-          <div>
-            <label class="label">직함 <span class="font-normal text-muted">(선택)</span></label>
-            <input class="input" name="title" value="${esc(c.title || "")}" placeholder="예: A&R · 매니저" />
-          </div>
-        </div>
-      </div>`;
+  // (구 '현재 소속' 블록 제거 — 2026-07-04 구식 필드 전수 정리: 아래 '회사' companyCombo + '직책'이
+  //  syncCompanyAffiliation으로 첫 소속을 등록하므로 평면 select와 기능 중복. 무소속=회사 비움.)
+  const affBlock = "";
   const managerBanner = manager
     ? `<div class="rounded-lg px-3 py-2 text-sm ${isHouseEngineer ? "bg-info/10 text-info" : "bg-neutral/10 text-fg"}">
         ${isHouseEngineer
@@ -470,6 +457,10 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
           <input class="input${isHouseEngineer ? " opacity-60 cursor-not-allowed" : ""}" type="email" name="email" value="${esc(c.email || "")}"${isHouseEngineer ? ' readonly aria-readonly="true"' : ""} />
           ${isHouseEngineer ? `<p class="mt-0.5 text-xs text-muted">하우스 엔지니어 로그인 계정 이메일이라 변경 불가합니다.</p>` : ""}
         </div>
+      </div>
+      <div>
+        <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(휴대폰 번호 또는 현금영수증 카드번호 — 개인을 청구처로 지정하려면 필요)</span></label>
+        <input class="input" name="cash_receipt_no" autocomplete="off" value="${esc(c.cash_receipt_no || "")}" placeholder="예: 010-0000-0000" />
       </div>
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       ${affBlock}

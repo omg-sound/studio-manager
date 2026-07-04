@@ -426,6 +426,17 @@ function init() {
     ).run();
     setState("payments_backfill_v1", "done");
   }
+  // 사업자등록번호 하이픈 정규화 1회 백필(000-00-00000) — 저장 경로는 formatBizNo가 상시 적용(lib/format).
+  if (!getState("biz_no_format_v1")) {
+    const { formatBizNo } = require("./lib/format"); // lib은 db를 require하지 않음(순환 없음)
+    for (const r of d.prepare("SELECT id, biz_no FROM parties WHERE biz_no IS NOT NULL").all()) {
+      const f = formatBizNo(r.biz_no);
+      if (f && f !== r.biz_no) d.prepare("UPDATE parties SET biz_no = ? WHERE id = ?").run(f, r.id);
+    }
+    const sb = getState("studio_biz_no");
+    if (sb) { const f = formatBizNo(sb); if (f && f !== sb) setState("studio_biz_no", f); }
+    setState("biz_no_format_v1", "done");
+  }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.
   if (!getState("rooms_seed_v1")) {

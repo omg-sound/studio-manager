@@ -153,7 +153,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
   // 동적 clone 행은 app.js window.__initPersonCombos(new row)로 초기화(디렉터 add/remove 핸들러).
   const allContacts = contactOptions();
-  const companyOpts = partyOptions({ role: "company" }); // '새 담당자 등록' 모달 회사칸 검색(datalist) — 기존 회사 타이핑 검색·오타/중복 방지
+  const companyOpts = partyOptions({ role: "company" }); // '새 담당자 등록' 모달 회사칸 검색 콤보 — 기존 회사 타이핑 검색·오타/중복 방지
   // 옵션 중복 임베드 제거: 이 폼의 디렉터 콤보(행·템플릿·동적 추가)가 공유 옵션 스크립트 1개를 참조(optionsRef).
   const dirOptsId = "__dir_opts_" + (s && s.id ? s.id : "new");
   const dirRow = (d) => `

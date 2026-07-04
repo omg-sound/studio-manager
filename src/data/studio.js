@@ -9,6 +9,7 @@
 
 const { getState, setState } = require("../db");
 const { cleanTime, timeToMin } = require("../lib/date");
+const { formatPhone, formatBizNo } = require("../lib/format");
 const { timeSlots, SESSION_START_SLOTS } = require("../config");
 
 // ── 공급자(스튜디오) 세금정보 — admin_state 평문(비밀 아님, studio_location과 동급) ──
@@ -19,7 +20,12 @@ function getStudioInfo() {
   return out;
 }
 function setStudioInfo(body = {}) {
-  for (const k of STUDIO_INFO_KEYS) setState(k, String(body[k] || "").trim() || null);
+  for (const k of STUDIO_INFO_KEYS) {
+    let v = String(body[k] || "").trim() || null;
+    if (k === "studio_biz_no") v = formatBizNo(v); // 사업자번호 000-00-00000 정규화(거래명세서 표기)
+    if (k === "studio_tel") v = formatPhone(v); // 전화 하이픈 정규화
+    setState(k, v);
+  }
 }
 
 /** 거래명세서 로고 — base64 data URI(admin_state.studio_logo). 없으면 null. */

@@ -554,7 +554,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
   const companies = listClients({}).filter((x) => x.kind === "company");
   if (c.kind !== "company") c.agency_id = currentAgencyId(c.id); // 아티스트·그룹: 소속사 select 기본값
   const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
-  // 폼의 대표자/담당자 datalist는 전체 연락처가 필요(상세의 contacts는 이 클라이언트 소속만이라 별도).
+  // 폼의 대표자/담당자 콤보는 전체 연락처(contactOptions)를 내부에서 조회(상세의 contacts는 이 클라이언트 소속만이라 별도).
   const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false, listGroupsForPicker()); // withExtras=false — 첨부·삭제 제외
   const crossRefs = [
     // 아티스트(사람) party는 연락처와 동일 레코드 — '연락처로 보기' 링크(같은 party를 연락처 화면에서).
@@ -709,8 +709,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         <div class="grid gap-3 sm:grid-cols-2">
           <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
           <div><label class="label">대표자 <span class="font-normal text-muted text-xs">(연락처 연동)</span></label>
-            <input class="input" name="owner_name" value="${esc(c.owner_name || "")}" list="client-owner-contacts" autocomplete="off" placeholder="이름 — 목록에서 선택하거나 새 이름" />
-            <datalist id="client-owner-contacts">${contacts.map((ct) => `<option value="${esc(ct.name)}"></option>`).join("")}</datalist>
+            ${personCombo({ idField: "owner_id", nameField: "owner_name", selectedId: c.owner_party_id || null, initialName: c.owner_name || "", options: contactOptions(), entityLabel: "대표자", placeholder: "대표자 — 검색 또는 새로 등록" })}
           </div>
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>

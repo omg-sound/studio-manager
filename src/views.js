@@ -503,8 +503,10 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = [], entityLabel = "담당자" } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = [], entityLabel = "담당자", initialName = "" } = {}) {
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
+  // initialName: 선택 id 없이 이름 텍스트만 있는 레거시 값(예: 업체 대표자 owner_name) 표시·보존용 — sel 없을 때 초기값.
+  const shown = sel ? sel.name : initialName || "";
   // 모달 '회사' 입력 = 커스텀 검색 콤보(기존 업체 검색 + '＋ …(으)로 새 업체 등록'). 프로젝트 폼 companyCombo와 동일 UX.
   // 옵션 JSON을 임베드하고 app.js initOne이 드롭다운을 구성한다(선택=회사명, '새 업체 등록'=입력한 이름 유지 → 저장 시 서버가 소속 회사 생성/연결).
   const companyJson = JSON.stringify((companyOptions || []).map((c) => ({ name: c.name || c }))).replace(/</g, "\\u003c");
@@ -516,10 +518,10 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   return `
     <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""} data-pc-entity="${esc(entityLabel)}">
       <input type="hidden" name="${idField}" value="${sel ? sel.id : ""}" data-pc-id />
-      <input type="hidden" name="${nameField}" value="${sel ? esc(sel.name) : ""}" data-pc-name-hidden />
+      <input type="hidden" name="${nameField}" value="${esc(shown)}" data-pc-name-hidden />
       <div class="relative">
         <!-- 보이는 검색칸은 name 없음(Chrome 자동완성 팝업이 앱 드롭다운을 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js가 동기화 -->
-        <input class="${inputCls}" type="text" value="${sel ? esc(sel.name) : ""}" data-pc-input autocomplete="off"
+        <input class="${inputCls}" type="text" value="${esc(shown)}" data-pc-input autocomplete="off"
           role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(placeholder)}" />
         <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>

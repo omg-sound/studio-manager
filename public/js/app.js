@@ -1365,7 +1365,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명 둘 다 검색
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명·소속 회사 검색(회사 이름이 먼저 생각날 때 — 사용자 요청)
         html = view.map(function (o, i) { var nm = esc(o.name) + (o.honorific ? ' <span class="text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="text-muted">(' + esc(o.alt) + ')</span>' : ""); return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + nm + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
         if (!view.some(function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q); })) html += newRow(input.value.trim());
       }

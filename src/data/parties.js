@@ -14,26 +14,9 @@
 const { db } = require("../db");
 const { splitKoreanName } = require("../lib/korean-name");
 const { todayYmd } = require("../lib/date");
+const { formatPhone, formatBizNo } = require("../lib/format"); // 전화·사업자번호 하이픈 정규화(전 저장 경로 공통, lib으로 승격 — studio·db 백필과 공유)
 
 const blankToNull = (v) => { const s = String(v == null ? "" : v).trim(); return s || null; };
-
-/**
- * 전화번호 정규화 — 공백·점 등 구분자 무관하게 숫자만 뽑아 하이픈 형식으로 저장.
- * 11자리=###-####-####(휴대폰·11자리 지역), 02+10자리=02-####-####, 02+9자리=02-###-####,
- * 그 외 10자리=0##-###-####(지역번호), 8자리=####-####(국번 없는 지역). 형식 불명(내선·해외)만 원본 보존.
- * 예: "010 3548 5638"→"010-3548-5638", "031 123 4567"→"031-123-4567", "02 123 4567"→"02-123-4567".
- */
-const formatPhone = (v) => {
-  const raw = String(v == null ? "" : v).trim();
-  if (!raw) return null;
-  const d = raw.replace(/\D/g, "");
-  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
-  if (d.length === 10 && d.startsWith("02")) return `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`;
-  if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`; // 0##-###-#### 지역번호(031·051 등)
-  if (d.length === 9 && d.startsWith("02")) return `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}`; // 02-###-####
-  if (d.length === 8) return `${d.slice(0, 4)}-${d.slice(4)}`; // ####-#### 국번 없는 지역
-  return raw; // 형식 불명(내선·해외 등)만 원본 보존
-};
 
 /** 표시명(name) 자동 생성(사람): 명시 name > 호칭+성+이름 > 활동명. 모두 없으면 예외. */
 function resolveDisplayName({ name, honorific, family_name, given_name, activity_name } = {}) {
@@ -108,7 +91,7 @@ function createPerson(b = {}) {
     phone: formatPhone(b.phone), email: blankToNull(b.email), memo: blankToNull(b.memo),
     family_name: fam, given_name: giv, honorific: blankToNull(b.honorific),
     department: blankToNull(b.department), job_title: blankToNull(b.job_title),
-    cash_receipt_no: blankToNull(b.cash_receipt_no),
+    cash_receipt_no: formatPhone(b.cash_receipt_no), // 전화형이면 하이픈 정규화(카드번호 등 형식 불명은 원본 보존)
   });
   return info.lastInsertRowid;
 }
@@ -122,7 +105,7 @@ function createCompany(b = {}) {
      VALUES ('company', @name, @phone, @email, @memo, @biz_no, @owner_name, @owner_party_id, @address, @roles)`
   ).run({
     name, phone: formatPhone(b.phone), email: blankToNull(b.email), memo: blankToNull(b.memo),
-    biz_no: blankToNull(b.biz_no), owner_name: blankToNull(b.owner_name),
+    biz_no: formatBizNo(b.biz_no), owner_name: blankToNull(b.owner_name),
     owner_party_id: b.owner_party_id ? Number(b.owner_party_id) : null,
     address: blankToNull(b.address), roles: blankToNull(b.roles),
   });
@@ -139,7 +122,7 @@ function createGroup(b = {}) {
   ).run({
     name, activity_name: blankToNull(b.activity_name) || name,
     phone: formatPhone(b.phone), email: blankToNull(b.email), memo: blankToNull(b.memo),
-    cash_receipt_no: blankToNull(b.cash_receipt_no),
+    cash_receipt_no: formatPhone(b.cash_receipt_no), // 전화형이면 하이픈 정규화(카드번호 등 형식 불명은 원본 보존)
     contact_party_id: b.contact_party_id ? Number(b.contact_party_id) : null, // 담당자(멤버/관계자 사람)
   });
   return info.lastInsertRowid;
@@ -163,7 +146,7 @@ function updateParty(id, b = {}) {
       `UPDATE parties SET name=?, phone=?, email=?, memo=?, biz_no=?, owner_name=?, owner_party_id=?, address=?, roles=? WHERE id=?`
     ).run(
       name, formatPhone(b.phone), blankToNull(b.email), blankToNull(b.memo),
-      blankToNull(b.biz_no), blankToNull(b.owner_name), b.owner_party_id ? Number(b.owner_party_id) : null,
+      formatBizNo(b.biz_no), blankToNull(b.owner_name), b.owner_party_id ? Number(b.owner_party_id) : null,
       blankToNull(b.address), blankToNull(b.roles), Number(id)
     );
     return;
@@ -173,6 +156,8 @@ function updateParty(id, b = {}) {
   const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (blankToNull(b.activity_name) ? 1 : cur.is_artist);
   // 그룹 담당자(contact_party_id): 폼이 값을 보냈으면(undefined 아님) 갱신, 아니면 기존 보존(person 폼은 안 보냄).
   const contactPartyId = b.contact_party_id !== undefined ? (b.contact_party_id ? Number(b.contact_party_id) : null) : (cur.contact_party_id || null);
+  // 현금영수증 정보도 동일 규칙(미전송=기존 보존) — 과거엔 무조건 덮어써, 필드 없는 폼(Google 동기화 등) 저장 시 지워지던 데이터 손실 방지(2026-07-04).
+  const cashReceiptNo = b.cash_receipt_no !== undefined ? formatPhone(b.cash_receipt_no) : (cur.cash_receipt_no || null);
   db().prepare(
     `UPDATE parties SET name=?, activity_name=?, is_artist=?, phone=?, email=?, memo=?,
        family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=?, contact_party_id=? WHERE id=?`
@@ -180,7 +165,7 @@ function updateParty(id, b = {}) {
     name, blankToNull(b.activity_name), isArtist,
     formatPhone(b.phone), blankToNull(b.email), blankToNull(b.memo),
     blankToNull(b.family_name), blankToNull(b.given_name), blankToNull(b.honorific),
-    blankToNull(b.department), blankToNull(b.job_title), blankToNull(b.cash_receipt_no), contactPartyId, Number(id)
+    blankToNull(b.department), blankToNull(b.job_title), cashReceiptNo, contactPartyId, Number(id)
   );
 }
 
