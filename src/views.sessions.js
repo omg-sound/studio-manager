@@ -417,4 +417,4 @@ function monthCalendar(ym, sessions) {
     </div>`;
 }
 
-module.exports = { sessionProjectCard, sessionsSection, monthCalendar }; // sessionRow·sessionCreateForm은 내부 전용(외부 소비자 없음, 2026-07-04 표면 축소)
+module.exports = { sessionProjectCard, sessionsSection, monthCalendar, sessionBookingFields }; // sessionRow·sessionCreateForm은 내부 전용. sessionBookingFields는 UI 상호작용 테스트(test/ui-interactions)가 세션 폼을 단독 마운트하는 용도로만 노출.

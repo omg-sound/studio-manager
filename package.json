@@ -33,6 +33,7 @@
     "better-sqlite3": "^12.2.0"
   },
   "devDependencies": {
+    "jsdom": "^29.1.1",
     "tailwindcss": "^3.4.17"
   }
 }
