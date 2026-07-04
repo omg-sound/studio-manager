@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
@@ -133,15 +133,14 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const engineerField = `<div><label class="label-sm">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
   // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 단가 항목은 세션 종류=녹음일 때만 노출(app.js data-show-when="rec").
-  // 룸 = 스튜디오 공간(같은 룸끼리만 시간 겹침 검사). 2x2 그리드로 세션종류/룸 · 녹음단가/엔지니어 배치.
-  const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-2">
+  // 한 줄(3열): 세션 종류 | 녹음 단가 항목 | 룸(같은 룸끼리만 겹침 검사). 담당 엔지니어는 상단(상태 자리)로 이동, 상태 필드는 제거.
+  const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
          <div><label class="label-sm">세션 종류</label>
           <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-         <div><label class="label-sm">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
-          ${roomSelect(roomList, s.room_id)}</div>
          <div data-show-when="rec"><label class="label-sm">녹음 단가 항목 <span class="font-normal text-muted">(시간제 단가)</span></label>
           ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
-         ${engineerField}
+         <div><label class="label-sm">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
+          ${roomSelect(roomList, s.room_id)}</div>
        </div>
        ${explain(`청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
   // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
@@ -173,9 +172,9 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
         <input class="input py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date required /></div>
       <div><label class="label-sm">예약 담당자</label>
         <select class="input py-1.5 text-sm" name="booker_name">${managerOptions(managers, s.booker_name || defaultBooker || getDefaultBooker() || "", "", { allowEmpty: false })}</select></div>
-      <div><label class="label-sm">상태</label>
-        <select class="input py-1.5 text-sm" name="status">${SESSION_STATUSES.map((st) => `<option value="${esc(st)}" ${st === (s.status || "예정") ? "selected" : ""}>${esc(st)}</option>`).join("")}</select></div>
+      ${engineerField}
     </div>
+    <input type="hidden" name="status" value="${esc(s.status || "예정")}" />
     ${typeRateRow}
     ${directorField}
     <div class="mt-3">
