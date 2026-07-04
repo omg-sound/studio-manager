@@ -78,15 +78,18 @@ function validRoomId(raw) {
 function sessionFields(input) {
   const date = String(input.session_date || "").trim();
   if (!isValidYmd(date)) throw new Error("SESSION_DATE_REQUIRED");
+  // 종일(Google/Apple 개념 = 하루 종일·시간 없음). 체크 시 시작·종료를 NULL로 저장(시간 미보유). 서버 권위: 클라 시간값 무시.
+  const allDay = input.all_day === "1" || input.all_day === "on" || input.all_day === true;
   // 직접입력(그리드 밖 시간)이 있으면 우선, 없으면 그리드에서 고른 시작.
-  const start = cleanTime(input.start_time_custom) || cleanTime(input.start_time);
+  const start = allDay ? null : cleanTime(input.start_time_custom) || cleanTime(input.start_time);
   const rateItemId = Number(input.rate_item_id) || null;
   // 담당 디렉터는 다대다(session_directors)로 별도 처리 — 여기선 레거시 컬럼 자리만 null(caller가 첫 디렉터로 채움).
   return {
     session_type: normalizeSessionType(input.session_type),
     session_date: date,
+    all_day: allDay ? 1 : 0,
     start_time: start,
-    end_time: resolveEndTime(input, start),
+    end_time: allDay ? null : resolveEndTime(input, start),
     booker_name: String(input.booker_name || "").trim() || null,
     engineer_name: String(input.engineer_name || "").trim() || null,
     status: normalizeSessionStatus(input.status),
@@ -192,10 +195,15 @@ function busySessionSlots(date, slots, { excludeId = null, room } = {}) {
 /** 녹음 세션의 진행시간 → 단가표 자동 산정. 시간제 대상(녹음+단가+시간)이 아니면 null. */
 function sessionRateAmount(session) {
   if (!session || !RENTAL_SESSION_TYPES.includes(session.session_type) || !session.rate_item_id) return null;
-  const minutes = minutesBetween(session.start_time, session.end_time);
-  if (minutes <= 0) return null;
   const item = db().prepare("SELECT * FROM rate_items WHERE id = ?").get(session.rate_item_id);
   if (!item) return null;
+  // 종일 세션은 시간이 없어 시간제 산정 불가 → 1 기준 블록으로 취급(정액 항목=base_price, 시간제 항목=1Pro). 금액은 청구 시 조정.
+  if (session.all_day) {
+    const mins = item.base_minutes || 0;
+    return { item, minutes: mins, amount: computeRatePrice(item, mins), allDay: true };
+  }
+  const minutes = minutesBetween(session.start_time, session.end_time);
+  if (minutes <= 0) return null;
   return { item, minutes, amount: computeRatePrice(item, minutes) };
 }
 
@@ -274,8 +282,8 @@ function createSession(user, projectId, input = {}) {
   try {
     const info = d
       .prepare(
-        `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_party_id, memo)
-         VALUES (@project_id, @session_type, @session_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_party_id, @memo)`
+        `INSERT INTO sessions (project_id, session_type, session_date, all_day, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_party_id, memo)
+         VALUES (@project_id, @session_type, @session_date, @all_day, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_party_id, @memo)`
       )
       .run({ project_id: project.id, ...f });
     newId = info.lastInsertRowid;
@@ -303,7 +311,7 @@ function updateSession(user, sessionId, input = {}) {
   try {
     d
       .prepare(
-        `UPDATE sessions SET session_type=@session_type, session_date=@session_date, start_time=@start_time,
+        `UPDATE sessions SET session_type=@session_type, session_date=@session_date, all_day=@all_day, start_time=@start_time,
          end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
          rate_item_id=@rate_item_id, room_id=@room_id, director_party_id=@director_party_id, memo=@memo WHERE id=@id`
       )

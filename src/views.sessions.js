@@ -42,6 +42,7 @@ function managerOptions(managers, current, placeholder = "담당자 미지정", 
 
 
 function timeLabel(s) {
+  if (s.all_day) return "종일"; // Google/Apple 개념 = 하루 종일(시간 없음)
   if (s.start_time && s.end_time) return `${esc(s.start_time)}–${esc(s.end_time)}`;
   if (s.start_time) return esc(s.start_time);
   return "시간 미정";
@@ -188,7 +189,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
         ${timeBox("end_time", s.end_time, "18:00", 'data-end-input aria-label="종료 시간"')}
         <input class="input w-auto py-1.5 text-sm" type="date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
         <label class="flex w-fit cursor-pointer items-center gap-2 pl-1 text-sm">
-          <input type="checkbox" class="h-4 w-4 rounded border-border text-primary" data-all-day /> 종일
+          <input type="checkbox" name="all_day" value="1" class="h-4 w-4 rounded border-border text-primary" data-all-day ${s.all_day ? "checked" : ""} /> 종일
         </label>
       </div>
       <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다.</p>
@@ -274,7 +275,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
   const billLine = s.billing
     ? `<div class="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 break-keep text-xs tabular">
          ${s.billing.amount > 0 ? `<span class="whitespace-nowrap text-success">예상 청구액 ${formatKRW(s.billing.amount)}</span>` : `<span class="whitespace-nowrap text-muted">청구액 미정 <span class="text-muted/70">(청구 시 입력)</span></span>`}
-         <span class="break-keep text-muted">${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)}</span>
+         <span class="break-keep text-muted">${s.billing.allDay ? "종일" : `${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분`} · ${esc(s.billing.item.name)}</span>
          ${billStatusChunk}
        </div>`
     : "";

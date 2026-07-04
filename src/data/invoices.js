@@ -170,7 +170,7 @@ function listBillableSessionsForProject(user, projectId) {
          AND s.status <> '취소'
          AND s.session_type IN (${RENTAL_IN})
          AND s.rate_item_id IS NOT NULL
-         AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+         AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
          AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
          AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)
        ORDER BY s.created_at ASC, s.id ASC`
@@ -269,7 +269,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
       .prepare(
         `SELECT s.* FROM sessions s
          WHERE s.project_id = ? AND s.status <> '취소' AND s.session_type IN (${RENTAL_IN})
-           AND s.rate_item_id IS NOT NULL AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+           AND s.rate_item_id IS NOT NULL AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
            AND s.id IN (${placeholders})
            AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
            AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)`
@@ -300,7 +300,8 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
   }
   for (const { session, calc, amount } of billSessions) {
     const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
-    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `${session.session_type || "녹음"} 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${hh}시간${mm ? " " + mm + "분" : ""})`, quantity: 1, unit_price: amount, amount }); // 촬영 세션도 실제 종류로 스냅샷(거래명세서 품목명)
+    const durLabel = calc.allDay ? "종일" : `${hh}시간${mm ? " " + mm + "분" : ""}`; // 종일 세션은 '종일'로 스냅샷(시간 없음)
+    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `${session.session_type || "녹음"} 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${durLabel})`, quantity: 1, unit_price: amount, amount }); // 촬영 세션도 실제 종류로 스냅샷(거래명세서 품목명)
   }
   return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedPayerId };
 }

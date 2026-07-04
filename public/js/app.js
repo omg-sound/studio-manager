@@ -428,33 +428,18 @@
     if (diff <= 0) diff += 1440; // 야간(자정 넘김)
     setDuration(diff);
   });
-  // 종일 = 구글 캘린더와 동일 개념(그냥 하루 종일 00:00~24:00, 운영시간 무관 — 2026-07-04 사용자 정정).
-  // 저장은 00:00~23:59(스키마=날짜+시각, hours는 비워 end_time 경로) — 체크 중 시간 박스·소요 UI 숨김, 해제 시 이전값 복원.
-  var allDayStash = null;
-  function applyAllDay(on, restore) {
+  // 종일 = 구글/애플 캘린더와 동일 개념(하루 종일 · 시간 없음, 운영시간 무관 — 2026-07-04 재정정).
+  // 서버가 all_day=1이면 start/end를 NULL로 저장(시간 미보유). JS는 UI만: 시간 박스·종료 날짜·소요 블록 숨김.
+  // 체크박스(name="all_day")가 제출 소스라 시간값은 건드리지 않는다(해제 시 원래 시간 그대로 보존).
+  function applyAllDay(on) {
     Array.prototype.forEach.call(form.querySelectorAll("[data-time-combo]"), function (w) { w.hidden = on; });
-    if (durationWrap) durationWrap.hidden = on; // 종일이면 소요 블록(헤딩+슬라이더) 숨김(해제 시 노출)
-    if (endDate) endDate.readOnly = on;
-    if (on) {
-      allDayStash = restore ? null : { s: startInput ? startInput.value : "", e: endInput ? endInput.value : "", d: curDur };
-      writeTime(startInput, "00:00");
-      writeTime(endInput, "23:59");
-      setDuration(1439);
-    } else if (allDayStash) {
-      writeTime(startInput, allDayStash.s);
-      writeTime(endInput, allDayStash.e);
-      setDuration(allDayStash.d);
-      allDayStash = null;
-    } else {
-      updatePreview();
-    }
+    if (durationWrap) durationWrap.hidden = on;
+    if (endDate) endDate.hidden = on;
+    if (durLabel) durLabel.textContent = on ? "종일" : fmtDuration(curDur);
   }
-  if (allDay) allDay.addEventListener("change", function () { applyAllDay(allDay.checked, false); });
-  // 편집 초기값이 종일 형태(00:00~23:59)면 체크 상태로 시작.
-  if (allDay && startInput && endInput && startInput.value === "00:00" && endInput.value === "23:59") {
-    allDay.checked = true;
-    applyAllDay(true, true);
-  }
+  if (allDay) allDay.addEventListener("change", function () { applyAllDay(allDay.checked); });
+  // 편집 진입 시 서버가 체크(all_day 세션)해 뒀으면 UI 반영.
+  if (allDay && allDay.checked) applyAllDay(true);
   // 겹침이 감지되면 제출 직전 확인 → 승인 시 override_conflict=1로 그대로 등록(서버가 겹침 허용). 취소면 제출 중단.
   form.addEventListener("submit", function (e) {
     if (!overrideField) return;
