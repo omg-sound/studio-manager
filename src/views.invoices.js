@@ -258,23 +258,23 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     ${balLine}
     <div class="text-[11px] text-muted">${dueLine}</div>`;
   // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(청구서 발행 권한자만).
-  // 상태 반영: 이미 완료된 항목은 '불 켜짐'(btn-primary·비클릭 정적 표시), 아직이면 '불 꺼짐'(btn-ghost·클릭 가능 폼) — 사용자 요청.
-  // 클릭 시 하향(입금완료→계산서 발행)으로 되돌리는 footgun 방지: 완료 버튼은 정적(폼 없음).
+  // 상태 반영(불): 완료=btn-primary(켜짐), 미완료=btn-ghost(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다(사용자 요청).
+  // 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
   const retPath = ret || "/invoices";
   const retHidden = `<input type="hidden" name="return" value="${esc(retPath)}" />`;
   const taxDoc = taxDocOf(inv);
   const taxIssued = inv.tax_status === "계산서 발행" || inv.tax_status === "입금완료";
   const isPaid = inv.tax_status === "입금완료";
-  const litBtn = (label) => `<span class="btn-primary btn-sm cursor-default select-none" aria-disabled="true">${esc(label)}</span>`;
-  const formBtn = (tax, label) => `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(tax)}" />${retHidden}<button class="btn-ghost btn-sm" type="submit">${esc(label)}</button></form>`;
+  const toggleBtn = (target, label, lit) =>
+    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="${lit ? "btn-primary" : "btn-ghost"} btn-sm" type="submit">${esc(label)}</button></form>`;
   const actions = isAdmin
     ? `<details class="group">
          <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
            <span>상태 처리</span>${detailsChevron()}
          </summary>
          <div class="flex flex-wrap justify-end gap-2 border-t border-border/40 bg-elevated/40 px-4 py-3">
-           ${taxIssued ? litBtn(`${taxDoc} 발행 완료`) : formBtn("계산서 발행", `${taxDoc} 발행 완료`)}
-           ${isPaid ? litBtn("입금완료") : formBtn("입금완료", "입금완료")}
+           ${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", `${taxDoc} 발행 완료`, taxIssued)}
+           ${toggleBtn(isPaid ? "계산서 발행" : "입금완료", "입금완료", isPaid)}
          </div>
        </details>`
     : "";

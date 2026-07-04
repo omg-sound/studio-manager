@@ -390,8 +390,11 @@ router.post("/:id/tax-status", requireBilling, (req, res) => {
   const tax = normalizeTaxStatus(req.body.tax_status);
   // 입금완료 선택 → 완납. 잔금이 있으면 그만큼 입금 이력 1건 추가(paid_amount는 SUM(payments)로 자동 반영).
   if (tax === "입금완료") { const bal = balanceOf(inv); if (bal > 0) addPayment(inv.id, { amount: bal, memo: "입금완료 처리" }); }
-  // 입금완료에서 다른 계산서 상태로 옮겨도 입금 이력은 보존한다(문서 단계 변경이 실제 입금 기록을 지우면 안 됨).
-  // 완납 취소가 필요하면 입금 이력에서 해당 건을 삭제한다.
+  // 입금완료를 되돌리면(잘못 눌렀을 때) 자동 완납으로 넣었던 입금('입금완료 처리')만 제거해 잔금을 복원한다.
+  // 사용자가 직접 기록한 실제 입금 이력은 보존(memo가 다름).
+  else if (inv.tax_status === "입금완료") {
+    listPayments(inv.id).filter((p) => p.memo === "입금완료 처리").forEach((p) => deletePayment(p.id));
+  }
   const d = db();
   d.exec("BEGIN IMMEDIATE");
   try {
