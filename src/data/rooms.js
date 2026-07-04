@@ -23,8 +23,16 @@ function createRoom(input = {}) {
   const name = String(input.room_name != null ? input.room_name : input.name || "").trim();
   if (!name) throw new Error("ROOM_NAME_REQUIRED");
   const sort = Number.isFinite(Number(input.sort_order)) ? Number(input.sort_order) : 0;
-  const info = db().prepare("INSERT INTO rooms (name, sort_order, active) VALUES (?, ?, 1)").run(name, sort);
+  const isExternal = input.is_external === "1" || input.is_external === "on" || input.is_external === true ? 1 : 0;
+  const info = db().prepare("INSERT INTO rooms (name, sort_order, active, is_external) VALUES (?, ?, 1, ?)").run(name, sort, isExternal);
   return db().prepare("SELECT * FROM rooms WHERE id = ?").get(info.lastInsertRowid);
+}
+
+/** 장소(룸)가 외부 장소(주소 입력 대상)인지. 세션 저장 시 location 저장 여부 판정. */
+function isExternalRoom(roomId) {
+  if (!roomId) return false;
+  const r = db().prepare("SELECT is_external FROM rooms WHERE id = ?").get(Number(roomId));
+  return !!(r && r.is_external);
 }
 
 /** 룸 삭제(하드). FK가 없으므로 참조 세션의 room_id를 먼저 NULL로(SET NULL 의미) 정리한 뒤 행 삭제. */
@@ -45,5 +53,6 @@ function deleteRoom(id) {
 module.exports = {
   listRooms,
   createRoom,
+  isExternalRoom,
   deleteRoom,
 };

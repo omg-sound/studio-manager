@@ -15,16 +15,16 @@ function resolveRooms(rooms) {
   return Array.isArray(rooms) ? rooms : listRooms();
 }
 
-/** 룸 select. 현재값 선택. 현재값이 없으면 첫 룸(A룸)을 기본 선택. '룸 미지정'은 맨 아래 옵션. */
+/** 장소(룸) select. 현재값 선택. 없으면 첫 장소(A룸)를 기본 선택. '장소 미지정'은 맨 아래. 외부 장소 옵션은 data-external=1(주소 필드 노출용). */
 function roomSelect(rooms, currentId) {
   const cur = currentId == null || currentId === "" ? "" : String(currentId);
-  const auto = cur === "" && rooms.length ? String(rooms[0].id) : cur; // 신규 예약은 A룸(첫 룸) 기본
+  const auto = cur === "" && rooms.length ? String(rooms[0].id) : cur; // 신규 예약은 첫 장소 기본
   const opts = [];
   for (const r of rooms) {
-    opts.push(`<option value="${r.id}" ${String(r.id) === auto ? "selected" : ""}>${esc(r.name)}</option>`);
+    opts.push(`<option value="${r.id}" data-external="${r.is_external ? 1 : 0}" ${String(r.id) === auto ? "selected" : ""}>${esc(r.name)}</option>`);
   }
-  opts.push(`<option value="" ${auto === "" ? "selected" : ""}>룸 미지정</option>`); // 맨 아래
-  return `<select class="input py-1.5 text-sm" name="room_id">${opts.join("")}</select>`;
+  opts.push(`<option value="" data-external="0" ${auto === "" ? "selected" : ""}>장소 미지정</option>`); // 맨 아래
+  return `<select class="input py-1.5 text-sm" name="room_id" data-room-select>${opts.join("")}</select>`;
 }
 
 /** 담당자 마스터 선택지. 현재값이 목록에 없으면 보존용으로 추가. 예약 담당자·담당 엔지니어 공용. */
@@ -125,8 +125,12 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
          <div data-show-when="rec"><label class="label-sm">단가 항목</label>
           <select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>${rateOptionsHtml(curItems, s.rate_item_id)}</select>
           ${rateKinds.map((k) => `<template data-rate-opts-${k}>${rateOptionsHtml(itemsByKind[k], s.rate_item_id)}</template>`).join("")}</div>
-         <div><label class="label-sm">룸</label>
+         <div><label class="label-sm">장소</label>
           ${roomSelect(roomList, s.room_id)}</div>
+       </div>
+       <div class="mt-2" data-external-loc ${s.room_id && roomList.some((r) => Number(r.id) === Number(s.room_id) && r.is_external) ? "" : "hidden"}>
+         <label class="label-sm">장소 주소 <span class="font-normal text-muted text-xs">(외부 장소 — 구글 지도용 주소)</span></label>
+         <input class="input py-1.5 text-sm" name="location" value="${esc(s.location || "")}" placeholder="예: 서울시 강남구 …" autocomplete="off" />
        </div>
        ${explain(`청구하려면 <b>세션 종류=녹음/촬영</b> + <b>단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
   // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
@@ -193,7 +197,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
           <input type="checkbox" name="all_day" value="1" class="h-4 w-4 rounded border-border text-primary" data-all-day ${s.all_day ? "checked" : ""} /> 종일
         </label>
       </div>
-      <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다.</p>
+      <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 장소 예약이 이미 있습니다.</p>
       <input type="hidden" name="override_conflict" value="" data-override-conflict />
       <div data-duration-wrap>
         <label class="label-sm">소요 시간 <span class="ml-1 font-medium text-primary" data-duration-label>${fmtDurationKo(initMins)}</span></label>

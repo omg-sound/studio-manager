@@ -199,6 +199,24 @@ test("세션 폼: 단가 항목을 골라도 사용자가 잡은 소요시간이
   assert.equal(end.value, "16:00", "종료 시간도 그대로");
 });
 
+// ── ③f 장소=외부 선택 시 주소 입력 노출(2026-07-05) ──
+test("세션 폼: 장소가 외부(is_external)면 주소 입력 노출, 스튜디오 룸이면 숨김", () => {
+  const rooms = [{ id: 1, name: "A룸", is_external: 0 }, { id: 2, name: "외부일정", is_external: 1 }];
+  const html = `<form data-session-form>${sessionBookingFields({}, [], [], rooms, "")}</form>`;
+  const { win, doc } = mountDom(html);
+  const roomSel = doc.querySelector('select[name="room_id"]');
+  const locWrap = doc.querySelector("[data-external-loc]");
+  // 초기: 첫 장소(A룸=스튜디오) → 주소 숨김
+  assert.equal(locWrap.hidden, true, "스튜디오 룸이면 주소 숨김");
+  // 외부일정 선택 → 주소 노출
+  roomSel.value = "2"; fire(win, roomSel, "change");
+  assert.equal(locWrap.hidden, false, "외부 장소 선택 시 주소 노출");
+  assert.ok(locWrap.querySelector('input[name="location"]'), "location 입력 존재");
+  // 다시 스튜디오 룸 → 숨김
+  roomSel.value = "1"; fire(win, roomSel, "change");
+  assert.equal(locWrap.hidden, true, "다시 숨김");
+});
+
 // ── ③c 새 작성 프리필 + 자동완성 차단(hidden 제출) ──
 test("세션 폼(새 작성): 시작=지금 기준 30분 슬롯 프리필·종료=+1Pro 자동, 보이는 입력 nameless+hidden 동기", () => {
   const rateItems = db().prepare("SELECT * FROM rate_items").all();

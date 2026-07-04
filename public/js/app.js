@@ -164,6 +164,7 @@
   var presets = form.querySelectorAll("[data-duration-preset]");
   var sessionTypeSel = form.querySelector('select[name="session_type"]');
   var roomSel = form.querySelector('select[name="room_id"]');
+  var externalLoc = form.querySelector("[data-external-loc]"); // 외부 장소 주소 입력(장소=외부일 때만 노출)
   var showWhenRec = form.querySelectorAll('[data-show-when="rec"]');
   var conflictWarn = form.querySelector("[data-conflict-warn]");
   var overrideField = form.querySelector("[data-override-conflict]");
@@ -342,6 +343,14 @@
       .catch(function () {});
   }
 
+  // 장소 = 외부 장소(선택 옵션 data-external=1)면 주소 입력 노출. 초기 + 변경 시 반영.
+  function syncExternalLoc() {
+    if (!externalLoc || !roomSel) return;
+    var opt = roomSel.options[roomSel.selectedIndex];
+    externalLoc.hidden = !(opt && opt.getAttribute("data-external") === "1");
+  }
+  if (roomSel) roomSel.addEventListener("change", syncExternalLoc);
+  syncExternalLoc();
   if (dateInput) dateInput.addEventListener("change", function () { refreshAvailability(); updatePreview(); });
   // 날짜 입력(datepick): 클릭/포커스 시 네이티브 달력 팝업(showPicker — 아이콘은 CSS로 숨김, 타이핑은 그대로).
   Array.prototype.forEach.call(form.querySelectorAll("input[data-datepick]"), function (el) {

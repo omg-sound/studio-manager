@@ -60,7 +60,7 @@ function eventInputForSession(session, project) {
     config.baseUrl ? `${config.baseUrl}/projects/${session.project_id}` : "",
   ].filter(Boolean).join("\n");
   const attendees = sessionAttendeeEmails(session, project); // 프로젝트 매니저·예약담당자·담당엔지니어 이메일(참석자)
-  return { title, location: calendar.getStudioLocation(), description, attendees, date: session.session_date, start: session.start_time, end: session.end_time, endDate: session.all_day ? session.end_date : null };
+  return { title, location: session.location || calendar.getStudioLocation(), description, attendees, date: session.session_date, start: session.start_time, end: session.end_time, endDate: session.all_day ? session.end_date : null };
 }
 
 /**

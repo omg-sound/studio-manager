@@ -390,6 +390,8 @@ function init() {
   addColumn("sessions", "director_party_id", "INTEGER"); // 담당 디렉터 첫 명(parties.id, 레거시 director_contact_id 대체)
   addColumn("sessions", "all_day", "INTEGER NOT NULL DEFAULT 0"); // 종일(Google/Apple 개념 = 하루 종일·시간 없음). all_day=1이면 start/end NULL
   addColumn("sessions", "end_date", "TEXT"); // 종일 다일(multi-day) 일정의 종료 날짜(NULL=session_date와 같은 날 = 단일일). 종일에서만 의미.
+  addColumn("sessions", "location", "TEXT"); // 외부 장소 주소(구글 주소 등). 스튜디오 룸이면 NULL(기본 장소 사용). 외부 장소(rooms.is_external)일 때만 입력.
+  addColumn("rooms", "is_external", "INTEGER NOT NULL DEFAULT 0"); // 외부 장소(주소 입력 대상). 세션 폼에서 이 장소 선택 시 주소 필드 노출.
   addColumn("session_directors", "party_id", "INTEGER"); // 다대다 디렉터(parties.id, 기존 contact_id 대체)
   addColumn("parties", "group_id", "INTEGER"); // 아티스트(사람)의 소속 그룹(parties.id, kind='group'). 그룹↔멤버 연결
   addColumn("parties", "contact_party_id", "INTEGER"); // 그룹의 담당자(parties.id, 사람 — 멤버 또는 관계자)
@@ -433,6 +435,11 @@ function init() {
   if (!getState("session_all_day_backfill_v1")) {
     d.prepare("UPDATE sessions SET all_day = 1, start_time = NULL, end_time = NULL WHERE start_time = '00:00' AND end_time = '23:59'").run();
     setState("session_all_day_backfill_v1", "done");
+  }
+  // 기존 '외부…' 이름 장소를 외부 플래그로 1회 승격(사용자가 만든 '외부일정' 룸 → 주소 입력 대상).
+  if (!getState("rooms_external_backfill_v1")) {
+    d.prepare("UPDATE rooms SET is_external = 1 WHERE name LIKE '외부%'").run();
+    setState("rooms_external_backfill_v1", "done");
   }
   // 사업자등록번호 하이픈 정규화 1회 백필(000-00-00000) — 저장 경로는 formatBizNo가 상시 적용(lib/format).
   if (!getState("biz_no_format_v1")) {

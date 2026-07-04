@@ -272,12 +272,13 @@ function roomsSection() {
   return `
     <section class="card space-y-4">
       <div>
-        <h2 class="font-display text-lg font-semibold">룸 (스튜디오 공간)</h2>
-        ${explain(`세션 예약 시 룸을 지정하면 <span class="text-fg">같은 룸끼리만 시간 겹침을 검사</span>합니다(다른 룸은 같은 시간 병렬 예약 허용). 룸을 삭제하면 그 룸으로 잡힌 세션은 '룸 미지정'으로 바뀝니다.`)}
+        <h2 class="font-display text-lg font-semibold">장소 (스튜디오 룸 · 외부)</h2>
+        ${explain(`세션 예약 시 장소를 지정하면 <span class="text-fg">같은 장소끼리만 시간 겹침을 검사</span>합니다(다른 장소는 같은 시간 병렬 예약 허용). 장소를 삭제하면 그 장소로 잡힌 세션은 '장소 미지정'으로 바뀝니다. <span class="text-fg">외부 장소</span>로 표시하면 세션 폼에서 주소 입력칸이 나오고 캘린더 일정 장소로 쓰입니다.`)}
       </div>
-      <form method="post" action="/settings/rooms" class="flex gap-2">
-        <input class="input py-1.5 text-sm" name="room_name" placeholder="룸 이름 (예: A룸)" autocomplete="off" required />
-        <button class="btn-primary shrink-0 btn-sm" type="submit">룸 추가</button>
+      <form method="post" action="/settings/rooms" class="flex flex-wrap items-center gap-2">
+        <input class="input py-1.5 text-sm" name="room_name" placeholder="장소 이름 (예: A룸 · 외부일정)" autocomplete="off" required />
+        <label class="flex cursor-pointer items-center gap-1.5 text-sm"><input type="checkbox" name="is_external" value="1" class="h-4 w-4 rounded border-border text-primary" /> 외부 장소(주소 입력)</label>
+        <button class="btn-primary shrink-0 btn-sm" type="submit">장소 추가</button>
       </form>
       <div class="space-y-2">${rows}</div>
     </section>`;
@@ -288,8 +289,8 @@ function roomRow(r) {
   return `
     <div class="rounded-lg border border-border bg-bg p-3">
       <div class="flex items-center justify-between gap-3">
-        <div class="font-medium">${esc(r.name)}</div>
-        <form method="post" action="/settings/rooms/${r.id}/delete" data-confirm="'${esc(r.name)}' 룸을 삭제할까요? 이 룸으로 예약된 세션은 '룸 미지정'으로 바뀝니다.">
+        <div class="flex items-center gap-2"><span class="font-medium">${esc(r.name)}</span>${r.is_external ? `<span class="badge badge-info">외부</span>` : ""}</div>
+        <form method="post" action="/settings/rooms/${r.id}/delete" data-confirm="'${esc(r.name)}' 장소를 삭제할까요? 이 장소로 예약된 세션은 '장소 미지정'으로 바뀝니다.">
           <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
         </form>
       </div>

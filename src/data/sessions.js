@@ -86,6 +86,10 @@ function sessionFields(input) {
   // 직접입력(그리드 밖 시간)이 있으면 우선, 없으면 그리드에서 고른 시작.
   const start = allDay ? null : cleanTime(input.start_time_custom) || cleanTime(input.start_time);
   const rateItemId = Number(input.rate_item_id) || null;
+  const roomId = validRoomId(input.room_id); // 활성 룸 검증 — 없거나 삭제된 id는 null
+  const { isExternalRoom } = require("./rooms"); // 무순환(rooms는 sessions를 require하지 않음)
+  // 외부 장소(is_external)일 때만 주소(location) 저장 — 스튜디오 룸이면 null(기본 장소 사용).
+  const location = roomId && isExternalRoom(roomId) ? String(input.location || "").trim() || null : null;
   // 담당 디렉터는 다대다(session_directors)로 별도 처리 — 여기선 레거시 컬럼 자리만 null(caller가 첫 디렉터로 채움).
   return {
     session_type: normalizeSessionType(input.session_type),
@@ -98,7 +102,8 @@ function sessionFields(input) {
     engineer_name: String(input.engineer_name || "").trim() || null,
     status: normalizeSessionStatus(input.status),
     rate_item_id: rateItemId,
-    room_id: validRoomId(input.room_id), // 활성 룸 검증 — 없거나 삭제된 id는 null
+    room_id: roomId,
+    location,
     director_party_id: null,
     memo: String(input.memo || "").trim() || null,
   };
@@ -286,8 +291,8 @@ function createSession(user, projectId, input = {}) {
   try {
     const info = d
       .prepare(
-        `INSERT INTO sessions (project_id, session_type, session_date, all_day, end_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_party_id, memo)
-         VALUES (@project_id, @session_type, @session_date, @all_day, @end_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_party_id, @memo)`
+        `INSERT INTO sessions (project_id, session_type, session_date, all_day, end_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, location, director_party_id, memo)
+         VALUES (@project_id, @session_type, @session_date, @all_day, @end_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @location, @director_party_id, @memo)`
       )
       .run({ project_id: project.id, ...f });
     newId = info.lastInsertRowid;
@@ -317,7 +322,7 @@ function updateSession(user, sessionId, input = {}) {
       .prepare(
         `UPDATE sessions SET session_type=@session_type, session_date=@session_date, all_day=@all_day, end_date=@end_date, start_time=@start_time,
          end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
-         rate_item_id=@rate_item_id, room_id=@room_id, director_party_id=@director_party_id, memo=@memo WHERE id=@id`
+         rate_item_id=@rate_item_id, room_id=@room_id, location=@location, director_party_id=@director_party_id, memo=@memo WHERE id=@id`
       )
       .run({ id: s.id, ...f });
     setSessionDirectors(s.id, directorIds); // 다대다 디렉터 교체
