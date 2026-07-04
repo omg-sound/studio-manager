@@ -37,8 +37,7 @@ function sessionAmountsByProject(projectIds) {
          AND s.session_type = '녹음'
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
-         AND s.status <> '취소'
-         AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)`
+         AND s.status <> '취소'`
     )
     .all(...projectIds);
   const sums = {};
@@ -74,7 +73,7 @@ function listProjects(_user, { q } = {}) {
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        LEFT JOIN task_types tt ON tt.key = t.task_type
-       WHERE tr.project_id = p.id AND t.is_invoiced = 0) AS task_total,
+       WHERE tr.project_id = p.id) AS task_total,
       (SELECT COUNT(*) FROM sessions s
        WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS upcoming_cnt,
       (SELECT MIN(s.session_date) FROM sessions s
@@ -123,7 +122,7 @@ function getProjectForUser(user, id) {
        LEFT JOIN (
          SELECT tr.project_id, COALESCE(SUM(COALESCE(NULLIF(t.total_price, 0), tt.unit_price, 0)), 0) AS task_total
          FROM project_tracks tr
-         LEFT JOIN track_tasks t ON t.track_id = tr.id AND t.is_invoiced = 0
+         LEFT JOIN track_tasks t ON t.track_id = tr.id
          LEFT JOIN task_types tt ON tt.key = t.task_type
          GROUP BY tr.project_id
        ) task_sum ON task_sum.project_id = p.id
