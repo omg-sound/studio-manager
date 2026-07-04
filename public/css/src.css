@@ -147,6 +147,9 @@
   }
 }
 
+/* 날짜 입력(datepick): 네이티브 달력 아이콘 숨김 — 달력은 클릭/포커스 시 showPicker()로 띄운다(구글식, app.js). */
+input[data-datepick]::-webkit-calendar-picker-indicator { display: none; }
+
 /* 커스텀 콤보(검색 드롭다운) 행 눌림 피드백 — 터치엔 hover 없음. 모든 pop은 role="listbox". */
 [role="listbox"] > button:active {
   background-color: rgb(var(--color-elevated));

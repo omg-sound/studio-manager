@@ -202,25 +202,30 @@
     return pad(Math.floor(t / 60)) + ":" + pad(t % 60);
   }
   function fmtHours(h) { return h % 1 === 0 ? String(h) : h.toFixed(1); }
-  // 소요시간(분): custom_hours(직접입력)가 진실원천. 슬라이더·프리셋이 이 값을 채운다.
-  function durationMinutes() {
+  // 소요시간(분) 단일 진실원천 = curDur. custom_hours는 ≤960(16h)일 때만 미러 —
+  // 초과(종일 23:59 등)는 hours를 비워 서버가 end_time을 그대로 쓰게(960 클램프 왜곡 방지).
+  var curDur = (function () {
     var h = parseFloat(customInput && customInput.value);
-    return h > 0 ? Math.round(h * 60) : 0;
-  }
+    if (h > 0) return Math.round(h * 60);
+    var sm = toMin(startInput && startInput.value), em = toMin(endInput && endInput.value);
+    if (sm != null && em != null) { var d = em - sm; if (d <= 0) d += 1440; return d; } // 야간 포함(편집 초기값)
+    return 0;
+  })();
+  function durationMinutes() { return curDur; }
   function fmtDuration(mins) {
     if (!(mins > 0)) return "설정 안 함";
     var hh = Math.floor(mins / 60), mm = mins % 60;
     return ((hh ? hh + "시간" : "") + (mm ? (hh ? " " : "") + mm + "분" : "")) || "0분";
   }
-  // 한 값을 custom_hours·슬라이더·라벨에 일괄 반영(프리셋·초기화용).
+  // 한 값을 curDur·custom_hours·슬라이더·라벨에 일괄 반영(프리셋·종료 역산·초기화용).
   function setDuration(mins) {
-    if (!(mins > 0)) mins = 0;
-    if (customInput) customInput.value = mins > 0 ? fmtHours(mins / 60) : "";
-    if (slider) slider.value = Math.min(mins, SLIDER_MAX);
+    curDur = mins > 0 ? Math.min(Math.round(mins), 1439) : 0; // 1439=24h-1분(스키마 표현 한계)
+    if (customInput && document.activeElement !== customInput) customInput.value = curDur > 0 && curDur <= SLIDER_MAX ? fmtHours(curDur / 60) : "";
+    if (slider) slider.value = Math.min(curDur, SLIDER_MAX);
     refreshDuration();
   }
   function refreshDuration() {
-    if (durLabel) durLabel.textContent = fmtDuration(durationMinutes());
+    if (durLabel) durLabel.textContent = allDay && allDay.checked ? "종일" : fmtDuration(curDur);
     updatePreview();
   }
   // (그리드 폐지 — busy 슬롯은 겹침 경고(overlapDetected) 계산에만 쓴다)
@@ -304,10 +309,11 @@
     var start = currentStart();
     var mins = durationMinutes();
     var sMin = toMin(start);
-    if (preview) preview.textContent = start && mins > 0 ? "예상 종료: " + addMin(start, mins) + " (" + fmtHours(mins / 60) + "시간)" : "";
-    // 종료 박스·종료 날짜 자동 동기(구글식): 시작+소요 → 종료. 자정 넘김이면 종료 날짜 +1일.
+    var isAllDay = allDay && allDay.checked;
+    if (preview) preview.textContent = isAllDay ? "종일 (00:00–24:00)" : start && mins > 0 ? "예상 종료: " + addMin(start, mins) + " (" + fmtHours(mins / 60) + "시간)" : "";
+    // 종료 박스·종료 날짜 자동 동기(구글식): 시작+소요 → 종료. 자정 넘김이면 종료 날짜 +1일. 사용자가 편집 중인 칸은 덮지 않음.
     if (endInput && sMin != null && mins > 0 && document.activeElement !== endInput) endInput.value = addMin(start, mins);
-    if (endDate && dateInput) endDate.value = sMin != null && mins > 0 && sMin + mins >= 1440 ? addDays(dateInput.value, 1) : dateInput.value || "";
+    if (endDate && dateInput && document.activeElement !== endDate) endDate.value = sMin != null && mins > 0 && sMin + mins >= 1440 ? addDays(dateInput.value, 1) : dateInput.value || "";
     updateConflictWarn();
   }
   function refreshAvailability() {
@@ -329,20 +335,31 @@
       .catch(function () {});
   }
 
-  if (dateInput) dateInput.addEventListener("change", refreshAvailability);
+  if (dateInput) dateInput.addEventListener("change", function () { refreshAvailability(); updatePreview(); });
+  // 날짜 입력(datepick): 클릭/포커스 시 네이티브 달력 팝업(showPicker — 아이콘은 CSS로 숨김, 타이핑은 그대로).
+  Array.prototype.forEach.call(form.querySelectorAll("input[data-datepick]"), function (el) {
+    var open = function () { if (el.showPicker && !el.readOnly) { try { el.showPicker(); } catch (_e) { /* 사용자 제스처 밖 등 — 무시 */ } } };
+    el.addEventListener("click", open);
+    el.addEventListener("focus", open);
+  });
+  // 종료 날짜 직접 편집(구글식): 시작 날짜와의 일수 차 + 종료 시각으로 소요 역산(<24h만 표현 가능 — 밖이면 자동 보정).
+  if (endDate) endDate.addEventListener("change", function () {
+    var sMin = toMin(currentStart()), eMin = toMin(endInput ? endInput.value : "");
+    if (sMin == null || eMin == null || !dateInput || !dateInput.value || !endDate.value) return updatePreview();
+    var dayDiff = Math.round((new Date(endDate.value + "T00:00:00") - new Date(dateInput.value + "T00:00:00")) / 86400000);
+    var dur = dayDiff * 1440 + eMin - sMin;
+    if (dur > 0 && dur < 1440) setDuration(dur);
+    else updatePreview(); // 표현 불가(0 이하·24h 이상) → canonical로 되돌림
+  });
   if (roomSel) roomSel.addEventListener("change", refreshAvailability); // 룸 변경 시 해당 룸 기준으로 가용성 재조회(날짜 변경과 동일)
   if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); applyTypeDefault(); updatePreview(); }); // 녹음 단가 바뀌면 슬라이더 기본=새 1Pro
   if (sessionTypeSel) sessionTypeSel.addEventListener("change", function () { syncRecFields(); updateProAvailability(); applyTypeDefault(); }); // 종류 바뀌면 단가 항목/버튼 노출 + 슬라이더 기본값(녹음=1Pro·그 외=기본시간)
-  // 슬라이더 드래그(30분 단위) → custom_hours 동기화.
-  if (slider) slider.addEventListener("input", function () {
-    var mins = parseInt(slider.value, 10) || 0;
-    if (customInput) customInput.value = mins > 0 ? fmtHours(mins / 60) : "";
-    refreshDuration();
-  });
-  // 직접입력(시간) → 슬라이더 동기화(12시간 초과는 슬라이더 최대로 클램프, 입력값은 보존).
+  // 슬라이더 드래그(30분 단위) → curDur.
+  if (slider) slider.addEventListener("input", function () { setDuration(parseInt(slider.value, 10) || 0); });
+  // 직접입력(시간) → curDur(타이핑 중엔 입력칸 미러 생략 — setDuration의 activeElement 가드).
   if (customInput) customInput.addEventListener("input", function () {
-    if (slider) slider.value = Math.min(durationMinutes(), SLIDER_MAX);
-    refreshDuration();
+    var h = parseFloat(customInput.value);
+    setDuration(h > 0 ? h * 60 : 0);
   });
   // 1~4Pro 프리셋 → 기준시간(1Pro)×N으로 슬라이더·직접입력 채움("pro3"→base×3).
   Array.prototype.forEach.call(presets, function (b) {
@@ -364,6 +381,43 @@
       updatePreview();
     });
   }
+  // 시간 콤보([data-time-combo]): 포커스 시 전체선택 + 30분 단위 목록(현재 값 근처로 스크롤), 선택=클릭.
+  Array.prototype.forEach.call(form.querySelectorAll("[data-time-combo]"), function (wrap) {
+    var inp = wrap.querySelector("input");
+    var pop = wrap.querySelector("[data-time-pop]");
+    if (!inp || !pop) return;
+    function openPop() {
+      if (inp.readOnly) return;
+      pop.classList.remove("hidden");
+      var cur = toMin(inp.value);
+      if (cur != null) {
+        var near = pop.querySelector('[data-time-opt="' + (inp.value.length === 5 ? inp.value : "") + '"]');
+        if (!near) { // 30분 격자 밖 값 → 가장 가까운 슬롯
+          var slot = Math.round(cur / 30) * 30 % 1440;
+          near = pop.querySelector('[data-time-opt="' + addMin("00:00", slot) + '"]');
+        }
+        if (near && near.scrollIntoView) near.scrollIntoView({ block: "center" });
+      }
+    }
+    function closePop() { pop.classList.add("hidden"); }
+    inp.addEventListener("focus", function () { inp.select(); openPop(); }); // 전체선택 → 타이핑만으로 교체
+    inp.addEventListener("click", openPop);
+    inp.addEventListener("blur", closePop);
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur 방지
+    pop.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-time-opt]");
+      if (!b) return;
+      inp.value = b.getAttribute("data-time-opt");
+      inp.dispatchEvent(new Event("input", { bubbles: true })); // 콜론 포맷·역산 파이프라인 재사용
+      closePop();
+      inp.blur();
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // IME 조합 중 무시(함정 #18)
+      if (e.key === "Escape") closePop();
+      else if (e.key === "Enter" && !pop.classList.contains("hidden")) { e.preventDefault(); closePop(); } // 목록 열린 채 Enter=닫기(폼 오제출 방지)
+    });
+  });
   attachTimeFormat(startInput); // 시작 변경 → 소요 유지, 종료 자동 재계산(updatePreview)
   // 종료 입력 → 소요 역산(자정 넘김 = 종료<시작이면 +24h). 슬라이더·직접입력과 양방향 동기.
   attachTimeFormat(endInput, function () {
@@ -373,19 +427,33 @@
     if (diff <= 0) diff += 1440; // 야간(자정 넘김)
     setDuration(diff);
   });
-  // 종일 = 운영시간 전체(시작=오픈, 소요=오픈~마감). 체크 중엔 시간 박스 잠금(구글처럼 흐리게), 해제 시 다시 편집.
-  if (allDay) allDay.addEventListener("change", function () {
-    var on = allDay.checked;
-    [startInput, endInput].forEach(function (el) { if (el) { el.readOnly = on; el.classList.toggle("opacity-60", on); } });
-    if (on && timeBlock) {
-      var open = timeBlock.getAttribute("data-studio-open") || "";
-      var close = timeBlock.getAttribute("data-studio-close") || "";
-      var oMin = toMin(open), cMin = toMin(close);
-      if (startInput && open) startInput.value = open;
-      if (oMin != null && cMin != null) setDuration(cMin > oMin ? cMin - oMin : cMin - oMin + 1440);
-      else updatePreview();
+  // 종일 = 구글 캘린더와 동일 개념(그냥 하루 종일 00:00~24:00, 운영시간 무관 — 2026-07-04 사용자 정정).
+  // 저장은 00:00~23:59(스키마=날짜+시각, hours는 비워 end_time 경로) — 체크 중 시간 박스·소요 UI 숨김, 해제 시 이전값 복원.
+  var allDayStash = null;
+  function applyAllDay(on, restore) {
+    Array.prototype.forEach.call(form.querySelectorAll("[data-time-combo]"), function (w) { w.hidden = on; });
+    if (durGroup) durGroup.hidden = on; // 종일이면 소요 UI 숨김(해제 시 노출)
+    if (endDate) endDate.readOnly = on;
+    if (on) {
+      allDayStash = restore ? null : { s: startInput ? startInput.value : "", e: endInput ? endInput.value : "", d: curDur };
+      if (startInput) startInput.value = "00:00";
+      if (endInput) endInput.value = "23:59";
+      setDuration(1439);
+    } else if (allDayStash) {
+      if (startInput) startInput.value = allDayStash.s;
+      if (endInput) endInput.value = allDayStash.e;
+      setDuration(allDayStash.d);
+      allDayStash = null;
+    } else {
+      updatePreview();
     }
-  });
+  }
+  if (allDay) allDay.addEventListener("change", function () { applyAllDay(allDay.checked, false); });
+  // 편집 초기값이 종일 형태(00:00~23:59)면 체크 상태로 시작.
+  if (allDay && startInput && endInput && startInput.value === "00:00" && endInput.value === "23:59") {
+    allDay.checked = true;
+    applyAllDay(true, true);
+  }
   // 겹침이 감지되면 제출 직전 확인 → 승인 시 override_conflict=1로 그대로 등록(서버가 겹침 허용). 취소면 제출 중단.
   form.addEventListener("submit", function (e) {
     if (!overrideField) return;

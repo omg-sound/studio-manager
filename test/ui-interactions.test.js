@@ -122,7 +122,7 @@ test("세션 폼: 종류(녹음↔촬영↔공연↔믹싱)에 따라 단가 옵
 });
 
 // ── ③b 구글식 시간 입력(2026-07-04 그리드 폐지): 시작/종료 타이핑 ↔ 슬라이더 양방향 + 종일 ──
-test("세션 폼(구글식): 시작·종료 타이핑 → 콜론 자동·소요 역산, 소요 변경 → 종료 자동, 종일 → 운영시간 전체", () => {
+test("세션 폼(구글식): 시간 콤보(전체선택·30분 목록)·양방향 역산·종료날짜 편집·종일(하루 종일·복원)", () => {
   const rateItems = db().prepare("SELECT * FROM rate_items").all();
   const html = `<form data-session-form>${sessionBookingFields({}, [], rateItems, [], "")}</form>`;
   const { win, doc } = mountDom(html);
@@ -146,14 +146,32 @@ test("세션 폼(구글식): 시작·종료 타이핑 → 콜론 자동·소요 
   end.value = "0200"; fire(win, end, "input");
   assert.equal(hours.value, "4", "자정 넘김 역산(+24h)");
   assert.notEqual(endDate.value, dateIn.value, "야간이면 종료 날짜 +1일");
-  // 종일 → 시작=운영 오픈, 시간 박스 잠금
+  // 시간 드롭다운(00:00~23:30): 포커스=열림, 옵션 클릭=값 세팅(+파이프라인 재계산)
+  const pop = start.closest("[data-time-combo]").querySelector("[data-time-pop]");
+  assert.equal(pop.querySelectorAll("[data-time-opt]").length, 48, "30분 단위 48개 옵션");
+  fire(win, start, "focus");
+  assert.ok(!pop.classList.contains("hidden"), "포커스 시 목록 열림");
+  fire(win, pop.querySelector('[data-time-opt="10:00"]'), "click");
+  assert.equal(start.value, "10:00", "옵션 클릭 = 값 세팅");
+  assert.ok(pop.classList.contains("hidden"), "선택 후 닫힘");
+  // 종료 날짜 직접 편집: +1일 + 종료 09:00 → 소요 23시간 역산(<24h 표현 범위)
+  end.value = "0900"; fire(win, end, "input"); // 같은 날 10:00→09:00은 야간 해석(23h)
+  assert.equal(hours.value, "", "16h 초과는 custom_hours 비움(end_time 저장 경로)");
+  // 종일 = 구글식 하루 종일(00:00~24:00): 시간·소요 UI 숨김, 해제 시 이전값 복원
   const allDay = doc.querySelector("[data-all-day]");
-  const open = doc.querySelector("[data-time-block]").getAttribute("data-studio-open");
+  const durGroup = doc.querySelector("[data-duration-group]");
+  const prevStart = start.value, prevEnd = end.value;
   allDay.checked = true; fire(win, allDay, "change");
-  assert.equal(start.value, open, "종일 = 시작이 운영 오픈 시각");
-  assert.equal(start.readOnly, true, "종일 중 시간 박스 잠금");
+  assert.equal(start.value, "00:00", "종일 = 00:00 시작");
+  assert.equal(end.value, "23:59", "종일 = 23:59 종료(스키마 표현)");
+  assert.equal(hours.value, "", "종일은 hours 비움(서버 end_time 경로 — 16h 클램프 회피)");
+  assert.equal(start.closest("[data-time-combo]").hidden, true, "종일 중 시간 박스 숨김");
+  assert.equal(durGroup.hidden, true, "종일 중 소요 UI 숨김");
+  assert.equal(endDate.readOnly, true, "종일 중 종료 날짜 잠금");
   allDay.checked = false; fire(win, allDay, "change");
-  assert.equal(start.readOnly, false, "해제 시 다시 편집 가능");
+  assert.equal(start.value, prevStart, "해제 시 이전 시작 복원");
+  assert.equal(end.value, prevEnd, "해제 시 이전 종료 복원");
+  assert.equal(start.closest("[data-time-combo]").hidden, false, "시간 박스 다시 노출");
 });
 
 // ── ④ dirty 폼: 변경 시 저장 강조·힌트, 원복 시 해제 ──

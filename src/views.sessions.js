@@ -5,7 +5,7 @@
 const { SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, getStudioHours, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
+const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -54,7 +54,9 @@ function timeLabel(s) {
 const DURATION_SLIDER_MAX = 960; // 슬라이더 최대(분) = 16시간. Pro 눈금 위치 계산의 기준(app.js SLIDER_MAX와 동일).
 function durationButtons(initMinutes = 0) {
   const m = Number(initMinutes) > 0 ? Math.round(Number(initMinutes)) : 0;
-  const hours = m > 0 ? (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(1)) : "";
+  // 16h(960분) 초과(종일 23:59 등)는 custom_hours를 비워 둔다 — 채우면 서버 resolveEndTime이 960분으로 클램프해
+  // 편집-저장 시 종료시각이 16h로 잘리는 왜곡. 빈 hours면 서버가 end_time을 그대로 사용(정확 보존).
+  const hours = m > 0 && m <= 960 ? (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(1)) : "";
   const pro = getProMinutes();
   // Pro 프리셋을 슬라이더 트랙 위 '눈금'으로 절대배치: 1Pro=기준시간, 2Pro=×2… 위치에 표시
   // (예: 기준 3시간30분이면 1Pro가 슬라이더 3시간30분 지점). 인라인 style은 CSP(styleSrc unsafe-inline 없음)에 막히므로
@@ -153,8 +155,14 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   // 시간 입력 = 구글 캘린더식(2026-07-04 그리드 폐지): [날짜][시작]–[종료][종료날짜(자동)] 타이핑 + 종일 + 소요 슬라이더.
   // 시작/종료는 콜론 자동 삽입(1400→14:00, app.js). 종료·슬라이더는 양방향 동기(종료 입력→소요 재계산, 소요 변경→종료 갱신).
   // 종료 날짜는 저장 필드가 아니라 자동 표시(자정 넘김이면 +1일 — 스키마는 session_date 하나, 야간 세션은 end<start로 표현).
-  const studioHours = getStudioHours();
-  const timeBox = (name, val, ph, extra = "") => `<input class="input w-[5.5rem] py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="${name}" value="${esc(val || "")}" placeholder="${ph}" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" ${extra} />`;
+  // 시간 박스 = 타이핑 + 30분 단위 드롭다운(00:00~23:30, 구글식 — 포커스 시 전체선택·목록, app.js [data-time-combo]).
+  const TIME_OPTS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+  const timeBox = (name, val, ph, extra = "") => `<div class="relative" data-time-combo>
+        <input class="input w-[5.5rem] py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="${name}" value="${esc(val || "")}" placeholder="${ph}" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" ${extra} />
+        <div class="absolute left-0 z-30 mt-1 hidden max-h-56 w-24 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-time-pop role="listbox">
+          ${TIME_OPTS.map((t) => `<button type="button" class="block w-full px-3 py-1.5 text-center text-sm tabular hover:bg-elevated active:bg-elevated" data-time-opt="${t}">${t}</button>`).join("")}
+        </div>
+      </div>`;
   const endDateInit = (() => {
     const d = s.session_date || todayYmd();
     if (s.start_time && s.end_time && s.end_time < s.start_time) { // 야간(자정 넘김) → +1일
@@ -171,17 +179,16 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   //  md 미만은 소스 순서대로 세로 스택(시간 → 세부정보 → 사람).
   return `
     <input type="hidden" name="status" value="${esc(s.status || "예정")}" />
-    <div class="space-y-3" data-time-block data-studio-open="${esc(studioHours.start)}" data-studio-close="${esc(studioHours.end)}">
+    <div class="space-y-3" data-time-block>
       <div class="flex flex-wrap items-center gap-2">
-        <input class="input w-auto py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date aria-label="날짜" required />
+        <input class="input w-auto py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date data-datepick aria-label="날짜" required />
         ${timeBox("start_time", s.start_time, "시작 14:00", 'data-start-input aria-label="시작 시간"')}
         <span class="text-muted">–</span>
         ${timeBox("end_time", s.end_time, "종료 18:00", 'data-end-input aria-label="종료 시간"')}
-        <input class="input w-auto py-1.5 text-sm text-muted" type="date" value="${endDateInit}" data-end-date readonly tabindex="-1" aria-label="종료 날짜(자동 계산)" />
+        <input class="input w-auto py-1.5 text-sm" type="date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
       </div>
       <label class="flex w-fit cursor-pointer items-center gap-2 text-sm">
         <input type="checkbox" class="h-4 w-4 rounded border-border text-primary" data-all-day /> 종일
-        <span class="text-xs text-muted">(운영시간 ${esc(studioHours.start)}–${esc(studioHours.end)})</span>
       </label>
       <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다.</p>
       <input type="hidden" name="override_conflict" value="" data-override-conflict />
