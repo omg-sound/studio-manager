@@ -27,9 +27,26 @@ function distinctProjectFields() {
 function sessionAmountsByProject(projectIds) {
   if (!projectIds || !projectIds.length) return {};
   const placeholders = projectIds.map(() => "?").join(",");
+  const sums = {};
+  // ① 청구가 확정된(청구서에 걸린) 세션 = 협의 끝 → invoice_items의 확정 청구액 우선(예상 단가 산정 대신). 사용자 요청.
+  const invoiced = db()
+    .prepare(
+      `SELECT s.project_id AS pid, ii.session_id AS sid, SUM(ii.amount) AS amt
+       FROM invoice_items ii
+       JOIN sessions s ON s.id = ii.session_id
+       WHERE s.project_id IN (${placeholders}) AND ii.session_id IS NOT NULL
+       GROUP BY ii.session_id`
+    )
+    .all(...projectIds);
+  const invoicedSids = new Set();
+  for (const r of invoiced) {
+    invoicedSids.add(r.sid);
+    sums[r.pid] = (sums[r.pid] || 0) + (r.amt || 0);
+  }
+  // ② 미청구 녹음 세션 = 예상 청구액(단가표 자동 산정).
   const rows = db()
     .prepare(
-      `SELECT s.project_id, s.start_time, s.end_time,
+      `SELECT s.id, s.project_id, s.start_time, s.end_time,
               ri.base_minutes, ri.base_price, ri.extra_minutes, ri.extra_price
        FROM sessions s
        JOIN rate_items ri ON ri.id = s.rate_item_id
@@ -40,8 +57,8 @@ function sessionAmountsByProject(projectIds) {
          AND s.status <> '취소'`
     )
     .all(...projectIds);
-  const sums = {};
   for (const row of rows) {
+    if (invoicedSids.has(row.id)) continue; // 청구 확정분은 ①에서 확정액으로 반영
     const mins = minutesBetween(row.start_time, row.end_time);
     if (mins <= 0) continue;
     sums[row.project_id] = (sums[row.project_id] || 0) + computeRatePrice(row, mins);
