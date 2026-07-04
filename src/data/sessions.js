@@ -371,7 +371,7 @@ function sessionsForMonth(_user, ym) {
   if (!/^\d{4}-\d{2}$/.test(String(ym || ""))) return [];
   return db()
     .prepare(
-      `SELECT s.*, p.title AS project_title FROM sessions s
+      `SELECT s.*, p.title AS project_title, p.artist, p.artist_company, p.production_company FROM sessions s
        JOIN projects p ON p.id = s.project_id
        WHERE s.session_date LIKE ? AND s.status <> '취소'
        ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`

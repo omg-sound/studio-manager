@@ -373,18 +373,21 @@ function monthCalendar(ym, sessions) {
   const dows = ["일", "월", "화", "수", "목", "금", "토"];
 
   let cells = "";
-  for (let i = 0; i < startDow; i++) cells += `<div class="min-h-[88px] min-w-0 rounded-md border border-border/40 bg-bg/40"></div>`;
+  const CELL = "min-h-[112px] min-w-0 rounded-md border p-1";
+  for (let i = 0; i < startDow; i++) cells += `<div class="${CELL} border-border/40 bg-bg/40"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${y}-${pad2(mo)}-${pad2(d)}`;
     const ds = byDate[date] || [];
     const isToday = date === today;
     const items = ds
       .map((s) => {
-        const t = s.start_time ? esc(s.start_time) + " " : "";
-        return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded ${calendarChipColor(s.status)} px-1 py-0.5 text-[11px] hover:opacity-80" title="${esc(s.session_type)} · ${esc(s.project_title || "")}">${t}${esc(s.session_type)}</a>`;
+        // 칩 라벨 = 아티스트/회사/프로젝트(누구·무엇인지 식별). 시간은 데스크톱에서만(모바일은 좁아 내용이 가려짐 — 사용자 요청).
+        const label = esc(String(s.artist || s.production_company || s.artist_company || s.project_title || s.session_type).trim());
+        const t = s.start_time ? esc(s.start_time) : "";
+        return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded ${calendarChipColor(s.status)} px-1.5 py-0.5 text-[11px] font-medium leading-snug hover:opacity-80 sm:text-xs" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}">${t ? `<span class="hidden font-normal opacity-70 sm:inline">${t} </span>` : ""}${label}</a>`;
       })
       .join("");
-    cells += `<div class="min-h-[88px] min-w-0 rounded-md border ${isToday ? "border-primary" : "border-border/40"} p-1">
+    cells += `<div class="${CELL} ${isToday ? "border-primary" : "border-border/40"}">
       <div class="mb-0.5 text-xs ${isToday ? "font-semibold text-primary" : "text-muted"}">${d}</div>
       <div class="space-y-0.5">${items}</div>
     </div>`;
