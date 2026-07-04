@@ -142,11 +142,11 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
          <div><label class="label-sm">세션 종류</label>
           <select class="input py-1.5 text-sm" name="session_type" data-rec-types="${esc(RENTAL_SESSION_TYPES.join(","))}" data-rate-kinds="${esc(rateKindsAttr)}">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-         <div data-show-when="rec"><label class="label-sm">단가 항목 <span class="font-normal text-muted">(시간제 · 종류에 맞춰 녹음/촬영)</span></label>
+         <div data-show-when="rec"><label class="label-sm">단가 항목</label>
           <select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>${rateOptionsHtml(curItems, s.rate_item_id)}</select>
           <template data-rate-opts-recording>${rateOptionsHtml(recItems, s.rate_item_id)}</template>
           <template data-rate-opts-filming>${rateOptionsHtml(filmItems, s.rate_item_id)}</template></div>
-         <div><label class="label-sm">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
+         <div><label class="label-sm">룸</label>
           ${roomSelect(roomList, s.room_id)}</div>
        </div>
        ${explain(`청구하려면 <b>세션 종류=녹음/촬영</b> + <b>단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
@@ -164,7 +164,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
   const directorField = `
     <div class="mt-2" data-director-wrap>
-      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자, 여러 명 가능 · 선택)</span></label>
+      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자)</span></label>
       ${personComboOptionsScript(dirOptsId, allContacts)}
       <div data-director-list>
         ${(currentDirectors.length ? currentDirectors : [null]).map((d) => dirRow(d)).join("")}
@@ -185,13 +185,13 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
     ${typeRateRow}
     ${directorField}
     <div class="mt-3">
-      <label class="label-sm">시작 시간 <span class="font-normal text-muted">(주황 = 이미 예약됨 · 선택 시 확인 후 등록)</span></label>
+      <label class="label-sm">시작 시간</label>
       ${startSlotGrid(s.start_time || "")}
-      <p class="mt-1.5 text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다. 등록 시 확인을 거칩니다.</p>
+      <p class="mt-1.5 text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다.</p>
       <input type="hidden" name="override_conflict" value="" data-override-conflict />
     </div>
     <div class="mt-3">
-      <label class="label-sm">소요 시간 <span class="font-normal text-muted">(녹음=1Pro 기준 · 믹싱 등은 기본 세션 시간)</span></label>
+      <label class="label-sm">소요 시간</label>
       ${durationButtons(initMins)}
       <div class="mt-1.5 text-xs text-success" data-end-preview></div>
     </div>
