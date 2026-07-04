@@ -244,6 +244,28 @@ test("세션 편집 폼: 기존 담당 디렉터가 콤보에 채워짐(hidden i
   assert.equal(doc.querySelector("[data-all-day]").checked, true, "종일 세션 → 체크");
 });
 
+// ── ③e 대표자 등록 모달(simpleModal): 회사·직책·활동명 생략 + 저장 시 null-guard로 안 깨짐 ──
+test("personCombo simpleModal(대표자): 회사·직책·활동명 필드 없음, 이름만으로 등록 동작", () => {
+  const html = `<form>${personCombo({ idField: "owner_id", nameField: "owner_name", options: [], entityLabel: "대표자", simpleModal: true })}</form>`;
+  const fetchCalls = [];
+  const { win, doc } = mountDom(html, { fetchImpl: (url, init) => { fetchCalls.push({ url: String(url), body: init && init.body }); return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, id: 99, name: "김대표" }) }); } });
+  const modal = doc.querySelector("[data-pc-modal]");
+  // 대표자 모달엔 회사·직책·활동명 없음(이 업체 대표로 자동)
+  assert.equal(modal.querySelector("[data-pc-company]"), null, "회사 필드 없음");
+  assert.equal(modal.querySelector("[data-pc-job]"), null, "직책 필드 없음");
+  assert.equal(modal.querySelector("[data-pc-activity]"), null, "활동명 필드 없음");
+  assert.ok(modal.querySelector("[data-pc-phone]") && modal.querySelector("[data-pc-email]"), "전화·이메일은 있음");
+  // 새 등록 열고 이름 입력 → 저장(회사/직책 읽기가 null이어도 안 깨지고 fetch)
+  const input = doc.querySelector("[data-pc-input]");
+  input.value = "김대표"; fire(win, input, "input");
+  fire(win, doc.querySelector("[data-pc-pop]").querySelector("[data-new]"), "click");
+  modal.querySelector("[data-pc-name]").value = "김대표";
+  fire(win, modal.querySelector("[data-pc-save]"), "click");
+  assert.equal(fetchCalls.length, 1, "POST /contacts 호출(예외 없이)");
+  assert.ok(fetchCalls[0].url.indexOf("/contacts") !== -1);
+  assert.ok(fetchCalls[0].body.indexOf("company=") === -1, "회사 파라미터 미포함(업체 저장 시 owner 흐름이 연결)");
+});
+
 // ── ④ dirty 폼: 변경 시 저장 강조·힌트, 원복 시 해제 ──
 test("dirty 폼: 변경 → 힌트·강조, 원복 → 해제(__hasDirty 연동)", async () => {
   const html = `

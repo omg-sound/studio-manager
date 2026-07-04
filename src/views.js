@@ -503,7 +503,7 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, entityLabel = "담당자", initialName = "" } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, entityLabel = "담당자", initialName = "", simpleModal = false } = {}) {
   // companyOptions 미전달 시 업체 목록을 스스로 조회 — '새 담당자 등록' 모달 회사칸이 조용히 평문이 되던 반복 실수 차단
   // (세션 디렉터·업체 대표자에서 각각 재발한 이력, 2026-07-04 기본값화. 명시 전달 시 그대로 사용.)
   if (companyOptions == null) companyOptions = require("./data").partyOptions({ role: "company" });
@@ -534,13 +534,14 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
       <div data-pc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
         <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
           <div class="font-display text-lg font-semibold">새 ${esc(entityLabel)} 등록</div>
+          ${simpleModal ? `<p class="text-xs text-muted">이 업체의 ${esc(entityLabel)}로 등록됩니다 — 회사·직책은 자동 지정.</p>` : ""}
           <div><label class="label">이름</label><input class="input" data-pc-name placeholder="${esc(entityLabel)} 이름" /></div>
-          <div><label class="label">활동명 <span class="text-xs font-normal text-muted">(입력 시 아티스트로도 등록)</span></label><input class="input" data-pc-activity autocomplete="off" placeholder="아티스트 활동명(선택)" /></div>
+          ${simpleModal ? "" : `<div><label class="label">활동명 <span class="text-xs font-normal text-muted">(입력 시 아티스트로도 등록)</span></label><input class="input" data-pc-activity autocomplete="off" placeholder="아티스트 활동명(선택)" /></div>`}
           <div class="grid gap-3 sm:grid-cols-2">
             <div><label class="label">전화</label><input class="input" data-pc-phone autocomplete="off" /></div>
             <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
           </div>
-          <div><label class="label">회사</label>
+          ${simpleModal ? "" : `<div><label class="label">회사</label>
             <div class="relative">
               <input class="input pr-9" data-pc-company autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="회사 검색 또는 새로 등록" />
               <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
@@ -548,7 +549,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
             </div>
             <script type="application/json" data-pc-company-options>${companyJson}</script>
           </div>
-          <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>
+          <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>`}
           <div class="flex items-center gap-2 pt-1">
             <button type="button" class="btn-primary" data-pc-save>등록</button>
             <button type="button" class="btn-ghost" data-pc-cancel>취소</button>

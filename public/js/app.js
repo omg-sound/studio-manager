@@ -1442,8 +1442,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (!nm) { err.textContent = "이름을 입력하세요."; err.classList.remove("hidden"); return; }
         var actEl = modal.querySelector("[data-pc-activity]");
         var activity = actEl ? actEl.value.trim() : ""; // 활동명 입력 시 서버가 is_artist=1로 아티스트 등록(createPerson)
+        // 회사·직책은 simpleModal(예: 대표자)에선 생략됨 — 요소 없으면 빈값(회사 연결은 업체 저장 시 owner 흐름이 처리).
+        var coEl = modal.querySelector("[data-pc-company]"), jobEl = modal.querySelector("[data-pc-job]");
         var phone = modal.querySelector("[data-pc-phone]").value.trim(), email = modal.querySelector("[data-pc-email]").value.trim(),
-            company = modal.querySelector("[data-pc-company]").value.trim(), job = modal.querySelector("[data-pc-job]").value.trim();
+            company = coEl ? coEl.value.trim() : "", job = jobEl ? jobEl.value.trim() : "";
         pSave.disabled = true; err.classList.add("hidden");
         var body = new URLSearchParams();
         body.append("name", nm);

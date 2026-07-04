@@ -709,7 +709,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         <div class="grid gap-3 sm:grid-cols-2">
           <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
           <div><label class="label">대표자 <span class="font-normal text-muted text-xs">(연락처 연동)</span></label>
-            ${personCombo({ idField: "owner_id", nameField: "owner_name", selectedId: c.owner_party_id || null, initialName: c.owner_name || "", options: contactOptions(), entityLabel: "대표자", placeholder: "대표자 — 검색 또는 새로 등록" })}
+            ${personCombo({ idField: "owner_id", nameField: "owner_name", selectedId: c.owner_party_id || null, initialName: c.owner_name || "", options: contactOptions(), entityLabel: "대표자", placeholder: "대표자 — 검색 또는 새로 등록", simpleModal: true })}
           </div>
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="biz_address" value="${esc(c.address || "")}" autocomplete="off" /></div>
