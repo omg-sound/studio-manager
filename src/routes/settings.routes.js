@@ -143,7 +143,7 @@ function contentTab() {
         </div>
         <form method="post" action="/settings/rate-items" class="space-y-2 rounded-lg border border-border bg-bg p-3">
           <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input py-1.5 text-sm" name="name" placeholder="단가 항목명 (예: 보컬 녹음 · 뮤직비디오 촬영)" required />
+            <input class="input py-1.5 text-sm" name="rate_name" placeholder="단가 항목명 (예: 보컬 녹음 · 뮤직비디오 촬영)" autocomplete="off" required />
             <select class="input py-1.5 text-sm" name="category">${rateCategoryOptions()}</select>
           </div>
           <div class="grid gap-2 sm:grid-cols-2">
@@ -751,7 +751,7 @@ function rateItemRow(r) {
         <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
         <form method="post" action="/settings/rate-items/${r.id}" class="mt-2 space-y-2" data-dirty-form>
           <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input py-1.5 text-sm" name="name" value="${esc(r.name)}" required />
+            <input class="input py-1.5 text-sm" name="rate_name" value="${esc(r.name)}" autocomplete="off" required />
             <select class="input py-1.5 text-sm" name="category">${rateCategoryOptions(cat)}</select>
           </div>
           <div class="grid gap-2 sm:grid-cols-2">

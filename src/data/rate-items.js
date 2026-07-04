@@ -20,7 +20,7 @@ function parseHoursToMinutes(v) {
 
 function rateFields(input) {
   return {
-    name: String(input.name || "").trim(),
+    name: String(input.rate_name != null ? input.rate_name : input.name || "").trim(), // 폼 필드=rate_name(Chrome이 name= 필드에 사람이름 자동완성을 강제 — 함정 #19)
     category: normalizeRecordingCategory(input.category),
     base_minutes: parseHoursToMinutes(input.base_hours),
     base_price: parseWon(input.base_price),
