@@ -112,7 +112,7 @@ const PROJECT_SERVICES = [
 ];
 // 단가표(녹음 종류) 분류 — 녹음 세션 폼에서 이 분류로 묶어 보여준다.
 const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
-const FILMING_CATEGORIES = ["스튜디오 촬영", "로케이션 촬영"]; // 촬영 단가 종류(대관). rate_items.category로 녹음/촬영 구분(별도 컬럼 없음).
+const FILMING_CATEGORIES = ["스튜디오 촬영"]; // 촬영 단가 종류(대관). rate_items.category로 녹음/촬영 구분(별도 컬럼 없음). 로케이션 촬영은 미사용(사용자 결정).
 const RATE_CATEGORIES = [...RECORDING_CATEGORIES, ...FILMING_CATEGORIES]; // 단가 항목 전체 카테고리(녹음+촬영)
 // 카테고리 → 종류(kind). 촬영 카테고리면 filming, 그 외 recording. 세션 종류(녹음/촬영)와 매칭해 폼 rate 옵션을 거른다.
 const rateCategoryKind = (cat) => (FILMING_CATEGORIES.includes(cat) ? "filming" : "recording");
