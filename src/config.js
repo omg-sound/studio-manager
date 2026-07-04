@@ -156,7 +156,10 @@ const BILLING_TYPE_LABELS = {
   Fixed_Per_Track: "트랙/콘텐츠 고정",
 };
 // 세션(스튜디오 일정). 청구 시간 산정의 기반.
-const SESSION_TYPES = ["녹음", "믹싱", "마스터링", "기타"];
+const SESSION_TYPES = ["녹음", "촬영", "믹싱", "마스터링", "기타"];
+// 대관 매출 세션 — 세션 자체가 단가표(시간제) 청구 대상. 완료 시 청구로 넘어간다. 녹음·촬영.
+// (믹싱·마스터링 등은 세션이 청구 단위가 아님 — 곡·콘텐츠 후반작업으로 청구.)
+const RENTAL_SESSION_TYPES = ["녹음", "촬영"];
 const SESSION_STATUSES = ["예정", "완료", "취소"];
 // 세션 시간 슬롯(30분 단위). 범위별 생성기.
 function timeSlots(startMin, endMin, step = 30) {
@@ -243,6 +246,7 @@ module.exports = {
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
   SESSION_TYPES,
+  RENTAL_SESSION_TYPES,
   SESSION_STATUSES,
   SESSION_STATUS_BADGE,
   SESSION_TIME_SLOTS,

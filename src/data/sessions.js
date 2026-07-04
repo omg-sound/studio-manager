@@ -13,7 +13,7 @@
 
 const { db } = require("../db");
 const { todayYmd, isValidYmd, cleanTime, timeToMin, minutesBetween } = require("../lib/date");
-const { normalizeSessionType, normalizeSessionStatus } = require("../config");
+const { normalizeSessionType, normalizeSessionStatus, RENTAL_SESSION_TYPES } = require("../config");
 const { getProjectForUser } = require("./projects"); // 무순환
 const { resolvePersonByName } = require("./parties"); // 무순환 — 디렉터=parties.id(사람)
 const { listRooms } = require("./rooms"); // 무순환
@@ -191,7 +191,7 @@ function busySessionSlots(date, slots, { excludeId = null, room } = {}) {
 
 /** 녹음 세션의 진행시간 → 단가표 자동 산정. 시간제 대상(녹음+단가+시간)이 아니면 null. */
 function sessionRateAmount(session) {
-  if (!session || session.session_type !== "녹음" || !session.rate_item_id) return null;
+  if (!session || !RENTAL_SESSION_TYPES.includes(session.session_type) || !session.rate_item_id) return null;
   const minutes = minutesBetween(session.start_time, session.end_time);
   if (minutes <= 0) return null;
   const item = db().prepare("SELECT * FROM rate_items WHERE id = ?").get(session.rate_item_id);

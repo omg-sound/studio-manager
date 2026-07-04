@@ -171,6 +171,12 @@
 
   var durGroup = form.querySelector("[data-duration-group]");
   function pad(n) { return (n < 10 ? "0" : "") + n; }
+  // 대관(단가 청구) 세션 판정 — 세션 종류 select의 data-rec-types(예: "녹음,촬영") 참조. 녹음 단가 필드·프리셋 노출 기준.
+  function isRecType() {
+    if (!sessionTypeSel) return false;
+    var raw = sessionTypeSel.getAttribute("data-rec-types") || "녹음";
+    return raw.split(",").indexOf(sessionTypeSel.value) !== -1;
+  }
   // 1Pro/2Pro 버튼 기준시간 = 녹음 단가 항목 기준시간(rateSel data-minutes). 버튼은 녹음일 때만 노출.
   function baseMinutes() {
     if (!rateSel) return 0;
@@ -181,7 +187,7 @@
   function proDefaultMinutes() { return durGroup ? parseInt(durGroup.getAttribute("data-pro-default"), 10) || 0 : 0; }
   // 세션 종류별 슬라이더 기본값: 녹음=1Pro(녹음 단가 기준시간), 그 외=기본 세션 시간. 사용자가 조정해 쓴다.
   function applyTypeDefault() {
-    var isRec = sessionTypeSel && sessionTypeSel.value === "녹음";
+    var isRec = isRecType();
     var def = isRec ? baseMinutes() : proDefaultMinutes();
     if (def > 0) setDuration(def);
   }
@@ -262,7 +268,7 @@
   }
   // 세션 종류=녹음일 때만 [data-show-when="rec"] 요소 표시(녹음 종류 select 등).
   function syncRecFields() {
-    var isRec = sessionTypeSel && sessionTypeSel.value === "녹음";
+    var isRec = isRecType();
     Array.prototype.forEach.call(showWhenRec, function (el) { el.hidden = !isRec; });
   }
   // 1Pro~4Pro 프리셋: 녹음 단가 기준시간이 있으면 그걸, 없으면 스튜디오 기본 블록(proDefault)을 기준으로 항상 활성.

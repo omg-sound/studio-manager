@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
@@ -132,11 +132,11 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const roomList = resolveRooms(rooms);
   const engineerField = `<div><label class="label-sm">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
-  // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 단가 항목은 세션 종류=녹음일 때만 노출(app.js data-show-when="rec").
+  // 세션 종류는 항상 선택 가능. 녹음 단가 항목은 대관 세션(녹음·촬영)일 때만 노출(app.js data-show-when="rec", data-rec-types 참조).
   // 한 줄(3열): 세션 종류 | 녹음 단가 항목 | 룸(같은 룸끼리만 겹침 검사). 담당 엔지니어는 상단(상태 자리)로 이동, 상태 필드는 제거.
   const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
          <div><label class="label-sm">세션 종류</label>
-          <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
+          <select class="input py-1.5 text-sm" name="session_type" data-rec-types="${esc(RENTAL_SESSION_TYPES.join(","))}">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
          <div data-show-when="rec"><label class="label-sm">녹음 단가 항목 <span class="font-normal text-muted">(시간제 단가)</span></label>
           ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
          <div><label class="label-sm">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
@@ -252,7 +252,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
        </div>`
     : "";
   // 청구 결핍 사유: 완료된 녹음 세션이 단가항목/시간이 없어 산정 불가하면 침묵하지 않고 사유를 옅게 안내(미청구·미전환 한정).
-  const billReason = !s.billing && s.session_type === "녹음" && s.status === "완료" && !s.invoiced && !s.billed_task_id
+  const billReason = !s.billing && RENTAL_SESSION_TYPES.includes(s.session_type) && s.status === "완료" && !s.invoiced && !s.billed_task_id
     ? (!s.rate_item_id ? "청구하려면 녹음 단가 항목을 선택하세요" : "청구하려면 시작·소요 시간을 입력하세요")
     : "";
   const reasonLine = billReason ? `<div class="mt-0.5 text-xs text-muted/70">${esc(billReason)}</div>` : "";

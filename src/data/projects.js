@@ -51,7 +51,7 @@ function sessionAmountsByProject(projectIds) {
        FROM sessions s
        JOIN rate_items ri ON ri.id = s.rate_item_id
        WHERE s.project_id IN (${placeholders})
-         AND s.session_type = '녹음'
+         AND s.session_type IN ('녹음', '촬영')
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
          AND s.status <> '취소'`

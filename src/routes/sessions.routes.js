@@ -21,7 +21,7 @@ const {
   sessionAttendeeEmails,
   listSessionDirectors,
 } = require("../data");
-const { config, SESSION_TIME_SLOTS } = require("../config");
+const { config, SESSION_TIME_SLOTS, RENTAL_SESSION_TYPES } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox } = require("../views");
 const { sessionProjectCard, monthCalendar } = require("../views.sessions");
 const { todayYmd } = require("../lib/date");
@@ -38,9 +38,9 @@ const router = express.Router();
 function sessionTypeLabel(session) {
   const t = session.session_type;
   if (!t) return "";
-  if (t === "녹음") {
+  if (RENTAL_SESSION_TYPES.includes(t)) { // 녹음·촬영 = 대관 → 단가 항목명 병기
     const ri = session.rate_item_id ? getRateItem(session.rate_item_id) : null;
-    return ri && ri.name ? `녹음 · ${ri.name}` : "녹음 세션";
+    return ri && ri.name ? `${t} · ${ri.name}` : `${t} 세션`;
   }
   if (t === "믹싱") return "믹스 세션"; // 사용자 표기 선호(믹싱 → 믹스)
   return `${t} 세션`;
