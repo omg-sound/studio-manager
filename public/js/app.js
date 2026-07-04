@@ -157,8 +157,7 @@
   var endInput = form.querySelector("[data-end-input]"); // 종료 시간 박스(name=end_time) — 슬라이더와 양방향 동기
   var endDate = form.querySelector("[data-end-date]"); // 종료 날짜(자동 표시 — 자정 넘김이면 +1일, 저장 필드 아님)
   var allDay = form.querySelector("[data-all-day]"); // 종일 토글 — 운영시간 전체로 시작·소요 세팅
-  var timeBlock = form.querySelector("[data-time-block]"); // data-studio-open/close(운영시간) 보유
-  var preview = form.querySelector("[data-end-preview]");
+  var durationWrap = form.querySelector("[data-duration-wrap]"); // 소요 시간 헤딩+슬라이더 블록(종일 시 숨김)
   var slider = form.querySelector("[data-duration-slider]");
   var durLabel = form.querySelector("[data-duration-label]");
   var customInput = form.querySelector("[data-custom-hours]");
@@ -228,7 +227,7 @@
   // 한 값을 curDur·custom_hours·슬라이더·라벨에 일괄 반영(프리셋·종료 역산·초기화용).
   function setDuration(mins) {
     curDur = mins > 0 ? Math.min(Math.round(mins), 1439) : 0; // 1439=24h-1분(스키마 표현 한계)
-    if (customInput && document.activeElement !== customInput) customInput.value = curDur > 0 && curDur <= SLIDER_MAX ? fmtHours(curDur / 60) : "";
+    if (customInput) customInput.value = curDur > 0 && curDur <= SLIDER_MAX ? fmtHours(curDur / 60) : ""; // hidden 제출값(>16h=빈값 → 서버 end_time 경로)
     if (slider) slider.value = Math.min(curDur, SLIDER_MAX);
     refreshDuration();
   }
@@ -317,8 +316,6 @@
     var start = currentStart();
     var mins = durationMinutes();
     var sMin = toMin(start);
-    var isAllDay = allDay && allDay.checked;
-    if (preview) preview.textContent = isAllDay ? "종일 (00:00–24:00)" : start && mins > 0 ? "예상 종료: " + addMin(start, mins) + " (" + fmtHours(mins / 60) + "시간)" : "";
     // 종료 박스·종료 날짜 자동 동기(구글식): 시작+소요 → 종료. 자정 넘김이면 종료 날짜 +1일. 사용자가 편집 중인 칸은 덮지 않음.
     if (endInput && sMin != null && mins > 0 && document.activeElement !== endInput) writeTime(endInput, addMin(start, mins));
     if (endDate && dateInput && document.activeElement !== endDate) endDate.value = sMin != null && mins > 0 && sMin + mins >= 1440 ? addDays(dateInput.value, 1) : dateInput.value || "";
@@ -364,11 +361,6 @@
   if (sessionTypeSel) sessionTypeSel.addEventListener("change", function () { syncRecFields(); updateProAvailability(); applyTypeDefault(); }); // 종류 바뀌면 단가 항목/버튼 노출 + 슬라이더 기본값(녹음=1Pro·그 외=기본시간)
   // 슬라이더 드래그(30분 단위) → curDur.
   if (slider) slider.addEventListener("input", function () { setDuration(parseInt(slider.value, 10) || 0); });
-  // 직접입력(시간) → curDur(타이핑 중엔 입력칸 미러 생략 — setDuration의 activeElement 가드).
-  if (customInput) customInput.addEventListener("input", function () {
-    var h = parseFloat(customInput.value);
-    setDuration(h > 0 ? h * 60 : 0);
-  });
   // 1~4Pro 프리셋 → 기준시간(1Pro)×N으로 슬라이더·직접입력 채움("pro3"→base×3).
   Array.prototype.forEach.call(presets, function (b) {
     b.addEventListener("click", function () {
@@ -441,7 +433,7 @@
   var allDayStash = null;
   function applyAllDay(on, restore) {
     Array.prototype.forEach.call(form.querySelectorAll("[data-time-combo]"), function (w) { w.hidden = on; });
-    if (durGroup) durGroup.hidden = on; // 종일이면 소요 UI 숨김(해제 시 노출)
+    if (durationWrap) durationWrap.hidden = on; // 종일이면 소요 블록(헤딩+슬라이더) 숨김(해제 시 노출)
     if (endDate) endDate.readOnly = on;
     if (on) {
       allDayStash = restore ? null : { s: startInput ? startInput.value : "", e: endInput ? endInput.value : "", d: curDur };

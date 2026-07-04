@@ -51,6 +51,12 @@ function timeLabel(s) {
 // 소요 시간 = 슬라이더(30분 단위·0~16시간)가 주 입력. 아래 1~4Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
 // 전송값은 custom_hours + duration_mode=custom(hidden) → 서버 resolveEndTime이 그대로 산정(슬라이더 자체는 미전송 UI).
 // minutesBetween은 ../lib/date 공용 유틸을 사용한다(중복 정의 제거).
+/** 소요 라벨(초기 렌더) — app.js fmtDuration과 동일 표기("7시간"/"3시간 30분"/"설정 안 함"). */
+function fmtDurationKo(mins) {
+  if (!(Number(mins) > 0)) return "설정 안 함";
+  const hh = Math.floor(mins / 60), mm = Math.round(mins % 60);
+  return ((hh ? hh + "시간" : "") + (mm ? (hh ? " " : "") + mm + "분" : "")) || "0분";
+}
 const DURATION_SLIDER_MAX = 960; // 슬라이더 최대(분) = 16시간. Pro 눈금 위치 계산의 기준(app.js SLIDER_MAX와 동일).
 function durationButtons(initMinutes = 0) {
   const m = Number(initMinutes) > 0 ? Math.round(Number(initMinutes)) : 0;
@@ -71,14 +77,7 @@ function durationButtons(initMinutes = 0) {
         <input type="range" min="0" max="${DURATION_SLIDER_MAX}" step="30" value="${Math.min(m, DURATION_SLIDER_MAX)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
         <div class="relative mt-1 flex h-8 flex-wrap items-center gap-1.5 sm:block" data-duration-ticks data-show-when="rec">${tickBtn(1)}${tickBtn(2)}${tickBtn(3)}${tickBtn(4)}</div>
       </div>
-      <div class="mt-1 flex items-center justify-between text-xs">
-        <span class="font-medium text-primary" data-duration-label>설정 안 함</span>
-        <span class="text-muted">0 ~ 16시간 · 30분 단위</span>
-      </div>
-      <div class="mt-2 flex items-center justify-end gap-1.5">
-        <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" value="${hours}" data-custom-hours />
-        <span class="text-xs text-muted">시간</span>
-      </div>
+      <input type="hidden" name="custom_hours" value="${hours}" data-custom-hours />
       <input type="hidden" name="duration_mode" value="custom" />
     </div>`;
 }
@@ -188,16 +187,15 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
         <span class="text-muted">–</span>
         ${timeBox("end_time", s.end_time, "18:00", 'data-end-input aria-label="종료 시간"')}
         <input class="input w-auto py-1.5 text-sm" type="date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
+        <label class="flex w-fit cursor-pointer items-center gap-2 pl-1 text-sm">
+          <input type="checkbox" class="h-4 w-4 rounded border-border text-primary" data-all-day /> 종일
+        </label>
       </div>
-      <label class="flex w-fit cursor-pointer items-center gap-2 text-sm">
-        <input type="checkbox" class="h-4 w-4 rounded border-border text-primary" data-all-day /> 종일
-      </label>
       <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다.</p>
       <input type="hidden" name="override_conflict" value="" data-override-conflict />
-      <div>
-        <label class="label-sm">소요 시간</label>
+      <div data-duration-wrap>
+        <label class="label-sm">소요 시간 <span class="ml-1 font-medium text-primary" data-duration-label>${fmtDurationKo(initMins)}</span></label>
         ${durationButtons(initMins)}
-        <div class="mt-1.5 text-xs text-success" data-end-preview></div>
       </div>
     </div>
     <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] md:items-start">
