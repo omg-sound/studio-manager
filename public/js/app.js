@@ -1333,7 +1333,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function openModal() {
       if (!modal) { hide(); return; }
       var n = modal.querySelector("[data-pc-name]"); n.value = input.value.trim();
-      ["[data-pc-phone]", "[data-pc-email]", "[data-pc-company]", "[data-pc-job]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      ["[data-pc-activity]", "[data-pc-phone]", "[data-pc-email]", "[data-pc-company]", "[data-pc-job]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
       modal.querySelector("[data-pc-err]").classList.add("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
     }
@@ -1346,18 +1346,21 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         var nm = modal.querySelector("[data-pc-name]").value.trim();
         var err = modal.querySelector("[data-pc-err]");
         if (!nm) { err.textContent = "이름을 입력하세요."; err.classList.remove("hidden"); return; }
+        var actEl = modal.querySelector("[data-pc-activity]");
+        var activity = actEl ? actEl.value.trim() : ""; // 활동명 입력 시 서버가 is_artist=1로 아티스트 등록(createPerson)
         var phone = modal.querySelector("[data-pc-phone]").value.trim(), email = modal.querySelector("[data-pc-email]").value.trim(),
             company = modal.querySelector("[data-pc-company]").value.trim(), job = modal.querySelector("[data-pc-job]").value.trim();
         pSave.disabled = true; err.classList.add("hidden");
         var body = new URLSearchParams();
         body.append("name", nm);
+        if (activity) body.append("nickname", activity); // nickname=활동명(별칭) → createPerson이 activity_name 저장 + is_artist
         if (phone) body.append("phone", phone);
         if (email) body.append("email", email);
         if (company) body.append("company", company);
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, phone: phone, email: email, company: company }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, phone: phone, email: email, company: company, isArtist: !!activity }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });

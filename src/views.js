@@ -509,21 +509,20 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
         <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
           <div class="font-display text-lg font-semibold">새 ${esc(entityLabel)} 등록</div>
           <div><label class="label">이름</label><input class="input" data-pc-name placeholder="${esc(entityLabel)} 이름" /></div>
+          <div><label class="label">활동명 <span class="text-xs font-normal text-muted">(입력 시 아티스트로도 등록)</span></label><input class="input" data-pc-activity autocomplete="off" placeholder="아티스트 활동명(선택)" /></div>
           <div class="grid gap-3 sm:grid-cols-2">
             <div><label class="label">전화</label><input class="input" data-pc-phone autocomplete="off" /></div>
             <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
           </div>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div><label class="label">회사</label>
-              <div class="relative">
-                <input class="input pr-9" data-pc-company autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="회사 검색 또는 새로 등록" />
-                <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-                <div class="absolute left-0 right-0 z-20 mt-1 hidden max-h-48 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-company-pop role="listbox"></div>
-              </div>
-              <script type="application/json" data-pc-company-options>${companyJson}</script>
+          <div><label class="label">회사</label>
+            <div class="relative">
+              <input class="input pr-9" data-pc-company autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="회사 검색 또는 새로 등록" />
+              <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+              <div class="absolute left-0 right-0 z-20 mt-1 hidden max-h-48 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-company-pop role="listbox"></div>
             </div>
-            <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>
+            <script type="application/json" data-pc-company-options>${companyJson}</script>
           </div>
+          <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>
           <div class="flex items-center gap-2 pt-1">
             <button type="button" class="btn-primary" data-pc-save>등록</button>
             <button type="button" class="btn-ghost" data-pc-cancel>취소</button>
