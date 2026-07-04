@@ -229,7 +229,11 @@ router.get("/", (req, res) => {
       : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "group" ? "그룹이 없습니다." : group === "associate" ? "관계자가 없습니다." : group === "company" ? "업체가 없습니다." : "클라이언트가 없습니다.", {
           card: true,
           icon: "clients",
-          cta: group === "associate" ? { href: "/contacts/new", label: "+ 새 관계자" } : { href: "/clients/new", label: "+ 새 클라이언트" },
+          // 유형 선택 페이지 폐기 — 빈 상태 CTA는 현재 탭 유형으로 바로 생성(탭=유형). 나머지 유형은 상단 드롭다운.
+          cta: group === "associate" ? { href: "/contacts/new", label: "+ 새 관계자" }
+            : group === "artist" ? { href: "/clients/new?type=artist", label: "+ 새 아티스트" }
+            : group === "group" ? { href: "/clients/new?type=group", label: "+ 새 그룹" }
+            : { href: "/clients/new?type=company", label: "+ 새 업체" },
         });
 
   // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 관계자=연락처 생성.
@@ -268,27 +272,11 @@ router.get("/suggest", (req, res) => {
   })));
 });
 
-// ── 새 클라이언트 ── 먼저 유형(업체/아티스트/그룹) 선택 → 유형별 폼(서로 섞이지 않는 3개념, '기타' 폐기).
+// ── 새 클라이언트 ── 유형(업체/아티스트/그룹)은 목록의 드롭다운(또는 탭별 빈 상태 CTA)에서만 선택 → 유형별 폼.
 const CLIENT_TYPES = ["company", "artist", "group"];
 router.get("/new", (req, res) => {
   const type = CLIENT_TYPES.includes(req.query.type) ? req.query.type : null;
-  if (!type) {
-    // 유형 선택 화면
-    const card = (href, title, desc) => `
-      <a href="${href}" class="card block transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-        <div class="font-display text-lg font-semibold text-fg">${title}</div>
-        <p class="mt-1 text-sm text-muted">${desc}</p>
-      </a>`;
-    const body = `
-      ${pageHeader({ title: "새 클라이언트", desc: "먼저 유형을 선택하세요 — 서로 섞이지 않습니다.", back: { href: "/clients", label: "클라이언트" } })}
-      <div class="grid gap-3 sm:grid-cols-2">
-        ${card("/clients/new?type=company", "업체", "소속사/레이블 · 제작사/운영사. 사업자·세금계산서 정보.")}
-        ${card("/contacts/new", "관계자", "대표 · A&R · 담당자 · 디렉터 · 작가 등 클라이언트 측 사람.")}
-        ${card("/clients/new?type=artist", "아티스트", "개인(솔로) 아티스트. 현금영수증 · 소속 그룹.")}
-        ${card("/clients/new?type=group", "그룹", "밴드 · 아이돌 그룹. 소속 멤버 연결.")}
-      </div>`;
-    return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body }));
-  }
+  if (!type) return res.redirect("/clients"); // 유형 선택 페이지 폐기(드롭다운만) — 유형 없는 진입은 목록으로
   const companies = listClients({}).filter((x) => x.kind === "company");
   res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
 });
