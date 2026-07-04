@@ -632,6 +632,13 @@ function resolveCompanyByName(name) {
   return ex ? ex.id : null;
 }
 
+/** 회사명 → 업체 party id(있으면 재사용, 없으면 생성). 빈 이름=null. companyCombo(이름 제출) 저장 경로 공용. */
+function ensureCompanyParty(name, role) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  return resolveCompanyByName(n) || createCompany({ name: n, roles: role || null });
+}
+
 // ── 그룹 ↔ 소속 멤버 연결(parties.group_id) ──
 
 /** 사람(아티스트)의 소속 그룹 지정/해제. groupId=null이면 그룹에서 제거. group 파티만 유효(아니면 무시). */
@@ -718,11 +725,20 @@ function currentAgencyId(partyId) {
   return cur && cur.org_id ? cur.org_id : null;
 }
 
+/** 현재 소속사 이름(companyCombo 초기값). 없으면 "". */
+function currentAgencyName(partyId) {
+  const id = currentAgencyId(partyId);
+  if (!id) return "";
+  const p = getParty(id);
+  return p ? p.name : "";
+}
+
 /** 그룹 선택 콤보용 — 그룹(kind='group') 목록 {id, name, agency_id(현재 그룹 소속사)}. agency_id는 폼 연동(그룹 선택 시 소속사 자동 맞춤)용. */
 function listGroupsForPicker() {
   return db().prepare(
     `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name,
-       (SELECT a.org_id FROM affiliations a WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS agency_id
+       (SELECT a.org_id FROM affiliations a WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS agency_id,
+       (SELECT o.name FROM affiliations a JOIN parties o ON o.id = a.org_id WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS agency_name
      FROM parties p WHERE p.kind = 'group' ORDER BY p.name COLLATE NOCASE`
   ).all();
 }
@@ -783,6 +799,8 @@ module.exports = {
   clientOptions,
   listArtistsForAgency,
   resolveCompanyByName,
+  ensureCompanyParty,
+  currentAgencyName,
   setPartyGroup,
   listGroupMembers,
   groupOfParty,

@@ -16,13 +16,13 @@ const {
   listArtistsForAgency, currentAffiliation, classifyParty,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
-  setPartyAgency, currentAgencyId,
+  setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -318,7 +318,7 @@ router.post("/", (req, res) => {
     });
     if (b.group_id) setPartyGroup(id, b.group_id); // 아티스트 생성 시 소속 그룹 선택했으면 연결
   }
-  if (type !== "company" && b.agency_id) setPartyAgency(id, b.agency_id); // 아티스트·그룹 소속사 연결('없음'=빈값→no-op)
+  if (type !== "company" && String(b.agency_company || "").trim()) setPartyAgency(id, ensureCompanyParty(b.agency_company, "소속사/레이블")); // 아티스트·그룹 소속사 연결(콤보 이름→업체 party, 없으면 생성; 빈값=no-op)
   if (type === "company") linkClientContact(id, b); // 업체만 담당자 연락처 연동
   if (req.get("X-Requested-With") === "fetch") { // 간이 등록(프로젝트 폼 모달 등) — 리다이렉트 대신 JSON
     const pp = getParty(id);
@@ -361,7 +361,7 @@ router.post("/:id", (req, res) => {
     contact_party_id: c.kind === "group" ? resolveContactPartyId(b) : undefined,
   });
   if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 개인 아티스트의 소속 그룹 연결
-  if (c.kind !== "company" && b.agency_id !== undefined) setPartyAgency(id, b.agency_id); // 아티스트·그룹 소속사 지정/해제('없음'=빈값)
+  if (c.kind !== "company" && b.agency_company !== undefined) setPartyAgency(id, String(b.agency_company).trim() ? ensureCompanyParty(b.agency_company, "소속사/레이블") : null); // 아티스트·그룹 소속사 콤보(이름→party, 비우면 해제)
   if (c.kind === "company") linkClientContact(id, b); // 업체만 담당자 연락처 연동
   if (c.kind === "company" && (b.owner_id || String(b.owner_name || "").trim())) ensureOwnerAffiliation(resolveOwnerParty(b.owner_name, b.owner_id), id); // 대표자의 직장(소속) = 이 회사
   if (isFetch) return res.json({ ok: true }); // 자동저장 — 페이지 유지
@@ -552,7 +552,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
 
   // 상세로 들어오면 바로 편집 — '정보 수정' 버튼 폐기, 인라인 편집 폼(dirty 저장). 첨부·삭제는 분리 배치.
   const companies = listClients({}).filter((x) => x.kind === "company");
-  if (c.kind !== "company") c.agency_id = currentAgencyId(c.id); // 아티스트·그룹: 소속사 select 기본값
+  if (c.kind !== "company") { c.agency_id = currentAgencyId(c.id); c.agency_name = currentAgencyName(c.id); } // 아티스트·그룹: 소속사 콤보 기본값(이름)
   const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
   // 폼의 대표자/담당자 콤보는 전체 연락처(contactOptions)를 내부에서 조회(상세의 contacts는 이 클라이언트 소속만이라 별도).
   const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false, listGroupsForPicker()); // withExtras=false — 첨부·삭제 제외
@@ -721,18 +721,15 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       </div>` : ""}
       ${type !== "company" ? `
       <div>
-        <label class="label">소속사 <span class="font-normal text-muted text-xs">(소속 회사 · 없으면 '없음')</span></label>
-        <select name="agency_id" class="input">
-          <option value="">없음</option>
-          ${companies.map((co) => `<option value="${co.id}"${Number(c.agency_id) === co.id ? " selected" : ""}>${esc(co.name)}</option>`).join("")}
-        </select>
+        <label class="label">소속사 <span class="font-normal text-muted text-xs">(검색 · 없으면 비움 · 목록 외 이름은 새 업체 등록)</span></label>
+        ${companyCombo("agency_company", c.agency_name || "", "소속사/레이블", "소속사")}
       </div>` : ""}
       ${type === "artist" ? `
       <div>
         <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때 — 선택 시 소속사 자동 연동)</span></label>
         <select name="group_id" class="input">
           <option value="" data-agency="">— 소속 그룹 없음 —</option>
-          ${groups.map((g) => `<option value="${g.id}" data-agency="${g.agency_id || ""}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
+          ${groups.map((g) => `<option value="${g.id}" data-agency="${esc(g.agency_name || "")}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
         </select>
       </div>` : ""}
       ${type === "group" ? `

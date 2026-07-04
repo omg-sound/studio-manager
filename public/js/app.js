@@ -751,11 +751,18 @@
     if (!gsel || gsel.tagName !== "SELECT" || gsel.name !== "group_id") return;
     var form = gsel.form;
     if (!form) return;
-    var asel = form.querySelector('select[name="agency_id"]');
-    if (!asel) return;
+    // 소속사는 이제 companyCombo(이름 제출) — 그룹의 소속사 이름(data-agency)으로 보이는 입력·숨김 필드를 채운다.
+    var combo = form.querySelector("[data-company-combo]");
+    if (!combo) return;
     var opt = gsel.options[gsel.selectedIndex];
-    var ag = opt ? opt.getAttribute("data-agency") || "" : "";
-    if (gsel.value && ag) { asel.value = ag; asel.dispatchEvent(new Event("change", { bubbles: true })); } // 그룹 소속사로 맞춤(dirty 반영)
+    var agName = opt ? opt.getAttribute("data-agency") || "" : "";
+    if (gsel.value && agName) {
+      var hid = combo.querySelector("[data-cc-hidden]");
+      var vis = combo.querySelector("[data-cc-input]");
+      if (vis) vis.value = agName;
+      if (hid) { hid.value = agName; hid.dispatchEvent(new Event("change", { bubbles: true })); } // 그룹 소속사로 맞춤(dirty 반영)
+      if (combo.__ccOpts && !combo.__ccOpts.some(function (o) { return String(o.name) === agName; })) combo.__ccOpts.push({ name: agName, sub: "" });
+    }
   });
 })();
 

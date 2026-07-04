@@ -12,6 +12,7 @@ const {
   currentAffiliation,
   listAffiliations,
   addAffiliation,
+  ensureCompanyParty,
   syncCompanyAffiliation,
   endAffiliation,
   updateAffiliation,
@@ -232,7 +233,7 @@ router.post("/:id/affiliations", (req, res) => {
   if (!getParty(id)) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const b = req.body;
   addAffiliation(id, {
-    client_id: b.client_id || null,
+    client_id: ensureCompanyParty(b.affiliation_company, "소속사/레이블"), // 콤보 이름 → 업체 party(없으면 생성), 빈값=무소속
     title: b.title,
     started_on: b.started_on,
     memo: b.memo,
@@ -250,7 +251,7 @@ router.post("/:id/affiliations/:aid/end", (req, res) => {
 router.post("/:id/affiliations/:aid", (req, res) => {
   const b = req.body;
   updateAffiliation(Number(req.params.aid), {
-    client_id: b.client_id || null,
+    client_id: ensureCompanyParty(b.affiliation_company, "소속사/레이블"), // 콤보 이름 → 업체 party(없으면 생성), 빈값=무소속
     title: b.title,
     started_on: b.started_on,
     ended_on: b.ended_on,
@@ -309,11 +310,8 @@ router.get("/:id", (req, res) => {
             <form method="post" action="/contacts/${c.id}/affiliations/${a.id}" class="mt-2 space-y-2 border-t border-border pt-2" data-dirty-form>
               <div class="grid gap-2 sm:grid-cols-2">
                 <div>
-                  <label class="label mb-0.5 text-xs">소속 회사</label>
-                  <select name="client_id" class="input py-1.5 text-sm">
-                    <option value="">무소속</option>
-                    ${clients.map((cl) => `<option value="${cl.id}" ${String(a.client_id || "") === String(cl.id) ? "selected" : ""}>${esc(cl.name)}${cl.kind ? " (" + esc(cl.kind) + ")" : ""}</option>`).join("")}
-                  </select>
+                  <label class="label mb-0.5 text-xs">소속 회사 <span class="font-normal text-muted">(검색 · 비우면 무소속)</span></label>
+                  ${companyCombo("affiliation_company", a.client_name || "", "소속사/레이블", "회사")}
                 </div>
                 <div><label class="label mb-0.5 text-xs">직함</label><input class="input py-1.5 text-sm" name="title" value="${esc(a.title || "")}" placeholder="예: A&amp;R · 매니저" /></div>
                 <div><label class="label mb-0.5 text-xs">시작일</label><input class="input py-1.5 text-sm" type="date" name="started_on" value="${esc(a.started_on || "")}" /></div>
@@ -351,11 +349,8 @@ router.get("/:id", (req, res) => {
       <div class="font-semibold">소속 추가 / 이직</div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="label">소속 회사</label>
-          <select name="client_id" class="input">
-            <option value="">무소속</option>
-            ${clients.map((cl) => `<option value="${cl.id}">${esc(cl.name)}${cl.kind ? " (" + esc(cl.kind) + ")" : ""}</option>`).join("")}
-          </select>
+          <label class="label">소속 회사 <span class="font-normal text-muted text-xs">(검색 · 목록 외 이름은 새 업체 등록)</span></label>
+          ${companyCombo("affiliation_company", "", "소속사/레이블", "회사")}
         </div>
         <div><label class="label">직함</label><input class="input" name="title" placeholder="예: A&amp;R · 매니저" /></div>
       </div>
