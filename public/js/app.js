@@ -189,11 +189,19 @@
   function proDefaultMinutes() { return durGroup ? parseInt(durGroup.getAttribute("data-pro-default"), 10) || 0 : 0; }
   // 세션 종류별 슬라이더 기본값: 녹음=1Pro(녹음 단가 기준시간), 그 외=기본 세션 시간. 사용자가 조정해 쓴다.
   function applyTypeDefault() {
-    var isRec = isRecType();
-    var def = isRec ? baseMinutes() : proDefaultMinutes();
+    // 1Pro 기본: 단가 기준시간 우선, 없으면(미지정 포함) 스튜디오 기본 블록 — 프리셋과 동일 폴백(새 작성 종료 프리필의 기준).
+    var def = baseMinutes() || proDefaultMinutes();
     if (def > 0) setDuration(def);
   }
   function currentStart() { return startInput ? startInput.value : ""; }
+  // 시간 값 기록: 보이는 입력 + 제출용 hidden(data-time-hidden) 동시(보이는 입력은 nameless — 자동완성 차단).
+  function syncTimeHidden(el) {
+    if (!el || !el.closest) return;
+    var w = el.closest("[data-time-combo]");
+    var h = w && w.querySelector("[data-time-hidden]");
+    if (h) h.value = el.value;
+  }
+  function writeTime(el, v) { if (el) { el.value = v; syncTimeHidden(el); } }
   function addMin(hhmm, mins) {
     var p = String(hhmm).split(":");
     if (p.length !== 2) return "";
@@ -312,7 +320,7 @@
     var isAllDay = allDay && allDay.checked;
     if (preview) preview.textContent = isAllDay ? "종일 (00:00–24:00)" : start && mins > 0 ? "예상 종료: " + addMin(start, mins) + " (" + fmtHours(mins / 60) + "시간)" : "";
     // 종료 박스·종료 날짜 자동 동기(구글식): 시작+소요 → 종료. 자정 넘김이면 종료 날짜 +1일. 사용자가 편집 중인 칸은 덮지 않음.
-    if (endInput && sMin != null && mins > 0 && document.activeElement !== endInput) endInput.value = addMin(start, mins);
+    if (endInput && sMin != null && mins > 0 && document.activeElement !== endInput) writeTime(endInput, addMin(start, mins));
     if (endDate && dateInput && document.activeElement !== endDate) endDate.value = sMin != null && mins > 0 && sMin + mins >= 1440 ? addDays(dateInput.value, 1) : dateInput.value || "";
     updateConflictWarn();
   }
@@ -377,13 +385,14 @@
     el.addEventListener("input", function () {
       var digits = el.value.replace(/[^0-9]/g, "").slice(0, 4);
       el.value = digits.length >= 3 ? digits.slice(0, 2) + ":" + digits.slice(2) : digits;
+      syncTimeHidden(el); // 제출용 hidden 동기화(보이는 입력은 nameless)
       if (onValid && toMin(el.value) != null) onValid();
       updatePreview();
     });
   }
   // 시간 콤보([data-time-combo]): 포커스 시 전체선택 + 30분 단위 목록(현재 값 근처로 스크롤), 선택=클릭.
   Array.prototype.forEach.call(form.querySelectorAll("[data-time-combo]"), function (wrap) {
-    var inp = wrap.querySelector("input");
+    var inp = wrap.querySelector('input[type="text"]'); // 첫 input은 제출용 hidden — 보이는 텍스트 입력을 잡는다
     var pop = wrap.querySelector("[data-time-pop]");
     if (!inp || !pop) return;
     function openPop() {
@@ -396,7 +405,7 @@
           var slot = Math.round(cur / 30) * 30 % 1440;
           near = pop.querySelector('[data-time-opt="' + addMin("00:00", slot) + '"]');
         }
-        if (near && near.scrollIntoView) near.scrollIntoView({ block: "center" });
+        if (near && near.scrollIntoView) near.scrollIntoView({ block: "start" }); // 미리 작성된 시간이 목록 최상단에 오게
       }
     }
     function closePop() { pop.classList.add("hidden"); }
@@ -436,12 +445,12 @@
     if (endDate) endDate.readOnly = on;
     if (on) {
       allDayStash = restore ? null : { s: startInput ? startInput.value : "", e: endInput ? endInput.value : "", d: curDur };
-      if (startInput) startInput.value = "00:00";
-      if (endInput) endInput.value = "23:59";
+      writeTime(startInput, "00:00");
+      writeTime(endInput, "23:59");
       setDuration(1439);
     } else if (allDayStash) {
-      if (startInput) startInput.value = allDayStash.s;
-      if (endInput) endInput.value = allDayStash.e;
+      writeTime(startInput, allDayStash.s);
+      writeTime(endInput, allDayStash.e);
       setDuration(allDayStash.d);
       allDayStash = null;
     } else {
@@ -470,7 +479,13 @@
 
   updateProAvailability();
   syncRecFields();
-  if (durationMinutes() === 0) applyTypeDefault(); // 새 세션(소요 미설정)이면 종류 기본값으로 시작(편집=저장값 유지)
+  // 새 작성(생성 폼: data-session-id 없음)이면 시작=지금 기준 다음 30분 슬롯 프리필(브라우저 로컬 시간 — 서버 TZ 무관).
+  if (!form.getAttribute("data-session-id") && startInput && !startInput.value && !(allDay && allDay.checked)) {
+    var nowT = new Date();
+    var slot = (Math.ceil((nowT.getHours() * 60 + nowT.getMinutes()) / 30) * 30) % 1440;
+    writeTime(startInput, addMin("00:00", slot));
+  }
+  if (durationMinutes() === 0) applyTypeDefault(); // 새 세션(소요 미설정)이면 1Pro(단가 기준시간, 없으면 스튜디오 기본) → 종료 자동 채움(편집=저장값 유지)
   refreshDuration();
   refreshAvailability();
   }

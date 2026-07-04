@@ -157,8 +157,10 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   // 종료 날짜는 저장 필드가 아니라 자동 표시(자정 넘김이면 +1일 — 스키마는 session_date 하나, 야간 세션은 end<start로 표현).
   // 시간 박스 = 타이핑 + 30분 단위 드롭다운(00:00~23:30, 구글식 — 포커스 시 전체선택·목록, app.js [data-time-combo]).
   const TIME_OPTS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+  // 보이는 입력은 name 없음(Chrome 과거값 제안·자동완성 원천 차단 — 함정 #19 패턴), 제출은 hidden(data-time-hidden, app.js 동기화).
   const timeBox = (name, val, ph, extra = "") => `<div class="relative" data-time-combo>
-        <input class="input w-[5.5rem] py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="${name}" value="${esc(val || "")}" placeholder="${ph}" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" ${extra} />
+        <input type="hidden" name="${name}" value="${esc(val || "")}" data-time-hidden />
+        <input class="input w-[5.5rem] py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" value="${esc(val || "")}" placeholder="${ph}" maxlength="5" autocomplete="off" ${extra} />
         <div class="absolute left-0 z-30 mt-1 hidden max-h-56 w-24 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-time-pop role="listbox">
           ${TIME_OPTS.map((t) => `<button type="button" class="block w-full px-3 py-1.5 text-center text-sm tabular hover:bg-elevated active:bg-elevated" data-time-opt="${t}">${t}</button>`).join("")}
         </div>
@@ -182,9 +184,9 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
     <div class="space-y-3" data-time-block>
       <div class="flex flex-wrap items-center gap-2">
         <input class="input w-auto py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date data-datepick aria-label="날짜" required />
-        ${timeBox("start_time", s.start_time, "시작 14:00", 'data-start-input aria-label="시작 시간"')}
+        ${timeBox("start_time", s.start_time, "14:00", 'data-start-input aria-label="시작 시간"')}
         <span class="text-muted">–</span>
-        ${timeBox("end_time", s.end_time, "종료 18:00", 'data-end-input aria-label="종료 시간"')}
+        ${timeBox("end_time", s.end_time, "18:00", 'data-end-input aria-label="종료 시간"')}
         <input class="input w-auto py-1.5 text-sm" type="date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
       </div>
       <label class="flex w-fit cursor-pointer items-center gap-2 text-sm">
