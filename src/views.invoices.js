@@ -265,8 +265,9 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
   const taxDoc = taxDocOf(inv);
   const taxIssued = inv.tax_status === "계산서 발행" || inv.tax_status === "입금완료";
   const isPaid = inv.tax_status === "입금완료";
+  // 색 계열: 세션 완료 토글과 동일한 은은한 success(초록) 흐름 — 완료=초록 tint, 미완료=ghost+초록 텍스트(앰버/btn-primary는 너무 강해 배제, 사용자 요청).
   const toggleBtn = (target, label, lit) =>
-    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="${lit ? "btn-primary" : "btn-ghost"} btn-sm" type="submit">${esc(label)}</button></form>`;
+    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost btn-sm ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit"><span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(label)}</button></form>`;
   const actions = isAdmin
     ? `<details class="group">
          <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
