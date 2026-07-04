@@ -136,9 +136,9 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   // 옵션 중복 임베드 제거: 이 폼의 디렉터 콤보(행·템플릿·동적 추가)가 공유 옵션 스크립트 1개를 참조(optionsRef).
   const dirOptsId = "__dir_opts_" + (s && s.id ? s.id : "new");
   const dirRow = (d) => `
-        <div class="mt-1 flex items-stretch gap-2" data-director-row>
+        <div class="mt-1 flex items-start gap-2" data-director-row>
           ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, initialName: d ? (d.name || "") : "", optionsRef: dirOptsId, companyOptions: companyOpts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
-          <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-border px-3 text-danger hover:bg-elevated active:bg-elevated" data-director-remove aria-label="디렉터 제거">✕</button>
+          <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-border px-3 py-1.5 text-sm leading-5 text-danger hover:bg-elevated active:bg-elevated" data-director-remove aria-label="디렉터 제거">✕</button>
         </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
   const directorField = `
