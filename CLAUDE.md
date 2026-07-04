@@ -320,7 +320,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 > **핵심 도메인(라이브)**: 인증 3역할(owner/chief/staff) · 프로젝트 · **세션 일정**(예약 그리드·Pro 블록 과금·다중 룸 겹침·구글 캘린더 자동 연동) · **곡·콘텐츠 후반작업** · **청구**(발행=확정·할인·VAT·부가세 토글·거래명세서 PDF·프로젝트 안에서 완결) · **자료 전달**(Drive/로컬·토큰 링크) · **클라이언트/연락처**(소속 이력·Google People 동기화·상세=인라인 편집) · **매출 현황**·**외주 정산** · 관리(단가표·작업 종류·담당자·환경설정).
 >
 > **이번 챕터(v1.0) 마무리 작업**:
-> - **저장 폼 공통 dirty 패턴** — 편집 폼 전부 명시적 저장 버튼(변경 없으면 흐리게·비활성, 변경 시 하이라이트 링+힌트, `[data-dirty-form]`/`[data-dirty-save]`/`[data-dirty-hint]`, app.js 문서위임·`form.elements` 스냅샷). 자동저장 폐기.
+> - **저장 폼 공통 dirty 패턴** — 편집 폼 전부 명시적 저장 버튼(변경 없으면 흐리게·비활성, 변경 시 하이라이트 링+힌트, `[data-dirty-form]`/`[data-dirty-save]`/`[data-dirty-hint]`, app.js 문서위임·`form.elements` 스냅샷). 자동저장 폐기. **네비게이션 가드**(2026-07-04): dirty 폼이 있는데 **다른 탭·섹션(인앱 `<a>` 링크)으로 이동**하면 커스텀 모달(**저장하지 않음 / 저장** 2택 — 사용자 결정)로 확인. '저장'=첫 dirty 폼의 `[data-dirty-save]` 클릭(정상 제출→리다이렉트), '저장하지 않음'=클릭한 링크로 이동(무시). **하드 언로드(탭 닫기·새로고침·주소창)** 는 `beforeunload` 브라우저 기본 경고. dirty IIFE가 `window.__hasDirty`/`__firstDirtyForm` 노출, 가드 IIFE가 click(capture)·beforeunload 처리·폼 제출 시 `bypass`로 우회(app.js).
 > - **상세 = 바로 편집** — 연락처·클라이언트 상세를 인라인 편집 화면으로('정보 수정' 버튼·중복 헤더 폐기, `embedded`), 연락처 소속 이력 각 행 편집(`updateAffiliation`), **'회사' 입력→소속 이력 자동 반영**(`syncCompanyAffiliation`).
 > - **녹음 단가 Pro 블록 과금** — 3.5h(1Pro)마다 묶어 계산(완전 블록=기본가, 자투리만 초과요금 → 10.5h=3Pro=90만), 소요 슬라이더 0~14h·프리셋 1~4Pro(`computeRatePrice`·`resolveEndTime` 840분 상한).
 > - **구글 캘린더 진단** — 자동 연동 실패 사유 로깅(`skipReason`) + 설정에 자동연동 켜짐/꺼짐 상태 배지('사용 안 함=연동 끔' 문구 명확화).

@@ -806,6 +806,65 @@
   }
   document.addEventListener("input", onEvt);
   document.addEventListener("change", onEvt);
+  // 네비게이션 가드용 전역 조회: 변경된(dirty) 폼이 있나 / 첫 dirty 폼.
+  window.__hasDirty = function () { return recs.some(function (r) { return snapshot(r.form) !== r.initial; }); };
+  window.__firstDirtyForm = function () { for (var i = 0; i < recs.length; i++) if (snapshot(recs[i].form) !== recs[i].initial) return recs[i].form; return null; };
+})();
+
+// 저장하지 않은 변경사항 가드: dirty 폼이 있는데 다른 탭·섹션(링크)으로 이동하거나 탭을 닫으려 하면
+// 저장/무시(이동)/취소를 묻는다. 링크 클릭=커스텀 모달(3택), 하드 언로드(탭 닫기·새로고침·주소창)=브라우저 기본 경고.
+(function () {
+  "use strict";
+  var bypass = false; // 의도된 이동(폼 제출·모달 '이동') 시 가드·경고 우회
+  function hasDirty() { return !!(window.__hasDirty && window.__hasDirty()); }
+  // 폼 제출(저장·완료 토글·삭제 등)은 의도된 동작 → beforeunload 경고 억제.
+  document.addEventListener("submit", function () { bypass = true; setTimeout(function () { bypass = false; }, 2000); }, true);
+  // 하드 언로드(탭 닫기·새로고침·주소 입력·외부 이동) 안전망 — 브라우저 기본 "나가시겠습니까?".
+  window.addEventListener("beforeunload", function (e) {
+    if (bypass || !hasDirty()) return;
+    e.preventDefault();
+    e.returnValue = "";
+  });
+  // 인앱 링크(사이드바·탭·상세 링크) 클릭 → 저장/무시/취소 모달.
+  document.addEventListener("click", function (e) {
+    if (bypass || !hasDirty()) return;
+    var a = e.target.closest && e.target.closest("a[href]");
+    if (!a) return;
+    var href = a.getAttribute("href");
+    if (!href || href.charAt(0) === "#" || /^(javascript:|mailto:|tel:)/i.test(href)) return;
+    if (a.target === "_blank" || a.hasAttribute("download") || a.hasAttribute("data-no-guard")) return;
+    e.preventDefault();
+    openGuardModal(href);
+  }, true);
+  function openGuardModal(href) {
+    if (document.querySelector("[data-nav-guard]")) return; // 중복 방지
+    var wrap = document.createElement("div");
+    wrap.setAttribute("data-nav-guard", "");
+    wrap.className = "fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4";
+    wrap.innerHTML =
+      '<div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">' +
+        '<div class="font-display text-lg font-semibold">저장하지 않은 변경사항</div>' +
+        '<p class="text-sm text-muted">저장하지 않은 변경사항이 있습니다. 저장할까요?</p>' +
+        '<div class="flex flex-wrap items-center justify-end gap-2 pt-1">' +
+          '<button type="button" class="btn-ghost btn-sm" data-g-discard>저장하지 않음</button>' +
+          '<button type="button" class="btn-primary btn-sm" data-g-save>저장</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+    function close() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }
+    wrap.addEventListener("click", function (e) { if (e.target === wrap) close(); }); // 배경 클릭 = 편집으로 복귀(이동 안 함)
+    wrap.querySelector("[data-g-discard]").addEventListener("click", function () { bypass = true; close(); window.location.href = href; }); // 저장하지 않고 이동
+    wrap.querySelector("[data-g-save]").addEventListener("click", function () { // 저장(제출→리다이렉트)
+      var f = window.__firstDirtyForm && window.__firstDirtyForm();
+      close();
+      if (f) {
+        var btn = f.querySelector("[data-dirty-save]");
+        if (btn) { btn.disabled = false; btn.click(); return; }
+        if (f.requestSubmit) f.requestSubmit(); else f.submit();
+      } else { bypass = true; window.location.href = href; }
+    });
+    var saveBtn = wrap.querySelector("[data-g-save]"); if (saveBtn) saveBtn.focus();
+  }
 })();
 
 // 헤더 상태 select 등 [data-no-toggle] 요소를 클릭/조작해도 <details> 펼침이 토글되지 않게(접힌 채 상태 수정).
