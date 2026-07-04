@@ -1294,6 +1294,39 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (e.key !== "Enter" || e.defaultPrevented || (e.target && e.target.tagName === "TEXTAREA")) return;
         e.preventDefault(); pSave.click();
       });
+      // 모달 '회사' 검색 콤보 — 기존 업체 검색 + '＋ …(으)로 새 업체 등록'(입력 이름 유지, 저장 시 서버가 소속 회사 생성/연결).
+      var coInput = modal.querySelector("[data-pc-company]"), coPop = modal.querySelector("[data-pc-company-pop]");
+      if (coInput && coPop) {
+        var coDataEl = modal.querySelector("[data-pc-company-options]");
+        var coOpts = [];
+        try { coOpts = JSON.parse((coDataEl && coDataEl.textContent) || "[]"); } catch (e2) { coOpts = []; }
+        document.addEventListener("party-created", function (e) { var p = e.detail; if (!p || p.kind !== "company" || !p.name) return; if (!coOpts.some(function (o) { return String(o.name) === String(p.name); })) coOpts.push({ name: p.name }); }); // 새 업체 생성 시 옵션 반영
+        var coView = [];
+        var coHide = function () { coPop.classList.add("hidden"); coInput.setAttribute("aria-expanded", "false"); };
+        var coShow = function () { coPop.classList.remove("hidden"); coInput.setAttribute("aria-expanded", "true"); };
+        var coNewRow = function (nm) {
+          var label = nm ? "'" + esc(nm) + "'(으)로 새 업체 등록" : "새 업체 등록";
+          return '<button type="button" class="' + rowCls + ' text-primary" data-co-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+        };
+        var coRender = function () {
+          var q = coInput.value.trim().toLowerCase();
+          coView = (q ? coOpts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : coOpts).slice(0, 10);
+          var html = coView.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-co-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span><span class="shrink-0 text-xs text-muted">조직</span></button>'; }).join("");
+          if (!coView.some(function (o) { return String(o.name).toLowerCase() === q; })) html += coNewRow(coInput.value.trim());
+          coPop.innerHTML = html; coShow();
+        };
+        coInput.addEventListener("focus", coRender);
+        coInput.addEventListener("click", coRender);
+        coInput.addEventListener("input", coRender);
+        coInput.addEventListener("blur", function () { setTimeout(coHide, 150); });
+        coPop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur 방지
+        coPop.addEventListener("click", function (e) {
+          var b = e.target.closest("button"); if (!b) return;
+          if (b.hasAttribute("data-co-idx")) coInput.value = coView[Number(b.getAttribute("data-co-idx"))].name; // 기존 업체 선택
+          coHide(); // '새 업체 등록'은 입력한 이름 그대로 유지
+        });
+        comboKbdNav(coInput, coPop); // 방향키·엔터(하이라이트 선택 시 preventDefault → 모달 엔터 제출과 충돌 없음)
+      }
     }
     input.addEventListener("focus", render);
     input.addEventListener("click", render);

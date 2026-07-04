@@ -484,9 +484,9 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  */
 function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = [], entityLabel = "담당자" } = {}) {
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
-  // 모달 '회사' 입력 autocomplete용 datalist(기존 클라이언트 검색 → 오타·중복 방지). 유니크 id로 중복 방지.
-  const coListId = companyOptions && companyOptions.length ? "pcco_" + Math.random().toString(36).slice(2, 9) : "";
-  const companyDatalist = coListId ? `<datalist id="${coListId}">${companyOptions.map((c) => `<option value="${esc(c.name || c)}"></option>`).join("")}</datalist>` : "";
+  // 모달 '회사' 입력 = 커스텀 검색 콤보(기존 업체 검색 + '＋ …(으)로 새 업체 등록'). 프로젝트 폼 companyCombo와 동일 UX.
+  // 옵션 JSON을 임베드하고 app.js initOne이 드롭다운을 구성한다(선택=회사명, '새 업체 등록'=입력한 이름 유지 → 저장 시 서버가 소속 회사 생성/연결).
+  const companyJson = JSON.stringify((companyOptions || []).map((c) => ({ name: c.name || c }))).replace(/</g, "\\u003c");
   // optionsRef 지정 시 옵션 JSON을 인라인 임베드하지 않고 페이지의 공유 스크립트(id=optionsRef)를 참조 →
   // 같은 옵션(연락처 목록)을 쓰는 콤보가 여러 개인 폼(세션 디렉터 다중 행 등)에서 중복 임베드 제거(페이지 축소).
   const inlineJson = optionsRef ? "" : `<script type="application/json" data-pc-options>${JSON.stringify(options.map((o) => ({ id: o.id, name: o.name, phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "", job_title: o.current_title || o.job_title || "", group: o.group_name || o.group || "" }))).replace(/</g, "\\u003c")}</script>`;
@@ -514,7 +514,14 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
             <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">
-            <div><label class="label">회사</label><input class="input" data-pc-company autocomplete="off"${coListId ? ` list="${coListId}" placeholder="기존 클라이언트 검색"` : ""} />${companyDatalist}</div>
+            <div><label class="label">회사</label>
+              <div class="relative">
+                <input class="input pr-9" data-pc-company autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="회사 검색 또는 새로 등록" />
+                <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+                <div class="absolute left-0 right-0 z-20 mt-1 hidden max-h-48 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-company-pop role="listbox"></div>
+              </div>
+              <script type="application/json" data-pc-company-options>${companyJson}</script>
+            </div>
             <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>
           </div>
           <div class="flex items-center gap-2 pt-1">
