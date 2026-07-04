@@ -5,7 +5,7 @@
 const { SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
+const { listRooms, getStudioHours, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -45,28 +45,6 @@ function timeLabel(s) {
   if (s.start_time && s.end_time) return `${esc(s.start_time)}–${esc(s.end_time)}`;
   if (s.start_time) return esc(s.start_time);
   return "시간 미정";
-}
-
-/**
- * 시작 시간 30분 버튼 그리드(라디오, 기본 14:00~20:00). 비활성(예약됨) 표시는 app.js가 data-slot 기준 처리.
- * 그리드 밖 시간은 아래 '직접입력'(start_time_custom)으로 — 서버에서 직접입력이 있으면 우선한다.
- */
-function startSlotGrid(current) {
-  const slots = studioStartSlots(); // 환경설정 운영시간 기반 30분 슬롯(정적 SESSION_START_SLOTS 대체)
-  const inGrid = slots.includes(current);
-  const showCustom = !inGrid && !!current; // 편집 시 그리드 밖 값이면 직접입력 칸 펼침
-  const cells = slots.map(
-    (t) => `
-      <label class="cursor-pointer">
-        <input type="radio" name="start_time" value="${t}" class="peer sr-only" data-slot="${t}" ${t === current ? "checked" : ""} />
-        <span class="flex min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
-      </label>`
-  ).join("");
-  // 그리드 맨 뒤 '직접입력' 셀 — 박스 자체에 바로 시간 입력(버튼 토글 없음). 콜론 자동 삽입("1400"→"14:00", app.js).
-  const customCell = `<input class="input min-h-[2.5rem] w-full px-1 py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="start_time_custom" data-custom-start
-      placeholder="직접입력" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
-      aria-label="시작 시간 직접입력(시:분, 1400→14:00)" value="${showCustom ? esc(current) : ""}" />`;
-  return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customCell}</div>`;
 }
 
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
@@ -116,7 +94,7 @@ function rateOptionsHtml(rateItems, currentId) {
   });
   const cats = [...RATE_CATEGORIES.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !RATE_CATEGORIES.includes(c))];
   const opt = (r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`;
-  return `<option value="" data-minutes="0">단가 항목 미지정</option>` + cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
+  return `<option value="" data-minutes="0">미지정</option>` + cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
 }
 function rateSelectGrouped(rateItems, currentId, required = false) {
   return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select ${required ? "data-rate-required" : ""}>${rateOptionsHtml(rateItems, currentId)}</select>`;
@@ -172,6 +150,20 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
       <button type="button" class="btn-ghost btn-xs mt-1" data-director-add>+ 디렉터 추가</button>
       ${explain(`목록에 없는 이름을 입력하면 저장 시 새 연락처로 등록됩니다. 비워 둔 행은 무시됩니다.`)}
     </div>`;
+  // 시간 입력 = 구글 캘린더식(2026-07-04 그리드 폐지): [날짜][시작]–[종료][종료날짜(자동)] 타이핑 + 종일 + 소요 슬라이더.
+  // 시작/종료는 콜론 자동 삽입(1400→14:00, app.js). 종료·슬라이더는 양방향 동기(종료 입력→소요 재계산, 소요 변경→종료 갱신).
+  // 종료 날짜는 저장 필드가 아니라 자동 표시(자정 넘김이면 +1일 — 스키마는 session_date 하나, 야간 세션은 end<start로 표현).
+  const studioHours = getStudioHours();
+  const timeBox = (name, val, ph, extra = "") => `<input class="input w-[5.5rem] py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="${name}" value="${esc(val || "")}" placeholder="${ph}" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" ${extra} />`;
+  const endDateInit = (() => {
+    const d = s.session_date || todayYmd();
+    if (s.start_time && s.end_time && s.end_time < s.start_time) { // 야간(자정 넘김) → +1일
+      const t = new Date(d + "T00:00:00"); t.setDate(t.getDate() + 1); // 로컬 기준(+1일)
+      const mm = t.getMonth() + 1, dd = t.getDate();
+      return `${t.getFullYear()}-${mm < 10 ? "0" : ""}${mm}-${dd < 10 ? "0" : ""}${dd}`; // toISOString은 UTC라 KST 하루 밀림
+    }
+    return d;
+  })();
   // 레이아웃 = 구글 캘린더 일정 편집기 모사(2026-07-04 사용자 요청 — 항목은 그대로, 배치만):
   //  ① 최상단 전폭 = 시간 블록(날짜 → 시작 시간 그리드 → 소요 슬라이더) — 구글의 날짜·시간 줄
   //  ② 좌측 상자 = '세션 세부정보'(종류·단가·룸·디렉터·메모) — 구글의 일정 세부정보 카드
@@ -179,17 +171,20 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   //  md 미만은 소스 순서대로 세로 스택(시간 → 세부정보 → 사람).
   return `
     <input type="hidden" name="status" value="${esc(s.status || "예정")}" />
-    <div class="space-y-3">
+    <div class="space-y-3" data-time-block data-studio-open="${esc(studioHours.start)}" data-studio-close="${esc(studioHours.end)}">
       <div class="flex flex-wrap items-center gap-2">
-        <label class="label-sm mb-0">날짜</label>
-        <input class="input w-auto py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date required />
+        <input class="input w-auto py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date aria-label="날짜" required />
+        ${timeBox("start_time", s.start_time, "시작 14:00", 'data-start-input aria-label="시작 시간"')}
+        <span class="text-muted">–</span>
+        ${timeBox("end_time", s.end_time, "종료 18:00", 'data-end-input aria-label="종료 시간"')}
+        <input class="input w-auto py-1.5 text-sm text-muted" type="date" value="${endDateInit}" data-end-date readonly tabindex="-1" aria-label="종료 날짜(자동 계산)" />
       </div>
-      <div>
-        <label class="label-sm">시작 시간</label>
-        ${startSlotGrid(s.start_time || "")}
-        <p class="mt-1.5 text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다.</p>
-        <input type="hidden" name="override_conflict" value="" data-override-conflict />
-      </div>
+      <label class="flex w-fit cursor-pointer items-center gap-2 text-sm">
+        <input type="checkbox" class="h-4 w-4 rounded border-border text-primary" data-all-day /> 종일
+        <span class="text-xs text-muted">(운영시간 ${esc(studioHours.start)}–${esc(studioHours.end)})</span>
+      </label>
+      <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 룸 예약이 이미 있습니다.</p>
+      <input type="hidden" name="override_conflict" value="" data-override-conflict />
       <div>
         <label class="label-sm">소요 시간</label>
         ${durationButtons(initMins)}

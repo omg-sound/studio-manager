@@ -121,6 +121,41 @@ test("세션 폼: 종류(녹음↔촬영↔공연↔믹싱)에 따라 단가 옵
   assert.equal(recBlock.hidden, true, "비대관 종류는 단가 블록 숨김");
 });
 
+// ── ③b 구글식 시간 입력(2026-07-04 그리드 폐지): 시작/종료 타이핑 ↔ 슬라이더 양방향 + 종일 ──
+test("세션 폼(구글식): 시작·종료 타이핑 → 콜론 자동·소요 역산, 소요 변경 → 종료 자동, 종일 → 운영시간 전체", () => {
+  const rateItems = db().prepare("SELECT * FROM rate_items").all();
+  const html = `<form data-session-form>${sessionBookingFields({}, [], rateItems, [], "")}</form>`;
+  const { win, doc } = mountDom(html);
+  const start = doc.querySelector("[data-start-input]");
+  const end = doc.querySelector("[data-end-input]");
+  const endDate = doc.querySelector("[data-end-date]");
+  const hours = doc.querySelector("[data-custom-hours]");
+  const dateIn = doc.querySelector("[data-session-date]");
+  // 시작 "1400" 타이핑 → 콜론 자동
+  start.value = "1400"; fire(win, start, "input");
+  assert.equal(start.value, "14:00", "콜론 자동 삽입");
+  // 종료 "1800" 타이핑 → 소요 4시간 역산(슬라이더·직접입력 동기)
+  end.value = "1800"; fire(win, end, "input");
+  assert.equal(hours.value, "4", "종료 입력 → 소요 역산(custom_hours)");
+  // 소요를 6시간으로 변경 → 종료 20:00 자동
+  hours.value = "6"; fire(win, hours, "input");
+  assert.equal(end.value, "20:00", "소요 변경 → 종료 자동 갱신");
+  assert.equal(endDate.value, dateIn.value, "당일 종료 = 시작 날짜");
+  // 야간(자정 넘김): 시작 22:00 + 종료 02:00 → 4시간 + 종료 날짜 +1일
+  start.value = "2200"; fire(win, start, "input");
+  end.value = "0200"; fire(win, end, "input");
+  assert.equal(hours.value, "4", "자정 넘김 역산(+24h)");
+  assert.notEqual(endDate.value, dateIn.value, "야간이면 종료 날짜 +1일");
+  // 종일 → 시작=운영 오픈, 시간 박스 잠금
+  const allDay = doc.querySelector("[data-all-day]");
+  const open = doc.querySelector("[data-time-block]").getAttribute("data-studio-open");
+  allDay.checked = true; fire(win, allDay, "change");
+  assert.equal(start.value, open, "종일 = 시작이 운영 오픈 시각");
+  assert.equal(start.readOnly, true, "종일 중 시간 박스 잠금");
+  allDay.checked = false; fire(win, allDay, "change");
+  assert.equal(start.readOnly, false, "해제 시 다시 편집 가능");
+});
+
 // ── ④ dirty 폼: 변경 시 저장 강조·힌트, 원복 시 해제 ──
 test("dirty 폼: 변경 → 힌트·강조, 원복 → 해제(__hasDirty 연동)", async () => {
   const html = `

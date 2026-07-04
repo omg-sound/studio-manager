@@ -152,9 +152,12 @@
 
   function initSessionForm(form) {
   var dateInput = form.querySelector("[data-session-date]");
-  var grid = form.querySelector("[data-start-grid]");
   var rateSel = form.querySelector("[data-rate-select]");
-  var customStart = form.querySelector("[data-custom-start]");
+  var startInput = form.querySelector("[data-start-input]"); // 구글식 시작 시간 타이핑 박스(name=start_time, 2026-07-04 그리드 폐지)
+  var endInput = form.querySelector("[data-end-input]"); // 종료 시간 박스(name=end_time) — 슬라이더와 양방향 동기
+  var endDate = form.querySelector("[data-end-date]"); // 종료 날짜(자동 표시 — 자정 넘김이면 +1일, 저장 필드 아님)
+  var allDay = form.querySelector("[data-all-day]"); // 종일 토글 — 운영시간 전체로 시작·소요 세팅
+  var timeBlock = form.querySelector("[data-time-block]"); // data-studio-open/close(운영시간) 보유
   var preview = form.querySelector("[data-end-preview]");
   var slider = form.querySelector("[data-duration-slider]");
   var durLabel = form.querySelector("[data-duration-label]");
@@ -190,18 +193,7 @@
     var def = isRec ? baseMinutes() : proDefaultMinutes();
     if (def > 0) setDuration(def);
   }
-  function checkedValue(name) {
-    var r = form.querySelector('input[name="' + name + '"]:checked');
-    return r ? r.value : "";
-  }
-  function currentStart() {
-    if (customStart && customStart.value) return customStart.value;
-    return checkedValue("start_time");
-  }
-  function clearGridStart() {
-    if (!grid) return;
-    Array.prototype.forEach.call(grid.querySelectorAll('input[name="start_time"]'), function (r) { r.checked = false; });
-  }
+  function currentStart() { return startInput ? startInput.value : ""; }
   function addMin(hhmm, mins) {
     var p = String(hhmm).split(":");
     if (p.length !== 2) return "";
@@ -231,15 +223,7 @@
     if (durLabel) durLabel.textContent = fmtDuration(durationMinutes());
     updatePreview();
   }
-  // 시작 시간 가용성: 예약된(busy) 슬롯을 '주황(slot-busy)'으로 표시 — 비활성이 아니라 선택 가능(확인 후 등록).
-  function applyStartState() {
-    if (grid) Array.prototype.forEach.call(grid.querySelectorAll("input[data-slot]"), function (inp) {
-      var b = !!busy[inp.getAttribute("data-slot")];
-      var span = inp.nextElementSibling; // 라디오 다음 형제 = 표시용 span
-      if (span) span.classList.toggle("slot-busy", b);
-    });
-    updateConflictWarn();
-  }
+  // (그리드 폐지 — busy 슬롯은 겹침 경고(overlapDetected) 계산에만 쓴다)
   // 시작(HH:MM) → 자정 기준 분. 무효면 null.
   function toMin(hhmm) {
     var p = String(hhmm || "").split(":");
@@ -307,19 +291,27 @@
       b.style.transform = "translateX(" + t + ")";
     });
   }
+  // YYYY-MM-DD에 일수 더하기(종료 날짜 자동 표시용).
+  function addDays(ymd, days) {
+    var t = new Date(String(ymd) + "T00:00:00"); // 로컬 자정 기준
+    if (isNaN(t)) return ymd || "";
+    t.setDate(t.getDate() + days);
+    // toISOString은 UTC 변환이라 KST에서 하루 밀림 — 로컬 파트로 조립.
+    var mm = t.getMonth() + 1, dd = t.getDate();
+    return t.getFullYear() + "-" + (mm < 10 ? "0" : "") + mm + "-" + (dd < 10 ? "0" : "") + dd;
+  }
   function updatePreview() {
-    if (!preview) return;
     var start = currentStart();
     var mins = durationMinutes();
-    if (start && mins > 0) {
-      preview.textContent = "예상 종료: " + addMin(start, mins) + " (" + fmtHours(mins / 60) + "시간)";
-    } else {
-      preview.textContent = "";
-    }
+    var sMin = toMin(start);
+    if (preview) preview.textContent = start && mins > 0 ? "예상 종료: " + addMin(start, mins) + " (" + fmtHours(mins / 60) + "시간)" : "";
+    // 종료 박스·종료 날짜 자동 동기(구글식): 시작+소요 → 종료. 자정 넘김이면 종료 날짜 +1일.
+    if (endInput && sMin != null && mins > 0 && document.activeElement !== endInput) endInput.value = addMin(start, mins);
+    if (endDate && dateInput) endDate.value = sMin != null && mins > 0 && sMin + mins >= 1440 ? addDays(dateInput.value, 1) : dateInput.value || "";
     updateConflictWarn();
   }
   function refreshAvailability() {
-    if (!grid || !dateInput || !dateInput.value) return;
+    if (!dateInput || !dateInput.value) return;
     // 편집 폼은 자기 세션을 exclude(자기 일정을 충돌로 보지 않음)하고, 선택한 룸으로 범위를 좁혀 조회(같은 룸만 충돌).
     // 둘 다 없으면(추가 폼·룸 미선택) 파라미터를 생략해 기존 동작 유지.
     var url = "/sessions/availability?date=" + encodeURIComponent(dateInput.value);
@@ -332,7 +324,6 @@
         if (!data || !data.busy) return;
         busy = {};
         data.busy.forEach(function (s) { busy[s] = true; });
-        applyStartState();
         updatePreview();
       })
       .catch(function () {});
@@ -363,18 +354,36 @@
     });
   });
   window.addEventListener("resize", positionTicks); // 모바일↔데스크톱 전환 시 Pro 눈금 재배치(모바일=흐름·데스크톱=위치정렬)
-  // 직접입력 시작 시간: 숫자만 받아 HH:MM 자동 포맷("1425"→"14:25"). 입력 시 그리드 선택 해제(서버도 직접입력 우선).
-  if (customStart) customStart.addEventListener("input", function () {
-    var digits = customStart.value.replace(/[^0-9]/g, "").slice(0, 4);
-    customStart.value = digits.length >= 3 ? digits.slice(0, 2) + ":" + digits.slice(2) : digits;
-    if (customStart.value) clearGridStart();
-    updatePreview();
-  });
-  form.addEventListener("change", function (e) {
-    if (!e.target) return;
-    if (e.target.name === "start_time") {
-      if (customStart) customStart.value = ""; // 그리드 고르면 직접입력 칸 비움(항상 노출)
+  // 시간 박스 공용: 숫자만 받아 HH:MM 자동 포맷("1425"→"14:25").
+  function attachTimeFormat(el, onValid) {
+    if (!el) return;
+    el.addEventListener("input", function () {
+      var digits = el.value.replace(/[^0-9]/g, "").slice(0, 4);
+      el.value = digits.length >= 3 ? digits.slice(0, 2) + ":" + digits.slice(2) : digits;
+      if (onValid && toMin(el.value) != null) onValid();
       updatePreview();
+    });
+  }
+  attachTimeFormat(startInput); // 시작 변경 → 소요 유지, 종료 자동 재계산(updatePreview)
+  // 종료 입력 → 소요 역산(자정 넘김 = 종료<시작이면 +24h). 슬라이더·직접입력과 양방향 동기.
+  attachTimeFormat(endInput, function () {
+    var sMin = toMin(currentStart()), eMin = toMin(endInput.value);
+    if (sMin == null || eMin == null) return;
+    var diff = eMin - sMin;
+    if (diff <= 0) diff += 1440; // 야간(자정 넘김)
+    setDuration(diff);
+  });
+  // 종일 = 운영시간 전체(시작=오픈, 소요=오픈~마감). 체크 중엔 시간 박스 잠금(구글처럼 흐리게), 해제 시 다시 편집.
+  if (allDay) allDay.addEventListener("change", function () {
+    var on = allDay.checked;
+    [startInput, endInput].forEach(function (el) { if (el) { el.readOnly = on; el.classList.toggle("opacity-60", on); } });
+    if (on && timeBlock) {
+      var open = timeBlock.getAttribute("data-studio-open") || "";
+      var close = timeBlock.getAttribute("data-studio-close") || "";
+      var oMin = toMin(open), cMin = toMin(close);
+      if (startInput && open) startInput.value = open;
+      if (oMin != null && cMin != null) setDuration(cMin > oMin ? cMin - oMin : cMin - oMin + 1440);
+      else updatePreview();
     }
   });
   // 겹침이 감지되면 제출 직전 확인 → 승인 시 override_conflict=1로 그대로 등록(서버가 겹침 허용). 취소면 제출 중단.
@@ -391,7 +400,6 @@
     }
   });
 
-  applyStartState();
   updateProAvailability();
   syncRecFields();
   if (durationMinutes() === 0) applyTypeDefault(); // 새 세션(소요 미설정)이면 종류 기본값으로 시작(편집=저장값 유지)
