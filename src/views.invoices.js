@@ -203,7 +203,7 @@ function payerName(inv) {
 }
 
 /** 목록 행(링크 카드). compact=프로젝트 상세 청구 탭용 — 클릭하면 그 자리에서 펼침(페이지 이동 없음). */
-function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnTo = "", openId = null } = {}) {
+function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnTo = "", openId = null, f = "" } = {}) {
   const bal = balanceOf(inv);
   const pname = payerName(inv);
   const sub = compact
@@ -252,12 +252,27 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
     ${balLine}
     <div class="text-[11px] text-muted">${dueLine}</div>`;
+  // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — 계산서 발행 완료 / 입금완료 2버튼(사용자 요청, 청구서 발행 권한자만).
+  const retPath = `/invoices${f ? "?f=" + encodeURIComponent(f) : ""}`;
+  const retHidden = `<input type="hidden" name="return" value="${esc(retPath)}" />`;
+  const actions = isAdmin
+    ? `<details class="group">
+         <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
+           <span>상태 처리</span>${detailsChevron()}
+         </summary>
+         <div class="flex flex-wrap gap-2 border-t border-border/40 bg-elevated/40 px-4 py-3">
+           <form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="계산서 발행" />${retHidden}<button class="btn-ghost btn-sm" type="submit">계산서 발행 완료</button></form>
+           <form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="입금완료" />${retHidden}<button class="btn-primary btn-sm" type="submit">입금완료</button></form>
+         </div>
+       </details>`
+    : "";
   return `
     <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
       <a href="/invoices/${inv.id}" class="row-link flex items-start justify-between gap-4 px-4 py-3">
         <div class="min-w-0">${left}</div>
         <div class="shrink-0 pl-2 text-right">${right}</div>
       </a>
+      ${actions}
     </div>`;
 }
 

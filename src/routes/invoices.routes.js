@@ -130,7 +130,7 @@ router.get("/", requireBilling, (req, res) => {
     : "";
 
   const list = rows.length
-    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i)).join("")}</div>`
+    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i, { isAdmin: admin, f })).join("")}</div>`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
