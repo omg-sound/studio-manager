@@ -1552,6 +1552,26 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       input.click();
     });
 
+    // '파일 찾기' 버튼(폼 내부, 드롭존 형제) → 파일 선택 대화상자(윈도우 크롬 등 드래그 안 되는 환경 대안)
+    var form0 = zone.closest("form");
+    var pick = form0 && form0.querySelector("[data-dropzone-pick]");
+    if (pick) pick.addEventListener("click", function () { input.click(); });
+
+    // 붙여넣기(Ctrl+V): 필드에 포커스한 뒤 이미지/파일 붙여넣기 → 즉시 업로드(드래그앤드롭 대안).
+    function handlePaste(e) {
+      var cd = e.clipboardData || window.clipboardData;
+      if (!cd) return;
+      var f = null;
+      if (cd.files && cd.files.length) f = cd.files[0];
+      else if (cd.items) { for (var i = 0; i < cd.items.length; i++) { if (cd.items[i].kind === "file") { f = cd.items[i].getAsFile(); break; } } }
+      if (!f) return;
+      e.preventDefault();
+      try { var dt = new DataTransfer(); dt.items.add(f); input.files = dt.files; } catch (_e) { /* DataTransfer 미지원 */ }
+      if (label) label.textContent = (f.name || "붙여넣은 이미지") + " · 업로드 중…";
+      autoSubmit();
+    }
+    zone.addEventListener("paste", handlePaste); // 포커스된 드롭존 필드에서 붙여넣기(버블링 포함)
+
     // 드래그 시 시각적 하이라이트
     function highlight(on) {
       if (display) display.style.boxShadow = on ? "0 0 0 2px var(--color-primary, currentColor)" : "";

@@ -631,11 +631,12 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
       <form enctype="multipart/form-data" method="post" action="/clients/${c.id}/files/${key}" class="flex items-center gap-2">
         <div class="flex-1" data-dropzone>
           <input type="file" name="file" accept="image/png,image/jpeg,application/pdf" class="sr-only" />
-          <div class="input flex cursor-pointer select-none items-center py-2 text-sm text-muted" data-dropzone-display>
-            <span data-dropzone-label>${existing && ok ? "다른 파일로 교체" : "파일 끌어놓기 또는 클릭"}</span>
+          <div class="input flex cursor-pointer select-none items-center py-2 text-sm text-muted" data-dropzone-display tabindex="0" role="button" aria-label="파일 찾기 또는 붙여넣기(Ctrl+V)">
+            <span data-dropzone-label>${existing && ok ? "다른 파일로 교체 — 클릭 또는 붙여넣기(Ctrl+V)" : "클릭해서 파일 찾기 · 또는 붙여넣기(Ctrl+V)"}</span>
           </div>
         </div>
-        <button class="btn-ghost shrink-0" type="submit">업로드</button>
+        <button class="btn-ghost shrink-0" type="button" data-dropzone-pick>파일 찾기</button>
+        <noscript><button class="btn-ghost shrink-0" type="submit">업로드</button></noscript>
       </form>
     </div>`;
   }).join("");
