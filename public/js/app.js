@@ -359,8 +359,10 @@
     else updatePreview(); // 표현 불가(0 이하·24h 이상) → canonical로 되돌림
   });
   if (roomSel) roomSel.addEventListener("change", refreshAvailability); // 룸 변경 시 해당 룸 기준으로 가용성 재조회(날짜 변경과 동일)
-  if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); applyTypeDefault(); updatePreview(); }); // 녹음 단가 바뀌면 슬라이더 기본=새 1Pro
-  if (sessionTypeSel) sessionTypeSel.addEventListener("change", function () { syncRecFields(); updateProAvailability(); applyTypeDefault(); }); // 종류 바뀌면 단가 항목/버튼 노출 + 슬라이더 기본값(녹음=1Pro·그 외=기본시간)
+  // 단가 항목 선택은 소요시간을 바꾸지 않는다(시간 흐름 우선·사용자 요청 2026-07-05). 1Pro는 프리셋 버튼으로 수동 적용.
+  if (rateSel) rateSel.addEventListener("change", function () { updateProAvailability(); updatePreview(); }); // Pro 눈금 위치만 갱신
+  // 세션 종류 변경: 단가 옵션/버튼 노출 갱신. 소요는 이미 잡혀 있으면(사용자 시간 흐름) 건드리지 않고, 미설정일 때만 기본값 채움.
+  if (sessionTypeSel) sessionTypeSel.addEventListener("change", function () { syncRecFields(); updateProAvailability(); if (durationMinutes() === 0) applyTypeDefault(); });
   // 슬라이더 드래그(30분 단위) → curDur.
   if (slider) slider.addEventListener("input", function () { setDuration(parseInt(slider.value, 10) || 0); });
   // 1~4Pro 프리셋 → 기준시간(1Pro)×N으로 슬라이더·직접입력 채움("pro3"→base×3).
