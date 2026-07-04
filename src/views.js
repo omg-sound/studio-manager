@@ -503,7 +503,10 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = [], entityLabel = "담당자", initialName = "" } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, entityLabel = "담당자", initialName = "" } = {}) {
+  // companyOptions 미전달 시 업체 목록을 스스로 조회 — '새 담당자 등록' 모달 회사칸이 조용히 평문이 되던 반복 실수 차단
+  // (세션 디렉터·업체 대표자에서 각각 재발한 이력, 2026-07-04 기본값화. 명시 전달 시 그대로 사용.)
+  if (companyOptions == null) companyOptions = require("./data").partyOptions({ role: "company" });
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
   // initialName: 선택 id 없이 이름 텍스트만 있는 레거시 값(예: 업체 대표자 owner_name) 표시·보존용 — sel 없을 때 초기값.
   const shown = sel ? sel.name : initialName || "";
