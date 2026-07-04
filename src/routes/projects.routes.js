@@ -883,6 +883,7 @@ function artistCombo(p = {}) {
             <script type="application/json" data-am-agency-options>${JSON.stringify(companies.map((co) => ({ id: co.id, name: co.name }))).replace(/</g, "\\u003c")}</script>
           </div>
           <div><label class="label">전화 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" data-am-phone autocomplete="off" /></div>
+          <div><label class="label">이메일 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" type="email" data-am-email autocomplete="off" /></div>
           <div class="flex items-center gap-2 pt-1">
             <button type="button" class="btn-primary" data-am-save>등록</button>
             <button type="button" class="btn-ghost" data-am-cancel>취소</button>

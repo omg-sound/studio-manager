@@ -1015,10 +1015,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var mName = modal.querySelector("[data-am-name]"), mGroup = modal.querySelector("[data-am-group]"),
           mRealWrap = modal.querySelector("[data-am-real-wrap]"), mReal = modal.querySelector("[data-am-real]"),
           mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
-          mAgencyInput = modal.querySelector("[data-am-agency-input]"),
+          mAgencyInput = modal.querySelector("[data-am-agency-input]"), mEmail = modal.querySelector("[data-am-email]"),
           mErr = modal.querySelector("[data-am-err]");
       mName.value = input.value.trim(); mGroup.checked = false;
-      if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = "";
+      if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = ""; if (mEmail) mEmail.value = "";
       mErr.classList.add("hidden"); mRealWrap.classList.remove("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex");
       hide(); mName.focus();
@@ -1033,6 +1033,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       mSave.addEventListener("click", function () {
         var mName = modal.querySelector("[data-am-name]"), mReal = modal.querySelector("[data-am-real]"),
             mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
+            mEmail = modal.querySelector("[data-am-email]"),
             mAgencyInput = modal.querySelector("[data-am-agency-input]"), mErr = modal.querySelector("[data-am-err]");
         var agName = mAgencyInput ? mAgencyInput.value.trim() : ""; // 모달에서 입력·선택한 소속사명 → 등록 후 프로젝트 소속사 필드에 반영
         var nm = mName.value.trim();
@@ -1043,6 +1044,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (!mGroup.checked && mReal && mReal.value.trim()) body.append("real_name", mReal.value.trim());
         if (mAgency && mAgency.value) body.append("agency_id", mAgency.value);
         if (mPhone && mPhone.value.trim()) body.append("phone", mPhone.value.trim());
+        if (mEmail && mEmail.value.trim()) body.append("email", mEmail.value.trim());
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
