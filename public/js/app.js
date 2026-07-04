@@ -166,7 +166,7 @@
   var showWhenRec = form.querySelectorAll('[data-show-when="rec"]');
   var conflictWarn = form.querySelector("[data-conflict-warn]");
   var overrideField = form.querySelector("[data-override-conflict]");
-  var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 840 : 840;
+  var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 960 : 960;
   var busy = {};
 
   var durGroup = form.querySelector("[data-duration-group]");
@@ -274,9 +274,12 @@
   // Pro 눈금을 슬라이더 값 위치에 맞춰 재배치: 1Pro=기준시간, 2Pro=×2…(기준=녹음 단가 기준시간, 없으면 스튜디오 기본).
   // 양 끝(0%/100%)은 잘리지 않게 정렬 기준(translateX)을 바꾼다. 서버 초기 렌더와 동일 규칙.
   function positionTicks() {
+    // 모바일(<640px): 절대배치 안 함 — 인라인 위치 제거하고 정적 흐름(flex)으로 앞에서부터 정렬(사용자 요청).
+    var desktop = !window.matchMedia || window.matchMedia("(min-width: 640px)").matches;
     var base = baseMinutes() || proDefaultMinutes();
-    if (!(base > 0)) return;
     Array.prototype.forEach.call(presets, function (b) {
+      if (!desktop) { b.style.left = ""; b.style.transform = ""; return; }
+      if (!(base > 0)) return;
       var mult = parseInt(String(b.getAttribute("data-duration-preset") || "pro1").replace("pro", ""), 10) || 1;
       var pos = Math.min(100, (base * mult / SLIDER_MAX) * 100);
       var t = pos <= 5 ? "0" : pos >= 95 ? "-100%" : "-50%";
@@ -339,7 +342,8 @@
       setDuration(base * mult);
     });
   });
-  // 그리드 '직접입력' 버튼 → 그 자리(같은 셀)를 시간 입력칸으로 교체(버튼 숨김·입력 노출·포커스).
+  window.addEventListener("resize", positionTicks); // 모바일↔데스크톱 전환 시 Pro 눈금 재배치(모바일=흐름·데스크톱=위치정렬)
+  // (레거시) 그리드 '직접입력' 버튼 토글 — 현재 직접입력은 박스 자체에 노출되어 버튼 없음. 있으면만 동작.
   if (customStartToggle) customStartToggle.addEventListener("click", function () {
     customStartToggle.hidden = true;
     if (customStart) { customStart.hidden = false; customStart.focus(); }
@@ -356,8 +360,8 @@
   form.addEventListener("change", function (e) {
     if (!e.target) return;
     if (e.target.name === "start_time") {
-      if (customStart) { customStart.value = ""; customStart.hidden = true; } // 그리드 고르면 직접입력 칸 닫고
-      if (customStartToggle) customStartToggle.hidden = false; // '직접입력' 버튼 복원
+      if (customStart) customStart.value = ""; // 그리드 고르면 직접입력 칸 비움(항상 노출)
+      if (customStartToggle) customStartToggle.hidden = false; // (레거시 토글 버튼 있으면 복원 — 현재 미사용)
       updatePreview();
     }
   });

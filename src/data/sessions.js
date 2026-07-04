@@ -55,7 +55,7 @@ function addMinutesToHHMM(hhmm, mins) {
 /**
  * 종료시간 결정: 소요시간(custom_hours)이 있으면 시작+길이로 계산, 없으면 입력된 end_time 사용.
  * 폼은 항상 duration_mode=custom + custom_hours를 전송한다(슬라이더/프리셋이 custom_hours를 채움).
- * custom_hours는 14시간(840분·4Pro) 상한으로 클램프 — addMinutesToHHMM의 %1440 감김으로 종료시각이 왜곡되지 않게.
+ * custom_hours는 16시간(960분) 상한으로 클램프 — addMinutesToHHMM의 %1440 감김으로 종료시각이 왜곡되지 않게.
  */
 function resolveEndTime(input, start) {
   if (!start || String(input.duration_mode || "") !== "custom") {
@@ -63,7 +63,7 @@ function resolveEndTime(input, start) {
   }
   const hours = parseFloat(input.custom_hours);
   if (!(hours > 0)) return cleanTime(input.end_time);
-  const mins = Math.min(Math.round(hours * 60), 840); // 상한 14시간(4Pro)
+  const mins = Math.min(Math.round(hours * 60), 960); // 상한 16시간
   return addMinutesToHHMM(start, mins);
 }
 

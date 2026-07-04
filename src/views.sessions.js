@@ -62,22 +62,18 @@ function startSlotGrid(current) {
         <span class="flex min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary peer-checked:font-semibold peer-checked:ring-1 peer-checked:ring-primary peer-disabled:cursor-not-allowed peer-disabled:border-border peer-disabled:bg-bg peer-disabled:text-muted/40 peer-disabled:line-through">${t}</span>
       </label>`
   ).join("");
-  // 그리드 맨 뒤 '직접입력' 셀 — 버튼을 누르면 그 자리(같은 셀)가 바로 시간 입력칸으로 바뀐다(app.js가 토글).
-  // 콜론은 자동 삽입("1425"→"14:25"). 편집 시 그리드 밖 값이면 처음부터 입력칸을 노출.
-  const customCell = `<div data-custom-start-cell>
-      <button type="button" class="flex w-full min-h-[2.5rem] items-center justify-center rounded-md border border-border px-1 py-1.5 text-center text-sm hover:bg-elevated disabled:opacity-40 disabled:cursor-not-allowed" data-custom-start-toggle ${showCustom ? "hidden" : ""}>직접입력</button>
-      <input class="input min-h-[2.5rem] w-full px-1 py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="start_time_custom" data-custom-start
-        placeholder="시:분" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
-        aria-label="시작 시간 직접입력(시:분)" value="${showCustom ? esc(current) : ""}" ${showCustom ? "" : "hidden"} />
-    </div>`;
+  // 그리드 맨 뒤 '직접입력' 셀 — 박스 자체에 바로 시간 입력(버튼 토글 없음). 콜론 자동 삽입("1400"→"14:00", app.js).
+  const customCell = `<input class="input min-h-[2.5rem] w-full px-1 py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" name="start_time_custom" data-custom-start
+      placeholder="직접입력" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" autocomplete="off" maxlength="5"
+      aria-label="시작 시간 직접입력(시:분, 1400→14:00)" value="${showCustom ? esc(current) : ""}" />`;
   return `<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-6" data-start-grid>${cells}${customCell}</div>`;
 }
 
 /** 소요시간 버튼([1Pro][2Pro][직접입력]) — 종료는 서버에서 시작+길이로 계산. */
-// 소요 시간 = 슬라이더(30분 단위·0~14시간)가 주 입력. 아래 1~4Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
+// 소요 시간 = 슬라이더(30분 단위·0~16시간)가 주 입력. 아래 1~4Pro 프리셋·직접입력(시간)은 슬라이더를 세팅한다.
 // 전송값은 custom_hours + duration_mode=custom(hidden) → 서버 resolveEndTime이 그대로 산정(슬라이더 자체는 미전송 UI).
 // minutesBetween은 ../lib/date 공용 유틸을 사용한다(중복 정의 제거).
-const DURATION_SLIDER_MAX = 840; // 슬라이더 최대(분) = 14시간. Pro 눈금 위치 계산의 기준(app.js SLIDER_MAX와 동일).
+const DURATION_SLIDER_MAX = 960; // 슬라이더 최대(분) = 16시간. Pro 눈금 위치 계산의 기준(app.js SLIDER_MAX와 동일).
 function durationButtons(initMinutes = 0) {
   const m = Number(initMinutes) > 0 ? Math.round(Number(initMinutes)) : 0;
   const hours = m > 0 ? (m % 60 === 0 ? String(m / 60) : (m / 60).toFixed(1)) : "";
@@ -85,18 +81,19 @@ function durationButtons(initMinutes = 0) {
   // Pro 프리셋을 슬라이더 트랙 위 '눈금'으로 절대배치: 1Pro=기준시간, 2Pro=×2… 위치에 표시
   // (예: 기준 3시간30분이면 1Pro가 슬라이더 3시간30분 지점). 인라인 style은 CSP(styleSrc unsafe-inline 없음)에 막히므로
   // 서버는 Tailwind 위치 클래스로 기본값(210분 기준 25/50/75/100%)만 렌더하고, app.js가 CSSOM으로 실제 기준시간에 맞춰 재배치한다.
-  const TICK_POS = { 1: "left-1/4 -translate-x-1/2", 2: "left-1/2 -translate-x-1/2", 3: "left-3/4 -translate-x-1/2", 4: "left-full -translate-x-full" };
+  // 데스크톱(sm+): Pro를 슬라이더 위치에 맞춰 절대배치(app.js가 기준시간으로 재배치). 모바일: 절대배치 없이 앞에서부터 흐름 정렬(flex).
+  const TICK_POS = { 1: "sm:left-1/4 sm:-translate-x-1/2", 2: "sm:left-1/2 sm:-translate-x-1/2", 3: "sm:left-3/4 sm:-translate-x-1/2", 4: "sm:left-full sm:-translate-x-full" };
   const tickBtn = (n) =>
-    `<button type="button" class="absolute top-0 ${TICK_POS[n]} whitespace-nowrap rounded-md border border-border bg-bg px-2 py-1 text-xs hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="pro${n}">${n}Pro</button>`;
+    `<button type="button" class="static top-0 sm:absolute sm:top-0 ${TICK_POS[n]} whitespace-nowrap rounded-md border border-border bg-bg px-2 py-1 text-xs hover:border-primary disabled:cursor-not-allowed disabled:text-muted/40" data-duration-preset="pro${n}">${n}Pro</button>`;
   return `
     <div data-duration-group data-pro-default="${pro}">
       <div class="relative">
         <input type="range" min="0" max="${DURATION_SLIDER_MAX}" step="30" value="${Math.min(m, DURATION_SLIDER_MAX)}" class="w-full cursor-pointer accent-primary" data-duration-slider aria-label="소요 시간" />
-        <div class="relative mt-1 h-8" data-duration-ticks data-show-when="rec">${tickBtn(1)}${tickBtn(2)}${tickBtn(3)}${tickBtn(4)}</div>
+        <div class="relative mt-1 flex h-8 flex-wrap items-center gap-1.5 sm:block" data-duration-ticks data-show-when="rec">${tickBtn(1)}${tickBtn(2)}${tickBtn(3)}${tickBtn(4)}</div>
       </div>
       <div class="mt-1 flex items-center justify-between text-xs">
         <span class="font-medium text-primary" data-duration-label>설정 안 함</span>
-        <span class="text-muted">0 ~ 14시간 · 30분 단위</span>
+        <span class="text-muted">0 ~ 16시간 · 30분 단위</span>
       </div>
       <div class="mt-2 flex items-center justify-end gap-1.5">
         <input class="input w-20 py-1.5 text-sm" type="number" name="custom_hours" step="0.5" min="0" placeholder="직접" value="${hours}" data-custom-hours />
@@ -240,15 +237,20 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
   if (s.memo) infoLines.push(esc(s.memo));
   const sub = infoLines.map((l) => `<div class="truncate">${l}</div>`).join("");
   // 녹음 세션은 청구 탭에서 직접 청구된다(곡·콘텐츠/버튼 없음). 여기선 예상액·청구상태만 표시.
-  const billStatus = s.invoiced
-    ? ' · <span class="text-muted">청구됨</span>'
+  // 세 항목(예상 청구액 / 소요·종류 / 청구상태)을 flex-wrap 묶음으로 — 데스크톱 1줄, 좁아지면 항목 단위로 2·3줄(각 항목은 whitespace-nowrap로 안 찌그러짐).
+  const billStatusChunk = s.invoiced
+    ? '<span class="whitespace-nowrap text-muted">청구됨</span>'
     : s.billed_task_id
-      ? ' · <span class="text-muted">작업 생성됨</span>'
+      ? '<span class="whitespace-nowrap text-muted">작업 생성됨</span>'
       : s.status === "완료"
-        ? ' · <span class="text-success">청구 가능</span>'
-        : ' · <span class="text-muted">완료 시 청구</span>';
+        ? '<span class="whitespace-nowrap text-success">청구 가능</span>'
+        : '<span class="whitespace-nowrap text-muted">완료 시 청구</span>';
   const billLine = s.billing
-    ? `<div class="mt-0.5 text-xs text-success tabular">예상 청구액 ${formatKRW(s.billing.amount)} <span class="text-muted">(${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)})</span>${billStatus}</div>`
+    ? `<div class="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 break-keep text-xs tabular">
+         <span class="whitespace-nowrap text-success">예상 청구액 ${formatKRW(s.billing.amount)}</span>
+         <span class="break-keep text-muted">${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분 · ${esc(s.billing.item.name)}</span>
+         ${billStatusChunk}
+       </div>`
     : "";
   // 청구 결핍 사유: 완료된 녹음 세션이 단가항목/시간이 없어 산정 불가하면 침묵하지 않고 사유를 옅게 안내(미청구·미전환 한정).
   const billReason = !s.billing && s.session_type === "녹음" && s.status === "완료" && !s.invoiced && !s.billed_task_id
@@ -260,7 +262,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
           <div class="flex flex-wrap items-center gap-2">
             ${typeBadge}
             <span class="font-medium tabular">${esc(formatYmdShort(s.session_date))}</span>
-            <span class="text-xs text-muted tabular">${timeLabel(s)}${dday}</span>
+            <span class="text-sm text-muted tabular">${timeLabel(s)}${dday}</span>
           </div>
           <div class="mt-0.5 space-y-0.5 text-xs text-muted">${sub}</div>
           ${billLine}
@@ -283,7 +285,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
   const completeToggle = s.status === "예정" || s.status === "완료"
     ? `<form method="post" action="/sessions/${s.id}/status">
             <input type="hidden" name="status" value="${isDone ? "예정" : "완료"}" />
-            <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "○"}</span>완료</button>
+            <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "−"}</span>완료</button>
           </form>`
     : "";
   return `
