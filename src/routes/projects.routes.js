@@ -54,7 +54,7 @@ const {
   getStudioInfo,
   getStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo, tabBar: renderTabs, searchBox } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo, companyCombo, tabBar: renderTabs, searchBox } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -894,62 +894,7 @@ function artistCombo(p = {}) {
     </div>`;
 }
 
-/**
- * 업체(소속사/레이블·제작사/운영사) 콤보 — 아티스트 콤보와 동일 UX(검색 + 새로 등록 모달).
- * 값은 업체명 TEXT(fieldName). 저장 시 ensureCompanyParty가 이름으로 찾/생성(중복 방지). CSP-safe(app.js [data-company-combo]).
- * @param {string} fieldName artist_company | production_company
- * @param {string} value 현재 업체명
- * @param {string} roleKey 기본 역할("소속사/레이블" | "제작사") — 모달 체크박스 기본값
- * @param {string} label 표시 라벨(소속사/레이블 · 제작사/운영사)
- */
-function companyCombo(fieldName, value, roleKey, label) {
-  const opts = partyOptions({ role: "company" }).map((o) => ({ name: o.name, sub: o.sub || "" }));
-  const json = JSON.stringify(opts).replace(/</g, "\\u003c");
-  const ownerOpts = partyOptions({ role: "person" }).map((o) => ({ id: o.id, name: o.name })); // 대표자 미니콤보(사람 검색)
-  const ownerJson = JSON.stringify(ownerOpts).replace(/</g, "\\u003c");
-  const isProd = roleKey === "제작사";
-  return `
-    <div data-company-combo>
-      <input type="hidden" name="${fieldName}" value="${esc(value || "")}" data-cc-hidden />
-      <div class="relative">
-        <!-- 보이는 입력은 name 없음(Chrome 조직 자동완성이 콤보 드롭다운 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js 동기화 -->
-        <input class="input pr-9" type="text" value="${esc(value || "")}" data-cc-input autocomplete="off"
-          role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(label)} — 검색 또는 새로 등록" />
-        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-cc-pop role="listbox"></div>
-      </div>
-      <script type="application/json" data-cc-options>${json}</script>
-      <!-- 간이 등록 모달(name 없음 → 프로젝트 폼과 분리, app.js가 fetch로 생성). -->
-      <div data-cc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
-        <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
-          <div class="font-display text-lg font-semibold">새 ${esc(label)} 등록</div>
-          <div><label class="label">업체명</label><input class="input" data-cc-name placeholder="상호(업체명)" /></div>
-          <div><label class="label">역할 <span class="text-xs font-normal text-muted">(겸업 가능)</span></label>
-            <div class="flex flex-wrap gap-4">
-              <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" data-cc-agency ${isProd ? "" : "checked"} class="h-4 w-4 rounded border-border text-primary" /> 소속사/레이블</label>
-              <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" data-cc-prod ${isProd ? "checked" : ""} class="h-4 w-4 rounded border-border text-primary" /> 제작사/운영사</label>
-            </div>
-          </div>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div><label class="label">사업자등록번호</label><input class="input" data-cc-biz placeholder="000-00-00000" autocomplete="off" /></div>
-            <div><label class="label">대표자</label>
-              <input type="hidden" data-cc-owner-id value="" />
-              <div class="relative">
-                <input class="input" data-cc-owner autocomplete="off" placeholder="이름 검색 또는 새로 등록" role="combobox" aria-expanded="false" aria-autocomplete="list" />
-                <div class="absolute left-0 right-0 z-10 mt-1 hidden max-h-40 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-cc-owner-pop role="listbox"></div>
-              </div>
-              <script type="application/json" data-cc-owner-options>${ownerJson}</script>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 pt-1">
-            <button type="button" class="btn-primary" data-cc-save>등록</button>
-            <button type="button" class="btn-ghost" data-cc-cancel>취소</button>
-            <span class="ml-1 hidden text-xs text-danger" data-cc-err></span>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
+// companyCombo는 views.js 공용 헬퍼로 이동(연락처 폼과 공유, 2026-07-04).
 
 /** 내부 담당자(프로젝트 매니저) 선택 — 하우스/외주 엔지니어 목록. 고객측 담당자(personCombo)와 별개 필드. */
 function managerSelect(selectedId) {

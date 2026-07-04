@@ -28,7 +28,7 @@ const {
 } = require("../data");
 const people = require("../people");
 const { asyncHandler } = require("../lib/async"); // async 라우트 예외를 전역 핸들러로 전달(People API throw 시 요청 행 방지)
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
 
 const router = express.Router();
 
@@ -459,9 +459,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
-        <div><label class="label">회사</label><input class="input" name="company" value="${esc(c.company || "")}" placeholder="소속 회사명 · 클라이언트에서 검색" list="contact-company-clients" autocomplete="off" />
-          <datalist id="contact-company-clients">${clients.map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
-        </div>
+        <div><label class="label">회사</label>${companyCombo("company", c.company || "", "소속사/레이블", "회사")}</div>
         <div><label class="label">직책</label><input class="input" name="job_title" value="${esc(c.job_title || "")}" placeholder="예: 대표 · 팀장" /></div>
         <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
       </div>
