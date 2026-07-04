@@ -537,7 +537,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
           ${simpleModal ? `<p class="text-xs text-muted">이 업체의 ${esc(entityLabel)}로 등록됩니다 — 회사·직책은 자동 지정.</p>` : ""}
           <div><label class="label">이름</label><input class="input" data-pc-name placeholder="${esc(entityLabel)} 이름" /></div>
           ${simpleModal ? "" : `<div><label class="label">활동명 <span class="text-xs font-normal text-muted">(입력 시 아티스트로도 등록)</span></label><input class="input" data-pc-activity autocomplete="off" placeholder="아티스트 활동명(선택)" /></div>`}
-          <div class="grid gap-3 sm:grid-cols-2">
+          <div class="grid gap-3 ${simpleModal ? "" : "sm:grid-cols-2"}">
             <div><label class="label">전화</label><input class="input" data-pc-phone autocomplete="off" /></div>
             <div><label class="label">이메일</label><input class="input" type="email" data-pc-email autocomplete="off" /></div>
           </div>
