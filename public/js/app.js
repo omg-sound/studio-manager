@@ -1846,3 +1846,58 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     pop.addEventListener("mousemove", function (e) { var a = e.target.closest("a"); if (!a) return; var rs = pop.children; for (var k = 0; k < rs.length; k++) if (rs[k] === a) { setHi(k); break; } });
   });
 })();
+
+// 장소 주소 자동완성([data-place-suggest], 2026-07-05): Google Places 백엔드 프록시(/sessions/place-suggest).
+// 검색 typeahead와 달리 '이동'이 아니라 선택 시 입력칸을 채운다(fill 모드). 미설정(키 없음)이면 서버가 []라 조용히 무동작.
+(function () {
+  "use strict";
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-place-suggest]"), function (root) {
+    var input = root.querySelector("[data-place-input]");
+    var pop = root.querySelector("[data-place-pop]");
+    var url = root.getAttribute("data-place-url");
+    if (!input || !pop || !url) return;
+    var items = [], hi = -1, timer = null, ctrl = null, lastQ = null;
+    function hide() { pop.classList.add("hidden"); hi = -1; }
+    function show() { pop.classList.remove("hidden"); }
+    function setHi(i) {
+      var rs = pop.children;
+      if (!rs.length) { hi = -1; return; }
+      hi = Math.max(0, Math.min(i, rs.length - 1));
+      for (var k = 0; k < rs.length; k++) rs[k].classList.toggle("bg-elevated", k === hi);
+      if (rs[hi] && rs[hi].scrollIntoView) rs[hi].scrollIntoView({ block: "nearest" });
+    }
+    function render() {
+      if (!items.length) { pop.innerHTML = ""; hide(); return; }
+      pop.innerHTML = items.map(function (it) {
+        return '<button type="button" class="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-elevated active:bg-elevated" data-place-val="' + esc(it.value) + '"><span class="truncate text-sm text-fg">' + esc(it.label) + "</span>" + (it.sub ? '<span class="truncate text-xs text-muted">' + esc(it.sub) + "</span>" : "") + "</button>";
+      }).join("");
+      hi = -1; show();
+    }
+    function pick(val) { input.value = val; input.dispatchEvent(new Event("change", { bubbles: true })); hide(); items = []; }
+    function fetchSuggest() {
+      var q = input.value.trim();
+      lastQ = q;
+      if (q.length < 2) { items = []; render(); return; }
+      if (ctrl && ctrl.abort) { try { ctrl.abort(); } catch (_e) {} }
+      ctrl = window.AbortController ? new AbortController() : null;
+      fetch(url + "?q=" + encodeURIComponent(q), { headers: { Accept: "application/json" }, credentials: "same-origin", signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (d) { if (input.value.trim() !== lastQ) return; items = Array.isArray(d) ? d : []; render(); })
+        .catch(function () {});
+    }
+    input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(fetchSuggest, 250); });
+    input.addEventListener("blur", function () { setTimeout(hide, 150); });
+    input.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 키 무시
+      var open = !pop.classList.contains("hidden");
+      if (e.key === "ArrowDown") { if (open) { e.preventDefault(); setHi(hi + 1); } }
+      else if (e.key === "ArrowUp") { if (open) { e.preventDefault(); setHi(hi - 1); } }
+      else if (e.key === "Enter") { if (open && hi >= 0 && pop.children[hi]) { e.preventDefault(); pick(pop.children[hi].getAttribute("data-place-val")); } }
+      else if (e.key === "Escape") { hide(); }
+    });
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur 방지
+    pop.addEventListener("click", function (e) { var b = e.target.closest("[data-place-val]"); if (b) pick(b.getAttribute("data-place-val")); });
+    pop.addEventListener("mousemove", function (e) { var b = e.target.closest("[data-place-val]"); if (!b) return; var rs = pop.children; for (var k = 0; k < rs.length; k++) if (rs[k] === b) { setHi(k); break; } });
+  });
+})();

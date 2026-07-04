@@ -43,6 +43,10 @@ const config = {
 
   backupToken: process.env.BACKUP_TOKEN || "",
 
+  // Google Places API 키(장소 주소 자동완성 백엔드 프록시용). 미설정 시 자동완성 비활성(자유입력만).
+  // Cloud에서 Places API(New) 활성화 + 결제 등록 + API 키 필요. 키는 서버에서만 사용(클라 미노출).
+  placesApiKey: (process.env.GOOGLE_PLACES_API_KEY || "").trim(),
+
   cookieName: "omg_session",
   sessionMaxAgeMs: 30 * 24 * 60 * 60 * 1000, // 30일
 };

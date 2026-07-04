@@ -37,6 +37,8 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false # (선택) 장소 주소 자동완성 — Places API(New) 키. 미설정 시 자동완성 비활성(자유입력만)
       - key: MAX_UPLOAD_MB
         value: "200"
       - key: BACKUP_TOKEN

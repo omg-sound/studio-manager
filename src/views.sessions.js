@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
+const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
@@ -129,8 +129,11 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
           ${roomSelect(roomList, s.room_id)}</div>
        </div>
        <div class="mt-2" data-external-loc ${s.room_id && roomList.some((r) => Number(r.id) === Number(s.room_id) && r.is_external) ? "" : "hidden"}>
-         <label class="label-sm">장소 주소 <span class="font-normal text-muted text-xs">(외부 장소 — 구글 지도용 주소)</span></label>
-         <input class="input py-1.5 text-sm" name="location" value="${esc(s.location || "")}" placeholder="예: 서울시 강남구 …" autocomplete="off" />
+         <label class="label-sm">장소 주소 <span class="font-normal text-muted text-xs">(외부 장소 — 구글 지도용 주소${config && config.placesApiKey ? " · 타이핑하면 제안" : ""})</span></label>
+         <div class="relative" ${config && config.placesApiKey ? 'data-place-suggest data-place-url="/sessions/place-suggest"' : ""}>
+           <input class="input py-1.5 text-sm" name="location" value="${esc(s.location || "")}" placeholder="예: 서울시 강남구 … / 장소명" autocomplete="off" data-place-input />
+           <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-place-pop role="listbox"></div>
+         </div>
        </div>
        ${explain(`청구하려면 <b>세션 종류=녹음/촬영</b> + <b>단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
   // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).

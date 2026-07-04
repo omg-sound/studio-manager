@@ -257,6 +257,7 @@
 | `DEV_LOGIN` | =1 시 `/dev-login` 활성(로컬 검증용, **프로덕션 금지**) |
 | `BACKUP_TOKEN` | cron이 `POST /internal/cron/daily`(백업+연체 스캔)를 트리거하는 인증 토큰. 미설정 시 라우트 비활성(404). web·cron 동일값 |
 | `CRON_TRIGGER_URL` / `WEB_HOSTPORT` | (cron 서비스) 트리거 대상 web URL. `WEB_HOSTPORT`는 Render `fromService hostport` 자동 주입 |
+| `GOOGLE_PLACES_API_KEY` | (선택) 장소 주소 자동완성 — Places API(New) 키. 세션 외부 장소 주소칸 타이핑 시 서버가 `/sessions/place-suggest`로 프록시 호출(CSP 무변경·키 미노출). 미설정 시 자동완성 비활성(자유입력만·캘린더가 지오코딩) |
 | `ALERT_WEBHOOK` | (선택) 알림 웹훅 URL 운영 오버라이드. 미설정 시 `/settings` 환경설정에서 암호화 저장한 값 사용(Slack/Discord 등) |
 
 프로덕션(`NODE_ENV=production`)에서는 `ADMIN_EMAIL`, 강한 `SESSION_SECRET`/`TOKEN_ENC_KEY`,

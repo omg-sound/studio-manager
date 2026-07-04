@@ -183,6 +183,41 @@ router.get("/sessions/suggest", requireAuth, (req, res) => {
   })));
 });
 
+// ── 장소 주소 자동완성(JSON) — Google Places API(New) 백엔드 프록시 ──
+// 클라가 구글 스크립트를 직접 부르지 않고(=CSP 그대로) 서버가 대신 호출·API 키 미노출. 미설정/오류는 fail-safe([]).
+// 반환: [{ label(주요), sub(보조), value(채울 전체 주소) }] — app.js [data-place-suggest]가 드롭다운으로 표시·클릭 시 채움.
+router.get("/sessions/place-suggest", requireEditor, asyncHandler(async (req, res) => {
+  const q = String(req.query.q || "").trim();
+  if (!config.placesApiKey || q.length < 2) return res.json([]);
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000); // 4s 타임아웃(느린 외부 API가 요청을 막지 않게)
+    const r = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Goog-Api-Key": config.placesApiKey },
+      body: JSON.stringify({ input: q, languageCode: "ko" }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) { console.error("[places] autocomplete 실패 HTTP " + r.status); return res.json([]); }
+    const data = await r.json();
+    const out = (data.suggestions || [])
+      .map((s) => s.placePrediction)
+      .filter(Boolean)
+      .map((p) => ({
+        label: (p.structuredFormat && p.structuredFormat.mainText && p.structuredFormat.mainText.text) || (p.text && p.text.text) || "",
+        sub: (p.structuredFormat && p.structuredFormat.secondaryText && p.structuredFormat.secondaryText.text) || "",
+        value: (p.text && p.text.text) || (p.structuredFormat && p.structuredFormat.mainText && p.structuredFormat.mainText.text) || "",
+      }))
+      .filter((x) => x.value)
+      .slice(0, 6);
+    res.json(out);
+  } catch (e) {
+    if (e.name !== "AbortError") console.error("[places] autocomplete 오류: " + (e && e.message)); // fail-safe
+    res.json([]);
+  }
+}));
+
 // ── 시간 슬롯 가용성(JSON) — 시작 버튼 그리드 비활성 표시용 ──
 // 그 날짜에 이미 예약된(앱 DB 세션 + 구글 캘린더) 30분 슬롯을 반환. 외부 캘린더 오류는 fail-open([]).
 router.get("/sessions/availability", requireEditor, asyncHandler(async (req, res) => {
