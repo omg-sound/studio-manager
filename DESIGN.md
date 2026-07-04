@@ -104,7 +104,7 @@ components:
 
 - **버튼**: `.btn-primary`(클레이 채움, 주요 동작·저장), `.btn-ghost`(테두리+surface, 보조). 크기 `.btn-sm`/`.btn-xs`. 클레이 채움은 **주요 동작에만** — 완료·상태 토글 등에는 쓰지 않는다(§ Do/Don't).
 - **입력/폼**: `.input`, `.label`, `.label-sm`. dirty 저장 패턴(`data-dirty-form`/`data-dirty-save`) + 이탈 가드(미저장 시 저장/저장하지 않음 모달).
-- **카드**: `.card`. 리스트 항목 카드는 `rounded-xl border-border/60 bg-surface` + `.row-link`, 카드 간 `space-y-2`(프로젝트·일정·청구 목록 공통 톤).
+- **카드**: `.card`. **두 리스트 스타일이 의도적으로 공존**: (a) **개별 카드** = `rounded-xl border-border/60 bg-surface` + `.row-link`, 카드 간 `space-y-2` — **프로젝트·일정·청구**(항목 하나하나가 독립 개체·상태 처리 접기 등 풍부); (b) **그룹 카드**(`listGroup` = 한 판 + `divide-y`) — **클라이언트·연락처**(이름 위주 얇은 행, 밀도 우선). 새 목록은 항목이 개체성/펼침을 가지면 (a), 단순 명부면 (b).
 - **배지**: `.badge` + 변형(neutral/primary/success/warning/danger/info). 공백 라벨이 쪼개지지 않게 `whitespace-nowrap shrink-0`.
 - **탭/필터**: `tabBar`(aria-current, 개수 라벨) — 목록 상단 분류(진행중/완료, 발행필요/발행완료 등).
 - **검색**: `searchBox`(typeahead — 200ms 디바운스, `/suggest` JSON, ↑↓·엔터, 한글 IME 가드).
