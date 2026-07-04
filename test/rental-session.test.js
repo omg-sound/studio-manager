@@ -85,6 +85,25 @@ test("종일(all_day): 시간 없어도 대관 세션 청구 가능(1 기준 블
   assert.equal(b2.amount, 300000, "시간제 항목 종일 = 1Pro base_price");
 });
 
+test("종일 다일(end_date): 종료>시작일 때만 저장·시간 NULL·시간세션은 무시(createSession 경로)", () => {
+  const { createSession } = require("../src/data");
+  const user = { role: "chief" };
+  const projId = Number(db().prepare("INSERT INTO projects (title, project_type, rate, created_at) VALUES ('다일종일', 'session', 0, datetime('now'))").run().lastInsertRowid);
+  // 다일: 2/5~2/9 (시간값 동봉 — 종일이라 무시돼야)
+  const multi = createSession(user, projId, { session_date: "2026-02-05", all_day: "1", end_date: "2026-02-09", start_time: "14:00", end_time: "18:00", session_type: "공연" });
+  assert.equal(multi.all_day, 1);
+  assert.equal(multi.end_date, "2026-02-09", "종료 날짜 저장");
+  assert.equal(multi.start_time, null, "종일이라 시간 NULL");
+  assert.equal(multi.end_time, null);
+  // 단일일(종료=시작): end_date NULL
+  const single = createSession(user, projId, { session_date: "2026-02-05", all_day: "1", end_date: "2026-02-05", session_type: "공연" });
+  assert.equal(single.end_date, null, "종료=시작이면 단일일(NULL)");
+  // 시간 세션은 end_date 무시
+  const timed = createSession(user, projId, { session_date: "2026-02-10", end_date: "2026-02-14", start_time: "14:00", custom_hours: "2", duration_mode: "custom", session_type: "믹싱" });
+  assert.equal(timed.all_day, 0);
+  assert.equal(timed.end_date, null, "시간 세션은 end_date 미저장");
+});
+
 test("sessionRateAmount: 단가 미선택·시간 없음은 null(결핍 사유 안내 대상)", () => {
   assert.equal(sessionRateAmount({ session_type: "촬영", rate_item_id: null, start_time: "10:00", end_time: "14:00" }), null);
   assert.equal(sessionRateAmount({ session_type: "촬영", rate_item_id: rateId, start_time: null, end_time: null }), null);

@@ -42,7 +42,7 @@ function managerOptions(managers, current, placeholder = "담당자 미지정", 
 
 
 function timeLabel(s) {
-  if (s.all_day) return "종일"; // Google/Apple 개념 = 하루 종일(시간 없음)
+  if (s.all_day) return s.end_date && s.end_date > s.session_date ? `종일 · ~${esc(formatYmdShort(s.end_date))}` : "종일"; // 다일이면 종료일 병기
   if (s.start_time && s.end_time) return `${esc(s.start_time)}–${esc(s.end_time)}`;
   if (s.start_time) return esc(s.start_time);
   return "시간 미정";
@@ -167,6 +167,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
       </div>`;
   const endDateInit = (() => {
     const d = s.session_date || todayYmd();
+    if (s.all_day && s.end_date && s.end_date > d) return s.end_date; // 종일 다일 일정: 저장된 종료 날짜 복원
     if (s.start_time && s.end_time && s.end_time < s.start_time) { // 야간(자정 넘김) → +1일
       const t = new Date(d + "T00:00:00"); t.setDate(t.getDate() + 1); // 로컬 기준(+1일)
       const mm = t.getMonth() + 1, dd = t.getDate();
@@ -187,7 +188,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
         ${timeBox("start_time", s.start_time, "14:00", 'data-start-input aria-label="시작 시간"')}
         <span class="text-muted">–</span>
         ${timeBox("end_time", s.end_time, "18:00", 'data-end-input aria-label="종료 시간"')}
-        <input class="input w-auto py-1.5 text-sm" type="date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
+        <input class="input w-auto py-1.5 text-sm" type="date" name="end_date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
         <label class="flex w-fit cursor-pointer items-center gap-2 pl-1 text-sm">
           <input type="checkbox" name="all_day" value="1" class="h-4 w-4 rounded border-border text-primary" data-all-day ${s.all_day ? "checked" : ""} /> 종일
         </label>

@@ -105,8 +105,8 @@ async function busySlotsForDate(date, slots) {
   }
 }
 
-/** 일정 시간 본문: 시작·종료 있으면 시간 일정(KST·야간 익일), 없으면 종일. */
-function eventTimes(date, start, end) {
+/** 일정 시간 본문: 시작·종료 있으면 시간 일정(KST·야간 익일), 없으면 종일(다일이면 endDate까지). */
+function eventTimes(date, start, end, endDate) {
   if (RE_TIME.test(start) && RE_TIME.test(end)) {
     const overnight = end <= start;
     return {
@@ -114,13 +114,15 @@ function eventTimes(date, start, end) {
       end: { dateTime: rfc3339Kst(date, end, overnight ? 1 : 0), timeZone: "Asia/Seoul" },
     };
   }
-  const dt = new Date(`${date}T00:00:00Z`);
+  // 종일: Google end.date는 배타적(마지막 날 다음날). 다일(endDate>date)이면 endDate+1, 단일이면 date+1.
+  const last = endDate && String(endDate) > String(date) ? String(endDate) : date;
+  const dt = new Date(`${last}T00:00:00Z`);
   dt.setUTCDate(dt.getUTCDate() + 1);
   return { start: { date }, end: { date: dt.toISOString().slice(0, 10) } };
 }
 
-function eventBody({ title, location, description, date, start, end, attendees }) {
-  const body = Object.assign({ summary: title || "스튜디오 세션" }, eventTimes(date, start, end));
+function eventBody({ title, location, description, date, start, end, endDate, attendees }) {
+  const body = Object.assign({ summary: title || "스튜디오 세션" }, eventTimes(date, start, end, endDate));
   if (location) body.location = location;
   if (description) body.description = description;
   // 참석자(프로젝트 매니저·예약담당자·담당엔지니어 이메일). 초대 메일은 안 보냄(캘린더 이벤트에만 표시) — sendUpdates 미지정(기본 none).

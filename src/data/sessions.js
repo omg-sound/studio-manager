@@ -80,6 +80,9 @@ function sessionFields(input) {
   if (!isValidYmd(date)) throw new Error("SESSION_DATE_REQUIRED");
   // 종일(Google/Apple 개념 = 하루 종일·시간 없음). 체크 시 시작·종료를 NULL로 저장(시간 미보유). 서버 권위: 클라 시간값 무시.
   const allDay = input.all_day === "1" || input.all_day === "on" || input.all_day === true;
+  // 종일 다일 일정: 종료 날짜(end_date)가 시작보다 뒤일 때만 저장(단일일이면 NULL). 시간 세션은 end_date 무시(야간=end<start로 표현).
+  const endDateRaw = String(input.end_date || "").trim();
+  const endDate = allDay && isValidYmd(endDateRaw) && endDateRaw > date ? endDateRaw : null;
   // 직접입력(그리드 밖 시간)이 있으면 우선, 없으면 그리드에서 고른 시작.
   const start = allDay ? null : cleanTime(input.start_time_custom) || cleanTime(input.start_time);
   const rateItemId = Number(input.rate_item_id) || null;
@@ -88,6 +91,7 @@ function sessionFields(input) {
     session_type: normalizeSessionType(input.session_type),
     session_date: date,
     all_day: allDay ? 1 : 0,
+    end_date: endDate,
     start_time: start,
     end_time: allDay ? null : resolveEndTime(input, start),
     booker_name: String(input.booker_name || "").trim() || null,
@@ -282,8 +286,8 @@ function createSession(user, projectId, input = {}) {
   try {
     const info = d
       .prepare(
-        `INSERT INTO sessions (project_id, session_type, session_date, all_day, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_party_id, memo)
-         VALUES (@project_id, @session_type, @session_date, @all_day, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_party_id, @memo)`
+        `INSERT INTO sessions (project_id, session_type, session_date, all_day, end_date, start_time, end_time, booker_name, engineer_name, status, rate_item_id, room_id, director_party_id, memo)
+         VALUES (@project_id, @session_type, @session_date, @all_day, @end_date, @start_time, @end_time, @booker_name, @engineer_name, @status, @rate_item_id, @room_id, @director_party_id, @memo)`
       )
       .run({ project_id: project.id, ...f });
     newId = info.lastInsertRowid;
@@ -311,7 +315,7 @@ function updateSession(user, sessionId, input = {}) {
   try {
     d
       .prepare(
-        `UPDATE sessions SET session_type=@session_type, session_date=@session_date, all_day=@all_day, start_time=@start_time,
+        `UPDATE sessions SET session_type=@session_type, session_date=@session_date, all_day=@all_day, end_date=@end_date, start_time=@start_time,
          end_time=@end_time, booker_name=@booker_name, engineer_name=@engineer_name, status=@status,
          rate_item_id=@rate_item_id, room_id=@room_id, director_party_id=@director_party_id, memo=@memo WHERE id=@id`
       )

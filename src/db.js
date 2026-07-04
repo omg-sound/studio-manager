@@ -389,6 +389,7 @@ function init() {
   addColumn("project_managers", "party_id", "INTEGER"); // 작업 담당 엔지니어 = person party(기존 contact_id 대체)
   addColumn("sessions", "director_party_id", "INTEGER"); // 담당 디렉터 첫 명(parties.id, 레거시 director_contact_id 대체)
   addColumn("sessions", "all_day", "INTEGER NOT NULL DEFAULT 0"); // 종일(Google/Apple 개념 = 하루 종일·시간 없음). all_day=1이면 start/end NULL
+  addColumn("sessions", "end_date", "TEXT"); // 종일 다일(multi-day) 일정의 종료 날짜(NULL=session_date와 같은 날 = 단일일). 종일에서만 의미.
   addColumn("session_directors", "party_id", "INTEGER"); // 다대다 디렉터(parties.id, 기존 contact_id 대체)
   addColumn("parties", "group_id", "INTEGER"); // 아티스트(사람)의 소속 그룹(parties.id, kind='group'). 그룹↔멤버 연결
   addColumn("parties", "contact_party_id", "INTEGER"); // 그룹의 담당자(parties.id, 사람 — 멤버 또는 관계자)

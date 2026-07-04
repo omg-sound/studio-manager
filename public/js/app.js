@@ -259,7 +259,7 @@
     return false;
   }
   function updateConflictWarn() {
-    if (conflictWarn) conflictWarn.hidden = !overlapDetected();
+    if (conflictWarn) conflictWarn.hidden = (allDay && allDay.checked) || !overlapDetected(); // 종일은 시간 점유 없음 → 경고 없음
   }
   // 세션 종류 kind(녹음→recording·촬영→filming) — 세션 종류 select data-rate-kinds="녹음:recording,촬영:filming"
   function rateKindOf(type) {
@@ -313,6 +313,8 @@
     return t.getFullYear() + "-" + (mm < 10 ? "0" : "") + mm + "-" + (dd < 10 ? "0" : "") + dd;
   }
   function updatePreview() {
+    // 종일: 시간·종료날짜 자동 동기 안 함 — 종료 날짜는 사용자가 지정한 다일(예: 2/5~2/9) 값을 그대로 보존.
+    if (allDay && allDay.checked) { updateConflictWarn(); return; }
     var start = currentStart();
     var mins = durationMinutes();
     var sMin = toMin(start);
@@ -432,10 +434,11 @@
   // 서버가 all_day=1이면 start/end를 NULL로 저장(시간 미보유). JS는 UI만: 시간 박스·종료 날짜·소요 블록 숨김.
   // 체크박스(name="all_day")가 제출 소스라 시간값은 건드리지 않는다(해제 시 원래 시간 그대로 보존).
   function applyAllDay(on) {
+    // 종일이면 시간(콤보)·소요 UI만 숨긴다. 날짜 2개(시작·종료)는 남겨 다일 일정(예: 2/5~2/9)을 지정할 수 있게(사용자 요청).
     Array.prototype.forEach.call(form.querySelectorAll("[data-time-combo]"), function (w) { w.hidden = on; });
     if (durationWrap) durationWrap.hidden = on;
-    if (endDate) endDate.hidden = on;
     if (durLabel) durLabel.textContent = on ? "종일" : fmtDuration(curDur);
+    if (on) updateConflictWarn(); // 시간 없음 → 겹침 경고 해제
   }
   if (allDay) allDay.addEventListener("change", function () { applyAllDay(allDay.checked); });
   // 편집 진입 시 서버가 체크(all_day 세션)해 뒀으면 UI 반영.
