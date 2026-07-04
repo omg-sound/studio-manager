@@ -265,9 +265,10 @@
     var isRec = sessionTypeSel && sessionTypeSel.value === "녹음";
     Array.prototype.forEach.call(showWhenRec, function (el) { el.hidden = !isRec; });
   }
-  // 1Pro/2Pro 프리셋: 단가표 기준시간(base_minutes)이 있어야 활성.
+  // 1Pro~4Pro 프리셋: 녹음 단가 기준시간이 있으면 그걸, 없으면 스튜디오 기본 블록(proDefault)을 기준으로 항상 활성.
+  // positionTicks도 같은 폴백으로 위치를 잡으므로 일관. 세션 종류·룸 예약과 무관하게 프리셋 클릭 가능(사용자 요청).
   function updateProAvailability() {
-    var base = baseMinutes();
+    var base = baseMinutes() || proDefaultMinutes();
     Array.prototype.forEach.call(presets, function (b) { b.disabled = base <= 0; });
     positionTicks();
   }
@@ -336,7 +337,7 @@
   // 1~4Pro 프리셋 → 기준시간(1Pro)×N으로 슬라이더·직접입력 채움("pro3"→base×3).
   Array.prototype.forEach.call(presets, function (b) {
     b.addEventListener("click", function () {
-      var base = baseMinutes();
+      var base = baseMinutes() || proDefaultMinutes(); // 단가 없으면 스튜디오 기본 블록 기준(녹음이면 단가 기준시간)
       if (base <= 0) return;
       var mult = parseInt(String(b.getAttribute("data-duration-preset") || "pro1").replace("pro", ""), 10) || 1;
       setDuration(base * mult);
