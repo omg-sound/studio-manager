@@ -25,7 +25,7 @@ const {
   addPayment,
   deletePayment,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo, tabBar } = require("../views");
 const { invoiceRow, invoiceBadge, payerInfoCard, paymentHistory } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
@@ -80,16 +80,14 @@ function resolveInvoiceRefs(body) {
 router.get("/", requireBilling, (req, res) => {
   const user = req.user;
   const admin = canBill(user);
-  const f = req.query.f || ""; // '', 미발행, 발행, 연체, 입금완료
   const q = (req.query.q || "").toString().trim();
-  let rows;
-  if (admin) {
-    if (f === "연체") rows = listInvoices(user, { overdue: true });
-    else if (INVOICE_STATUSES.includes(f) || f === "입금완료") rows = listInvoices(user, { status: f }); // 입금완료=계산서·입금 축 필터
-    else rows = listInvoices(user, {});
-  } else {
-    rows = listInvoices(user, {});
-  }
+  // 계산서/현금영수증 '발행 필요'(미발행) / '발행 완료'(발행·입금완료) 탭 분리(사용자 요청).
+  const tab = req.query.tab === "done" ? "done" : "todo";
+  const allRows = listInvoices(user, {});
+  const issued = (i) => i.tax_status === "계산서 발행" || i.tax_status === "입금완료";
+  const todoRows = allRows.filter((i) => !issued(i));
+  const doneRows = allRows.filter(issued);
+  let rows = tab === "done" ? doneRows : todoRows;
 
   // 라우트 레벨 q 필터(제목·채번·클라이언트명 부분일치, 소문자 비교). data.js 수정 없음.
   if (q) {
@@ -102,35 +100,31 @@ router.get("/", requireBilling, (req, res) => {
     );
   }
 
-  const totalDue = rows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0);
+  const totalDue = allRows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0); // 미수금 합계=전체 기준(탭 무관)
 
-  // 칩 링크는 현재 q를 함께 전달해 필터와 공존.
-  const chip = (label, val) => {
-    const active = f === val || (!f && val === "");
-    const href = val
-      ? `/invoices?f=${encodeURIComponent(val)}${q ? "&q=" + encodeURIComponent(q) : ""}`
-      : `/invoices${q ? "?q=" + encodeURIComponent(q) : ""}`;
-    return `<a href="${href}" class="badge ${active ? "bg-primary text-primary-fg" : "bg-surface border border-border text-muted"}">${esc(label)}</a>`;
-  };
-  const filterBar = admin
-    ? `<div class="mb-4 flex flex-wrap gap-2">
-         ${chip("전체", "")}${chip("미발행", "미발행")}${chip("발행", "발행")}${chip("연체", "연체")}${chip("입금완료", "입금완료")}
-       </div>`
-    : "";
+  const tabs = tabBar({
+    tabs: [
+      { key: "todo", label: `발행 필요 ${todoRows.length}` },
+      { key: "done", label: `발행 완료 ${doneRows.length}` },
+    ],
+    activeKey: tab,
+    hrefFn: (k) => `/invoices?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+  });
 
-  // 검색바: GET form. f 필터가 선택된 경우 hidden으로 보존.
+  // 검색바: GET form. 탭을 hidden으로 보존.
   const searchBar = `
     <form method="get" action="/invoices" class="mb-4 flex gap-2">
-      ${f ? `<input type="hidden" name="f" value="${esc(f)}" />` : ""}
+      <input type="hidden" name="tab" value="${esc(tab)}" />
       <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="제목 · 채번 · 클라이언트 검색" aria-label="청구 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
   const resultNote = q
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/invoices${f ? "?f=" + encodeURIComponent(f) : ""}" class="text-primary hover:underline">검색 초기화</a></div>`
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/invoices?tab=${tab}" class="text-primary hover:underline">검색 초기화</a></div>`
     : "";
 
+  const retPath = `/invoices?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`;
   const list = rows.length
-    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i, { isAdmin: admin, f })).join("")}</div>`
+    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i, { isAdmin: admin, ret: retPath })).join("")}</div>`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
@@ -144,8 +138,8 @@ router.get("/", requireBilling, (req, res) => {
     ${flashBanner(req.query)}
     ${pageHeader({ title: "청구", desc: admin ? "발행·입금·미수금" : "내 청구 내역", action })}
     ${dueNote}
+    ${admin ? tabs : ""}
     ${searchBar}
-    ${filterBar}
     ${resultNote}
     ${list}`;
   res.send(layout({ title: "청구", user, current: "/invoices", body }));

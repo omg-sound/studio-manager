@@ -53,11 +53,16 @@ function billBadge(inv) {
   return `<span class="badge ${cls}">${esc(label)}</span>`;
 }
 
-/** 계산서·입금 배지 — 계산서 미발행 / 계산서 발행 / 입금완료(+연체·부분납 파생). */
+/** 청구처 유형에 따른 세무 문서명 — 개인(person)=현금영수증, 그 외(업체·그룹·미지정)=계산서. tax_status DB값(계산서 …)은 그대로, 표시만 치환. */
+function taxDocOf(inv) {
+  return inv && inv.payer_kind === "person" ? "현금영수증" : "계산서";
+}
+
+/** 계산서·입금 배지 — (계산서|현금영수증) 미발행 / 발행 / 입금완료(+연체·부분납 파생). */
 function taxBadge(inv) {
-  const label = displayStatus(inv);
-  if (label === "계산서 발행") return `<span class="badge-info">${esc(label)}</span>`;
-  const cls = INVOICE_STATUS_BADGE[label] || "bg-muted/10 text-muted";
+  const label = displayStatus(inv).replace("계산서", taxDocOf(inv)); // 개인이면 '계산서'→'현금영수증' 표시
+  if (label === "계산서 발행" || label === "현금영수증 발행") return `<span class="badge-info">${esc(label)}</span>`;
+  const cls = INVOICE_STATUS_BADGE[displayStatus(inv)] || "bg-muted/10 text-muted";
   return `<span class="badge ${cls}">${esc(label)}</span>`;
 }
 
@@ -203,7 +208,7 @@ function payerName(inv) {
 }
 
 /** 목록 행(링크 카드). compact=프로젝트 상세 청구 탭용 — 클릭하면 그 자리에서 펼침(페이지 이동 없음). */
-function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnTo = "", openId = null, f = "" } = {}) {
+function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnTo = "", openId = null, ret = "" } = {}) {
   const bal = balanceOf(inv);
   const pname = payerName(inv);
   const sub = compact
@@ -252,17 +257,24 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
     ${balLine}
     <div class="text-[11px] text-muted">${dueLine}</div>`;
-  // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — 계산서 발행 완료 / 입금완료 2버튼(사용자 요청, 청구서 발행 권한자만).
-  const retPath = `/invoices${f ? "?f=" + encodeURIComponent(f) : ""}`;
+  // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(청구서 발행 권한자만).
+  // 상태 반영: 이미 완료된 항목은 '불 켜짐'(btn-primary·비클릭 정적 표시), 아직이면 '불 꺼짐'(btn-ghost·클릭 가능 폼) — 사용자 요청.
+  // 클릭 시 하향(입금완료→계산서 발행)으로 되돌리는 footgun 방지: 완료 버튼은 정적(폼 없음).
+  const retPath = ret || "/invoices";
   const retHidden = `<input type="hidden" name="return" value="${esc(retPath)}" />`;
+  const taxDoc = taxDocOf(inv);
+  const taxIssued = inv.tax_status === "계산서 발행" || inv.tax_status === "입금완료";
+  const isPaid = inv.tax_status === "입금완료";
+  const litBtn = (label) => `<span class="btn-primary btn-sm cursor-default select-none" aria-disabled="true">${esc(label)}</span>`;
+  const formBtn = (tax, label) => `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(tax)}" />${retHidden}<button class="btn-ghost btn-sm" type="submit">${esc(label)}</button></form>`;
   const actions = isAdmin
     ? `<details class="group">
          <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
            <span>상태 처리</span>${detailsChevron()}
          </summary>
          <div class="flex flex-wrap justify-end gap-2 border-t border-border/40 bg-elevated/40 px-4 py-3">
-           <form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="계산서 발행" />${retHidden}<button class="btn-ghost btn-sm" type="submit">계산서 발행 완료</button></form>
-           <form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="입금완료" />${retHidden}<button class="btn-primary btn-sm" type="submit">입금완료</button></form>
+           ${taxIssued ? litBtn(`${taxDoc} 발행 완료`) : formBtn("계산서 발행", `${taxDoc} 발행 완료`)}
+           ${isPaid ? litBtn("입금완료") : formBtn("입금완료", "입금완료")}
          </div>
        </details>`
     : "";

@@ -414,7 +414,7 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
     params.clientId = Number(clientId);
   }
   const sql = `
-    SELECT i.*, p.title AS project_title, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name
+    SELECT i.*, p.title AS project_title, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name, c.kind AS payer_kind, c.is_artist AS payer_is_artist
     FROM invoices i
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN parties c ON c.id = i.payer_id
