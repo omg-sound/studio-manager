@@ -5,7 +5,7 @@
 const { SESSION_TYPES, SESSION_STATUSES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, listSessionDirectors } = require("./data");
+const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -150,11 +150,12 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
   // 동적 clone 행은 app.js window.__initPersonCombos(new row)로 초기화(디렉터 add/remove 핸들러).
   const allContacts = contactOptions();
+  const companyOpts = partyOptions({ role: "company" }); // '새 담당자 등록' 모달 회사칸 검색(datalist) — 기존 회사 타이핑 검색·오타/중복 방지
   // 옵션 중복 임베드 제거: 이 폼의 디렉터 콤보(행·템플릿·동적 추가)가 공유 옵션 스크립트 1개를 참조(optionsRef).
   const dirOptsId = "__dir_opts_" + (s && s.id ? s.id : "new");
   const dirRow = (d) => `
         <div class="mt-1 flex items-start gap-2" data-director-row>
-          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, optionsRef: dirOptsId, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
+          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, optionsRef: dirOptsId, companyOptions: companyOpts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
           <button type="button" class="btn-ghost btn-xs shrink-0 text-danger mt-1" data-director-remove aria-label="디렉터 제거">✕</button>
         </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
