@@ -520,7 +520,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   const rootCls = compact ? " class=\"min-w-0 flex-1\"" : "";
   return `
     <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""} data-pc-entity="${esc(entityLabel)}">
-      <input type="hidden" name="${idField}" value="${sel ? sel.id : ""}" data-pc-id />
+      <input type="hidden" name="${idField}" value="${sel ? sel.id : (selectedId || "")}" data-pc-id />
       <input type="hidden" name="${nameField}" value="${esc(shown)}" data-pc-name-hidden />
       <div class="relative">
         <!-- 보이는 검색칸은 name 없음(Chrome 자동완성 팝업이 앱 드롭다운을 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js가 동기화 -->

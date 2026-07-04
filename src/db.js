@@ -427,6 +427,12 @@ function init() {
     ).run();
     setState("payments_backfill_v1", "done");
   }
+  // 종일 위장 승격 1회 백필: 종일 기능 초기 구현(2026-07-04)이 종일을 00:00~23:59로 위장 저장했다.
+  // all_day 컬럼 도입 후 그 위장 패턴을 진짜 종일(시간 NULL)로 승격(정확히 00:00~23:59만 — 실제 사용자가 이 값을 직접 넣을 일 없음).
+  if (!getState("session_all_day_backfill_v1")) {
+    d.prepare("UPDATE sessions SET all_day = 1, start_time = NULL, end_time = NULL WHERE start_time = '00:00' AND end_time = '23:59'").run();
+    setState("session_all_day_backfill_v1", "done");
+  }
   // 사업자등록번호 하이픈 정규화 1회 백필(000-00-00000) — 저장 경로는 formatBizNo가 상시 적용(lib/format).
   if (!getState("biz_no_format_v1")) {
     const { formatBizNo } = require("./lib/format"); // lib은 db를 require하지 않음(순환 없음)

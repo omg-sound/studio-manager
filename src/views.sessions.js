@@ -137,7 +137,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const dirOptsId = "__dir_opts_" + (s && s.id ? s.id : "new");
   const dirRow = (d) => `
         <div class="mt-1 flex items-stretch gap-2" data-director-row>
-          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, optionsRef: dirOptsId, companyOptions: companyOpts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
+          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, initialName: d ? (d.name || "") : "", optionsRef: dirOptsId, companyOptions: companyOpts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
           <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-border px-3 text-danger hover:bg-elevated active:bg-elevated" data-director-remove aria-label="디렉터 제거">✕</button>
         </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
