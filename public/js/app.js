@@ -155,7 +155,6 @@
   var grid = form.querySelector("[data-start-grid]");
   var rateSel = form.querySelector("[data-rate-select]");
   var customStart = form.querySelector("[data-custom-start]");
-  var customStartToggle = form.querySelector("[data-custom-start-toggle]");
   var preview = form.querySelector("[data-end-preview]");
   var slider = form.querySelector("[data-duration-slider]");
   var durLabel = form.querySelector("[data-duration-label]");
@@ -364,13 +363,6 @@
     });
   });
   window.addEventListener("resize", positionTicks); // 모바일↔데스크톱 전환 시 Pro 눈금 재배치(모바일=흐름·데스크톱=위치정렬)
-  // (레거시) 그리드 '직접입력' 버튼 토글 — 현재 직접입력은 박스 자체에 노출되어 버튼 없음. 있으면만 동작.
-  if (customStartToggle) customStartToggle.addEventListener("click", function () {
-    customStartToggle.hidden = true;
-    if (customStart) { customStart.hidden = false; customStart.focus(); }
-    clearGridStart();
-    updatePreview();
-  });
   // 직접입력 시작 시간: 숫자만 받아 HH:MM 자동 포맷("1425"→"14:25"). 입력 시 그리드 선택 해제(서버도 직접입력 우선).
   if (customStart) customStart.addEventListener("input", function () {
     var digits = customStart.value.replace(/[^0-9]/g, "").slice(0, 4);
@@ -382,7 +374,6 @@
     if (!e.target) return;
     if (e.target.name === "start_time") {
       if (customStart) customStart.value = ""; // 그리드 고르면 직접입력 칸 비움(항상 노출)
-      if (customStartToggle) customStartToggle.hidden = false; // (레거시 토글 버튼 있으면 복원 — 현재 미사용)
       updatePreview();
     }
   });
@@ -679,25 +670,6 @@
     body.append("amount", String(el.value).replace(/[^\d]/g, ""));
     fetch("/projects/tasks/" + m[1] + "/amount", { method: "POST", body: body, headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" }).catch(function () {});
   });
-})();
-
-// 클라이언트 폼: 아티스트(개인)는 사업자등록번호·대표자·주소가 없으므로 분류=아티스트면 세금정보 숨김.
-(function () {
-  "use strict";
-  var kindSel = document.querySelector("[data-client-kind]");
-  var tax = document.querySelector("[data-client-tax]");
-  var cash = document.querySelector("[data-client-cash]"); // 개인(아티스트)=현금영수증·소속그룹(세금정보와 반대로 표시)
-  var filesBox = document.querySelector("[data-client-files]"); // 아티스트는 첨부 서류(사업자등록증·통장사본) 불필요 → 숨김
-  if (!kindSel || !tax) return;
-  function sync() {
-    // 아티스트(개인)·그룹은 세금정보 없음(현금영수증만), 업체(소속사/제작사/기타)는 세금정보·첨부.
-    var isArtist = kindSel.value === "아티스트" || kindSel.value === "그룹";
-    tax.hidden = isArtist;
-    if (cash) cash.hidden = !isArtist;
-    if (filesBox) filesBox.hidden = isArtist;
-  }
-  kindSel.addEventListener("change", sync);
-  sync();
 })();
 
 // 아티스트 폼: 소속 그룹 선택 시 소속사를 그룹 소속사로 자동 맞춤(연동). 그룹 소속사가 있을 때만 — 이후 개별 변경(오버라이드) 가능.
