@@ -1135,13 +1135,12 @@ function taskEditForm(task, managers = []) {
       </div>
       ${legacyName ? `<input type="hidden" name="engineer_name" value="${esc(legacyName)}" />` : ""}
       <div class="flex items-center justify-end gap-2 sm:col-span-2">
+        <button class="btn-ghost btn-xs text-danger mr-auto" type="submit" form="del-task-${task.id}">작업 삭제</button>
         <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
         <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>작업 저장</button>
       </div>
     </form>
-    <form method="post" action="/projects/tasks/${task.id}/delete" data-confirm="이 작업을 삭제할까요?" class="mt-2">
-      <button class="btn-ghost btn-xs text-danger" type="submit">작업 삭제</button>
-    </form>`;
+    <form method="post" action="/projects/tasks/${task.id}/delete" id="del-task-${task.id}" data-confirm="이 작업을 삭제할까요?" class="hidden"></form>`;
 }
 
 /** 다음 단계 빠른 추가 — is_quick 종류 버튼(기본 단가 주입), +기타는 전체 활성 종류 그룹 + 금액 인라인 입력(0원 강제 방지). 추가하면 편집이 펼쳐져 조정할 수 있다. */
