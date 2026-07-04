@@ -22,7 +22,7 @@ const {
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox } = require("../views");
-const { sessionRow, monthCalendar } = require("../views.sessions");
+const { sessionProjectCard, monthCalendar } = require("../views.sessions");
 const { todayYmd } = require("../lib/date");
 const { asyncHandler } = require("../lib/async");
 const calendar = require("../calendar");
@@ -127,8 +127,16 @@ router.get("/sessions", requireAuth, (req, res) => {
       hrefFn: (k) => `/sessions?view=list&stab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
     });
     const activeSess = stab === "past" ? past : up;
+    // 프로젝트별로 묶어 카드(판) 분리 — 같은 프로젝트 세션은 한 판, 다른 프로젝트는 다른 판(프로젝트 목록과 통일감).
+    // 첫 등장 순서 유지 = 날짜순(가까운/최근 세션의 프로젝트가 위로).
+    const groups = [];
+    const gIdx = new Map();
+    for (const s of activeSess) {
+      if (!gIdx.has(s.project_id)) { gIdx.set(s.project_id, groups.length); groups.push([]); }
+      groups[gIdx.get(s.project_id)].push(s);
+    }
     const listHtml = activeSess.length
-      ? `<div class="card"><div class="space-y-2">${activeSess.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div></div>`
+      ? `<div class="space-y-3">${groups.map((g) => sessionProjectCard(g, { isAdmin: editable, managers, rateItems, rooms })).join("")}</div>`
       : emptyState(
           stab === "past" ? "지난 세션이 없습니다." : q ? "검색 결과가 없습니다." : "다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.",
           { card: true }

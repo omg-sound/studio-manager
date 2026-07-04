@@ -304,6 +304,30 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
     </details>`;
 }
 
+/**
+ * 전역 일정 목록용 — 한 프로젝트의 세션들을 한 카드(판)에 묶는다(프로젝트 목록과 통일감, 2026-07-04 사용자 요청).
+ * 헤더 = 프로젝트 제목 + 아티스트·회사 링크(프로젝트 목록 카드와 동일 톤), 본문 = 세션 행(showProject=false, 프로젝트는 헤더에).
+ */
+function sessionProjectCard(sessions, { isAdmin = false, managers = [], rateItems = [], rooms } = {}) {
+  const p = sessions[0] || {};
+  const company = String(p.production_company || p.artist_company || "").trim();
+  const artist = String(p.artist || "").trim();
+  const meta = [artist, company].filter(Boolean).join(" · ");
+  return `
+    <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
+      <a href="/projects/${p.project_id}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
+        <div class="min-w-0">
+          <div class="truncate font-semibold">${esc(p.project_title || "(제목 없음)")}</div>
+          ${meta ? `<div class="mt-0.5 truncate text-sm text-fg/80">${esc(meta)}</div>` : ""}
+        </div>
+        <span class="shrink-0 pl-2 text-sm text-muted">세션 ${sessions.length}</span>
+      </a>
+      <div class="space-y-2 border-t border-border/40 p-3">
+        ${sessions.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms, showProject: false })).join("")}
+      </div>
+    </div>`;
+}
+
 /** 프로젝트 상세용 세션 섹션. 유형 구분 없이 항상 펼친 <section>으로 렌더(목록 + '새 세션 추가' 폼). */
 function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = [], rooms, defaultBooker = "" }) {
   const roomList = resolveRooms(rooms); // 룸 1회 조회 후 폼·행에 전달(호출부가 안 넘겨도 채워짐)
@@ -377,4 +401,4 @@ function monthCalendar(ym, sessions) {
     </div>`;
 }
 
-module.exports = { sessionRow, sessionsSection, sessionCreateForm, monthCalendar };
+module.exports = { sessionRow, sessionProjectCard, sessionsSection, sessionCreateForm, monthCalendar };
