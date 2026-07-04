@@ -1634,3 +1634,36 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     if (a) { try { sessionStorage.setItem(KEY, JSON.stringify({ url: here, y: window.scrollY })); } catch (_e) {} }
   });
 })();
+
+// 모달 스크롤 잠금(전 모달 공통, 2026-07-04 사용자 요청): 모달이 열려 있으면 배경(문서) 스크롤을 잠근다.
+// 모든 모달은 [data-*-modal]/[data-nav-guard] 마커를 갖고 '열림 = hidden 클래스 없음'(토글형) 또는 'DOM에 존재'(동적형).
+// 하나라도 열리면 <html>·<body> overflow:hidden(+스크롤바 폭만큼 padding으로 레이아웃 점프 방지). 전부 닫히면 복원.
+(function () {
+  "use strict";
+  var SEL = "[data-pc-modal],[data-cc-modal],[data-artist-modal],[data-nav-guard],[data-modal]";
+  var locked = false, scheduled = false;
+  function anyOpen() {
+    var els = document.querySelectorAll(SEL);
+    for (var i = 0; i < els.length; i++) if (!els[i].classList.contains("hidden")) return true;
+    return false;
+  }
+  function apply() {
+    scheduled = false;
+    var open = anyOpen();
+    if (open === locked) return;
+    locked = open;
+    if (open) {
+      var sw = window.innerWidth - document.documentElement.clientWidth; // 스크롤바 폭
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+      if (sw > 0) document.body.style.paddingRight = sw + "px";
+    } else {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+    }
+  }
+  function schedule() { if (scheduled) return; scheduled = true; (window.requestAnimationFrame || setTimeout)(apply); }
+  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+  schedule();
+})();
