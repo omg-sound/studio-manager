@@ -97,7 +97,7 @@ function peopleTab(currentUser) {
   const addForm = chief
     ? `<form method="post" action="/settings/users" class="space-y-2">
           <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input" name="name" placeholder="이름 (작업 담당자 표시명)" />
+            <input class="input" name="user_name" placeholder="이름 (작업 담당자 표시명)" autocomplete="off" />
             <input class="input" type="email" name="email" placeholder="Google 이메일" required />
           </div>
           <div class="flex gap-2">
@@ -276,7 +276,7 @@ function roomsSection() {
         ${explain(`세션 예약 시 룸을 지정하면 <span class="text-fg">같은 룸끼리만 시간 겹침을 검사</span>합니다(다른 룸은 같은 시간 병렬 예약 허용). 룸을 삭제하면 그 룸으로 잡힌 세션은 '룸 미지정'으로 바뀝니다.`)}
       </div>
       <form method="post" action="/settings/rooms" class="flex gap-2">
-        <input class="input py-1.5 text-sm" name="name" placeholder="룸 이름 (예: A룸)" required />
+        <input class="input py-1.5 text-sm" name="room_name" placeholder="룸 이름 (예: A룸)" autocomplete="off" required />
         <button class="btn-primary shrink-0 btn-sm" type="submit">룸 추가</button>
       </form>
       <div class="space-y-2">${rows}</div>
@@ -544,7 +544,7 @@ function ensureContactForHouseUser(userId) {
 // ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
 router.post("/users", requireChief, (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
-  const name = String(req.body.name || "").trim();
+  const name = String(req.body.user_name != null ? req.body.user_name : req.body.name || "").trim(); // 폼 필드=user_name(자동완성 회피)
   const role = normalizeRole(req.body.role);
   if (email && /^\S+@\S+\.\S+$/.test(email)) {
     const exists = db().prepare("SELECT id, role FROM users WHERE email = ?").get(email);
@@ -600,7 +600,7 @@ router.post("/users/:id/delete", requireChief, (req, res) => {
 // 하우스 엔지니어 정보 수정(이름·전화) — 이름은 users + 작업 담당자 동기화, 전화는 작업 담당자 행에 저장.
 router.post("/users/:id/edit", requireChief, (req, res) => {
   const id = Number(req.params.id);
-  const name = String(req.body.name || "").trim();
+  const name = String(req.body.user_name != null ? req.body.user_name : req.body.name || "").trim(); // 폼 필드=user_name(자동완성 회피)
   if (name) db().prepare("UPDATE users SET name = ? WHERE id = ?").run(name, id);
   syncUserToManager(findUserById(id)); // users.name·email·active → 작업 담당자(project_managers) 동기화
   const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ?").get(id);
@@ -716,7 +716,7 @@ function userRow(u, currentUser, chief = true) {
       ${chief ? `<details class="mt-2">
         <summary class="cursor-pointer text-xs text-muted hover:text-fg">정보 수정 (이름 · 전화)</summary>
         <form method="post" action="/settings/users/${u.id}/edit" class="mt-2 grid gap-2 sm:grid-cols-2">
-          <input class="input py-1.5 text-sm" name="name" value="${esc(u.name || "")}" placeholder="이름 (표시명)" />
+          <input class="input py-1.5 text-sm" name="user_name" value="${esc(u.name || "")}" placeholder="이름 (표시명)" autocomplete="off" />
           <input class="input py-1.5 text-sm" name="phone" autocomplete="off" value="${esc(u.mgr_phone || "")}" placeholder="전화" />
           <button class="btn-primary btn-sm sm:col-span-2" type="submit">저장</button>
         </form>

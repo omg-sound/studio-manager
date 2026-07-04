@@ -34,7 +34,7 @@ router.get("/", requireInvoice, (req, res) => {
     <form method="post" action="/workers" class="card mt-3 space-y-2">
       <div class="text-sm font-medium">외주 작업자 추가</div>
       <div class="grid gap-2 sm:grid-cols-3">
-        <input class="input py-1.5 text-sm" name="name" placeholder="이름 (작업 담당자 표시명)" required />
+        <input class="input py-1.5 text-sm" name="worker_name" placeholder="이름 (작업 담당자 표시명)" autocomplete="off" required />
         <input class="input py-1.5 text-sm" name="email" placeholder="이메일(선택)" />
         <input class="input py-1.5 text-sm" name="phone" autocomplete="off" placeholder="전화(선택)" />
       </div>
@@ -50,7 +50,7 @@ router.get("/", requireInvoice, (req, res) => {
 });
 
 router.post("/", requireChief, (req, res) => {
-  const name = String(req.body.name || "").trim();
+  const name = String(req.body.worker_name != null ? req.body.worker_name : req.body.name || "").trim(); // 폼 필드=worker_name(자동완성 회피)
   if (name) {
     const info = db()
       .prepare("INSERT INTO project_managers (name, email, phone, active) VALUES (?, ?, ?, 1)")
@@ -68,7 +68,7 @@ router.post("/:id/delete", requireChief, (req, res) => {
 // 외주 작업자 정보 수정(이름·전화·이메일) — 치프만(마스터 관리). user_id IS NULL로 외주만.
 router.post("/:id/edit", requireChief, (req, res) => {
   const id = Number(req.params.id);
-  const name = String(req.body.name || "").trim();
+  const name = String(req.body.worker_name != null ? req.body.worker_name : req.body.name || "").trim(); // 폼 필드=worker_name(자동완성 회피)
   if (name) {
     db().prepare("UPDATE project_managers SET name = ?, email = ?, phone = ? WHERE id = ? AND user_id IS NULL")
       .run(name, String(req.body.email || "").trim() || null, formatPhone(req.body.phone), id);
@@ -148,7 +148,7 @@ router.get("/:id", requireInvoice, (req, res) => {
     ? `<details class="card mb-3">
         <summary class="cursor-pointer text-sm font-medium text-muted hover:text-fg">정보 수정 (이름 · 전화 · 이메일)</summary>
         <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3">
-          <input class="input py-1.5 text-sm" name="name" value="${esc(w.name || "")}" placeholder="이름" required />
+          <input class="input py-1.5 text-sm" name="worker_name" value="${esc(w.name || "")}" placeholder="이름" autocomplete="off" required />
           <input class="input py-1.5 text-sm" name="email" value="${esc(w.email || "")}" placeholder="이메일" />
           <input class="input py-1.5 text-sm" name="phone" autocomplete="off" value="${esc(w.phone || "")}" placeholder="전화" />
           <button class="btn-primary btn-sm sm:col-span-3" type="submit">저장</button>

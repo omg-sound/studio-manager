@@ -135,37 +135,47 @@ function createParty(b = {}) {
   return createPerson(b);
 }
 
-/** 당사자 수정. kind는 불변(정체성). person/company/group 각 필드 갱신. */
+/**
+ * 당사자 수정. kind는 불변(정체성). person/company/group 각 필드 갱신.
+ *
+ * **부분 갱신 계약(2026-07-04 전면 적용)**: 호출부가 보낸 필드(`undefined` 아님)만 갱신하고,
+ * 안 보낸 필드는 기존값 보존. 빈 문자열 전송 = 의도적 비움(null 저장).
+ * — 근거: Google 동기화(personToContactFields)·유형별 폼처럼 **일부 필드만 다루는 호출부**가
+ *   나머지 필드를 조용히 지우던 데이터 손실 클래스(현금영수증에서 실증)의 근본 차단.
+ *   urlencoded 폼은 폼에 있는 input을 전부 전송하므로 "폼에 없는 필드=미전송=보존"이 정확히 성립.
+ */
 function updateParty(id, b = {}) {
-  b = { ...b, activity_name: b.activity_name != null ? b.activity_name : b.nickname }; // 활동명=nickname 별칭(연락처 폼)
   const cur = getParty(id);
   if (!cur) return;
+  // 미전송(undefined)=기존 보존, 전송=정규화 후 갱신(빈 문자열→null=비움).
+  const pick = (key, norm = blankToNull) => (b[key] !== undefined ? norm(b[key]) : (cur[key] != null ? cur[key] : null));
   if (cur.kind === "company") {
     const name = String(b.name || "").trim() || cur.name;
+    const ownerPartyId = b.owner_party_id !== undefined ? (b.owner_party_id ? Number(b.owner_party_id) : null) : (cur.owner_party_id || null);
     db().prepare(
       `UPDATE parties SET name=?, phone=?, email=?, memo=?, biz_no=?, owner_name=?, owner_party_id=?, address=?, roles=? WHERE id=?`
     ).run(
-      name, formatPhone(b.phone), blankToNull(b.email), blankToNull(b.memo),
-      formatBizNo(b.biz_no), blankToNull(b.owner_name), b.owner_party_id ? Number(b.owner_party_id) : null,
-      blankToNull(b.address), blankToNull(b.roles), Number(id)
+      name, pick("phone", formatPhone), pick("email"), pick("memo"),
+      pick("biz_no", formatBizNo), pick("owner_name"), ownerPartyId,
+      pick("address"), pick("roles"), Number(id)
     );
     return;
   }
-  // person / group
-  const name = resolveDisplayName({ ...b, name: b.name || cur.name });
-  const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (blankToNull(b.activity_name) ? 1 : cur.is_artist);
-  // 그룹 담당자(contact_party_id): 폼이 값을 보냈으면(undefined 아님) 갱신, 아니면 기존 보존(person 폼은 안 보냄).
+  // person / group — 활동명은 nickname 별칭(연락처 폼) 수용: 둘 다 미전송이면 보존.
+  const activityName = b.activity_name !== undefined ? blankToNull(b.activity_name)
+    : b.nickname !== undefined ? blankToNull(b.nickname)
+    : (cur.activity_name || null);
+  const name = resolveDisplayName({ ...b, activity_name: activityName, name: b.name || cur.name });
+  const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (activityName ? 1 : cur.is_artist);
   const contactPartyId = b.contact_party_id !== undefined ? (b.contact_party_id ? Number(b.contact_party_id) : null) : (cur.contact_party_id || null);
-  // 현금영수증 정보도 동일 규칙(미전송=기존 보존) — 과거엔 무조건 덮어써, 필드 없는 폼(Google 동기화 등) 저장 시 지워지던 데이터 손실 방지(2026-07-04).
-  const cashReceiptNo = b.cash_receipt_no !== undefined ? formatPhone(b.cash_receipt_no) : (cur.cash_receipt_no || null);
   db().prepare(
     `UPDATE parties SET name=?, activity_name=?, is_artist=?, phone=?, email=?, memo=?,
        family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=?, contact_party_id=? WHERE id=?`
   ).run(
-    name, blankToNull(b.activity_name), isArtist,
-    formatPhone(b.phone), blankToNull(b.email), blankToNull(b.memo),
-    blankToNull(b.family_name), blankToNull(b.given_name), blankToNull(b.honorific),
-    blankToNull(b.department), blankToNull(b.job_title), cashReceiptNo, contactPartyId, Number(id)
+    name, activityName, isArtist,
+    pick("phone", formatPhone), pick("email"), pick("memo"),
+    pick("family_name"), pick("given_name"), pick("honorific"),
+    pick("department"), pick("job_title"), pick("cash_receipt_no", formatPhone), contactPartyId, Number(id)
   );
 }
 

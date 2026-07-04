@@ -291,7 +291,7 @@ function resolveContactPartyId(b) {
 router.post("/", (req, res) => {
   const b = req.body;
   const type = CLIENT_TYPES.includes(b.type) ? b.type : "artist"; // 업체/아티스트/그룹(폼 hidden)
-  const name = String(b.name || "").trim();
+  const name = String(b.party_name != null ? b.party_name : b.name || "").trim(); // 폼 필드=party_name(Chrome name= 자동완성 회피 — 함정 #19·#21)
   if (!name) {
     const companies = listClients({}).filter((x) => x.kind === "company");
     return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
@@ -306,7 +306,7 @@ router.post("/", (req, res) => {
       name, phone: b.phone, email: b.email, memo: b.memo,
       biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
       owner_party_id: ownerId,
-      address: b.address, roles: companyRolesFrom(b),
+      address: b.biz_address != null ? b.biz_address : b.address, roles: companyRolesFrom(b),
     });
     ensureOwnerAffiliation(ownerId, id); // 대표자의 직장(소속) = 이 회사
   } else {
@@ -341,7 +341,7 @@ router.post("/:id", (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const isFetch = req.get("X-Requested-With") === "fetch"; // 자동저장(AJAX)
   const b = req.body;
-  const name = String(b.name || "").trim();
+  const name = String(b.party_name != null ? b.party_name : b.name || "").trim(); // 폼 필드=party_name(Chrome name= 자동완성 회피 — 함정 #19·#21)
   if (!name) {
     if (isFetch) return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     const files = listClientFiles(id);
@@ -353,7 +353,7 @@ router.post("/:id", (req, res) => {
     // company 필드
     biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
     owner_party_id: (b.owner_id || String(b.owner_name || "").trim()) ? resolveOwnerParty(b.owner_name, b.owner_id) : (c.owner_party_id || null),
-    address: b.address, roles: c.kind === "company" ? companyRolesFrom(b) : null,
+    address: b.biz_address != null ? b.biz_address : b.address, roles: c.kind === "company" ? companyRolesFrom(b) : null,
     // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신)
     activity_name: c.activity_name, is_artist: c.is_artist,
     cash_receipt_no: c.kind === "group" ? c.cash_receipt_no : b.cash_receipt_no, // 그룹은 폼에 필드 없음 → 기존값 보존(개인 아티스트만 현금영수증)
@@ -697,7 +697,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <input type="hidden" name="type" value="${type}" />
       <div class="flex items-center gap-2"><span class="badge ${type === "company" ? "badge-neutral" : "badge-info"}">${typeLabel}</span>${isEdit ? `<span class="text-xs text-muted">유형은 변경할 수 없습니다</span>` : ""}</div>
-      <div><label class="label">${nameLabel}</label><input class="input" name="name" value="${esc(c.name || "")}" required /></div>
+      <div><label class="label">${nameLabel}</label><input class="input" name="party_name" value="${esc(c.name || "")}" autocomplete="off" required /></div>
       ${type === "company" ? `
       <div class="space-y-4">
         <div>
@@ -712,7 +712,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
             ${personCombo({ idField: "owner_id", nameField: "owner_name", selectedId: c.owner_party_id || null, initialName: c.owner_name || "", options: contactOptions(), entityLabel: "대표자", placeholder: "대표자 — 검색 또는 새로 등록" })}
           </div>
         </div>
-        <div><label class="label">사업장 주소</label><input class="input" name="address" value="${esc(c.address || "")}" /></div>
+        <div><label class="label">사업장 주소</label><input class="input" name="biz_address" value="${esc(c.address || "")}" autocomplete="off" /></div>
       </div>` : ""}
       ${type === "artist" ? `
       <div>

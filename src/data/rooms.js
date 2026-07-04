@@ -20,7 +20,7 @@ function listRooms({ includeInactive = false } = {}) {
 }
 
 function createRoom(input = {}) {
-  const name = String(input.name || "").trim();
+  const name = String(input.room_name != null ? input.room_name : input.name || "").trim();
   if (!name) throw new Error("ROOM_NAME_REQUIRED");
   const sort = Number.isFinite(Number(input.sort_order)) ? Number(input.sort_order) : 0;
   const info = db().prepare("INSERT INTO rooms (name, sort_order, active) VALUES (?, ?, 1)").run(name, sort);
