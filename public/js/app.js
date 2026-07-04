@@ -266,8 +266,22 @@
   function updateConflictWarn() {
     if (conflictWarn) conflictWarn.hidden = !overlapDetected();
   }
-  // 세션 종류=녹음일 때만 [data-show-when="rec"] 요소 표시(녹음 종류 select 등).
+  // 세션 종류 kind(녹음→recording·촬영→filming) — 세션 종류 select data-rate-kinds="녹음:recording,촬영:filming"
+  function rateKindOf(type) {
+    var raw = sessionTypeSel ? (sessionTypeSel.getAttribute("data-rate-kinds") || "") : "";
+    var map = {};
+    raw.split(",").forEach(function (p) { var kv = p.split(":"); if (kv[0]) map[kv[0].trim()] = (kv[1] || "").trim(); });
+    return map[type] || "recording";
+  }
+  // 세션 종류에 맞춰 단가 select 옵션을 녹음/촬영 템플릿으로 교체 — 촬영 고르면 촬영 단가만 보이게.
+  function swapRateOptions() {
+    if (!rateSel || !sessionTypeSel) return;
+    var tpl = form.querySelector("[data-rate-opts-" + rateKindOf(sessionTypeSel.value) + "]");
+    if (tpl && rateSel.innerHTML !== tpl.innerHTML) rateSel.innerHTML = tpl.innerHTML;
+  }
+  // 대관 세션(녹음·촬영)일 때만 [data-show-when="rec"] 요소 표시 + 종류에 맞는 단가 옵션으로 교체.
   function syncRecFields() {
+    swapRateOptions();
     var isRec = isRecType();
     Array.prototype.forEach.call(showWhenRec, function (el) { el.hidden = !isRec; });
   }

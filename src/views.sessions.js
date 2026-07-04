@@ -2,7 +2,7 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
@@ -107,19 +107,19 @@ function durationButtons(initMinutes = 0) {
  * '녹음 종류' select — 단가표 항목(rate_items)을 분류(스튜디오/로케이션 녹음)로 묶는다. data-minutes로 1Pro 계산.
  * required=true면 data-rate-required(녹음 폼: 선택해야 시작 시간 입력 가능). 편집·믹스 폼은 false.
  */
-function rateSelectGrouped(rateItems, currentId, required = false) {
+/** 단가 항목 옵션 HTML(미지정 + 카테고리별 optgroup). 세션 종류에 따라 녹음/촬영 항목만 넘겨 렌더 — app.js가 종류 변경 시 이 옵션을 통째로 교체. */
+function rateOptionsHtml(rateItems, currentId) {
   const groups = {};
   rateItems.forEach((r) => {
-    const c = r.category || RECORDING_CATEGORIES[0];
+    const c = r.category || RATE_CATEGORIES[0];
     (groups[c] = groups[c] || []).push(r);
   });
-  const cats = [...RECORDING_CATEGORIES.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !RECORDING_CATEGORIES.includes(c))];
+  const cats = [...RATE_CATEGORIES.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !RATE_CATEGORIES.includes(c))];
   const opt = (r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`;
-  const body = cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
-  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select ${required ? "data-rate-required" : ""}>
-      <option value="" data-minutes="0">녹음 단가 항목 미지정</option>
-      ${body}
-    </select>`;
+  return `<option value="" data-minutes="0">단가 항목 미지정</option>` + cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
+}
+function rateSelectGrouped(rateItems, currentId, required = false) {
+  return `<select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select ${required ? "data-rate-required" : ""}>${rateOptionsHtml(rateItems, currentId)}</select>`;
 }
 
 /**
@@ -132,17 +132,24 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const roomList = resolveRooms(rooms);
   const engineerField = `<div><label class="label-sm">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
-  // 세션 종류는 항상 선택 가능. 녹음 단가 항목은 대관 세션(녹음·촬영)일 때만 노출(app.js data-show-when="rec", data-rec-types 참조).
-  // 한 줄(3열): 세션 종류 | 녹음 단가 항목 | 룸(같은 룸끼리만 겹침 검사). 담당 엔지니어는 상단(상태 자리)로 이동, 상태 필드는 제거.
+  // 세션 종류는 항상 선택 가능. 단가 항목은 대관 세션(녹음·촬영)일 때만 노출(app.js data-show-when="rec").
+  // 단가 항목은 세션 종류에 따라 녹음/촬영 항목만 보인다 — 서버는 현재 종류 kind로 렌더하고, app.js가 종류 변경 시 아래 템플릿(녹음/촬영)으로 옵션 교체.
+  const recItems = rateItems.filter((r) => rateCategoryKind(r.category) === "recording");
+  const filmItems = rateItems.filter((r) => rateCategoryKind(r.category) === "filming");
+  const curKind = SESSION_TYPE_RATE_KIND[s.session_type] || "recording";
+  const curItems = curKind === "filming" ? filmItems : recItems;
+  const rateKindsAttr = Object.entries(SESSION_TYPE_RATE_KIND).map(([k, v]) => `${k}:${v}`).join(","); // "녹음:recording,촬영:filming"
   const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
          <div><label class="label-sm">세션 종류</label>
-          <select class="input py-1.5 text-sm" name="session_type" data-rec-types="${esc(RENTAL_SESSION_TYPES.join(","))}">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
-         <div data-show-when="rec"><label class="label-sm">녹음 단가 항목 <span class="font-normal text-muted">(시간제 단가)</span></label>
-          ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
+          <select class="input py-1.5 text-sm" name="session_type" data-rec-types="${esc(RENTAL_SESSION_TYPES.join(","))}" data-rate-kinds="${esc(rateKindsAttr)}">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
+         <div data-show-when="rec"><label class="label-sm">단가 항목 <span class="font-normal text-muted">(시간제 · 종류에 맞춰 녹음/촬영)</span></label>
+          <select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>${rateOptionsHtml(curItems, s.rate_item_id)}</select>
+          <template data-rate-opts-recording>${rateOptionsHtml(recItems, s.rate_item_id)}</template>
+          <template data-rate-opts-filming>${rateOptionsHtml(filmItems, s.rate_item_id)}</template></div>
          <div><label class="label-sm">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>
           ${roomSelect(roomList, s.room_id)}</div>
        </div>
-       ${explain(`청구하려면 <b>세션 종류=녹음</b> + <b>녹음 단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
+       ${explain(`청구하려면 <b>세션 종류=녹음/촬영</b> + <b>단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
   // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
   // 동적 clone 행은 app.js window.__initPersonCombos(new row)로 초기화(디렉터 add/remove 핸들러).
   const allContacts = contactOptions();

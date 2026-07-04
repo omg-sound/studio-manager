@@ -3,7 +3,13 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, requireEditor, isChief, syncUserToManager, findUserById } = require("../auth");
-const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
+const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, FILMING_CATEGORIES, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
+
+/** 단가 항목 카테고리 select 옵션 — 녹음/촬영 optgroup(대관 종류별). current 선택 반영. */
+function rateCategoryOptions(current = "") {
+  const grp = (label, cats) => `<optgroup label="${esc(label)}">${cats.map((c) => `<option value="${esc(c)}" ${c === current ? "selected" : ""}>${esc(c)}</option>`).join("")}</optgroup>`;
+  return grp("녹음", RECORDING_CATEGORIES) + grp("촬영", FILMING_CATEGORIES);
+}
 const {
   listProjectManagers,
   listRooms,
@@ -132,15 +138,13 @@ function contentTab() {
   return `
       <section class="card space-y-4">
         <div>
-          <h2 class="font-display text-lg font-semibold">단가표 · 녹음 종류</h2>
-          ${explain(`분류(스튜디오 녹음 / 로케이션 녹음)별로 녹음 종류(보컬 녹음, 악기 녹음 등)를 추가합니다. 녹음 세션 폼의 '녹음 종류'에 이 항목이 분류로 묶여 표시됩니다. 기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금.`)}
+          <h2 class="font-display text-lg font-semibold">단가표 · 녹음/촬영 종류</h2>
+          ${explain(`대관 세션(녹음·촬영)의 시간제 단가 항목을 분류(스튜디오/로케이션 녹음·촬영)별로 추가합니다. 세션 폼의 '단가 항목'에 세션 종류(녹음/촬영)에 맞춰 분류로 묶여 표시됩니다. 기준 시간(1Pro) 안은 기준가, 초과는 단위 시간당 추가 과금.`)}
         </div>
         <form method="post" action="/settings/rate-items" class="space-y-2 rounded-lg border border-border bg-bg p-3">
           <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input py-1.5 text-sm" name="name" placeholder="녹음 종류명 (예: 보컬 녹음)" required />
-            <select class="input py-1.5 text-sm" name="category">
-              ${RECORDING_CATEGORIES.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}
-            </select>
+            <input class="input py-1.5 text-sm" name="name" placeholder="단가 항목명 (예: 보컬 녹음 · 뮤직비디오 촬영)" required />
+            <select class="input py-1.5 text-sm" name="category">${rateCategoryOptions()}</select>
           </div>
           <div class="grid gap-2 sm:grid-cols-2">
             <div>
@@ -748,9 +752,7 @@ function rateItemRow(r) {
         <form method="post" action="/settings/rate-items/${r.id}" class="mt-2 space-y-2" data-dirty-form>
           <div class="grid gap-2 sm:grid-cols-2">
             <input class="input py-1.5 text-sm" name="name" value="${esc(r.name)}" required />
-            <select class="input py-1.5 text-sm" name="category">
-              ${RECORDING_CATEGORIES.map((c) => `<option value="${esc(c)}" ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("")}
-            </select>
+            <select class="input py-1.5 text-sm" name="category">${rateCategoryOptions(cat)}</select>
           </div>
           <div class="grid gap-2 sm:grid-cols-2">
             <div><label class="label mb-0.5 text-xs">기준 시간(시간)</label><input class="input py-1.5 text-sm" name="base_hours" inputmode="decimal" value="${esc(String(baseHours))}" /></div>

@@ -112,6 +112,12 @@ const PROJECT_SERVICES = [
 ];
 // 단가표(녹음 종류) 분류 — 녹음 세션 폼에서 이 분류로 묶어 보여준다.
 const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
+const FILMING_CATEGORIES = ["스튜디오 촬영", "로케이션 촬영"]; // 촬영 단가 종류(대관). rate_items.category로 녹음/촬영 구분(별도 컬럼 없음).
+const RATE_CATEGORIES = [...RECORDING_CATEGORIES, ...FILMING_CATEGORIES]; // 단가 항목 전체 카테고리(녹음+촬영)
+// 카테고리 → 종류(kind). 촬영 카테고리면 filming, 그 외 recording. 세션 종류(녹음/촬영)와 매칭해 폼 rate 옵션을 거른다.
+const rateCategoryKind = (cat) => (FILMING_CATEGORIES.includes(cat) ? "filming" : "recording");
+// 세션 종류(대관) → 단가 kind. 녹음=recording, 촬영=filming.
+const SESSION_TYPE_RATE_KIND = { 녹음: "recording", 촬영: "filming" };
 const CLIENT_KINDS = ["아티스트", "그룹", "소속사/레이블", "제작사", "기타"]; // 그룹=밴드·아이돌 그룹 등 그룹 아티스트(parties.kind='group')
 const COMPANY_ROLES = ["소속사/레이블", "제작사"]; // 업체 역할 다중(겸업: 소속사가 제작도 함). CSV로 clients.roles에 저장
 const DELIVERABLE_KINDS = ["녹음본", "튠본", "믹스", "스템", "마스터", "레퍼런스", "기타"];
@@ -253,7 +259,11 @@ module.exports = {
   SESSION_START_SLOTS,
   timeSlots,
   RECORDING_CATEGORIES,
-  normalizeRecordingCategory: (v) => normalize(v, RECORDING_CATEGORIES),
+  FILMING_CATEGORIES,
+  RATE_CATEGORIES,
+  rateCategoryKind,
+  SESSION_TYPE_RATE_KIND,
+  normalizeRecordingCategory: (v) => normalize(v, RATE_CATEGORIES), // 녹음+촬영 카테고리 모두 허용(촬영 항목이 녹음으로 강제되지 않게)
   normalizeSessionType: (v) => normalize(v, SESSION_TYPES),
   normalizeSessionStatus: (v) => normalize(v, SESSION_STATUSES),
   normalizeClientKind: (v) => normalize(v, CLIENT_KINDS),
