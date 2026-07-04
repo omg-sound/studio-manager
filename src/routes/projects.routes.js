@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireAuth, requireEditor, requireBilling, canEdit, canBill } = require("../auth");
+const { requireAuth, requireEditor, requireBilling, requireChief, canEdit, canBill, isChief } = require("../auth");
 const {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
@@ -157,7 +157,8 @@ router.get("/", requireAuth, (req, res) => {
   } else if (!activeRows.length) {
     list = emptyState(tab === "done" ? "완료된 프로젝트가 없습니다." : "진행 중인 프로젝트가 없습니다.", { card: true });
   } else {
-    list = `<div class="space-y-2">${activeRows.map((p) => projectListRow(p, summaries[p.id])).join("")}</div>`;
+    const chief = isChief(req.user); // 치프만 목록에서 작성일 인라인 수정
+    list = `<div class="space-y-2">${activeRows.map((p) => projectListRow(p, summaries[p.id], { isChief: chief, tab, q })).join("")}</div>`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
@@ -219,7 +220,7 @@ function trackCount(p) {
  *  ① 상단(제목 / 아티스트·회사 / 우측 PM·금액) → 프로젝트 상세로 이동(<a>).
  *  ② 하단 요약 줄(곡·콘텐츠·예정/완료 세션 수) → 접기 토글, 펼치면 세션 일정·곡별 작업자 인라인 요약(프로젝트 안 안 가고 미리보기).
  */
-function projectListRow(p, summary) {
+function projectListRow(p, summary, { isChief: chief = false, tab = "active", q = "" } = {}) {
   const metaLine = [p.artist, p.client_name, contactMetaPart(p)].filter(Boolean).join(" · ") || "정보 미정";
   const n = trackCount(p);
   const amt = projectAmount(p);
@@ -244,12 +245,20 @@ function projectListRow(p, summary) {
   // 한 프로젝트 = 밝은 바탕(bg-surface=흰색) 라운드 블록 하나(제목행 + 요약 접기행). 블록 사이 여백(space-y)으로 구분.
   // 호버 강조는 두 영역(상단 링크 / 하단 요약 토글)에 각각 row-link(hover:bg-elevated/60)로 분리 — 위·아래가 따로 강조된다.
   // 내부 제목→요약 구분선은 옅게(border/40) 종속.
+  // 작성일(생성일) — 링크 밖 상단 스트립. 치프는 날짜 인라인 수정(data-autosubmit), 그 외는 표시만.
+  const dateStr = esc(String(p.created_at || "").slice(0, 10));
+  const dateRow = chief
+    ? `<form method="post" action="/projects/${p.id}/created-at" class="px-4 pt-2.5">
+         <input type="hidden" name="tab" value="${esc(tab)}" />${q ? `<input type="hidden" name="q" value="${esc(q)}" />` : ""}
+         <input type="date" name="created_at" value="${dateStr}" data-autosubmit aria-label="작성일 수정" class="rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" />
+       </form>`
+    : `<div class="px-4 pt-2.5 text-xs text-muted tabular">${dateStr}</div>`;
   return `
     <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
-      <a href="/projects/${p.id}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
+      ${dateRow}
+      <a href="/projects/${p.id}" class="row-link flex items-start justify-between gap-3 px-4 pb-3 pt-1">
         <div class="min-w-0">
-          <div class="text-xs text-muted tabular">${esc(String(p.created_at || "").slice(0, 10))}</div>
-          <div class="mt-0.5 truncate font-semibold">${esc(p.title)}</div>
+          <div class="truncate font-semibold">${esc(p.title)}</div>
           <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
           ${nextSessionLine(p)}
         </div>
@@ -330,6 +339,20 @@ router.post("/", requireEditor, (req, res) => {
       memo: String(b.memo || "").trim() || null,
     });
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
+});
+
+// ── 작성일(생성일) 수정 (치프 전용) — 목록에서 인라인 date 입력, 시각(HH:MM:SS)은 보존 ──
+router.post("/:id/created-at", requireChief, (req, res) => {
+  const id = Number(req.params.id);
+  const date = String(req.body.created_at || "").trim();
+  const p = db().prepare("SELECT created_at FROM projects WHERE id = ?").get(id);
+  if (p && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const timePart = String(p.created_at || "").slice(10); // " HH:MM:SS"(있으면 보존해 같은 날 정렬 안정)
+    db().prepare("UPDATE projects SET created_at = ? WHERE id = ?").run(date + (timePart || " 00:00:00"), id);
+  }
+  const tab = req.body.tab === "done" ? "done" : "active";
+  const q = String(req.body.q || "").trim();
+  res.redirect(`/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`);
 });
 
 // ── 상세 ──
