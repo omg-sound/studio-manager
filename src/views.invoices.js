@@ -3,7 +3,7 @@
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
 const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, DOC_TYPES, docNumberWithType } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, listRow, copyable } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, copyable } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -243,7 +243,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     </details>`;
   }
 
-  // 목록 페이지: listRow 활용(listGroup 래퍼와 함께 사용)
+  // 목록 페이지: 프로젝트 목록처럼 각 청구서를 개별 카드로(사용자 요청). 프로젝트 카드와 동일 톤(rounded-xl·border-border/60·row-link 호버).
   const left = `
     <div class="truncate font-medium">${esc(inv.title)}</div>
     <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
@@ -252,7 +252,13 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
     ${balLine}
     <div class="text-[11px] text-muted">${dueLine}</div>`;
-  return listRow({ href: `/invoices/${inv.id}`, left, right });
+  return `
+    <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
+      <a href="/invoices/${inv.id}" class="row-link flex items-start justify-between gap-4 px-4 py-3">
+        <div class="min-w-0">${left}</div>
+        <div class="shrink-0 pl-2 text-right">${right}</div>
+      </a>
+    </div>`;
 }
 
 /**

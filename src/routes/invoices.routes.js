@@ -25,7 +25,7 @@ const {
   addPayment,
   deletePayment,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, listGroup, explain, payerCombo } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo } = require("../views");
 const { invoiceRow, invoiceBadge, payerInfoCard, paymentHistory } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
@@ -130,7 +130,7 @@ router.get("/", requireBilling, (req, res) => {
     : "";
 
   const list = rows.length
-    ? listGroup({ rows: rows.map((i) => invoiceRow(i)).join("") })
+    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i)).join("")}</div>`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
