@@ -1292,8 +1292,11 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     document.addEventListener("party-created", function (e) { // 어디서든 새 사람 생성/갱신되면 이 담당자 콤보 옵션에 반영
       var p = e.detail; if (!p || p.kind !== "person") return;
       var ex = opts.filter(function (o) { return String(o.id) === String(p.id); })[0];
-      if (ex) { if (p.company) ex.company = p.company; if (p.job_title) ex.job_title = p.job_title; if (p.phone) ex.phone = p.phone; return; } // 기존 항목 갱신(소속·직책 등)
-      opts.push({ id: p.id, name: p.name, phone: p.phone || "", email: p.email || "", company: p.company || "", job_title: p.job_title || "", group: p.group || "" });
+      if (ex) { if (p.company) ex.company = p.company; if (p.job_title) ex.job_title = p.job_title; if (p.phone) ex.phone = p.phone; if (p.realName && !ex.alt) ex.alt = p.realName; return; } // 기존 항목 갱신(소속·직책·본명 등)
+      // 아티스트 간이 등록 브로드캐스트는 name=활동명·realName=본명 → 담당자는 본명 우선 표시, 활동명은 검색 보조(둘 다 검색되게).
+      var pcPrimary = p.realName || p.name;
+      var pcAlt = p.realName ? p.name : (p.activity || "");
+      opts.push({ id: p.id, name: pcPrimary, alt: pcAlt, phone: p.phone || "", email: p.email || "", company: p.company || "", job_title: p.job_title || "", group: p.group || "" });
     });
     var view = [];
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
@@ -1324,9 +1327,9 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }).slice(0, 12);
-        html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
-        if (!view.some(function (o) { return String(o.name).toLowerCase() === q; })) html += newRow(input.value.trim());
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명 둘 다 검색
+        html = view.map(function (o, i) { var nm = esc(o.name) + (o.alt ? ' <span class="text-muted">(' + esc(o.alt) + ')</span>' : ""); return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + nm + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
+        if (!view.some(function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q); })) html += newRow(input.value.trim());
       }
       pop.innerHTML = html; show();
     }
@@ -1361,7 +1364,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, phone: phone, email: email, company: company, isArtist: !!activity }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, activity: activity, phone: phone, email: email, company: company, isArtist: !!activity }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
