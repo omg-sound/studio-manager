@@ -69,6 +69,12 @@ function deleteRateItem(id) {
   db().prepare("DELETE FROM rate_items WHERE id = ?").run(id);
 }
 
+/** id로 단가 항목 1건(없으면 null) — 캘린더 이벤트 종류 표기 등. */
+function getRateItem(id) {
+  if (!id) return null;
+  return db().prepare("SELECT * FROM rate_items WHERE id = ?").get(id) || null;
+}
+
 /**
  * 진행 분(minutes)에 대한 자동 산정 금액(3단계에서 사용).
  * - 기준 시간 이내 → 기준가. 초과분은 초과 단위(분)로 올림하여 단위당 과금.
@@ -95,6 +101,7 @@ function computeRatePrice(item, minutes) {
 
 module.exports = {
   listRateItems,
+  getRateItem,
   createRateItem,
   updateRateItem,
   deleteRateItem,

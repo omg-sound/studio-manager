@@ -5,6 +5,7 @@ const { requireAuth, requireEditor, canEdit } = require("../auth");
 const {
   listProjectManagers,
   listRateItems,
+  getRateItem,
   listRooms,
   upcomingSessions,
   pastSessions,
@@ -30,13 +31,27 @@ const calendar = require("../calendar");
 const router = express.Router();
 
 /** 세션+프로젝트 → 구글 캘린더 일정 입력(제목=제작사·아티스트, 제작사 없으면 레이블(소속사)·아티스트, 장소=관리 기본값). */
+/**
+ * 캘린더 이벤트 '종류' 표기 — 녹음이면 녹음 단가 항목명(예: '녹음 · 보컬녹음'),
+ * 그 외 세션 종류는 '{종류} 세션'(믹싱 세션·마스터링 세션 등). 사용자 요청.
+ */
+function sessionTypeLabel(session) {
+  const t = session.session_type;
+  if (!t) return "";
+  if (t === "녹음") {
+    const ri = session.rate_item_id ? getRateItem(session.rate_item_id) : null;
+    return ri && ri.name ? `녹음 · ${ri.name}` : "녹음 세션";
+  }
+  return `${t} 세션`;
+}
+
 function eventInputForSession(session, project) {
   const company = project.production_company || project.artist_company; // 제작사 우선, 없으면 레이블(레이블 자체 제작분)
   const title = [company, project.artist].filter(Boolean).join(" · ") || project.title || "스튜디오 세션";
   // 담당 디렉터(다대다) 이름 — 활동명 우선. 캘린더 설명에 포함.
   const directors = session.id ? listSessionDirectors(session.id).map((d) => d.activity_name || d.name).filter(Boolean) : [];
   const description = [
-    session.session_type ? `종류: ${session.session_type}` : "",
+    session.session_type ? `종류: ${sessionTypeLabel(session)}` : "",
     session.booker_name ? `예약: ${session.booker_name}` : "",
     session.engineer_name ? `엔지니어: ${session.engineer_name}` : "",
     directors.length ? `디렉터: ${directors.join(", ")}` : "",
