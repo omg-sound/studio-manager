@@ -10,7 +10,7 @@ const assert = require("node:assert");
 
 const { init, db } = require("../src/db");
 const { sessionRateAmount } = require("../src/data");
-const { RENTAL_SESSION_TYPES, SESSION_TYPES, FILMING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("../src/config");
+const { RENTAL_SESSION_TYPES, SESSION_TYPES, RECORDING_CATEGORIES, FILMING_CATEGORIES, PERFORMANCE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("../src/config");
 
 init();
 
@@ -29,13 +29,14 @@ const rateId = Number(
 const baseSession = { rate_item_id: rateId, start_time: "10:00", end_time: "14:00" }; // 240분=1Pro
 
 test("config: 대관 종류·kind 매핑 정합", () => {
-  assert.deepEqual(RENTAL_SESSION_TYPES, ["녹음", "촬영"], "대관 매출 세션 = 녹음·촬영");
+  assert.deepEqual(RENTAL_SESSION_TYPES, ["녹음", "촬영", "공연"], "대관 매출 세션 = 녹음·촬영·공연");
   for (const t of RENTAL_SESSION_TYPES) assert.ok(SESSION_TYPES.includes(t), `${t}는 세션 종류에 존재`);
   // 대관 종류마다 단가 kind가 정의돼야 세션폼 옵션 스왑이 동작한다.
   for (const t of RENTAL_SESSION_TYPES) assert.ok(SESSION_TYPE_RATE_KIND[t], `${t}의 단가 kind 정의`);
-  // 촬영 카테고리는 filming, 녹음 카테고리는 recording으로 갈라져야 한다.
+  // 카테고리 → kind 분기: 녹음=recording·촬영=filming·공연=performance.
+  for (const c of RECORDING_CATEGORIES) assert.equal(rateCategoryKind(c), "recording");
   for (const c of FILMING_CATEGORIES) assert.equal(rateCategoryKind(c), "filming");
-  for (const c of RATE_CATEGORIES.filter((c) => !FILMING_CATEGORIES.includes(c))) assert.equal(rateCategoryKind(c), "recording");
+  for (const c of PERFORMANCE_CATEGORIES) assert.equal(rateCategoryKind(c), "performance");
 });
 
 test("sessionRateAmount: 녹음·촬영은 산정, 그 외 종류는 null", () => {

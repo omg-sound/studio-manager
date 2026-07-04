@@ -132,20 +132,19 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const roomList = resolveRooms(rooms);
   const engineerField = `<div><label class="label-sm">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
-  // 세션 종류는 항상 선택 가능. 단가 항목은 대관 세션(녹음·촬영)일 때만 노출(app.js data-show-when="rec").
-  // 단가 항목은 세션 종류에 따라 녹음/촬영 항목만 보인다 — 서버는 현재 종류 kind로 렌더하고, app.js가 종류 변경 시 아래 템플릿(녹음/촬영)으로 옵션 교체.
-  const recItems = rateItems.filter((r) => rateCategoryKind(r.category) === "recording");
-  const filmItems = rateItems.filter((r) => rateCategoryKind(r.category) === "filming");
+  // 세션 종류는 항상 선택 가능. 단가 항목은 대관 세션(녹음·촬영·공연)일 때만 노출(app.js data-show-when="rec").
+  // 단가 항목은 세션 종류 kind에 맞는 항목만 보인다 — 서버는 현재 kind로 렌더 + kind별 <template> 임베드, app.js가 종류 변경 시 옵션 교체.
+  const rateKinds = [...new Set(Object.values(SESSION_TYPE_RATE_KIND))]; // recording·filming·performance …(config가 단일 진실원천)
+  const itemsByKind = Object.fromEntries(rateKinds.map((k) => [k, rateItems.filter((r) => rateCategoryKind(r.category) === k)]));
   const curKind = SESSION_TYPE_RATE_KIND[s.session_type] || "recording";
-  const curItems = curKind === "filming" ? filmItems : recItems;
-  const rateKindsAttr = Object.entries(SESSION_TYPE_RATE_KIND).map(([k, v]) => `${k}:${v}`).join(","); // "녹음:recording,촬영:filming"
+  const curItems = itemsByKind[curKind] || [];
+  const rateKindsAttr = Object.entries(SESSION_TYPE_RATE_KIND).map(([k, v]) => `${k}:${v}`).join(","); // "녹음:recording,촬영:filming,공연:performance"
   const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
          <div><label class="label-sm">세션 종류</label>
           <select class="input py-1.5 text-sm" name="session_type" data-rec-types="${esc(RENTAL_SESSION_TYPES.join(","))}" data-rate-kinds="${esc(rateKindsAttr)}">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
          <div data-show-when="rec"><label class="label-sm">단가 항목</label>
           <select class="input py-1.5 text-sm" name="rate_item_id" data-rate-select>${rateOptionsHtml(curItems, s.rate_item_id)}</select>
-          <template data-rate-opts-recording>${rateOptionsHtml(recItems, s.rate_item_id)}</template>
-          <template data-rate-opts-filming>${rateOptionsHtml(filmItems, s.rate_item_id)}</template></div>
+          ${rateKinds.map((k) => `<template data-rate-opts-${k}>${rateOptionsHtml(itemsByKind[k], s.rate_item_id)}</template>`).join("")}</div>
          <div><label class="label-sm">룸</label>
           ${roomSelect(roomList, s.room_id)}</div>
        </div>

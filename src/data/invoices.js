@@ -13,6 +13,8 @@
 const { db } = require("../db");
 const { todayYmd, formatYmdShort } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
+const { RENTAL_SESSION_TYPES } = require("../config");
+const RENTAL_IN = RENTAL_SESSION_TYPES.map((t) => `'${t}'`).join(", "); // SQL IN절(정적 config 값 — 인젝션 무관)
 const { canBill, canInvoice } = require("../auth");
 const { getProjectForUser } = require("./projects"); // 무순환
 const { getParty, listPersonsForOrg } = require("./parties"); // 무순환 — 청구처(payer)=parties.id
@@ -166,7 +168,7 @@ function listBillableSessionsForProject(user, projectId) {
       `SELECT s.* FROM sessions s
        WHERE s.project_id = ?
          AND s.status <> '취소'
-         AND s.session_type IN ('녹음', '촬영')
+         AND s.session_type IN (${RENTAL_IN})
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
@@ -266,7 +268,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
     const rawSessions = d
       .prepare(
         `SELECT s.* FROM sessions s
-         WHERE s.project_id = ? AND s.status <> '취소' AND s.session_type IN ('녹음', '촬영')
+         WHERE s.project_id = ? AND s.status <> '취소' AND s.session_type IN (${RENTAL_IN})
            AND s.rate_item_id IS NOT NULL AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
            AND s.id IN (${placeholders})
            AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)

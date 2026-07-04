@@ -3,12 +3,12 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, requireEditor, isChief, syncUserToManager, findUserById } = require("../auth");
-const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, FILMING_CATEGORIES, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
+const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, FILMING_CATEGORIES, PERFORMANCE_CATEGORIES, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
 
-/** 단가 항목 카테고리 select 옵션 — 녹음/촬영 optgroup(대관 종류별). current 선택 반영. */
+/** 단가 항목 카테고리 select 옵션 — 녹음/촬영/공연 optgroup(대관 종류별). current 선택 반영. */
 function rateCategoryOptions(current = "") {
   const grp = (label, cats) => `<optgroup label="${esc(label)}">${cats.map((c) => `<option value="${esc(c)}" ${c === current ? "selected" : ""}>${esc(c)}</option>`).join("")}</optgroup>`;
-  return grp("녹음", RECORDING_CATEGORIES) + grp("촬영", FILMING_CATEGORIES);
+  return grp("녹음", RECORDING_CATEGORIES) + grp("촬영", FILMING_CATEGORIES) + grp("공연", PERFORMANCE_CATEGORIES);
 }
 const {
   listProjectManagers,

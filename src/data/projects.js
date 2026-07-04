@@ -12,6 +12,8 @@
 const { db } = require("../db");
 const { minutesBetween, todayYmd } = require("../lib/date");
 const { computeRatePrice } = require("./rate-items"); // 무순환(rate-items는 projects를 호출하지 않음)
+const { RENTAL_SESSION_TYPES } = require("../config");
+const RENTAL_IN = RENTAL_SESSION_TYPES.map((t) => `'${t}'`).join(", "); // SQL IN절(정적 config 값 — 인젝션 무관)
 
 /** 프로젝트 폼 자동완성용 — 기존 프로젝트의 아티스트·소속사/레이블·제작사 중복 제거 목록. */
 function distinctProjectFields() {
@@ -51,7 +53,7 @@ function sessionAmountsByProject(projectIds) {
        FROM sessions s
        JOIN rate_items ri ON ri.id = s.rate_item_id
        WHERE s.project_id IN (${placeholders})
-         AND s.session_type IN ('녹음', '촬영')
+         AND s.session_type IN (${RENTAL_IN})
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
          AND s.status <> '취소'`
