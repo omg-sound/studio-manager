@@ -297,6 +297,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
         <form id="del-sess-${s.id}" method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?" class="hidden"></form>
         <form method="post" action="/sessions/${s.id}" data-session-form data-session-id="${s.id}" data-dirty-form>
           ${sessionBookingFields(s, managers, rateItems, rooms)}
+          <div class="mt-3 border-t border-border/50"></div>
           ${dirtyActionRow({ deleteFormId: `del-sess-${s.id}`, deleteLabel: "삭제", saveLabel: "세션 저장" })}
         </form>
       </div>
