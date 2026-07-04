@@ -260,7 +260,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
          <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
            <span>상태 처리</span>${detailsChevron()}
          </summary>
-         <div class="flex flex-wrap gap-2 border-t border-border/40 bg-elevated/40 px-4 py-3">
+         <div class="flex flex-wrap justify-end gap-2 border-t border-border/40 bg-elevated/40 px-4 py-3">
            <form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="계산서 발행" />${retHidden}<button class="btn-ghost btn-sm" type="submit">계산서 발행 완료</button></form>
            <form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="입금완료" />${retHidden}<button class="btn-primary btn-sm" type="submit">입금완료</button></form>
          </div>
