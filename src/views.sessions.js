@@ -2,10 +2,10 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
+const { SESSION_STATUS_BADGE, RECORDING_CATEGORIES } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
+const { listRooms, studioStartSlots, getDefaultBooker, getProMinutes, getSessionTypes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -132,11 +132,13 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const roomList = resolveRooms(rooms);
   const engineerField = `<div><label class="label-sm">담당 엔지니어</label>
         <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
-  // 세션 종류(녹음/믹싱/마스터링/기타)는 항상 선택 가능. 녹음 단가 항목은 세션 종류=녹음일 때만 노출(app.js data-show-when="rec").
-  // 한 줄(3열): 세션 종류 | 녹음 단가 항목 | 룸(같은 룸끼리만 겹침 검사). 담당 엔지니어는 상단(상태 자리)로 이동, 상태 필드는 제거.
+  // 세션 종류는 관리(컨텐츠)에서 편집 가능한 동적 목록(getSessionTypes). 녹음 단가 항목은 세션 종류=녹음일 때만 노출(app.js data-show-when="rec").
+  // 현재값이 목록에 없으면(관리에서 삭제·이름변경) 보존용으로 맨 앞에 추가. 한 줄(3열): 세션 종류 | 녹음 단가 항목 | 룸.
+  const sessionTypeOpts = getSessionTypes();
+  if (s.session_type && !sessionTypeOpts.includes(s.session_type)) sessionTypeOpts.unshift(s.session_type);
   const typeRateRow = `<div class="mt-2 grid gap-2 sm:grid-cols-3">
          <div><label class="label-sm">세션 종류</label>
-          <select class="input py-1.5 text-sm" name="session_type">${SESSION_TYPES.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
+          <select class="input py-1.5 text-sm" name="session_type">${sessionTypeOpts.map((t) => `<option value="${esc(t)}" ${t === s.session_type ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
          <div data-show-when="rec"><label class="label-sm">녹음 단가 항목 <span class="font-normal text-muted">(시간제 단가)</span></label>
           ${rateSelectGrouped(rateItems, s.rate_item_id)}</div>
          <div><label class="label-sm">룸 <span class="font-normal text-muted">(같은 룸끼리만 겹침 검사)</span></label>

@@ -9,7 +9,7 @@
 
 const { getState, setState } = require("../db");
 const { cleanTime, timeToMin } = require("../lib/date");
-const { timeSlots, SESSION_START_SLOTS } = require("../config");
+const { timeSlots, SESSION_START_SLOTS, SESSION_TYPES } = require("../config");
 
 // ── 공급자(스튜디오) 세금정보 — admin_state 평문(비밀 아님, studio_location과 동급) ──
 const STUDIO_INFO_KEYS = ["studio_biz_name", "studio_biz_no", "studio_owner_name", "studio_address", "studio_biz_type", "studio_biz_item", "studio_tel"];
@@ -45,6 +45,24 @@ function getStudioHours() {
 function setStudioHours(start, end) {
   setState("studio_hours_start", cleanTime(start) || null);
   setState("studio_hours_end", cleanTime(end) || null);
+}
+
+// ── 세션 종류(세션 폼 select 옵션) — admin_state JSON. 관리(컨텐츠)에서 편집. 기본=config SESSION_TYPES ──
+// ⚠️ '녹음'은 청구·단가표·캘린더 라벨의 특수 키워드다(session_type === '녹음'만 단가로 청구). 이름을 바꾸면 그 청구 로직이 안 걸리니 '녹음'은 유지 권장.
+/** 세션 종류 목록. admin_state.session_types(JSON 배열) 우선, 없으면 config 기본. */
+function getSessionTypes() {
+  const raw = getState("session_types");
+  if (raw) { try { const arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) return arr.map((s) => String(s)); } catch (_e) { /* 파싱 실패 → 기본 */ } }
+  return SESSION_TYPES.slice();
+}
+/** 세션 종류 저장 — 배열 또는 줄바꿈/쉼표 문자열. 공백·중복 제거. 비면 null(기본 폴백). */
+function setSessionTypes(list) {
+  const arr = (Array.isArray(list) ? list : String(list == null ? "" : list).split(/[\n,]/))
+    .map((s) => String(s).trim())
+    .filter(Boolean);
+  const uniq = [];
+  for (const t of arr) if (!uniq.includes(t)) uniq.push(t);
+  setState("session_types", uniq.length ? JSON.stringify(uniq) : null);
 }
 
 // ── 기본 세션 시간(분) — 녹음 외 세션(믹싱·마스터링·기타)의 소요시간 슬라이더 기본값 ──
@@ -83,6 +101,8 @@ module.exports = {
   setStudioLogo,
   getStudioHours,
   setStudioHours,
+  getSessionTypes,
+  setSessionTypes,
   getProMinutes,
   setProMinutes,
   getDefaultBooker,

@@ -13,7 +13,7 @@
 
 const { db } = require("../db");
 const { todayYmd, isValidYmd, cleanTime, timeToMin, minutesBetween } = require("../lib/date");
-const { normalizeSessionType, normalizeSessionStatus } = require("../config");
+const { normalizeSessionStatus } = require("../config");
 const { getProjectForUser } = require("./projects"); // 무순환
 const { resolvePersonByName } = require("./parties"); // 무순환 — 디렉터=parties.id(사람)
 const { listRooms } = require("./rooms"); // 무순환
@@ -75,6 +75,15 @@ function validRoomId(raw) {
   return listRooms({ includeInactive: true }).some((r) => r.id === id) ? id : null;
 }
 
+// 세션 종류 정규화 — 관리에서 편집 가능한 동적 목록이라 정적 강제 대신 값 보존.
+// 비어 있을 때만 현재 목록 첫 종류로 폴백(이름을 바꾼 뒤 옛 세션이 '녹음'으로 오변경되는 것 방지).
+function normSessionType(v) {
+  const t = String(v == null ? "" : v).trim();
+  if (t) return t;
+  const types = require("./studio").getSessionTypes(); // 지연 require(순환 회피)
+  return types[0] || "녹음";
+}
+
 function sessionFields(input) {
   const date = String(input.session_date || "").trim();
   if (!isValidYmd(date)) throw new Error("SESSION_DATE_REQUIRED");
@@ -83,7 +92,7 @@ function sessionFields(input) {
   const rateItemId = Number(input.rate_item_id) || null;
   // 담당 디렉터는 다대다(session_directors)로 별도 처리 — 여기선 레거시 컬럼 자리만 null(caller가 첫 디렉터로 채움).
   return {
-    session_type: normalizeSessionType(input.session_type),
+    session_type: normSessionType(input.session_type),
     session_date: date,
     start_time: start,
     end_time: resolveEndTime(input, start),

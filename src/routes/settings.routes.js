@@ -23,6 +23,8 @@ const {
   setStudioLogo,
   getStudioHours,
   setStudioHours,
+  getSessionTypes,
+  setSessionTypes,
   getProMinutes,
   setProMinutes,
   getDefaultBooker,
@@ -182,6 +184,17 @@ function contentTab() {
           <button class="btn-primary btn-sm" type="submit">작업 종류 추가</button>
         </form>
         <div class="space-y-2">${taskTypeRows}</div>
+      </section>
+
+      <section class="card space-y-3">
+        <div>
+          <h2 class="font-display text-lg font-semibold">세션 종류 <span class="text-sm font-normal text-muted">(세션 일정 폼의 종류 옵션)</span></h2>
+          ${explain(`세션 일정 폼의 '세션 종류' 선택지를 한 줄에 하나씩 관리합니다. '녹음'은 단가·청구가 걸리는 특수 종류라 이름을 그대로 두는 걸 권장합니다(이름을 바꾸면 그 종류엔 단가 청구가 안 걸립니다). 저장 후 이미 그 종류로 만든 세션은 값이 유지됩니다.`)}
+        </div>
+        <form method="post" action="/settings/session-types" class="space-y-2">
+          <textarea class="input py-2 text-sm" name="types" rows="5" placeholder="녹음&#10;믹싱&#10;마스터링&#10;기타">${esc(getSessionTypes().join("\n"))}</textarea>
+          <button class="btn-primary btn-sm" type="submit">세션 종류 저장</button>
+        </form>
       </section>`;
 }
 
@@ -511,6 +524,12 @@ router.post("/pro-minutes", requireEditor, (req, res) => {
 router.post("/studio-hours", requireEditor, (req, res) => {
   setStudioHours(req.body.hours_start, req.body.hours_end);
   res.redirect("/settings?tab=settings&flash=saved");
+});
+
+// ── 세션 종류(세션 폼 옵션) 저장 — admin_state.session_types ──
+router.post("/session-types", requireEditor, (req, res) => {
+  setSessionTypes(req.body.types);
+  res.redirect("/settings?tab=content&flash=saved");
 });
 
 // ── 공급자(스튜디오) 세금정보 저장 — 거래명세서 PDF용. 평문 admin_state ──
