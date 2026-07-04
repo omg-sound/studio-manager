@@ -854,14 +854,24 @@
     function close() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }
     wrap.addEventListener("click", function (e) { if (e.target === wrap) close(); }); // 배경 클릭 = 편집으로 복귀(이동 안 함)
     wrap.querySelector("[data-g-discard]").addEventListener("click", function () { bypass = true; close(); window.location.href = href; }); // 저장하지 않고 이동
-    wrap.querySelector("[data-g-save]").addEventListener("click", function () { // 저장(제출→리다이렉트)
+    wrap.querySelector("[data-g-save]").addEventListener("click", function () { // 저장 성공 후 원래 목적지로 이동
       var f = window.__firstDirtyForm && window.__firstDirtyForm();
       close();
-      if (f) {
-        var btn = f.querySelector("[data-dirty-save]");
-        if (btn) { btn.disabled = false; btn.click(); return; }
-        if (f.requestSubmit) f.requestSubmit(); else f.submit();
-      } else { bypass = true; window.location.href = href; }
+      if (!f) { bypass = true; window.location.href = href; return; }
+      var action = f.getAttribute("action") || (window.location.pathname + window.location.search);
+      // 함정#14: urlencoded로 전송(multipart 금지). form= 로 연결된 폼 밖 컨트롤도 FormData에 포함됨.
+      var body = new URLSearchParams();
+      new FormData(f).forEach(function (v, k) { body.append(k, v); });
+      bypass = true; // 저장/이동 동안 beforeunload 억제
+      // X-Requested-With 없이 보내 서버가 JSON이 아닌 정상 302 리다이렉트로 응답 → 성공 판정(opaqueredirect).
+      fetch(action, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body.toString(), redirect: "manual", credentials: "same-origin" })
+        .then(function (r) {
+          if (r.type === "opaqueredirect") { window.location.href = href; } // 저장 성공(서버 리다이렉트) → 원래 클릭한 목적지로
+          else { // 검증 오류·충돌 등 — 정상 제출로 폴백해 오류/확인을 그대로 노출(사용자가 처리 후 재시도)
+            var sb = f.querySelector("[data-dirty-save]"); if (sb) { sb.disabled = false; sb.click(); } else if (f.requestSubmit) f.requestSubmit(); else f.submit();
+          }
+        })
+        .catch(function () { var sb = f.querySelector("[data-dirty-save]"); if (sb) { sb.disabled = false; sb.click(); } else f.submit(); });
     });
     var saveBtn = wrap.querySelector("[data-g-save]"); if (saveBtn) saveBtn.focus();
   }
