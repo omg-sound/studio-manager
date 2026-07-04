@@ -208,9 +208,9 @@ function sessionCreateForm(project, managers, rateItems = [], rooms, defaultBook
 /** 세션 한 행. showProject=true면 프로젝트명 링크 표시(전역 일정). tracks 전달 시 청구 작업 생성 폼 노출. */
 function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, showProject = false, projectTitle = "" } = {}) {
   const typeBadge = `<span class="badge bg-bg text-muted">${esc(s.session_type)}</span>`;
-  // 상태 배지: 예정은 쿨톤 badge-info, 그 외(완료/취소)는 config 매핑 색.
+  // 상태 배지: '예정'은 배지 없음(완료 버튼 누르기 전 기본 상태 — 라벨 불필요). 완료/취소만 배지 표시.
   const statusBadge = s.status === "예정"
-    ? `<span class="badge-info">${esc(s.status)}</span>`
+    ? ""
     : `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>`;
   const dday = s.status !== "취소" && s.session_date >= todayYmd() ? ` · ${esc(ddayLabel(s.session_date))}` : "";
   const directors = listSessionDirectors(s.id);

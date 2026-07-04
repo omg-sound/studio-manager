@@ -55,7 +55,7 @@ const {
   getStudioInfo,
   getStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo, tabBar: renderTabs } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -137,33 +137,35 @@ router.get("/", requireAuth, (req, res) => {
   // 진행 중 / 완료로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
   const ongoing = rows.filter((r) => !r.is_completed);
   const done = rows.filter((r) => r.is_completed);
-  // 두 섹션 모두 접기 가능. 진행 중은 기본 펼침, 완료는 기본 접힘(완료가 쌓여도 목록을 짧게 유지 — 개수는 헤딩에 유지).
-  // summary는 사이드바 메뉴처럼 은은하게 — 테두리·배경 없이 옅은 hover(bg-surface)만.
-  const projectSection = (title, arr, { open = true } = {}) =>
-    arr.length
-      ? `<details class="group"${open ? " open" : ""}>
-           <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-fg/80 transition-colors hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
-             <span class="flex items-baseline gap-2 font-display text-base font-semibold">${title}<span class="text-sm font-normal text-muted">${arr.length}</span></span>
-             ${detailsChevron()}
-           </summary>
-           <div class="mt-2 space-y-2">${arr.map((p) => projectListRow(p, summaries[p.id])).join("")}</div>
-         </details>`
-      : "";
+  // 접기 섹션 → 탭바(연락처 방식). ?tab=active(기본)/done, 검색어 유지. 활성 탭 목록만 렌더.
+  const tab = req.query.tab === "done" ? "done" : "active";
+  const activeRows = tab === "done" ? done : ongoing;
+  const projTabs = rows.length
+    ? renderTabs({
+        tabs: [
+          { key: "active", label: `진행 중 ${ongoing.length}` },
+          { key: "done", label: `완료 ${done.length}` },
+        ],
+        activeKey: tab,
+        hrefFn: (k) => `/projects?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+      })
+    : "";
   let list;
   if (!rows.length) {
     list = searched
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
+  } else if (!activeRows.length) {
+    list = emptyState(tab === "done" ? "완료된 프로젝트가 없습니다." : "진행 중인 프로젝트가 없습니다.", { card: true });
   } else {
-    const ongoingSec = projectSection("진행 중", ongoing);
-    const doneSec = projectSection("완료", done, { open: false }); // 완료는 기본 접힘
-    list = `${ongoingSec}${doneSec ? `<div class="${ongoingSec ? "mt-4" : ""}">${doneSec}</div>` : ""}`;
+    list = `<div class="space-y-2">${activeRows.map((p) => projectListRow(p, summaries[p.id])).join("")}</div>`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
 
   const searchBar = `
     <form method="get" action="/projects" class="mb-4 flex gap-2">
+      <input type="hidden" name="tab" value="${esc(tab)}" />
       <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 아티스트 검색" aria-label="프로젝트 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
@@ -175,6 +177,7 @@ router.get("/", requireAuth, (req, res) => {
     ${pageHeader({ title: "프로젝트", desc: "전체 프로젝트", action })}
     ${searchBar}
     ${resultNote}
+    ${projTabs}
     ${list}`;
   res.send(layout({ title: "프로젝트", user, current: "/projects", body }));
 });

@@ -21,7 +21,7 @@ const {
   listSessionDirectors,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
-const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, detailsChevron } = require("../views");
+const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar } = require("../views");
 const { sessionRow, monthCalendar } = require("../views.sessions");
 const { todayYmd } = require("../lib/date");
 const { asyncHandler } = require("../lib/async");
@@ -108,28 +108,34 @@ router.get("/sessions", requireAuth, (req, res) => {
         .filter(Boolean).join(" ").toLowerCase().includes(ql);
     const up = upcomingSessions(req.user, { limit: 50 }).filter(matchesQ);
     const past = pastSessions(req.user, { limit: 20 }).filter(matchesQ);
+    // 접기 섹션 → 탭바(일정=다가오는 / 지난 세션). ?stab=upcoming(기본)/past, view=list·검색어 유지.
+    const stab = req.query.stab === "past" ? "past" : "upcoming";
     const searchBox = `
       <form method="get" action="/sessions" class="mb-4 flex gap-2">
         <input type="hidden" name="view" value="list" />
+        <input type="hidden" name="stab" value="${esc(stab)}" />
         <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 예약 담당자 · 엔지니어 검색" aria-label="세션 검색" />
         <button class="btn-primary shrink-0" type="submit">검색</button>
       </form>`;
     const resultNote = q
       ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${up.length + past.length}건 · <a href="/sessions?view=list" class="text-primary hover:underline">전체 보기</a></div>`
       : "";
-    const upList = up.length
-      ? `<div class="card"><div class="space-y-2">${up.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div></div>`
-      : emptyState(q ? "검색 결과가 없습니다." : "다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.", { card: true });
-    const pastList = past.length
-      ? `<details class="card group mt-3" ${q ? "open" : ""}>
-           <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
-             <h2 class="font-display text-base font-semibold">지난 세션 <span class="text-sm font-normal text-muted">${past.length}</span></h2>
-             ${detailsChevron()}
-           </summary>
-           <div class="mt-3 space-y-2 border-t border-border pt-3">${past.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div>
-         </details>`
-      : "";
-    content = `${searchBox}${resultNote}${upList}${pastList}`;
+    const sessTabs = tabBar({
+      tabs: [
+        { key: "upcoming", label: `일정 ${up.length}` },
+        { key: "past", label: `지난 세션 ${past.length}` },
+      ],
+      activeKey: stab,
+      hrefFn: (k) => `/sessions?view=list&stab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+    });
+    const activeSess = stab === "past" ? past : up;
+    const listHtml = activeSess.length
+      ? `<div class="card"><div class="space-y-2">${activeSess.map((s) => sessionRow(s, { isAdmin: editable, managers, rateItems, rooms, showProject: true })).join("")}</div></div>`
+      : emptyState(
+          stab === "past" ? "지난 세션이 없습니다." : q ? "검색 결과가 없습니다." : "다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.",
+          { card: true }
+        );
+    content = `${searchBox}${resultNote}${sessTabs}${listHtml}`;
   }
 
   const body = `
