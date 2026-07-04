@@ -249,10 +249,10 @@ function projectListRow(p, summary) {
     <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
       <a href="/projects/${p.id}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
         <div class="min-w-0">
-          <div class="truncate font-semibold">${esc(p.title)}</div>
+          <div class="text-xs text-muted tabular">${esc(String(p.created_at || "").slice(0, 10))}</div>
+          <div class="mt-0.5 truncate font-semibold">${esc(p.title)}</div>
           <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
           ${nextSessionLine(p)}
-          <div class="mt-0.5 text-xs text-muted tabular">생성 ${esc(String(p.created_at || "").slice(0, 10))}</div>
         </div>
         <div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>
       </a>
