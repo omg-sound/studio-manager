@@ -55,7 +55,7 @@ const {
   getStudioInfo,
   getStudioLogo,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo, tabBar: renderTabs } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo, tabBar: renderTabs, searchBox } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -163,12 +163,10 @@ router.get("/", requireAuth, (req, res) => {
 
   const action = canCreate ? newProjectMenu() : "";
 
-  const searchBar = `
-    <form method="get" action="/projects" class="mb-4 flex gap-2">
-      <input type="hidden" name="tab" value="${esc(tab)}" />
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 아티스트 검색" aria-label="프로젝트 검색" />
-      <button class="btn-primary shrink-0" type="submit">검색</button>
-    </form>`;
+  const searchBar = searchBox({
+    action: "/projects", q, placeholder: "프로젝트 · 아티스트 검색", label: "프로젝트 검색",
+    suggestUrl: "/projects/suggest", hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />`,
+  });
   const resultNote = searched
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/projects" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
@@ -180,6 +178,18 @@ router.get("/", requireAuth, (req, res) => {
     ${projTabs}
     ${list}`;
   res.send(layout({ title: "프로젝트", user, current: "/projects", body }));
+});
+
+// ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록 ──
+router.get("/suggest", requireAuth, (req, res) => {
+  const q = String(req.query.q || "").trim();
+  if (!q) return res.json([]);
+  const rows = listProjects(req.user, { q }).slice(0, 8);
+  res.json(rows.map((p) => ({
+    label: p.title,
+    sub: [p.artist, p.production_company || p.artist_company].filter(Boolean).join(" · "),
+    href: `/projects/${p.id}`,
+  })));
 });
 
 /** "+ 새 프로젝트" 버튼 — 유형 구분 없이 단일 진입(모든 프로젝트가 세션 일정+곡·콘텐츠 동일). */

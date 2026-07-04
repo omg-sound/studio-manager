@@ -410,6 +410,27 @@ function tabBar({ tabs, activeKey, hrefFn }) {
 }
 
 /**
+ * 검색 박스(+ 타이핑 제안 typeahead). suggestUrl 지정 시 app.js가 타이핑하면 매칭 결과를 드롭다운으로 제안(클릭·엔터로 해당 상세로 이동).
+ * hidden = 함께 제출할 hidden input HTML(탭·뷰 등 유지). suggestUrl JSON = [{label, sub?, href}].
+ */
+function searchBox({ action, q = "", placeholder = "", label = "검색", suggestUrl = "", hidden = "" }) {
+  const wrapAttrs = suggestUrl ? ` data-search-suggest data-suggest-url="${esc(suggestUrl)}"` : "";
+  const combo = suggestUrl ? ' role="combobox" aria-expanded="false" aria-autocomplete="list"' : "";
+  const pop = suggestUrl
+    ? `<div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-72 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-suggest-pop role="listbox"></div>`
+    : "";
+  return `
+    <form method="get" action="${esc(action)}" class="mb-4 flex gap-2">
+      ${hidden}
+      <div class="relative min-w-0 flex-1"${wrapAttrs}>
+        <input class="input w-full" type="search" name="q" value="${esc(q)}" placeholder="${esc(placeholder)}" aria-label="${esc(label)}" autocomplete="off"${combo} />
+        ${pop}
+      </div>
+      <button class="btn-primary shrink-0" type="submit">검색</button>
+    </form>`;
+}
+
+/**
  * 목록 페이지 필터 알약칩 그룹.
  * @param {{chips:Array<{key:string,label:string}>, activeKey:string, hrefFn:(key:string)=>string}} opts
  * @returns {string} HTML — `<div class="mb-4 flex flex-wrap gap-2">...</div>`
@@ -606,4 +627,4 @@ function copyable(value, { cls = "", display = "" } = {}) {
   return `<button type="button" data-copy="${v}" class="rounded text-left hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}</button>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, copyable };
+module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, copyable };

@@ -21,7 +21,7 @@ const {
   listSessionDirectors,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS } = require("../config");
-const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar } = require("../views");
+const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox } = require("../views");
 const { sessionRow, monthCalendar } = require("../views.sessions");
 const { todayYmd } = require("../lib/date");
 const { asyncHandler } = require("../lib/async");
@@ -110,13 +110,11 @@ router.get("/sessions", requireAuth, (req, res) => {
     const past = pastSessions(req.user, { limit: 20 }).filter(matchesQ);
     // 접기 섹션 → 탭바(일정=다가오는 / 지난 세션). ?stab=upcoming(기본)/past, view=list·검색어 유지.
     const stab = req.query.stab === "past" ? "past" : "upcoming";
-    const searchBox = `
-      <form method="get" action="/sessions" class="mb-4 flex gap-2">
-        <input type="hidden" name="view" value="list" />
-        <input type="hidden" name="stab" value="${esc(stab)}" />
-        <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="프로젝트 · 예약 담당자 · 엔지니어 검색" aria-label="세션 검색" />
-        <button class="btn-primary shrink-0" type="submit">검색</button>
-      </form>`;
+    const searchBoxHtml = searchBox({
+      action: "/sessions", q, placeholder: "프로젝트 · 예약 담당자 · 엔지니어 검색", label: "세션 검색",
+      suggestUrl: "/sessions/suggest",
+      hidden: `<input type="hidden" name="view" value="list" /><input type="hidden" name="stab" value="${esc(stab)}" />`,
+    });
     const resultNote = q
       ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${up.length + past.length}건 · <a href="/sessions?view=list" class="text-primary hover:underline">전체 보기</a></div>`
       : "";
@@ -135,7 +133,7 @@ router.get("/sessions", requireAuth, (req, res) => {
           stab === "past" ? "지난 세션이 없습니다." : q ? "검색 결과가 없습니다." : "다가오는 세션이 없습니다. 프로젝트 상세에서 세션을 추가하세요.",
           { card: true }
         );
-    content = `${searchBox}${resultNote}${sessTabs}${listHtml}`;
+    content = `${searchBoxHtml}${resultNote}${sessTabs}${listHtml}`;
   }
 
   const body = `
@@ -143,6 +141,22 @@ router.get("/sessions", requireAuth, (req, res) => {
     ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)", action: viewToggle })}
     ${content}`;
   res.send(layout({ title: "일정", user: req.user, current: "/sessions", body }));
+});
+
+// ── 검색 제안(typeahead JSON) — 다가오는+지난 세션에서 매칭 → 프로젝트 세션 탭으로 이동 ──
+router.get("/sessions/suggest", requireAuth, (req, res) => {
+  const ql = String(req.query.q || "").trim().toLowerCase();
+  if (!ql) return res.json([]);
+  const all = [...upcomingSessions(req.user, { limit: 100 }), ...pastSessions(req.user, { limit: 100 })];
+  const match = (s) =>
+    [s.project_title, s.artist, s.artist_company, s.production_company, s.booker_name, s.engineer_name, s.session_type, s.memo]
+      .filter(Boolean).join(" ").toLowerCase().includes(ql);
+  const rows = all.filter(match).slice(0, 8);
+  res.json(rows.map((s) => ({
+    label: s.project_title || s.session_type,
+    sub: [s.session_date, s.session_type, s.engineer_name].filter(Boolean).join(" · "),
+    href: `/projects/${s.project_id}?tab=sessions`,
+  })));
 });
 
 // ── 시간 슬롯 가용성(JSON) — 시작 버튼 그리드 비활성 표시용 ──

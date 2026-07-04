@@ -28,7 +28,7 @@ const {
 } = require("../data");
 const people = require("../people");
 const { asyncHandler } = require("../lib/async"); // async 라우트 예외를 전역 핸들러로 전달(People API throw 시 요청 행 방지)
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox } = require("../views");
 
 const router = express.Router();
 
@@ -66,12 +66,10 @@ router.get("/", (req, res) => {
     hrefFn: (k) => `/contacts?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
   });
 
-  const searchBar = `
-    <form method="get" action="/contacts" class="mb-4 flex gap-2">
-      <input type="hidden" name="tab" value="${esc(tab)}" />
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 · 전화 검색" aria-label="연락처 검색" />
-      <button class="btn-primary shrink-0" type="submit">검색</button>
-    </form>`;
+  const searchBar = searchBox({
+    action: "/contacts", q, placeholder: "이름 · 전화 검색", label: "연락처 검색", suggestUrl: "/contacts/suggest",
+    hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />`,
+  });
 
   const resultNote = q
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts?tab=${tab}" class="text-primary hover:underline">전체 보기</a></div>`
@@ -110,19 +108,26 @@ router.get("/", (req, res) => {
           ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
           : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
 
-  const syncBtn = `
-    <form method="post" action="/contacts/sync" class="inline">
-      <button class="btn-ghost btn-sm" type="submit">Google 동기화</button>
-    </form>`;
-
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "연락처", desc: "레이블/제작사 직원 · 프리 매니저 · 아티스트 지인 등 사람 마스터(소속 이력 포함).", action: `<div class="flex gap-2 items-center">${syncBtn}<a href="/contacts/new" class="btn-primary">+ 새 연락처</a></div>` })}
+    ${pageHeader({ title: "연락처", desc: "레이블/제작사 직원 · 프리 매니저 · 아티스트 지인 등 사람 마스터(소속 이력 포함).", action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
     ${tabs}
     ${searchBar}
     ${resultNote}
     ${list}`;
   res.send(layout({ title: "연락처", user: req.user, current: "/contacts", body }));
+});
+
+// ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listContacts가 이름/활동명/전화 LIKE 필터 ──
+router.get("/suggest", (req, res) => {
+  const q = String(req.query.q || "").trim();
+  if (!q) return res.json([]);
+  const rows = listContacts({ q }).slice(0, 8);
+  res.json(rows.map((c) => ({
+    label: c.name,
+    sub: [c.activity_name && c.activity_name !== c.name ? c.activity_name : "", c.phone].filter(Boolean).join(" · "),
+    href: `/contacts/${c.id}`,
+  })));
 });
 
 // ── 새 연락처 ──

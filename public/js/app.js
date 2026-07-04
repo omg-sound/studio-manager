@@ -1667,3 +1667,57 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   schedule();
 })();
+
+// 검색 typeahead(2026-07-04): [data-search-suggest] 검색 인풋에 타이핑하면 서버(data-suggest-url)에서
+// 매칭 결과를 받아 드롭다운으로 제안 → 클릭/엔터로 해당 상세로 이동. 하이라이트 없이 엔터면 폼 제출(전체 검색).
+(function () {
+  "use strict";
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-search-suggest]"), function (root) {
+    var input = root.querySelector('input[name="q"]');
+    var pop = root.querySelector("[data-suggest-pop]");
+    var url = root.getAttribute("data-suggest-url");
+    if (!input || !pop || !url) return;
+    var items = [], hi = -1, timer = null, ctrl = null, lastQ = null;
+    function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); hi = -1; }
+    function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    function setHi(i) {
+      var rs = pop.children;
+      if (!rs.length) { hi = -1; return; }
+      hi = Math.max(0, Math.min(i, rs.length - 1));
+      for (var k = 0; k < rs.length; k++) rs[k].classList.toggle("bg-elevated", k === hi);
+      if (rs[hi] && rs[hi].scrollIntoView) rs[hi].scrollIntoView({ block: "nearest" });
+    }
+    function render() {
+      if (!items.length) { pop.innerHTML = ""; hide(); return; }
+      pop.innerHTML = items.map(function (it) {
+        return '<a href="' + esc(it.href) + '" class="flex flex-col gap-0.5 px-3 py-2 hover:bg-elevated"><span class="truncate text-sm text-fg">' + esc(it.label) + "</span>" + (it.sub ? '<span class="truncate text-xs text-muted">' + esc(it.sub) + "</span>" : "") + "</a>";
+      }).join("");
+      hi = -1; show();
+    }
+    function fetchSuggest() {
+      var q = input.value.trim();
+      lastQ = q;
+      if (q.length < 1) { items = []; render(); return; }
+      if (ctrl && ctrl.abort) { try { ctrl.abort(); } catch (_e) {} }
+      ctrl = window.AbortController ? new AbortController() : null;
+      fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "q=" + encodeURIComponent(q), { headers: { Accept: "application/json" }, credentials: "same-origin", signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (d) { if (input.value.trim() !== lastQ) return; items = Array.isArray(d) ? d : []; render(); })
+        .catch(function () {});
+    }
+    input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(fetchSuggest, 200); });
+    input.addEventListener("focus", function () { if (items.length) show(); });
+    input.addEventListener("blur", function () { setTimeout(hide, 150); });
+    input.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 키 무시
+      var open = !pop.classList.contains("hidden");
+      if (e.key === "ArrowDown") { if (open) { e.preventDefault(); setHi(hi + 1); } }
+      else if (e.key === "ArrowUp") { if (open) { e.preventDefault(); setHi(hi - 1); } }
+      else if (e.key === "Enter") { if (open && hi >= 0 && pop.children[hi]) { e.preventDefault(); pop.children[hi].click(); } } // 하이라이트 선택 이동, 없으면 폼 제출(전체 검색)
+      else if (e.key === "Escape") { hide(); }
+    });
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur로 닫히는 것 방지
+    pop.addEventListener("mousemove", function (e) { var a = e.target.closest("a"); if (!a) return; var rs = pop.children; for (var k = 0; k < rs.length; k++) if (rs[k] === a) { setHi(k); break; } });
+  });
+})();

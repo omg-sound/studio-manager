@@ -22,7 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable } = require("../views");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -131,13 +131,10 @@ router.get("/", (req, res) => {
   });
   const kindChips = ""; // 2차 분류 필터 폐기(당사자 모델 — 조직 겸업은 roles 배지로 표시)
 
-  const searchBar = `
-    <form method="get" action="/clients" class="mb-4 flex gap-2">
-      ${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}
-      ${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="이름 검색" />
-      <button class="btn-primary shrink-0" type="submit">검색</button>
-    </form>`;
+  const searchBar = searchBox({
+    action: "/clients", q, placeholder: "이름 검색", label: "클라이언트 검색", suggestUrl: "/clients/suggest",
+    hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
+  });
 
   const clearQHref = group === "company" && activeKind ? `/clients?group=company&kind=${encodeURIComponent(activeKind)}` : group ? `/clients?group=${group}` : "/clients";
   const resultNote = q
@@ -255,6 +252,20 @@ router.get("/", (req, res) => {
     ${resultNote}
     ${list}`;
   res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body }));
+});
+
+// ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listClients는 q 미지원이라 이름/활동명 인메모리 필터 ──
+router.get("/suggest", (req, res) => {
+  const ql = String(req.query.q || "").trim().toLowerCase();
+  if (!ql) return res.json([]);
+  const rows = listClients({})
+    .filter((c) => String(c.name || "").toLowerCase().includes(ql) || String(c.activity_name || "").toLowerCase().includes(ql))
+    .slice(0, 8);
+  res.json(rows.map((c) => ({
+    label: c.name,
+    sub: c.kind === "company" ? "업체" : c.kind === "group" ? "그룹" : c.is_artist ? "아티스트" : "",
+    href: `/clients/${c.id}`,
+  })));
 });
 
 // ── 새 클라이언트 ── 먼저 유형(업체/아티스트/그룹) 선택 → 유형별 폼(서로 섞이지 않는 3개념, '기타' 폐기).
