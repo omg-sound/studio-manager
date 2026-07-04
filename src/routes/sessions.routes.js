@@ -42,6 +42,7 @@ function sessionTypeLabel(session) {
     const ri = session.rate_item_id ? getRateItem(session.rate_item_id) : null;
     return ri && ri.name ? `녹음 · ${ri.name}` : "녹음 세션";
   }
+  if (t === "믹싱") return "믹스 세션"; // 사용자 표기 선호(믹싱 → 믹스)
   return `${t} 세션`;
 }
 
