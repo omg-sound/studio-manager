@@ -283,7 +283,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
   const completeToggle = s.status === "예정" || s.status === "완료"
     ? `<form method="post" action="/sessions/${s.id}/status">
             <input type="hidden" name="status" value="${isDone ? "예정" : "완료"}" />
-            <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="${isDone ? "" : "invisible"}">✓</span>완료</button>
+            <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "○"}</span>완료</button>
           </form>`
     : "";
   return `
