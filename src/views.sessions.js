@@ -372,9 +372,10 @@ function monthCalendar(ym, sessions) {
   for (const s of sessions) (byDate[s.session_date] = byDate[s.session_date] || []).push(s);
   const dows = ["일", "월", "화", "수", "목", "금", "토"];
 
+  // 셀 경계는 개별 라운드 테두리·간격 대신 그리드 라인(border-b/border-r)으로 통합 — 카드·꾸밈 없이 화면 폭을 꽉 채운다(사용자 요청).
   let cells = "";
-  const CELL = "min-h-[112px] min-w-0 rounded-md border p-1";
-  for (let i = 0; i < startDow; i++) cells += `<div class="${CELL} border-border/40 bg-bg/40"></div>`;
+  const CELL = "min-h-[104px] min-w-0 border-b border-r border-border/50 p-1";
+  for (let i = 0; i < startDow; i++) cells += `<div class="${CELL} bg-bg/30"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${y}-${pad2(mo)}-${pad2(d)}`;
     const ds = byDate[date] || [];
@@ -387,20 +388,26 @@ function monthCalendar(ym, sessions) {
         return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded ${calendarChipColor(s.status)} px-1.5 py-0.5 text-[11px] font-medium leading-snug hover:opacity-80 sm:text-xs" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}">${t ? `<span class="hidden font-normal opacity-70 sm:inline">${t} </span>` : ""}${label}</a>`;
       })
       .join("");
-    cells += `<div class="${CELL} ${isToday ? "border-primary" : "border-border/40"}">
+    cells += `<div class="${CELL} ${isToday ? "bg-primary/5" : ""}">
       <div class="mb-0.5 text-xs ${isToday ? "font-semibold text-primary" : "text-muted"}">${d}</div>
       <div class="space-y-0.5">${items}</div>
     </div>`;
   }
+  // 요일 헤더도 같은 그리드 라인. 컨테이너는 상·좌 테두리(border-t/border-l)로 격자 마감. -mx로 콘텐츠 패딩을 상쇄해 화면 끝까지.
+  const dowRow = dows
+    .map((d, i) => `<div class="border-b border-r border-border/50 py-1 text-center text-xs font-medium ${i === 0 ? "text-danger" : i === 6 ? "text-primary" : "text-muted"}">${d}</div>`)
+    .join("");
   return `
     <div class="mb-3 flex items-center justify-between">
       <a href="/sessions?view=calendar&month=${prevYm}" class="btn-ghost btn-sm">‹ 이전</a>
       <h2 class="font-display text-lg font-semibold">${y}년 ${mo}월</h2>
       <a href="/sessions?view=calendar&month=${nextYm}" class="btn-ghost btn-sm">다음 ›</a>
     </div>
-    <div class="grid grid-cols-7 gap-1">
-      ${dows.map((d, i) => `<div class="pb-1 text-center text-xs font-medium ${i === 0 ? "text-danger" : i === 6 ? "text-primary" : "text-muted"}">${d}</div>`).join("")}
-      ${cells}
+    <div class="-mx-4 border-t border-border/50 sm:-mx-6">
+      <div class="grid grid-cols-7 border-l border-border/50">
+        ${dowRow}
+        ${cells}
+      </div>
     </div>`;
 }
 

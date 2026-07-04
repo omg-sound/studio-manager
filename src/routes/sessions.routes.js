@@ -94,7 +94,7 @@ router.get("/sessions", requireAuth, (req, res) => {
   let content;
   if (view === "calendar") {
     const ym = /^\d{4}-\d{2}$/.test(req.query.month || "") ? req.query.month : todayYmd().slice(0, 7);
-    content = `<div class="card">${monthCalendar(ym, sessionsForMonth(req.user, ym))}</div>`;
+    content = monthCalendar(ym, sessionsForMonth(req.user, ym)); // 카드 래퍼 없이 — 캘린더는 그리드 라인으로 화면 끝까지(full)
   } else {
     const managers = editable ? listProjectManagers() : [];
     const rateItems = editable ? listRateItems() : [];
@@ -148,7 +148,7 @@ router.get("/sessions", requireAuth, (req, res) => {
     ${flashBanner(req.query)}
     ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)", action: viewToggle })}
     ${content}`;
-  res.send(layout({ title: "일정", user: req.user, current: "/sessions", body }));
+  res.send(layout({ title: "일정", user: req.user, current: "/sessions", body, full: view === "calendar" }));
 });
 
 // ── 검색 제안(typeahead JSON) — 다가오는+지난 세션에서 매칭 → 프로젝트 세션 탭으로 이동 ──
