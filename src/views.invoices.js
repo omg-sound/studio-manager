@@ -2,7 +2,7 @@
 
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
-const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, TAX_STATUSES, DOC_TYPES, docNumberWithType } = require("./config");
+const { INVOICE_STATUS_BADGE, INVOICE_STATUSES, INVOICE_STATUS_LABELS, DOC_TYPES, docNumberWithType } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, copyable } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
@@ -157,6 +157,8 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
        </div>`
     : "";
 
+  // 프로젝트 청구 탭에는 계산서·현금영수증 발행·입금 처리를 두지 않는다(청구 메뉴에서만 — 사용자 요청).
+  // 여기선 청구서 상태(발행/미발행)·삭제만. 실제 청구(계산서/입금) 프로세스는 /invoices로 안내.
   const adminControls = isAdmin
     ? `<div class="space-y-2 border-t border-border pt-2">
          <div class="flex flex-wrap items-end gap-3">
@@ -168,22 +170,13 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
              </select>
              <noscript><button class="btn-ghost btn-sm">변경</button></noscript>
            </form>
-           <form method="post" action="/invoices/${inv.id}/tax-status">
-             <input type="hidden" name="return" value="${ret}" />
-             <label class="label mb-0.5 text-xs">계산서 · 입금</label>
-             <select name="tax_status" class="input max-w-[10rem] py-1.5 text-sm" data-autosubmit>
-               ${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || "계산서 미발행") ? "selected" : ""}>${esc(s)}</option>`).join("")}
-             </select>
-             <noscript><button class="btn-ghost btn-sm">변경</button></noscript>
-           </form>
          </div>
-         ${paymentHistory(inv, payments, { ret, compact: true })}
-         <div class="flex items-center gap-2 pt-0.5">
+         <div class="flex flex-wrap items-center gap-2 pt-0.5">
            <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다.">
              <input type="hidden" name="return" value="${ret}" />
              <button class="btn-ghost btn-sm text-danger">삭제</button>
            </form>
-           <span class="text-xs text-muted">수정이 필요하면 삭제 후 다시 발행하세요.</span>
+           <span class="text-xs text-muted">계산서·현금영수증 발행과 입금 처리는 <a href="/invoices?tab=todo" class="text-primary hover:underline">청구 메뉴</a>에서 합니다. 수정은 삭제 후 재발행.</span>
          </div>
        </div>`
     : "";

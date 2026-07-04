@@ -34,7 +34,6 @@ const {
   listDeliverablesForProject,
   listInvoicesForProject,
   listInvoiceItemsForInvoice,
-  listPayments,
   listTracksForProject,
   listUnbilledTasksForProject,
   listBillableSessionsForProject,
@@ -398,7 +397,6 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
           return {
             ...r,
             items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [],
-            payments: listPayments(r.id), // 입금 이력(청구 탭 펼침에서 추가·삭제). 프로젝트당 인보이스 소수라 N+1 무해.
             // 청구처 정보(대표자·사업자번호·담당자) 카드 — 청구 탭 펼침에서 바로 확인. 프로젝트당 인보이스 소수라 N+1 무해.
             payerCard: pc ? payerInfoCard(pc, listPersonsForOrg(pc.id), !!getClientFile(pc.id, "biz_license"), { compact: true }) : "",
           };
