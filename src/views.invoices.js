@@ -2,7 +2,7 @@
 
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
-const { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABELS, DOC_TYPES, docNumberWithType } = require("./config");
+const { INVOICE_STATUS_BADGE, DOC_TYPES, docNumberWithType } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, copyable } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
@@ -46,13 +46,6 @@ function displayStatus(inv) {
   return inv.tax_status || "계산서 미발행";
 }
 
-/** 청구서(bill) 발행 배지 — 청구서 미발행 / 청구서 발행. */
-function billBadge(inv) {
-  const label = INVOICE_STATUS_LABELS[inv.status] || inv.status || "청구서 미발행";
-  const cls = INVOICE_STATUS_BADGE[label] || "bg-muted/10 text-muted";
-  return `<span class="badge ${cls}">${esc(label)}</span>`;
-}
-
 /** 청구처 유형에 따른 세무 문서명 — 개인(person)=현금영수증, 그 외(업체·그룹·미지정)=계산서. tax_status DB값(계산서 …)은 그대로, 표시만 치환. */
 function taxDocOf(inv) {
   return inv && inv.payer_kind === "person" ? "현금영수증" : "계산서";
@@ -66,9 +59,9 @@ function taxBadge(inv) {
   return `<span class="badge ${cls}">${esc(label)}</span>`;
 }
 
-/** 행/헤더 배지 — 청구서 축 + 계산서·입금 축을 함께 표시. */
+/** 행/헤더 배지 — 계산서·입금 진행 단계만 표시(청구 생성=청구서 발행 단일화로 청구서 발행 배지는 제거). */
 function invoiceBadge(inv) {
-  return `${billBadge(inv)} ${taxBadge(inv)}`;
+  return taxBadge(inv);
 }
 
 /**
@@ -191,7 +184,7 @@ function payerName(inv) {
 }
 
 /** 목록 행(링크 카드). compact=프로젝트 상세 청구 탭용 — 클릭하면 그 자리에서 펼침(페이지 이동 없음). */
-function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnTo = "", openId = null, ret = "" } = {}) {
+function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoicer = false, returnTo = "", openId = null, ret = "" } = {}) {
   const bal = balanceOf(inv);
   const pname = payerName(inv);
   const sub = compact
@@ -240,7 +233,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
     ${balLine}
     <div class="text-[11px] text-muted">${dueLine}</div>`;
-  // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(청구서 발행 권한자만).
+  // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(계산서·입금 처리 권한자=대표·치프만).
   // 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다(사용자 요청).
   // 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
   const retPath = ret || "/invoices";
@@ -251,7 +244,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, returnT
   // 색 계열: 세션 완료 토글과 동일한 은은한 success(초록) 흐름 — 완료=초록 tint, 미완료=ghost+초록 텍스트(앰버/btn-primary는 너무 강해 배제, 사용자 요청).
   const toggleBtn = (target, label, lit) =>
     `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost btn-sm ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit"><span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(label)}</button></form>`;
-  const actions = isAdmin
+  const actions = isInvoicer
     ? `<details class="group">
          <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
            <span>상태 처리</span>${detailsChevron()}
