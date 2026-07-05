@@ -229,18 +229,15 @@ router.get("/:id", requireBilling, (req, res) => {
   const row = (label, value) =>
     `<div class="flex justify-between border-b border-border py-2 last:border-0"><span class="text-sm text-muted">${esc(label)}</span><span class="text-sm font-medium">${value}</span></div>`;
 
-  // 계산서·입금 처리(대표·치프만) — select 폐기, 청구 목록 '발행 필요' 카드와 동일한 토글 버튼 2개(2026-07-05 사용자 요청·taxToggleButtons 공용).
-  const processSection = canProcess
-    ? `
-      <div class="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-        ${taxToggleButtons(inv, `/invoices/${inv.id}`)}
-      </div>`
-    : "";
-  // PDF 발행 — 통합 카드 맨 아래(처리 섹션 다음, 2026-07-05 재배치).
+  // PDF 발행 + 계산서·입금 처리(대표·치프만)를 한 줄에(2026-07-06 사용자 요청 — 이전엔 각자 border-t로 줄이 나뉘어 있었음).
+  // 왼쪽=PDF 발행(항상), 오른쪽=처리 토글 버튼 2개(canProcess만, 청구 목록 '발행 필요' 카드와 동일한 taxToggleButtons 공용).
   const pdfSection = `
-      <div class="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
-        <span class="text-xs text-muted">PDF 발행:</span>
-        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement/${encodeURIComponent(docNumberWithType(inv.invoice_number, t) || t)}.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-xs text-muted">PDF 발행:</span>
+          ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement/${encodeURIComponent(docNumberWithType(inv.invoice_number, t) || t)}.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
+        </div>
+        ${canProcess ? `<div class="flex flex-wrap gap-2">${taxToggleButtons(inv, `/invoices/${inv.id}`)}</div>` : ""}
       </div>`;
   // 삭제(치프·대표·스태프=canBill). 청구 생성자가 잘못 만든 청구를 정리.
   const deleteBlock = admin
@@ -264,7 +261,6 @@ router.get("/:id", requireBilling, (req, res) => {
       ${row("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
       ${invoiceItemsSection(items)}
-      ${processSection}
       ${pdfSection}
     </div>
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
@@ -314,8 +310,10 @@ function invoiceItemsSection(items) {
       </div>`
     )
     .join("");
+  // border-t 없음(2026-07-06 사용자 리포트 '프로젝트랑 청구 항목 사이에 줄이 2개') — 바로 위 row()가 이미
+  // border-b를 그리므로 여기서 또 border-t를 그으면 사실상 같은 자리에 선이 두 겹으로 겹쳐 보인다.
   return `
-    <div class="mt-4 border-t border-border pt-3">
+    <div class="mt-3">
       <div class="mb-2 flex items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">청구 항목</h2>
         <span class="text-xs text-muted">공급가 ${formatKRW(supply)}</span>
