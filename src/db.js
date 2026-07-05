@@ -294,6 +294,20 @@ function init() {
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 외주 작업자 첨부 서류(주민등록증 사본·통장사본, 2026-07-06 사용자 요청) — client_files와 동일 구조, project_managers 참조.
+    CREATE TABLE IF NOT EXISTS worker_files (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      worker_id       INTEGER NOT NULL REFERENCES project_managers(id) ON DELETE CASCADE,
+      kind            TEXT NOT NULL,                       -- 'id_card' | 'bankbook'
+      storage_backend TEXT NOT NULL DEFAULT 'local',
+      file_id         TEXT NOT NULL,
+      file_name       TEXT NOT NULL,
+      mime_type       TEXT,
+      file_size       INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(worker_id, kind)
+    );
+
     -- 세션 담당 디렉터(다대다) — 한 세션에 고객측 디렉터 여러 명. 단일 sessions.director_contact_id는 레거시 보존.
     CREATE TABLE IF NOT EXISTS session_directors (
       session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -429,6 +443,10 @@ function init() {
   addColumn("parties", "contact_party_id", "INTEGER"); // 그룹의 담당자(parties.id, 사람 — 멤버 또는 관계자)
   addColumn("track_tasks", "waived", "INTEGER NOT NULL DEFAULT 0"); // 청구 안 함(무료 처리, 2026-07-06) — 청구 후보에서 되돌리기 가능하게 표시만, 예산·미청구 집계 제외
   addColumn("sessions", "waived", "INTEGER NOT NULL DEFAULT 0"); // 청구 안 함(무료 처리, 2026-07-06) — 위와 동일
+  addColumn("project_managers", "id_number", "TEXT"); // 외주 작업자 주민등록번호/사업자등록번호(2026-07-06 사용자 요청) — 암호화 저장(db.encrypt), 정산 세금신고용
+  addColumn("project_managers", "bank_name", "TEXT"); // 외주 작업자 정산 계좌 은행명
+  addColumn("project_managers", "account_number", "TEXT"); // 외주 작업자 정산 계좌번호 — 암호화 저장(db.encrypt)
+  addColumn("project_managers", "account_holder", "TEXT"); // 외주 작업자 예금주명(입금자명)
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_group ON parties(group_id);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_kind ON parties(kind, is_artist, name);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_user ON parties(user_id);");

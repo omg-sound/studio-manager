@@ -12,7 +12,7 @@ const { db } = require("../db");
 const drive = require("../drive");
 const storage = require("../storage");
 
-const LOCAL_TABLES = ["client_files", "deliverables"]; // storage_backend/file_id 컬럼을 가진 테이블(고정 상수 — SQL 주입 아님)
+const LOCAL_TABLES = ["client_files", "worker_files", "deliverables"]; // storage_backend/file_id 컬럼을 가진 테이블(고정 상수 — SQL 주입 아님). worker_files=외주 첨부(2026-07-06)
 
 /** 저장 백엔드별 파일 수(상태·점검 표시용). backend='local'|'drive'. */
 function fileCountByBackend(backend) {
@@ -27,14 +27,14 @@ function localFileCount() { return fileCountByBackend("local"); }
 /** Drive 저장 파일 수. */
 function driveFileCount() { return fileCountByBackend("drive"); }
 
-const KIND_FOLDER = { biz_license: "사업자등록증", bankbook: "통장사본" }; // client_files kind → Drive 하위 폴더명(새 업로드와 일치)
+const KIND_FOLDER = { biz_license: "사업자등록증", bankbook: "통장사본", id_card: "주민등록증 사본" }; // client_files·worker_files kind → Drive 하위 폴더명(새 업로드와 일치)
 
 async function migrateLocalFilesToDrive() {
   if (!drive.isLinked()) return { ok: false, error: "DRIVE_NOT_LINKED" };
   const rows = [];
   for (const t of LOCAL_TABLES) {
     try {
-      const cols = t === "client_files" ? "id, file_id, file_name, mime_type, kind" : "id, file_id, file_name, mime_type";
+      const cols = t === "client_files" || t === "worker_files" ? "id, file_id, file_name, mime_type, kind" : "id, file_id, file_name, mime_type";
       db().prepare(`SELECT ${cols} FROM ${t} WHERE storage_backend='local'`).all().forEach((r) => rows.push({ ...r, tbl: t }));
     } catch (_e) { /* 테이블 없으면 skip */ }
   }

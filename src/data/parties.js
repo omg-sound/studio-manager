@@ -579,6 +579,25 @@ function listTasksForWorker(worker) {
     .all({ id: worker.id, name: worker.name });
 }
 
+/**
+ * 외주 작업자가 담당한 세션 — 참여 내역(2026-07-06 사용자 리포트: 작업 참여는 뜨는데 세션 참여가 안 뜸).
+ * 매칭: 다대다 session_engineers(manager_id) 우선 + 레거시 engineer_name 폴백(DISTINCT로 중복 제거).
+ * 세션은 worker_rate/정산 개념이 없어(스튜디오 자체 예약) 참고용 목록으로만 노출, 지급 처리 대상 아님.
+ */
+function listSessionsForWorker(worker) {
+  if (!worker) return [];
+  return db()
+    .prepare(
+      `SELECT DISTINCT s.*, p.id AS project_id, p.title AS project_title
+       FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+       WHERE s.id IN (SELECT session_id FROM session_engineers WHERE manager_id = @id)
+          OR s.engineer_name = @name
+       ORDER BY s.session_date DESC, s.id DESC`
+    )
+    .all({ id: worker.id, name: worker.name });
+}
+
 /** 외주 작업 지급 처리/해제(정산). */
 function setTaskPayout(taskId, paid) {
   const p = paid ? 1 : 0;
@@ -857,6 +876,7 @@ module.exports = {
   listProjectManagers,
   getWorker,
   listTasksForWorker,
+  listSessionsForWorker,
   setTaskPayout,
   listContacts,
   listAssociates,

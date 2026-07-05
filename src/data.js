@@ -15,6 +15,7 @@
 
 const studio = require("./data/studio"); // 스튜디오(공급자) 설정
 const clientFiles = require("./data/client-files"); // 클라이언트 첨부 서류
+const workerFiles = require("./data/worker-files"); // 외주 작업자 첨부 서류(2026-07-06)
 const revenue = require("./data/revenue"); // 매출 집계
 const deliverables = require("./data/deliverables"); // 자료 전달
 const rooms = require("./data/rooms"); // 룸
@@ -52,4 +53,5 @@ module.exports = {
   ...sessions, // src/data/sessions.js
   ...revenue, // src/data/revenue.js
   ...clientFiles, // src/data/client-files.js
+  ...workerFiles, // src/data/worker-files.js
 };
