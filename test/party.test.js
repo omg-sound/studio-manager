@@ -347,3 +347,25 @@ test("관계자 역할에 제작/운영 포함 + classifyParty 배지", () => {
   assert.ok(labels.includes("제작/운영"), "classifyParty에 제작/운영 배지");
   assert.ok(labels.includes("아티스트"), "아티스트 배지 병존");
 });
+
+// ── 프로젝트 아티스트 다대다(2026-07-05 — 콤마 여러 명): setProjectArtists·연결 프로젝트·삭제 정리 ──
+test("project_artists: 다중 기록·교체·dedup·연결 프로젝트 매칭·party 삭제 정리", () => {
+  const a1 = D.createPerson({ name: "권보라", nickname: "보라빛" });
+  const a2 = D.createPerson({ name: "정노을", nickname: "노을템포" });
+  const g1 = D.createGroup({ name: "새벽밴드" });
+  const pid = Number(db().prepare("INSERT INTO projects (title, project_type, rate, artist, artist_id) VALUES ('다중아티스트','session',0,'보라빛, 노을템포, 새벽밴드',?)").run(a1).lastInsertRowid);
+  D.setProjectArtists(pid, [a1, a2, g1, a2]); // dedup 포함
+  const listed = D.listProjectArtists(pid).map((p) => p.id);
+  assert.deepEqual(listed.sort(), [a1, a2, g1].sort(), "3명 기록(중복 제거)");
+  // 모든 아티스트의 '연결 프로젝트'에 매칭(artist_id=첫째만이던 한계 해소)
+  assert.ok(D.listProjectsForParty(a2).some((p) => p.id === pid), "둘째 아티스트도 연결 프로젝트 매칭");
+  assert.ok(D.listProjectsForParty(g1).some((p) => p.id === pid), "그룹 아티스트도 매칭");
+  // 목록 교체
+  D.setProjectArtists(pid, [a1]);
+  assert.deepEqual(D.listProjectArtists(pid).map((p) => p.id), [a1], "통째 교체");
+  assert.ok(!D.listProjectsForParty(a2).some((p) => p.id === pid), "빠진 아티스트는 매칭 해제");
+  // party 삭제 시 조인 정리
+  D.setProjectArtists(pid, [a1, a2]);
+  D.deleteParty(a2);
+  assert.deepEqual(D.listProjectArtists(pid).map((p) => p.id), [a1], "party 삭제 → 조인 행 정리");
+});

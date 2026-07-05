@@ -1039,6 +1039,12 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     });
     var view = []; // 현재 렌더된 후보(클릭 인덱스 매핑)
     function showReal(rn) { if (!realDisp) return; if (rn) { if (realVal) realVal.textContent = rn; realDisp.classList.remove("hidden"); } else realDisp.classList.add("hidden"); }
+    // 콤마 다중 아티스트(2026-07-05): 마지막 콤마 뒤 조각(tail)로 검색·선택하고, 선택은 앞부분(head)에 이어붙인다.
+    function seg() {
+      var v = input.value;
+      var i = v.lastIndexOf(",");
+      return i === -1 ? { head: "", tail: v } : { head: v.slice(0, i + 1).replace(/\s*$/, "") + " ", tail: v.slice(i + 1) };
+    }
 
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
@@ -1080,7 +1086,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         '<span class="truncate">＋ ' + esc(label) + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
     }
     function render() {
-      var q = input.value.trim().toLowerCase();
+      var s = seg(); // 콤마 다중: 마지막 조각으로만 검색("아이유, 태" → "태")
+      var q = s.tail.trim().toLowerCase();
       var html = "";
       if (!q) {
         view = [];
@@ -1089,19 +1096,27 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.realName && String(o.realName).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 활동명·본명 둘 다 검색
         html = view.map(pickRow).join("");
         var exact = view.some(function (o) { return String(o.name).toLowerCase() === q || (o.realName && String(o.realName).toLowerCase() === q); });
-        if (!exact) html += newRow("'" + input.value.trim() + "'(으)로 새 아티스트");
+        if (!exact) html += newRow("'" + s.tail.trim() + "'(으)로 새 아티스트");
       }
       pop.innerHTML = html;
       show();
       setHi(0); // 첫 후보 하이라이트(방향키·엔터 대비)
     }
     function pick(o) {
-      input.value = o.name;
-      cid.value = o.contactId || "";
-      showReal(o.realName);
-      fillAgency(o.agency); // 소속사/레이블 자동 채움(그 아티스트의 현재 소속사)
+      var s = seg();
+      var multi = !!s.head; // 콤마 다중 — 선택을 이어붙임("아이유, " + 선택명)
+      input.value = multi ? s.head + o.name : o.name;
+      cid.value = multi ? "" : (o.contactId || ""); // 다중이면 명시 id 무의미(서버가 이름별 해석) — 비움
+      showReal(multi ? "" : o.realName); // 본명 표시는 단일 전용
+      if (!multi || !currentAgencyValue()) fillAgency(o.agency); // 다중일 땐 이미 채워진 소속사 유지(첫 아티스트 우선)
       fireInput();
       hide(); // fireInput 뒤에 닫아야 재렌더로 다시 열리지 않음(선택됨이 보이게)
+    }
+    // 현재 소속사/레이블 값(다중 아티스트 시 덮어쓰기 방지 판단용)
+    function currentAgencyValue() {
+      var form = root.closest ? root.closest("form") : null;
+      var hidden = (form || document).querySelector('input[name="artist_company"]');
+      return hidden ? hidden.value.trim() : "";
     }
     function asNew() { cid.value = ""; hide(); input.focus(); fireInput(); } // 새 아티스트: 연결 없음, 입력값 유지(모달 없을 때 폴백)
 
@@ -1114,7 +1129,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
           mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
           mAgencyInput = modal.querySelector("[data-am-agency-input]"), mEmail = modal.querySelector("[data-am-email]"),
           mErr = modal.querySelector("[data-am-err]");
-      mName.value = input.value.trim(); mGroup.checked = false;
+      mName.value = seg().tail.trim(); mGroup.checked = false; // 콤마 다중이면 마지막 조각만 프리필
       if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = ""; if (mEmail) mEmail.value = "";
       mErr.classList.add("hidden"); mRealWrap.classList.remove("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex");
@@ -1148,9 +1163,11 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
             if (!d || !d.ok) throw new Error("fail");
             var rn = !mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : "";
             announceParty({ kind: mGroup.checked ? "group" : "person", id: d.id, name: d.name, isArtist: true, realName: rn, agency: agName || "" }); // 전역 브로드캐스트 → 이 콤보 포함 모든 콤보 옵션에 반영
-            input.value = d.name; cid.value = d.id;
-            showReal(rn); // 모달 입력 본명(개인) 표시
-            fillAgency(agName); // 모달에서 지정한 소속사를 프로젝트 소속사/레이블 필드에 즉시 반영
+            var s2 = seg(); var multi2 = !!s2.head; // 콤마 다중이면 등록한 이름을 이어붙임
+            input.value = multi2 ? s2.head + d.name : d.name;
+            cid.value = multi2 ? "" : d.id;
+            showReal(multi2 ? "" : rn); // 모달 입력 본명(개인) 표시 — 단일 전용
+            if (!multi2 || !currentAgencyValue()) fillAgency(agName); // 다중일 땐 기존 소속사 유지
             closeModal(); fireInput(); hide(); // 등록 후 콤보 드롭다운 닫기(fireInput 재렌더로 다시 열리는 것 방지)
             if (window.__toast) window.__toast(d.name + " 등록됨");
           })
@@ -1204,7 +1221,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
-    input.addEventListener("input", render);
+    input.addEventListener("input", function () {
+      if (input.value.indexOf(",") !== -1) { cid.value = ""; showReal(""); } // 콤마 다중 = 명시 id·본명 표시는 단일 전용(서버가 이름별 해석)
+      render();
+    });
     // 방향키 이동 + 엔터 선택(ESC 닫기). 드롭다운 열려 있을 때만 가로챔 — 아니면 폼 기본 동작.
     input.addEventListener("keydown", function (e) {
       if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 키(엔터=조합 확정 등)는 무시

@@ -456,3 +456,56 @@ test("companyCombo 제작/운영: 다른 콤보(personCombo 모달)에서 만든
   fire(win, row, "click");
   assert.equal(doc.querySelector("[data-cc-party-id]").value, "777", "선택 시 그 사람 id");
 });
+
+// ── ⑤ artistCombo 콤마 다중(2026-07-05): 마지막 조각 검색 + 선택 이어붙임 ──
+function mountArtistCombo(optsJson) {
+  const html = `<form>
+    <div data-artist-combo>
+      <input type="hidden" name="artist_contact_id" value="" data-artist-cid />
+      <div class="relative">
+        <input class="input" type="text" name="artist" value="" data-artist-input autocomplete="off" role="combobox" />
+        <span class="hidden" data-artist-realname>(<span data-artist-realname-val></span>)</span>
+        <div class="hidden" data-artist-pop role="listbox"></div>
+      </div>
+      <script type="application/json" data-artist-options>${JSON.stringify(optsJson)}</script>
+    </div>
+    <div data-company-combo>
+      <input type="hidden" name="artist_company" value="" data-cc-hidden />
+      <input class="input" type="text" data-cc-input autocomplete="off" />
+      <div class="hidden" data-cc-pop></div>
+      <script type="application/json" data-cc-options>[]</script>
+    </div>
+  </form>`;
+  const m = mountDom(html);
+  return { ...m, input: m.doc.querySelector("[data-artist-input]"), pop: m.doc.querySelector("[data-artist-pop]"), cid: m.doc.querySelector("[data-artist-cid]") };
+}
+const ARTIST_OPTS = [
+  { name: "아이유", contactId: 31, realName: "이지은", sub: "아티스트", agency: "이담" },
+  { name: "태연", contactId: 32, realName: "", sub: "아티스트", agency: "SM" },
+];
+test("artistCombo: 단일 선택은 기존 동작(교체·cid·소속사 채움) 유지", () => {
+  const { win, doc, input, pop, cid } = mountArtistCombo(ARTIST_OPTS);
+  input.value = "아이"; fire(win, input, "input");
+  fire(win, pop.querySelector("button[data-idx]"), "click");
+  assert.equal(input.value, "아이유", "단일 = 교체");
+  assert.equal(cid.value, "31", "단일 = 명시 id");
+  assert.equal(doc.querySelector('input[name="artist_company"]').value, "이담", "소속사 자동 채움");
+});
+test("artistCombo: 콤마 뒤 조각으로 검색·선택 이어붙임 + cid 비움 + 소속사 유지", () => {
+  const { win, doc, input, pop, cid } = mountArtistCombo(ARTIST_OPTS);
+  // 첫 아티스트 선택(소속사 '이담' 채워짐)
+  input.value = "아이"; fire(win, input, "input");
+  fire(win, pop.querySelector("button[data-idx]"), "click");
+  // 콤마 찍고 둘째 검색 — 마지막 조각(태)으로만 검색
+  input.value = "아이유, 태"; fire(win, input, "input");
+  const row = pop.querySelector("button[data-idx]");
+  assert.ok(row && row.textContent.includes("태연"), "마지막 조각으로 둘째 검색");
+  fire(win, row, "click");
+  assert.equal(input.value, "아이유, 태연", "선택은 이어붙임(교체 아님)");
+  assert.equal(cid.value, "", "다중이면 명시 id 비움(서버가 이름별 해석)");
+  assert.equal(doc.querySelector('input[name="artist_company"]').value, "이담", "이미 채워진 소속사는 유지(첫 아티스트 우선)");
+  // 새등록 행 라벨도 조각 기준
+  input.value = "아이유, 태연, 신인"; fire(win, input, "input");
+  const nw = pop.querySelector("button[data-new]");
+  assert.ok(nw && nw.textContent.includes("'신인'"), "새 아티스트 라벨 = 마지막 조각");
+});

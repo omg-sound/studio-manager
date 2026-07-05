@@ -290,6 +290,16 @@ function init() {
       PRIMARY KEY (session_id, contact_id)
     );
 
+    -- 프로젝트 아티스트 다대다(2026-07-05 — 콤마로 여러 명 등록). projects.artist TEXT=콤마 표시 목록,
+    -- projects.artist_id=첫(대표) 아티스트(청구처 파생·레거시 호환), 전체 목록은 이 테이블(각 아티스트 상세 '연결 프로젝트' 매칭).
+    CREATE TABLE IF NOT EXISTS project_artists (
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      party_id   INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (project_id, party_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_artists_party ON project_artists(party_id);
+
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
     CREATE INDEX IF NOT EXISTS idx_task_types_active ON task_types(active, sort_order, label);
     CREATE INDEX IF NOT EXISTS idx_project_tracks_project ON project_tracks(project_id);
@@ -467,6 +477,11 @@ function init() {
       }
     }
     setState("person_name_honorific_split_v1", "done");
+  }
+  // 프로젝트 아티스트 다대다 백필(2026-07-05): 기존 단일 artist_id를 project_artists로 1회 복사(멱등·중복 무시).
+  if (!getState("project_artists_backfill_v1")) {
+    d.exec("INSERT OR IGNORE INTO project_artists (project_id, party_id) SELECT id, artist_id FROM projects WHERE artist_id IS NOT NULL");
+    setState("project_artists_backfill_v1", "done");
   }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.

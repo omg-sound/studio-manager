@@ -195,6 +195,7 @@ function deleteParty(id) {
   d.prepare("UPDATE project_managers SET party_id = NULL WHERE party_id = ?").run(pid);
   d.prepare("UPDATE sessions SET director_party_id = NULL WHERE director_party_id = ?").run(pid);
   d.prepare("DELETE FROM session_directors WHERE party_id = ?").run(pid);
+  d.prepare("DELETE FROM project_artists WHERE party_id = ?").run(pid); // 다대다 아티스트 연결 해제(FK CASCADE 대비 명시)
   d.prepare("UPDATE parties SET owner_party_id = NULL WHERE owner_party_id = ?").run(pid);
   d.prepare("UPDATE parties SET group_id = NULL WHERE group_id = ?").run(pid); // 그룹 삭제 시 멤버 소속 해제
   d.prepare("DELETE FROM parties WHERE id = ?").run(pid);
@@ -296,6 +297,7 @@ function listProjectsForParty(partyId) {
   return db().prepare(
     `SELECT DISTINCT p.* FROM projects p
       WHERE p.artist_id = @id OR p.agency_id = @id OR p.production_id = @id OR p.contact_party_id = @id
+         OR p.id IN (SELECT project_id FROM project_artists WHERE party_id = @id)
       ORDER BY p.created_at DESC, p.id DESC`
   ).all({ id });
 }

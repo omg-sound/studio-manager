@@ -54,6 +54,7 @@ const {
   getStudioLogo,
   ensureCompanyParty,
   resolvePartyByDisplay,
+  setProjectArtists,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo, companyCombo, tabBar: renderTabs, searchBox } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
@@ -90,21 +91,38 @@ function resolveProjectParties(b) {
     : String(b.contact_name || "").trim()
       ? resolvePersonByName(b.contact_name.trim())
       : null;
-  const artistName = String(b.artist || "").trim();
-  let artistId = null;
-  if (artistName) {
+  // 아티스트 = 콤마로 여러 명 가능(2026-07-05 사용자 요청): "아이유, 태연" → 각 이름을 party로 해석해
+  // project_artists(다대다)에 전부 기록, artist_id=첫(대표) 아티스트(청구처 파생·레거시 호환), artist TEXT=정규화된 콤마 목록(표시).
+  const artistNames = String(b.artist || "").split(",").map((s) => s.trim()).filter(Boolean);
+  let artistIds = [];
+  if (artistNames.length === 1) {
+    // 단일 = 기존 경로 그대로(그룹 체크·명시 선택 artist_contact_id·본명 입력칸 모두 유효)
+    const artistName = artistNames[0];
     if (b.artist_is_group) {
       const ex = db().prepare("SELECT id FROM parties WHERE kind = 'group' AND name = ? ORDER BY id LIMIT 1").get(artistName);
-      artistId = ex ? ex.id : createGroup({ name: artistName });
+      artistIds = [ex ? ex.id : createGroup({ name: artistName })];
     } else if (b.artist_contact_id) {
-      artistId = Number(b.artist_contact_id);
-      markArtistParty(artistId, artistName);
+      artistIds = [Number(b.artist_contact_id)];
+      markArtistParty(artistIds[0], artistName);
     } else {
       const realName = String(b.artist_real_name || "").trim();
-      artistId = resolvePersonByName(realName || artistName);
-      markArtistParty(artistId, artistName);
+      artistIds = [resolvePersonByName(realName || artistName)];
+      markArtistParty(artistIds[0], artistName);
     }
+  } else if (artistNames.length > 1) {
+    // 다중 = 각 이름 독립 해석(그룹 체크·명시 id·본명칸은 단일 전용이라 무시 — 이름 안전망이 커버):
+    // 기존 그룹 정확 일치 → 그 그룹 / 사람은 resolvePersonByName(유일·라벨·활동명 안전망, 없으면 생성) + 아티스트 마킹.
+    for (const nm of artistNames) {
+      const g = db().prepare("SELECT id FROM parties WHERE kind = 'group' AND name = ? ORDER BY id LIMIT 1").get(nm);
+      if (g) { artistIds.push(g.id); continue; }
+      const pid = resolvePersonByName(nm);
+      markArtistParty(pid, nm);
+      artistIds.push(pid);
+    }
+    artistIds = [...new Set(artistIds)]; // "아이유, 아이유" 같은 중복 제거
   }
+  const artistId = artistIds[0] || null;
+  const artistText = artistNames.join(", ") || null; // 표시 TEXT 정규화("아이유,태연"→"아이유, 태연")
   // 제작/운영: 콤보에서 사람(관계자·개인) 또는 회사를 선택하면 hidden production_party_id로 party id가 온다 → 그 party를 직접 사용
   // (개인이 제작·운영하는 경우 지원, 2026-07-05). 없으면(새 이름 타이핑·id 미확정) ①기존 party 표시명 해석(resolvePartyByDisplay —
   // 회사 상호·사람 본명/라벨/활동명; 사람 라벨 "조형우 (형우비트)"가 회사로 오생성되는 것 방지) ②그래도 없으면 새 회사 생성.
@@ -114,6 +132,8 @@ function resolveProjectParties(b) {
   return {
     contactId,
     artistId,
+    artistIds,
+    artistText,
     agencyId: ensureCompanyParty(b.artist_company, "소속사/레이블"),
     productionId: prodPartyId || (prodText ? resolvePartyByDisplay(prodText) || ensureCompanyParty(prodText, "제작사") : null),
   };
@@ -329,7 +349,7 @@ router.post("/", requireEditor, (req, res) => {
       title,
       project_type: type,
       // 표시용 denormalized TEXT 유지(목록·요약 렌더). 정체성/청구는 party 참조가 진실원천.
-      artist: String(b.artist || "").trim() || null,
+      artist: parties.artistText, // 콤마 다중 정규화("아이유, 태연")
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
       artist_id: parties.artistId,
@@ -339,6 +359,7 @@ router.post("/", requireEditor, (req, res) => {
       manager_id: b.manager_id ? Number(b.manager_id) : null,
       memo: String(b.memo || "").trim() || null,
     });
+  setProjectArtists(info.lastInsertRowid, parties.artistIds); // 다대다 전체 기록(각 아티스트 상세 '연결 프로젝트' 매칭)
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
 });
 
@@ -553,7 +574,7 @@ router.post("/:id", requireEditor, (req, res) => {
     .run({
       id,
       title,
-      artist: String(b.artist || "").trim() || null,
+      artist: parties.artistText, // 콤마 다중 정규화
       artist_company: String(b.artist_company || "").trim() || null,
       production_company: String(b.production_company || "").trim() || null,
       artist_id: parties.artistId,
@@ -563,6 +584,7 @@ router.post("/:id", requireEditor, (req, res) => {
       manager_id: b.manager_id ? Number(b.manager_id) : null,
       memo: String(b.memo || "").trim() || null,
     });
+  setProjectArtists(id, parties.artistIds); // 다대다 목록 통째 교체
   if (isFetch) return res.json({ ok: true });
   res.redirect(`/projects/${id}?flash=saved`);
 });
@@ -842,10 +864,12 @@ function artistCombo(p = {}) {
   const artistParty = p.artist_id ? getParty(p.artist_id) : null; // getParty=getParty(compat)
   // 표시 이름 = artist TEXT 우선, 없으면 party 활동명/본명 폴백(TEXT denorm 비어도 콤보에 이름 표시).
   const artistName = p.artist || (artistParty ? artistParty.activity_name || artistParty.name || "" : "");
+  // 콤마 다중("아이유, 태연")이면 단일 전용 메타(명시 id·그룹·본명) 비활성 — 서버가 이름별 해석(resolveProjectParties 다중 경로).
+  const multi = artistName.includes(",");
   const meta = {
-    contactId: artistParty ? artistParty.id : "",
-    isGroup: artistParty ? artistParty.kind === "group" : false,
-    realName: artistParty && artistParty.kind === "person" && artistParty.name && artistParty.name !== artistName ? artistParty.name : "",
+    contactId: !multi && artistParty ? artistParty.id : "",
+    isGroup: !multi && artistParty ? artistParty.kind === "group" : false,
+    realName: !multi && artistParty && artistParty.kind === "person" && artistParty.name && artistParty.name !== artistName ? artistParty.name : "",
   };
   // 아티스트 후보 = is_artist party(사람 solo + 그룹). 콤보 옵션 shape {name, contactId, realName, sub}.
   const opts = partyOptions({ role: "artist" }).map((o) => ({
