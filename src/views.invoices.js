@@ -86,13 +86,14 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
       ${cell("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : '<span class="text-muted">미정</span>')}
     </dl>`;
 
-  // 입금액·미수금·납입상태 줄 제거(2026-07-05 사용자 결정 — 분납 없는 워크플로: 배지(발행/입금완료)가 입금 상태를 대체. 미수는 합계(목록 상단·대시보드)만).
+  // 금액 블록 = 영수증식 우측 정렬 스택(2026-07-05 사용자 요청 — 'VAT 오른쪽 정렬, 줄바꿔서 총액'): (할인) → VAT → 총액(마지막·강조).
+  // (입금액·미수금·납입상태 줄은 제거 — 분납 없는 워크플로: 배지(발행/입금완료)가 입금 상태를 대체. 미수는 합계(목록 상단·대시보드)만.)
   const amountGrid = `
-    <dl class="grid grid-cols-1 gap-y-1.5 border-t border-border pt-2 sm:grid-cols-2 sm:gap-x-8">
-      ${cell("총액", formatKRW(inv.amount))}
-      ${inv.discount_amount ? cell("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
-      ${inv.tax_amount ? cell("VAT", formatKRW(inv.tax_amount)) : ""}
-    </dl>`;
+    <div class="flex flex-col items-end gap-1 border-t border-border pt-2">
+      ${inv.discount_amount ? `<div class="text-muted">할인 <span class="tabular ml-2 font-medium text-success">-${formatKRW(inv.discount_amount)}</span></div>` : ""}
+      ${inv.tax_amount ? `<div class="text-muted">VAT <span class="tabular ml-2 font-medium text-fg">${formatKRW(inv.tax_amount)}</span></div>` : ""}
+      <div class="text-muted">총액 <span class="tabular ml-2 text-base font-semibold text-fg">${formatKRW(inv.amount)}</span></div>
+    </div>`;
 
   const itemList = items.length
     ? `<div class="border-t border-border pt-2">
