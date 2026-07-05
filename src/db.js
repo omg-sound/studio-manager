@@ -387,6 +387,7 @@ function init() {
   addColumn("track_tasks", "worker_rate", "INTEGER NOT NULL DEFAULT 0"); // 외주 지급단가(원). 정산 합계 기준(고객청구 total_price와 별개, 미입력=0)
   addColumn("track_tasks", "engineer_id", "INTEGER"); // 담당 엔지니어(project_managers 참조 의미·FK 없음). rename 내성 정산 매칭 키
   addColumn("invoice_items", "session_id", "INTEGER REFERENCES sessions(id) ON DELETE SET NULL"); // 녹음 세션 직접 청구 라인(곡·콘텐츠 안 거침). 청구 여부 = 이 컬럼 역참조
+  addColumn("invoice_items", "item_date", "TEXT"); // 청구 항목 정렬용 날짜(YYYY-MM-DD) 스냅샷 — 세션=session_date, 작업=생성일(작업 자체엔 일정 개념 없음). 2026-07-05
   // contacts 확장 필드 — Google People API 동기화 대비
   addColumn("contacts", "family_name", "TEXT");   // 성
   addColumn("contacts", "given_name",  "TEXT");   // 이름
@@ -509,6 +510,20 @@ function init() {
          AND (SELECT COUNT(*) FROM project_managers pm2 WHERE pm2.name = s.engineer_name) = 1`
     );
     setState("session_engineers_backfill_v1", "done");
+  }
+  // 기존 invoice_items에 item_date 1회 백필(2026-07-05 — 청구 항목 날짜순 정렬 도입).
+  // 세션 라인=session_date, 작업 라인=작업 생성일(created_at 앞 10자, 작업 자체엔 일정 개념이 없어 생성순으로 근사).
+  // 참조 task_id/session_id가 SET NULL된(원본 삭제) 라인은 날짜를 복원할 수 없어 NULL 유지(정렬 시 id로 폴백).
+  if (!getState("invoice_item_date_backfill_v1")) {
+    d.exec(
+      `UPDATE invoice_items SET item_date = (SELECT s.session_date FROM sessions s WHERE s.id = invoice_items.session_id)
+       WHERE session_id IS NOT NULL AND item_date IS NULL`
+    );
+    d.exec(
+      `UPDATE invoice_items SET item_date = (SELECT substr(t.created_at, 1, 10) FROM track_tasks t WHERE t.id = invoice_items.task_id)
+       WHERE task_id IS NOT NULL AND item_date IS NULL`
+    );
+    setState("invoice_item_date_backfill_v1", "done");
   }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.

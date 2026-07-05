@@ -202,8 +202,9 @@ function isSessionInvoiced(sessionId) {
 function listInvoiceItemsForInvoice(user, invoiceId) {
   const inv = getInvoiceForUser(user, invoiceId);
   if (!inv) return null;
+  // 날짜순(item_date) — 없으면(레거시·원본 삭제로 복원 불가) 맨 뒤로 밀고 id순 폴백.
   const rows = db()
-    .prepare("SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY id ASC")
+    .prepare("SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY (item_date IS NULL), item_date ASC, id ASC")
     .all(inv.id);
   return { invoice: inv, rows };
 }
@@ -307,15 +308,18 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
   if (resolvedPayerId && !d.prepare("SELECT 1 FROM parties WHERE id = ?").get(resolvedPayerId)) throw new Error("CLIENT_NOT_FOUND");
 
   // 라인아이템(청구서·PDF 공용). 작업=곡명 - 종류, 세션=녹음 세션 라인.
+  // item_date = 정렬용 날짜 스냅샷(2026-07-05 사용자 요청 — 청구 항목도 세션 탭처럼 항상 날짜순).
+  // 세션=session_date(실제 일정), 작업=생성일(작업 자체엔 일정 개념이 없어 created_at으로 근사).
   const items = [];
   for (const t of tasks) {
-    items.push({ task_id: t.id, session_id: null, track_title: t.track_title, task_type: t.task_type, description: `${t.track_title} - ${taskTypeLabel(t.task_type)}`, quantity: t.quantity, unit_price: t.unit_price, amount: t.total_price });
+    items.push({ task_id: t.id, session_id: null, track_title: t.track_title, task_type: t.task_type, description: `${t.track_title} - ${taskTypeLabel(t.task_type)}`, quantity: t.quantity, unit_price: t.unit_price, amount: t.total_price, item_date: String(t.created_at || "").slice(0, 10) || null });
   }
   for (const { session, calc, amount } of billSessions) {
     const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
     const durLabel = calc.allDay ? "종일" : `${hh}시간${mm ? " " + mm + "분" : ""}`; // 종일 세션은 '종일'로 스냅샷(시간 없음)
-    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `${session.session_type || "녹음"} 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${durLabel})`, quantity: 1, unit_price: amount, amount }); // 촬영 세션도 실제 종류로 스냅샷(거래명세서 품목명)
+    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `${session.session_type || "녹음"} 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${durLabel})`, quantity: 1, unit_price: amount, amount, item_date: session.session_date || null }); // 촬영 세션도 실제 종류로 스냅샷(거래명세서 품목명)
   }
+  items.sort((a, b) => (a.item_date || "").localeCompare(b.item_date || "")); // 날짜순(동일 날짜는 원래 순서 유지 — Array#sort는 안정 정렬)
   return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedPayerId };
 }
 
@@ -356,14 +360,14 @@ function createInvoiceFromTasks(user, opts = {}) {
       });
     const invoiceId = info.lastInsertRowid;
     const insertItem = d.prepare(
-      `INSERT INTO invoice_items (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO invoice_items (invoice_id, task_id, session_id, track_title, task_type, description, quantity, unit_price, amount, item_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     // 청구 시 작업 잠금·확정 금액 반영 + 상태를 '완료'로(청구=완료 처리; 미완료 선택 시 폼에서 확인받음).
     const markTask = d.prepare("UPDATE track_tasks SET is_invoiced = 1, invoice_id = ?, unit_price = ?, total_price = ?, status = 'Completed' WHERE id = ?");
     const markSession = d.prepare("UPDATE sessions SET status = '완료' WHERE id = ? AND status <> '취소'"); // 청구 시 녹음 세션도 완료 처리(예정→완료)
     for (const it of draft.items) {
-      insertItem.run(invoiceId, it.task_id, it.session_id, it.track_title, it.task_type, it.description, it.quantity, it.unit_price, it.amount);
+      insertItem.run(invoiceId, it.task_id, it.session_id, it.track_title, it.task_type, it.description, it.quantity, it.unit_price, it.amount, it.item_date);
       if (it.task_id) markTask.run(invoiceId, it.unit_price, it.amount, it.task_id); // 청구 시 확정 금액을 작업에도 반영
       if (it.session_id) markSession.run(it.session_id); // 청구=완료(예정 세션도 완료로)
     }
