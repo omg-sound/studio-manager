@@ -1,7 +1,9 @@
-// 자동 제출([data-autosubmit], 아래) 직전 저장한 스크롤 위치를 같은 경로(pathname)로 돌아왔을 때 복원.
-// 2026-07-05 사용자 리포트 — 프로젝트 목록에서 치프가 작성일을 인라인 수정하면 목록이 재정렬되며
-// 페이지 전체가 새로고침돼 맨 위로 튀어 원하던 프로젝트를 다시 찾아 스크롤해야 하던 불편.
-// 경로만 비교(쿼리의 flash= 등은 무시)하고 1회성으로 지워 이후 일반 이동에는 영향 없음.
+// 스크롤 위치 보존 — 폼 제출 후 같은 페이지로 돌아올 때 맨 위로 튀지 않고 원래 보던 위치 유지.
+// 2026-07-05 사용자 리포트 2건: ①프로젝트 목록에서 작성일 인라인 수정 시 목록이 재정렬되며 페이지 전체가
+// 새로고침돼 맨 위로 튐 ②청구 목록의 계산서·입금 처리 토글도 동일 — 발행필요→발행완료로 카드가 탭을 옮기며
+// 스크롤이 맨 위로, 같은 탭에 남는 토글도 재로드 자체는 일어나 깜빡이는 느낌. 제출 직전 스크롤 저장(전 폼 공통,
+// PDF 미리보기 등 새 탭 제출은 현재 페이지가 안 바뀌므로 제외), 페이지 로드 시 같은 경로(pathname)면 1회
+// 복원(쿼리의 flash= 등 차이는 무시) 후 삭제 — 일반 이동에는 영향 없음.
 (function () {
   "use strict";
   var KEY = "scrollPos:" + location.pathname;
@@ -12,6 +14,11 @@
       window.scrollTo(0, parseInt(raw, 10) || 0);
     }
   } catch (e) {}
+  document.addEventListener("submit", function (e) {
+    var f = e.target;
+    if (!f || (e.submitter && e.submitter.getAttribute("formtarget") === "_blank")) return;
+    try { sessionStorage.setItem("scrollPos:" + location.pathname, String(window.scrollY)); } catch (_e) {}
+  }, true);
 })();
 
 // 클릭 복사([data-copy]) + 토스트 알림. 사업자등록번호 등 값을 눌러 클립보드에 복사.
@@ -111,12 +118,8 @@
   "use strict";
   document.addEventListener("change", function (e) {
     var field = e.target.closest && e.target.closest("[data-autosubmit]");
-    if (field && field.form) {
-      // 자동 제출은 같은 목록 페이지로 되돌아오는 경우가 많다(예: 프로젝트 목록 작성일 인라인 수정) —
-      // 제출 직전 스크롤을 저장해두면 재로드 후 맨 위로 튀지 않고 원래 보던 위치로 복원된다(아래 복원 IIFE).
-      try { sessionStorage.setItem("scrollPos:" + location.pathname, String(window.scrollY)); } catch (_e) {}
-      if (field.form.requestSubmit) field.form.requestSubmit(); else field.form.submit();
-    } // requestSubmit: submit 이벤트 발화(콤마정리·드래프트 핸들러 동작)
+    // requestSubmit: 실제 submit 이벤트 발화(콤마정리·드래프트 핸들러·스크롤 위치 저장 IIFE 전부 동작).
+    if (field && field.form) { if (field.form.requestSubmit) field.form.requestSubmit(); else field.form.submit(); }
   });
 
   document.addEventListener("click", function (e) {

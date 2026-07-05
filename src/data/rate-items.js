@@ -7,7 +7,7 @@
  */
 
 const { db } = require("../db");
-const { normalizeRecordingCategory } = require("../config");
+const { listRateCategories } = require("./rate-categories"); // 무순환(rate-categories는 rate-items를 require하지 않음)
 const { parseMoney } = require("../lib/forms");
 
 const parseWon = parseMoney; // 내부 호출명 parseWon 유지(data.js와 동일 별칭)
@@ -18,10 +18,17 @@ function parseHoursToMinutes(v) {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 60) : 0;
 }
 
+/** 분류 검증 — DB(rate_categories)에 등록된 이름만 허용, 아니면 첫 분류로 폴백(2026-07-05, config 하드코딩에서 전환). */
+function normalizeCategory(v) {
+  const names = listRateCategories().map((c) => c.name);
+  const s = String(v || "").trim();
+  return names.includes(s) ? s : names[0] || "";
+}
+
 function rateFields(input) {
   return {
     name: String(input.rate_name != null ? input.rate_name : input.name || "").trim(), // 폼 필드=rate_name(Chrome이 name= 필드에 사람이름 자동완성을 강제 — 함정 #19)
-    category: normalizeRecordingCategory(input.category),
+    category: normalizeCategory(input.category),
     base_minutes: parseHoursToMinutes(input.base_hours),
     base_price: parseWon(input.base_price),
     extra_minutes: parseHoursToMinutes(input.extra_hours) || 60,

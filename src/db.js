@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { config, TASK_TYPES } = require("./config");
+const { config, TASK_TYPES, RECORDING_CATEGORIES, FILMING_CATEGORIES, PERFORMANCE_CATEGORIES } = require("./config");
 const { openDatabase } = require("./sqlite");
 const { splitKoreanName } = require("./lib/korean-name");
 
@@ -92,6 +92,18 @@ function init() {
       extra_price   INTEGER NOT NULL DEFAULT 0,    -- 초과 단위당 가격(원)
       active        INTEGER NOT NULL DEFAULT 1,
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- 단가표 분류(2026-07-05, 이전엔 config 하드코딩 배열이 유일한 진실원천 — 커스텀 분류 추가 불가했음).
+    -- config RECORDING/FILMING/PERFORMANCE_CATEGORIES를 1회 시드하며 그 4개는 locked=1(수정·삭제 불가 — 세션 종류↔kind
+    -- 매핑 등 코드가 이름에 의존). 치프가 새로 추가하는 분류만 locked=0(수정·삭제 가능).
+    CREATE TABLE IF NOT EXISTS rate_categories (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL UNIQUE,
+      kind       TEXT NOT NULL DEFAULT 'recording', -- recording | filming | performance
+      locked     INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     -- 작업 종류 카탈로그(곡·콘텐츠 후반작업 종류). config.TASK_TYPES를 1회 시드 후 DB가 단일 진실원천.
@@ -780,6 +792,15 @@ function seedDefaultCatalogs() {
       insTaskType.run(t.key, t.label, t.group, t.billing || "Fixed_Per_Track", t.price || 0, t.quick ? 1 : 0, (i + 1) * 10)
     );
     setState("task_types_seed_v1", "done");
+  }
+
+  // 단가표 분류 1회 시드(2026-07-05) — config 배열의 4개 기본 분류를 locked=1로. 이후 치프가 추가하는 분류만 수정·삭제 가능.
+  if (!getState("rate_categories_seed_v1")) {
+    const insCat = d.prepare("INSERT INTO rate_categories (name, kind, locked, sort_order) VALUES (?, ?, 1, ?) ON CONFLICT(name) DO NOTHING");
+    RECORDING_CATEGORIES.forEach((name, i) => insCat.run(name, "recording", i));
+    FILMING_CATEGORIES.forEach((name, i) => insCat.run(name, "filming", 100 + i));
+    PERFORMANCE_CATEGORIES.forEach((name, i) => insCat.run(name, "performance", 200 + i));
+    setState("rate_categories_seed_v1", "done");
   }
 
   const hasManager = d.prepare("SELECT id FROM project_managers LIMIT 1").get();

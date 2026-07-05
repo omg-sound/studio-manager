@@ -114,13 +114,13 @@ const PROJECT_SERVICES = [
   { key: "mixing", label: "믹싱" },
   { key: "mastering", label: "마스터링" },
 ];
-// 단가표(녹음 종류) 분류 — 녹음 세션 폼에서 이 분류로 묶어 보여준다.
+// 단가표 분류의 **1회 시드 데이터**(2026-07-05부터 진실원천은 DB `rate_categories` 테이블 — 치프가 관리>컨텐츠에서
+// 커스텀 분류를 추가·수정·삭제할 수 있게 전환. 이 4개는 시드 시 locked=1로 들어가 수정·삭제 불가). db.js seedDefaultCatalogs만 참조.
+// 분류→kind 조회·검증은 이제 DB 기반(`src/data/rate-categories.js`의 rateCategoryKind/listRateCategories)을 쓴다.
 const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
-const FILMING_CATEGORIES = ["스튜디오 촬영"]; // 촬영 단가 종류(대관). rate_items.category로 녹음/촬영 구분(별도 컬럼 없음). 로케이션 촬영은 미사용(사용자 결정).
-const PERFORMANCE_CATEGORIES = ["공연"]; // 공연 단가 종류(대관) — 항목 예: 플레이백 세션·라이브 믹스(관리>컨텐츠에서 등록).
-const RATE_CATEGORIES = [...RECORDING_CATEGORIES, ...FILMING_CATEGORIES, ...PERFORMANCE_CATEGORIES]; // 단가 항목 전체 카테고리(녹음+촬영+공연)
-// 카테고리 → 종류(kind). 촬영=filming·공연=performance·그 외 recording. 세션 종류와 매칭해 폼 rate 옵션을 거른다.
-const rateCategoryKind = (cat) => (FILMING_CATEGORIES.includes(cat) ? "filming" : PERFORMANCE_CATEGORIES.includes(cat) ? "performance" : "recording");
+const FILMING_CATEGORIES = ["스튜디오 촬영"]; // 로케이션 촬영은 미사용(사용자 결정)
+const PERFORMANCE_CATEGORIES = ["공연"]; // 항목 예: 플레이백 세션·라이브 믹스
+const RATE_CATEGORIES = [...RECORDING_CATEGORIES, ...FILMING_CATEGORIES, ...PERFORMANCE_CATEGORIES]; // 시드 전용(단가 항목 전체 카테고리)
 // 세션 종류(대관) → 단가 kind. 녹음=recording, 촬영=filming, 공연=performance.
 const SESSION_TYPE_RATE_KIND = { 녹음: "recording", 촬영: "filming", 공연: "performance" };
 const CLIENT_KINDS = ["아티스트", "그룹", "소속사/레이블", "제작사", "기타"]; // 그룹=밴드·아이돌 그룹 등 그룹 아티스트(parties.kind='group')
@@ -267,9 +267,7 @@ module.exports = {
   FILMING_CATEGORIES,
   PERFORMANCE_CATEGORIES,
   RATE_CATEGORIES,
-  rateCategoryKind,
   SESSION_TYPE_RATE_KIND,
-  normalizeRecordingCategory: (v) => normalize(v, RATE_CATEGORIES), // 녹음+촬영 카테고리 모두 허용(촬영 항목이 녹음으로 강제되지 않게)
   normalizeSessionType: (v) => normalize(v, SESSION_TYPES),
   normalizeSessionStatus: (v) => normalize(v, SESSION_STATUSES),
   normalizeClientKind: (v) => normalize(v, CLIENT_KINDS),

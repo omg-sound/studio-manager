@@ -9,8 +9,8 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 const { init, db } = require("../src/db");
-const { sessionRateAmount } = require("../src/data");
-const { RENTAL_SESSION_TYPES, SESSION_TYPES, RECORDING_CATEGORIES, FILMING_CATEGORIES, PERFORMANCE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("../src/config");
+const { sessionRateAmount, rateCategoryKind } = require("../src/data");
+const { RENTAL_SESSION_TYPES, SESSION_TYPES, RECORDING_CATEGORIES, FILMING_CATEGORIES, PERFORMANCE_CATEGORIES, SESSION_TYPE_RATE_KIND } = require("../src/config");
 
 init();
 

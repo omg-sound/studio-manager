@@ -3,12 +3,18 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, requireEditor, isChief, syncUserToManager, findUserById } = require("../auth");
-const { config, ROLES, ROLE_LABELS, normalizeRole, RECORDING_CATEGORIES, FILMING_CATEGORIES, PERFORMANCE_CATEGORIES, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
+const { config, ROLES, ROLE_LABELS, normalizeRole, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
 
-/** 단가 항목 카테고리 select 옵션 — 녹음/촬영/공연 optgroup(대관 종류별). current 선택 반영. */
+const RATE_KIND_LABELS = { recording: "녹음", filming: "촬영", performance: "공연" };
+
+/** 단가 항목 카테고리 select 옵션 — kind(녹음/촬영/공연)별 optgroup, DB 분류 순서(2026-07-05 config 하드코딩에서 전환). current 선택 반영. */
 function rateCategoryOptions(current = "") {
-  const grp = (label, cats) => `<optgroup label="${esc(label)}">${cats.map((c) => `<option value="${esc(c)}" ${c === current ? "selected" : ""}>${esc(c)}</option>`).join("")}</optgroup>`;
-  return grp("녹음", RECORDING_CATEGORIES) + grp("촬영", FILMING_CATEGORIES) + grp("공연", PERFORMANCE_CATEGORIES);
+  const byKind = {};
+  listRateCategories().forEach((c) => { (byKind[c.kind] = byKind[c.kind] || []).push(c); });
+  return Object.keys(RATE_KIND_LABELS)
+    .filter((k) => byKind[k] && byKind[k].length)
+    .map((k) => `<optgroup label="${esc(RATE_KIND_LABELS[k])}">${byKind[k].map((c) => `<option value="${esc(c.name)}" ${c.name === current ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</optgroup>`)
+    .join("");
 }
 const {
   listProjectManagers,
@@ -19,6 +25,10 @@ const {
   createRateItem,
   updateRateItem,
   deleteRateItem,
+  listRateCategories,
+  createRateCategory,
+  updateRateCategory,
+  deleteRateCategory,
   listTaskTypes,
   createTaskType,
   updateTaskType,
@@ -130,10 +140,73 @@ function peopleTab(currentUser) {
       </section>`;
 }
 
+/** 단가표 항목을 분류별로 묶어 접이식(<details>, 기본 접힘)으로 — 2026-07-05 사용자 요청. DB 분류 순서(kind→sort_order→이름) 따름. */
+function ratesGroupedByCategory(rates) {
+  if (!rates.length) return emptyState("등록된 단가 항목이 없습니다.");
+  const order = listRateCategories().map((c) => c.name);
+  const groups = {};
+  rates.forEach((r) => { const c = r.category || order[0] || ""; (groups[c] = groups[c] || []).push(r); });
+  const orderedCats = [...order.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !order.includes(c))];
+  return orderedCats
+    .map((c) => {
+      const items = groups[c];
+      const activeN = items.filter((r) => r.active).length;
+      const countLabel = activeN !== items.length ? `${items.length}개 · 활성 ${activeN}` : `${items.length}개`;
+      return `
+        <details class="group rounded-lg border border-border">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-medium hover:bg-elevated">
+            <span>${esc(c)}</span>
+            <span class="flex items-center gap-2 text-xs font-normal text-muted">${esc(countLabel)}${detailsChevron()}</span>
+          </summary>
+          <div class="space-y-2 border-t border-border p-3">${items.map((r) => rateItemRow(r)).join("")}</div>
+        </details>`;
+    })
+    .join("");
+}
+
+/** 분류 관리 행 — 기본(내장) 분류는 표시만(수정·삭제 불가), 치프가 추가한 분류만 이름·kind 수정 + 삭제. */
+function rateCategoryManageRow(c) {
+  if (c.locked) {
+    return `<div class="flex items-center justify-between gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-sm">
+      <span>${esc(c.name)} <span class="badge bg-bg text-muted">${esc(RATE_KIND_LABELS[c.kind] || c.kind)}</span></span>
+      <span class="text-xs text-muted">기본 분류 · 수정·삭제 불가</span>
+    </div>`;
+  }
+  const kindOpts = Object.entries(RATE_KIND_LABELS).map(([k, l]) => `<option value="${k}" ${k === c.kind ? "selected" : ""}>${esc(l)}</option>`).join("");
+  return `<div class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2">
+    <form method="post" action="/settings/rate-categories/${c.id}" class="flex flex-1 flex-wrap items-center gap-2" data-dirty-form>
+      <input class="input py-1 text-sm w-40" name="cat_name" value="${esc(c.name)}" autocomplete="off" required />
+      <select class="input py-1 text-sm" name="kind">${kindOpts}</select>
+      <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>저장</button>
+    </form>
+    <form method="post" action="/settings/rate-categories/${c.id}/delete" data-confirm="'${esc(c.name)}' 분류를 삭제할까요? 이 분류를 쓰는 단가 항목이 있으면 삭제할 수 없습니다.">
+      <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
+    </form>
+  </div>`;
+}
+
+/** 분류 관리 섹션(접이식, 기본 접힘) — 추가 폼 + 목록(기본 분류/커스텀 분류). */
+function rateCategoriesSection() {
+  const cats = listRateCategories();
+  const kindOpts = Object.entries(RATE_KIND_LABELS).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
+  return `
+    <details class="group mt-3 border-t border-border pt-3">
+      <summary class="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">${detailsChevron()} 분류 관리</summary>
+      <div class="mt-2 space-y-2">
+        ${explain(`분류는 <b>녹음·촬영·공연</b> 중 하나에 속해 세션 종류에 맞는 단가 항목을 거르는 기준이 됩니다. <b>기본 분류(스튜디오/로케이션 녹음·스튜디오 촬영·공연)는 수정·삭제할 수 없습니다.</b> 새로 추가한 분류만 이름·소속을 바꾸거나(사용 중인 단가 항목도 함께 갱신) 삭제할 수 있어요(삭제는 그 분류를 쓰는 단가 항목이 없을 때만).`)}
+        <form method="post" action="/settings/rate-categories" class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg p-3">
+          <input class="input py-1.5 text-sm flex-1" name="cat_name" placeholder="새 분류명 (예: 야외 촬영)" autocomplete="off" required />
+          <select class="input py-1.5 text-sm" name="kind">${kindOpts}</select>
+          <button class="btn-primary btn-sm shrink-0" type="submit">분류 추가</button>
+        </form>
+        <div class="space-y-2">${cats.map(rateCategoryManageRow).join("")}</div>
+      </div>
+    </details>`;
+}
+
 /** 컨텐츠 탭: 단가표·녹음 종류 + 작업 종류 카탈로그. */
 function contentTab() {
   const rates = listRateItems({ includeInactive: true });
-  const rateRows = rates.length ? rates.map((r) => rateItemRow(r)).join("") : emptyState("등록된 단가 항목이 없습니다.");
   const taskTypes = listTaskTypes({ includeInactive: true });
   const taskTypeRows = taskTypes.length ? taskTypes.map((t) => taskTypeRow(t)).join("") : emptyState("등록된 작업 종류가 없습니다.");
   return `
@@ -167,7 +240,8 @@ function contentTab() {
           </div>
           <button class="btn-primary btn-sm" type="submit">단가 항목 추가</button>
         </form>
-        <div class="space-y-2">${rateRows}</div>
+        <div class="space-y-2">${ratesGroupedByCategory(rates)}</div>
+        ${rateCategoriesSection()}
       </section>
 
       <section class="card space-y-4">
@@ -663,6 +737,38 @@ router.post("/rate-items/:id", requireEditor, (req, res) => {
 
 router.post("/rate-items/:id/delete", requireEditor, (req, res) => {
   deleteRateItem(Number(req.params.id));
+  res.redirect("/settings?tab=content&flash=deleted");
+});
+
+// ── 단가표 분류 관리(2026-07-05) — 기본 분류는 잠금(locked), 치프가 추가한 분류만 수정·삭제 ──
+router.post("/rate-categories", requireEditor, (req, res) => {
+  try {
+    createRateCategory({ name: req.body.cat_name, kind: req.body.kind });
+  } catch (e) {
+    if (e.message !== "CATEGORY_NAME_REQUIRED") throw e; // 이름 누락은 조용히 생성 안 함
+  }
+  res.redirect("/settings?tab=content&flash=saved");
+});
+
+router.post("/rate-categories/:id", requireEditor, (req, res) => {
+  try {
+    updateRateCategory(Number(req.params.id), { name: req.body.cat_name, kind: req.body.kind });
+  } catch (e) {
+    if (e.message === "CATEGORY_NAME_REQUIRED") return res.redirect("/settings?tab=content");
+    if (e.message === "CATEGORY_LOCKED") return res.redirect("/settings?tab=content&notice=" + encodeURIComponent("기본 분류는 수정할 수 없습니다.") + "&notice_warn=1");
+    throw e;
+  }
+  res.redirect("/settings?tab=content&flash=saved");
+});
+
+router.post("/rate-categories/:id/delete", requireEditor, (req, res) => {
+  try {
+    deleteRateCategory(Number(req.params.id));
+  } catch (e) {
+    if (e.message === "CATEGORY_LOCKED") return res.redirect("/settings?tab=content&notice=" + encodeURIComponent("기본 분류는 삭제할 수 없습니다.") + "&notice_warn=1");
+    if (e.message === "CATEGORY_IN_USE") return res.redirect("/settings?tab=content&notice=" + encodeURIComponent("이 분류를 쓰는 단가 항목이 있어 삭제할 수 없습니다. 먼저 그 항목들을 다른 분류로 옮기거나 삭제하세요.") + "&notice_warn=1");
+    throw e;
+  }
   res.redirect("/settings?tab=content&flash=deleted");
 });
 

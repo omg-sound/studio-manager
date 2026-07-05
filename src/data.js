@@ -19,6 +19,7 @@ const revenue = require("./data/revenue"); // 매출 집계
 const deliverables = require("./data/deliverables"); // 자료 전달
 const rooms = require("./data/rooms"); // 룸
 const rateItems = require("./data/rate-items"); // 단가표
+const rateCategories = require("./data/rate-categories"); // 단가표 분류(2026-07-05 — DB 기반 커스텀 분류)
 const taskTypes = require("./data/task-types"); // 작업 종류 카탈로그(모듈 캐시 포함)
 const parties = require("./data/parties"); // 당사자(사람·조직·그룹) 통합 마스터 — clients/contacts 대체
 const projects = require("./data/projects"); // 프로젝트
@@ -34,6 +35,7 @@ module.exports = {
   ...parties, // src/data/parties.js — 당사자 통합(사람/조직/아티스트/담당자연동)
   ...rooms, // src/data/rooms.js
   ...rateItems, // src/data/rate-items.js
+  ...rateCategories, // src/data/rate-categories.js
   listTaskTypes, // src/data/task-types.js (7함수, normalizeTaskTypeDb 내부전용 제외)
   activeTaskTypes,
   taskTypeLabel,

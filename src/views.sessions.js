@@ -2,10 +2,10 @@
 
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
-const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
+const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, SESSION_TYPE_RATE_KIND } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personLabel, personName } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers } = require("./data");
+const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers, listRateCategories, rateCategoryKind } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -105,12 +105,13 @@ function durationButtons(initMinutes = 0) {
  */
 /** 단가 항목 옵션 HTML(미지정 + 카테고리별 optgroup). 세션 종류에 따라 녹음/촬영 항목만 넘겨 렌더 — app.js가 종류 변경 시 이 옵션을 통째로 교체. */
 function rateOptionsHtml(rateItems, currentId) {
+  const catOrder = listRateCategories().map((c) => c.name); // DB 순서(kind→sort_order→이름) — 2026-07-05 config 하드코딩에서 전환
   const groups = {};
   rateItems.forEach((r) => {
-    const c = r.category || RATE_CATEGORIES[0];
+    const c = r.category || catOrder[0] || "";
     (groups[c] = groups[c] || []).push(r);
   });
-  const cats = [...RATE_CATEGORIES.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !RATE_CATEGORIES.includes(c))];
+  const cats = [...catOrder.filter((c) => groups[c]), ...Object.keys(groups).filter((c) => !catOrder.includes(c))];
   const opt = (r) => `<option value="${r.id}" data-minutes="${Number(r.base_minutes) || 0}" ${String(r.id) === String(currentId || "") ? "selected" : ""}>${esc(r.name)}</option>`;
   return `<option value="" data-minutes="0">미지정</option>` + cats.map((c) => `<optgroup label="${esc(c)}">${groups[c].map(opt).join("")}</optgroup>`).join("");
 }
