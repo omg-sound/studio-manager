@@ -679,9 +679,10 @@ function copyable(value, { cls = "", display = "" } = {}) {
 function companyCombo(fieldName, value, roleKey, label, extra = {}) {
   const { partyOptions } = require("./data"); // 지연 require(모듈 로드 순서·순환 회피 — data는 views를 require하지 않음)
   const withPeople = !!extra.partyIdField; // 사람(관계자/개인) 포함 여부
-  let opts = partyOptions({ role: "company" }).map((o) => ({ id: o.id, name: o.name, sub: o.sub || "조직" }));
+  let opts = partyOptions({ role: "company" }).map((o) => ({ id: o.id, name: o.name, sub: o.sub || "조직", kind: "company" }));
   if (withPeople) {
-    const people = partyOptions({ role: "person" }).map((o) => ({ id: o.id, name: o.name, sub: o.company || (o.is_artist ? "아티스트" : "관계자") }));
+    // 사람 옵션: alt=활동명·honorific → app.js가 아티스트면 '본명 호칭 (활동명)' 병기(2026-07-05). kind='person'으로 선택 시 담당자 자동채움 판별.
+    const people = partyOptions({ role: "person" }).map((o) => ({ id: o.id, name: o.name, sub: o.company || (o.is_artist ? "아티스트" : "관계자"), kind: "person", alt: o.activity_name || "", honorific: o.honorific || "" }));
     opts = opts.concat(people);
   }
   const json = JSON.stringify(opts).replace(/</g, "\\u003c");

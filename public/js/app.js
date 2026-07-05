@@ -1265,6 +1265,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
+    // 사람(관계자·개인) 옵션 표시 라벨 = 본명 호칭 (활동명) — personCombo labelOf와 동일 형식(아티스트면 활동명 병기, 2026-07-05). 회사는 name 그대로.
+    function dispOf(o) {
+      if (!o || o.kind !== "person") return o ? String(o.name || "") : "";
+      var n = String(o.name || ""); var h = o.honorific ? String(o.honorific).trim() : ""; var a = o.alt ? String(o.alt).trim() : "";
+      var s = (h && n.slice(-h.length) !== h) ? n + " " + h : n;
+      return a && a !== n ? s + " (" + a + ")" : s;
+    }
     function newRow(nm) {
       var label = nm ? "'" + esc(nm) + "'(으)로 새 업체 등록" : "새 업체 등록";
       return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
@@ -1274,9 +1281,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }).slice(0, 12);
-        html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span><span class="shrink-0 text-xs text-muted">' + esc(o.sub || "") + '</span></button>'; }).join("");
-        if (!view.some(function (o) { return String(o.name).toLowerCase() === q; })) html += newRow(input.value.trim());
+        // 이름 또는 표시 라벨(활동명 포함)로 검색 — 아티스트를 활동명으로도 찾게.
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || dispOf(o).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1); }).slice(0, 12);
+        html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(dispOf(o)) + '</span><span class="shrink-0 text-xs text-muted">' + esc(o.sub || "") + '</span></button>'; }).join("");
+        if (!view.some(function (o) { return String(o.name).toLowerCase() === q || dispOf(o).toLowerCase() === q; })) html += newRow(input.value.trim());
       }
       pop.innerHTML = html; show();
     }
@@ -1361,8 +1369,16 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;
-      if (b.hasAttribute("data-idx")) { var o = view[Number(b.getAttribute("data-idx"))]; input.value = o.name; fireInput(); if (hidPid) hidPid.value = o.id || ""; hide(); } // fireInput이 hidPid를 지우므로 그 다음에 세팅(사람/회사 id 확정)
-      else if (b.hasAttribute("data-new")) openModal();
+      if (b.hasAttribute("data-idx")) {
+        var o = view[Number(b.getAttribute("data-idx"))];
+        input.value = dispOf(o); fireInput(); if (hidPid) hidPid.value = o.id || ""; hide(); // fireInput이 hidPid를 지우므로 그 다음에 세팅(사람/회사 id 확정)
+        // 제작/운영에 개인(사람) 선택 → 고객측 담당자 자동 채움(비어있을 때만 — 이미 지정한 담당자는 존중). 2026-07-05.
+        if (o.kind === "person" && hidPid) {
+          var form = root.closest && root.closest("form");
+          var pc = form && form.querySelector("[data-person-combo]");
+          if (pc && pc.__pcSetById && pc.__pcHasValue && !pc.__pcHasValue()) pc.__pcSetById(o.id);
+        }
+      } else if (b.hasAttribute("data-new")) openModal();
     });
     comboKbdNav(input, pop); // 방향키 이동·엔터 선택
   });
@@ -1532,6 +1548,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     });
     comboKbdNav(input, pop); // 방향키 이동·엔터 선택
     if (hid.value) { var init = opts.filter(function (o) { return String(o.id) === String(hid.value); })[0]; if (init) setInfo(init, false); } // 편집 초기값 정보
+    // 프로그래매틱 세팅(다른 콤보 연동용) — 제작/운영에 개인 선택 시 고객측 담당자 자동 채움(2026-07-05).
+    root.__pcSetById = function (id) {
+      var m = opts.filter(function (o) { return String(o.id) === String(id); })[0];
+      if (m) { input.value = labelOf(m); hid.value = m.id; if (hidName) hidName.value = m.name; setInfo(m, false); }
+      else { hid.value = id; } // 옵션에 없으면 id만(정보 표시는 생략)
+    };
+    root.__pcHasValue = function () { return !!(hid.value && String(hid.value).trim()); };
   }
   // 정적 + 동적(디렉터 '+추가' clone 등) 행 모두 초기화. container 지정 시 그 안(또는 자신)의 콤보만.
   window.__initPersonCombos = function (container) {
