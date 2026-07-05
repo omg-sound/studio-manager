@@ -246,7 +246,9 @@ function sessionCreateForm(project, managers, rateItems = [], rooms, defaultBook
     <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
       ${sessionBookingFields({}, managers, rateItems, rooms, defaultBooker, pmName)}
-      <button class="btn-primary mt-4 w-full py-2.5 text-base" type="submit">+ 세션 추가</button>
+      <div class="mt-4 flex justify-end">
+        <button class="btn-primary btn-sm" type="submit">+ 세션 추가</button>
+      </div>
     </form>`;
 }
 

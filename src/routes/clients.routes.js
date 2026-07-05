@@ -22,7 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo, groupCombo } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -733,10 +733,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       ${type === "artist" ? `
       <div>
         <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때 — 선택 시 소속사 자동 연동)</span></label>
-        <select name="group_id" class="input">
-          <option value="" data-agency="">— 소속 그룹 없음 —</option>
-          ${groups.map((g) => `<option value="${g.id}" data-agency="${esc(g.agency_name || "")}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
-        </select>
+        ${groupCombo("group_id", c.group_id || "", (groups.find((g) => Number(c.group_id) === g.id) || {}).name || "", groups)}
       </div>` : ""}
       ${type === "group" ? `
       <div>

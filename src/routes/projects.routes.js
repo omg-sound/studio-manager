@@ -4,7 +4,6 @@ const express = require("express");
 const { db } = require("../db");
 const { requireAuth, requireEditor, requireBilling, requireChief, canEdit, canBill, isChief } = require("../auth");
 const {
-  TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
   normalizeProjectType,
@@ -43,6 +42,7 @@ const {
   createTask,
   updateTask,
   setTaskAmount,
+  setTaskStatus,
   deleteTask,
   createInvoiceFromTasks,
   payerDocMeta,
@@ -666,6 +666,20 @@ router.post("/tasks/:taskId", requireEditor, (req, res) => {
   }
 });
 
+// ── 작업 완료 토글(2026-07-05 사용자 요청 — 세션 완료 버튼과 동일 UX: '−완료'/'✓완료' 즉시 전환) ──
+// 독립 라우트로 상태만 바꾼다 — 일반 수정 라우트(/tasks/:taskId)는 종류·담당·단가를 함께 요구해
+// 상태만 담긴 요청이 오면 그 필드들이 리셋될 위험이 있어 별도로 분리(세션의 /sessions/:id/status와 동일 이유).
+router.post("/tasks/:taskId/status", requireEditor, (req, res) => {
+  try {
+    const task = setTaskStatus(req.user, Number(req.params.taskId), req.body.status);
+    if (!task) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+    res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
+  } catch (e) {
+    if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "수정 불가", message: "이미 청구된 작업은 수정할 수 없습니다.", user: req.user }));
+    throw e;
+  }
+});
+
 // 청구 폼에서 입력한 작업 금액을 즉시 작업에 저장(AJAX) — 초안이 아니라 바로 기록되어 목록·청구 폼 기본값에 반영.
 router.post("/tasks/:taskId/amount", requireEditor, (req, res) => {
   try {
@@ -1042,20 +1056,21 @@ function taskRow(task, { isAdmin, managers = [], open = false } = {}) {
         <span class="flex shrink-0 items-center gap-1.5">${amount}${statusBadge}${billed}</span>
       </div>`;
   }
-  // 편집 가능: 헤더 전체가 접기 토글. 상태 select는 헤더에 두어 접힌 채로도 수정 가능(form= 로 본문 폼에 연결, [data-no-toggle]로 펼침 방지).
-  const statusSelect = `
-    <span data-no-toggle>
-      <select class="input w-24 py-1 text-xs" name="status" form="task-form-${task.id}" aria-label="상태">
-        ${TASK_STATUSES.map((s) => `<option value="${esc(s)}" ${s === task.status ? "selected" : ""}>${esc(TASK_STATUS_LABELS[s] || s)}</option>`).join("")}
-      </select>
-    </span>`;
+  // 완료 토글(2026-07-05 사용자 요청 — 세션 완료 버튼과 동일 UX): 배지 대신 버튼 활성/비활성이 상태를 표시.
+  // 대기=비활성 '− 완료'(누르면 완료), 완료=활성 '✓ 완료'(다시 누르면 대기로). 독립 폼(POST /status)이라 접힌 채로도 즉시 전환.
+  const isDone = task.status === "Completed";
+  const completeToggle = `
+    <form method="post" action="/projects/tasks/${task.id}/status">
+      <input type="hidden" name="status" value="${isDone ? "Pending" : "Completed"}" />
+      <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "−"}</span>완료</button>
+    </form>`;
   return `
     <details id="task-${task.id}" class="group rounded-lg border border-border bg-surface"${open ? " open" : ""}>
       <summary class="flex cursor-pointer list-none items-center justify-between gap-2 p-2.5">
         ${title}
         <span class="flex shrink-0 items-center gap-2">
           ${amount}
-          ${statusSelect}
+          ${completeToggle}
           ${detailsChevron()}
         </span>
       </summary>
@@ -1095,8 +1110,8 @@ function taskTypeOptions(current) {
 
 function taskEditForm(task, managers = []) {
   const legacyName = !task.engineer_id && task.engineer_name ? String(task.engineer_name) : "";
-  // 상태(status) select는 헤더에 있고 form= 로 이 폼에 연결됨(접힌 채 수정). 본문엔 종류·담당·외주단가만.
-  // 명시적 저장 버튼(변경 시 하이라이트) — app.js [data-dirty-form] 공통. form.elements로 헤더 상태 select 변경도 감지.
+  // 상태(완료 여부)는 헤더의 독립 토글 버튼(POST /tasks/:id/status)이 전담(2026-07-05) — 이 폼엔 상태 필드 없음(종류·담당·외주단가만).
+  // 명시적 저장 버튼(변경 시 하이라이트) — app.js [data-dirty-form] 공통.
   return `
     <form method="post" action="/projects/tasks/${task.id}" id="task-form-${task.id}" class="grid gap-2 sm:grid-cols-2" data-dirty-form>
       <div>

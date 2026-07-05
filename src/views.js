@@ -738,4 +738,41 @@ function companyCombo(fieldName, value, roleKey, label, extra = {}) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, copyable };
+/**
+ * 소속 그룹 검색 콤보(아티스트 클라이언트 폼 전용, 2026-07-05 사용자 요청 — 기존 평범한 select를
+ * 타이핑 검색·새로 등록 콤보로 전환). 값은 hidden에 그룹 party id 제출. '새 그룹 등록'=그룹명만
+ * 입력하는 간이 모달(fetch POST /clients type=group — companyCombo와 동일 엔드포인트·패턴 재사용).
+ * 옵션에 agency(그룹의 현재 소속사명)를 실어, 그룹 선택 시 같은 폼의 소속사 companyCombo를 자동 채우는 데 쓴다(app.js).
+ * @param {string} fieldName 제출 name(group_id)
+ * @param {number|string} selectedId 현재 선택된 그룹 party id
+ * @param {string} currentName 현재 선택된 그룹의 표시 이름(보이는 입력 초기값)
+ * @param {Array<{id:number,name:string,agency_name?:string}>} groups listGroupsForPicker() 결과
+ */
+function groupCombo(fieldName, selectedId, currentName, groups = []) {
+  const opts = groups.map((g) => ({ id: g.id, name: g.name, agency: g.agency_name || "" }));
+  const json = JSON.stringify(opts).replace(/</g, "\\u003c");
+  return `
+    <div data-group-combo>
+      <input type="hidden" name="${esc(fieldName)}" value="${esc(selectedId || "")}" data-gc-hidden />
+      <div class="relative">
+        <input class="input pr-9" type="text" value="${esc(currentName || "")}" data-gc-input autocomplete="off"
+          role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="소속 그룹 — 검색 또는 새로 등록" />
+        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-gc-pop role="listbox"></div>
+      </div>
+      <script type="application/json" data-gc-options>${json}</script>
+      <div data-gc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+        <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
+          <div class="font-display text-lg font-semibold">새 그룹 등록</div>
+          <div><label class="label">그룹명</label><input class="input" data-gc-name placeholder="그룹명" autocomplete="off" /></div>
+          <div class="flex items-center gap-2 pt-1">
+            <button type="button" class="btn-primary" data-gc-save>등록</button>
+            <button type="button" class="btn-ghost" data-gc-cancel>취소</button>
+            <span class="ml-1 hidden text-xs text-danger" data-gc-err></span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, groupCombo, copyable };

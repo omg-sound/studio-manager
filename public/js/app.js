@@ -782,25 +782,108 @@
   });
 })();
 
-// 아티스트 폼: 소속 그룹 선택 시 소속사를 그룹 소속사로 자동 맞춤(연동). 그룹 소속사가 있을 때만 — 이후 개별 변경(오버라이드) 가능.
+// 소속 그룹 콤보([data-group-combo], 2026-07-05 — 아티스트 폼): 타이핑=기존 그룹 검색, 빈 입력=[＋새 그룹 등록].
+// 값은 hidden(group_id, party id) 제출. '새 등록'=그룹명만 입력하는 간이 모달(fetch POST /clients type=group,
+// companyCombo와 같은 엔드포인트·같은 JSON 응답 패턴 재사용). 그룹 선택 시 그 그룹의 소속사(agency)로 같은 폼의
+// 소속사 companyCombo를 자동 채운다(그룹 소속사가 있을 때만 — 이전 <select> 동작과 동일, 이후 개별 변경 가능).
 (function () {
   "use strict";
-  document.addEventListener("change", function (ev) {
-    var gsel = ev.target;
-    if (!gsel || gsel.tagName !== "SELECT" || gsel.name !== "group_id") return;
-    var form = gsel.form;
-    if (!form) return;
-    // 소속사는 이제 companyCombo(이름 제출) — 그룹의 소속사 이름(data-agency)으로 보이는 입력·숨김 필드를 채운다.
-    var combo = form.querySelector("[data-company-combo]");
-    if (!combo) return;
-    var opt = gsel.options[gsel.selectedIndex];
-    var agName = opt ? opt.getAttribute("data-agency") || "" : "";
-    if (gsel.value && agName) {
-      var hid = combo.querySelector("[data-cc-hidden]");
-      var vis = combo.querySelector("[data-cc-input]");
-      if (vis) vis.value = agName;
-      if (hid) { hid.value = agName; hid.dispatchEvent(new Event("change", { bubbles: true })); } // 그룹 소속사로 맞춤(dirty 반영)
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-group-combo]"), function (root) {
+    var input = root.querySelector("[data-gc-input]");
+    var hid = root.querySelector("[data-gc-hidden]");
+    var pop = root.querySelector("[data-gc-pop]");
+    var dataEl = root.querySelector("[data-gc-options]");
+    var modal = root.querySelector("[data-gc-modal]");
+    if (!input || !hid || !pop || !dataEl) return;
+    var opts = [];
+    try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
+    document.addEventListener("party-created", function (e) { // 함정 #20 — 다른 콤보에서 만든 새 그룹도 즉시 검색
+      var p = e.detail; if (!p || p.kind !== "group") return;
+      if (opts.some(function (o) { return String(o.id) === String(p.id); })) return;
+      opts.push({ id: p.id, name: p.name, agency: p.agency || "" });
+    });
+    var view = [];
+    var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+    function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
+    function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    function fillAgency(agName) {
+      if (!agName) return;
+      var form = root.closest("form");
+      var combo = form && form.querySelector("[data-company-combo]");
+      if (!combo) return;
+      var cHid = combo.querySelector("[data-cc-hidden]"), cVis = combo.querySelector("[data-cc-input]");
+      if (cVis) cVis.value = agName;
+      if (cHid) { cHid.value = agName; cHid.dispatchEvent(new Event("change", { bubbles: true })); } // dirty 반영
       if (combo.__ccOpts && !combo.__ccOpts.some(function (o) { return String(o.name) === agName; })) combo.__ccOpts.push({ name: agName, sub: "" });
+    }
+    function pick(o) {
+      input.value = o.name; hid.value = o.id; hid.dispatchEvent(new Event("change", { bubbles: true }));
+      fillAgency(o.agency); hide();
+    }
+    function newRow(nm) {
+      var label = nm ? "'" + esc(nm) + "'(으)로 새 그룹 등록" : "새 그룹 등록";
+      return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+    }
+    function render() {
+      var q = input.value.trim().toLowerCase();
+      view = (q ? opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : opts).slice(0, 12);
+      var html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span></button>'; }).join("");
+      if (q && !view.some(function (o) { return String(o.name).toLowerCase() === q; })) html += newRow(input.value.trim());
+      else if (!q) html += newRow("");
+      pop.innerHTML = html; show();
+    }
+    input.addEventListener("focus", render);
+    input.addEventListener("input", function () { hid.value = ""; render(); }); // 타이핑 중엔 연결 해제(정확 일치 시 blur에서 복구)
+    input.addEventListener("blur", function () {
+      setTimeout(function () {
+        var v = input.value.trim();
+        var match = opts.filter(function (o) { return String(o.name) === v; })[0];
+        hid.value = match ? match.id : "";
+        hide();
+      }, 150);
+    });
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // blur보다 먼저 pick(터치 표준 패턴)
+    pop.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("button"); if (!b) return;
+      if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]);
+      else if (b.hasAttribute("data-new")) openModal();
+    });
+    input.addEventListener("keydown", function (e) { if (e.isComposing || e.keyCode === 229) return; if (e.key === "Escape") hide(); });
+    function openModal() {
+      if (!modal) { hide(); return; }
+      var n = modal.querySelector("[data-gc-name]"); n.value = input.value.trim();
+      modal.querySelector("[data-gc-err]").classList.add("hidden");
+      modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
+    }
+    if (modal) {
+      var gSave = modal.querySelector("[data-gc-save]"), gCancel = modal.querySelector("[data-gc-cancel]");
+      var closeModal = function () { modal.classList.add("hidden"); modal.classList.remove("flex"); };
+      gCancel.addEventListener("click", closeModal);
+      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+      modal.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return;
+        if (e.key === "Enter") { e.preventDefault(); gSave.click(); }
+      });
+      gSave.addEventListener("click", function () {
+        var nm = modal.querySelector("[data-gc-name]").value.trim();
+        var err = modal.querySelector("[data-gc-err]");
+        if (!nm) { err.textContent = "그룹명을 입력하세요."; err.classList.remove("hidden"); return; }
+        var body = new URLSearchParams();
+        body.append("type", "group"); body.append("party_name", nm);
+        gSave.disabled = true; err.classList.add("hidden");
+        fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (!d || !d.ok) throw new Error("fail");
+            announceParty({ kind: "group", id: d.id, name: d.name });
+            input.value = d.name; hid.value = d.id; hid.dispatchEvent(new Event("change", { bubbles: true }));
+            closeModal(); hide();
+            if (window.__toast) window.__toast(d.name + " 등록됨");
+          })
+          .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
+          .then(function () { gSave.disabled = false; });
+      });
     }
   });
 })();
@@ -1011,12 +1094,7 @@
   }
 })();
 
-// 헤더 상태 select 등 [data-no-toggle] 요소를 클릭/조작해도 <details> 펼침이 토글되지 않게(접힌 채 상태 수정).
-(function () {
-  "use strict";
-  function guard(e) { if (e.target.closest && e.target.closest("[data-no-toggle]")) e.preventDefault(); }
-  document.addEventListener("click", guard); // 클릭의 기본동작(summary 토글) 취소 — select 드롭다운은 mousedown이라 영향 없음
-})();
+// (옛 작업 헤더 상태 select의 접힘 방지 가드는 완료 토글 버튼으로 대체 — 2026-07-05 제거.)
 
 // 콤보 공용 키보드 내비게이션(방향키 이동·엔터 선택·ESC 닫기). 하이라이트 항목을 click 시뮬레이션 →
 // 각 콤보의 기존 click 핸들러가 선택 처리(콤보별 pick 로직 몰라도 동작). pop 재렌더(MutationObserver)마다 첫 항목 하이라이트.

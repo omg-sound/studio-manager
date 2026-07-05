@@ -146,6 +146,8 @@ function updateTask(user, taskId, input = {}) {
   const hasPrice = input.unit_price != null && String(input.unit_price).trim() !== "";
   const unitPrice = hasPrice ? parseWon(input.unit_price) : (task.total_price > 0 ? task.total_price : taskTypeUnitPrice(taskType)); // 자동저장(상태·담당만 변경) 시 확정 금액 리셋 방지
   const eng = resolveTaskEngineer(input);
+  // 상태는 완료 토글(POST /tasks/:id/status)이 전담 — 이 폼엔 상태 필드가 없다. 미전송이면 기존값 보존(리셋 방지, 2026-07-05).
+  const status = input.status != null ? normalizeTaskStatus(input.status) : task.status;
   db()
     .prepare(
       `UPDATE track_tasks SET
@@ -161,8 +163,17 @@ function updateTask(user, taskId, input = {}) {
       engineer_name: eng.engineer_name,
       engineer_id: eng.engineer_id,
       worker_rate: eng.is_external ? parseWon(input.worker_rate) : 0, // 하우스 엔지니어·미지정은 외주 지급단가 없음(0, NOT NULL 컬럼)
-      status: normalizeTaskStatus(input.status),
+      status,
     });
+  return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
+}
+
+/** 작업 완료 토글(2026-07-05 사용자 요청 — 세션 완료 버튼과 동일 UX). 상태만 바꾸고 종류·담당·단가는 건드리지 않는다. */
+function setTaskStatus(user, taskId, status) {
+  const task = getTaskForUser(user, taskId);
+  if (!task) return null;
+  if (task.is_invoiced) throw new Error("TASK_LOCKED");
+  db().prepare("UPDATE track_tasks SET status = ? WHERE id = ?").run(normalizeTaskStatus(status), task.id);
   return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
 }
 
@@ -214,6 +225,7 @@ module.exports = {
   getTaskForUser,
   setTaskAmount,
   updateTask,
+  setTaskStatus,
   deleteTask,
   createTask,
 };
