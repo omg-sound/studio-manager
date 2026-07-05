@@ -109,8 +109,9 @@ function sessionFields(input) {
   };
 }
 
-/** 세션 담당 디렉터(다대다): director_contact_id[](목록 선택=party id) + director_name[](새/입력 이름)을 당사자 id 배열로 해석(중복 제거).
- *  콤보 hidden 필드명은 레거시 유지하되 값=parties.id. id 우선, 없으면 같은 이름 사람 재사용(유일 매칭), 없으면 생성. */
+/** 세션 담당 디렉터(다대다): director_name(콤마 여러 명 텍스트) + director_contact_id(레거시 단일 id)를 당사자 id 배열로 해석(중복 제거).
+ *  콤마 다중(2026-07-05 — 아티스트 콤보와 동일 UX): 각 조각을 resolvePersonByName로 해석 — 라벨 안전망이
+ *  '박수한 대표님 (워터멜론)' 같은 표시 라벨도 그 사람으로 정확 매칭(유일), 새 이름만 생성. 레거시 행 UI(배열+id)도 그대로 지원. */
 function resolveDirectorIds(input) {
   const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
   const ids = asArr(input.director_contact_id);
@@ -118,14 +119,17 @@ function resolveDirectorIds(input) {
   const n = Math.max(ids.length, names.length);
   const out = [];
   const seen = new Set();
+  const push = (pid) => { if (pid && !seen.has(pid)) { seen.add(pid); out.push(pid); } };
   for (let i = 0; i < n; i++) {
-    let pid = Number(ids[i]) || null;
-    if (!pid) {
-      const nm = String(names[i] || "").trim();
-      if (!nm) continue;
-      pid = resolvePersonByName(nm); // 유일 매칭 재사용·아니면 새 사람 party
+    const nm = String(names[i] || "").trim();
+    const explicitId = Number(ids[i]) || null;
+    // 명시 id + 콤마 없는 단일 이름(레거시 행 UI·정확 연결) = id 우선. 콤마가 있으면 이름 목록이 명시적 → 이름별 해석.
+    if (explicitId && !nm.includes(",")) { push(explicitId); continue; }
+    if (!nm) continue;
+    for (const part of nm.split(",")) {
+      const one = part.trim();
+      if (one) push(resolvePersonByName(one));
     }
-    if (pid && !seen.has(pid)) { seen.add(pid); out.push(pid); }
   }
   return out;
 }

@@ -54,12 +54,17 @@ function getTrackForUser(user, trackId) {
   return track || null;
 }
 
+/** 콤마 다중 아티스트 표시 정규화("아이유,태연 " → "아이유, 태연") — 프로젝트 artist TEXT와 동일 규칙(2026-07-05). */
+function normalizeArtistList(value) {
+  return String(value || "").split(",").map((s) => s.trim()).filter(Boolean).join(", ");
+}
+
 function createTrack(user, projectId, input = {}) {
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
   const title = String(input.title || "").trim();
   if (!title) throw new Error("TRACK_TITLE_REQUIRED");
-  const artist = String(input.artist || "").trim() || project.artist || null; // 곡별 아티스트, 미입력 시 프로젝트 아티스트
+  const artist = normalizeArtistList(input.artist) || project.artist || null; // 곡별 아티스트(콤마 여러 명·정규화), 미입력 시 프로젝트 아티스트
   const info = db()
     .prepare("INSERT INTO project_tracks (project_id, title, artist, content_type) VALUES (?, ?, ?, ?)")
     .run(project.id, title, artist, normalizeTrackContentType(input.content_type));
@@ -71,7 +76,7 @@ function updateTrack(user, trackId, input = {}) {
   if (!track) return null;
   const title = String(input.title || "").trim();
   if (!title) throw new Error("TRACK_TITLE_REQUIRED");
-  const artist = input.artist !== undefined ? (String(input.artist || "").trim() || null) : track.artist; // 폼에 아티스트 있으면 갱신
+  const artist = input.artist !== undefined ? (normalizeArtistList(input.artist) || null) : track.artist; // 폼에 아티스트 있으면 갱신(콤마 정규화)
   db()
     .prepare("UPDATE project_tracks SET title = ?, artist = ?, content_type = ? WHERE id = ?")
     .run(title, artist, normalizeTrackContentType(input.content_type), track.id);

@@ -518,15 +518,18 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, entityLabel = "담당자", initialName = "", simpleModal = false } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, entityLabel = "담당자", initialName = "", simpleModal = false, multi = false } = {}) {
   // companyOptions 미전달 시 업체 목록을 스스로 조회 — '새 담당자 등록' 모달 회사칸이 조용히 평문이 되던 반복 실수 차단
   // (세션 디렉터·업체 대표자에서 각각 재발한 이력, 2026-07-04 기본값화. 명시 전달 시 그대로 사용.)
   if (companyOptions == null) companyOptions = require("./data").partyOptions({ role: "company" });
-  const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
+  // multi(콤마 여러 명 — 세션 디렉터 등, 2026-07-05): 보이는 입력 = 라벨 콤마 목록("A 대표님, B (비트)"),
+  // 제출 숨김 이름 = 전체 텍스트 그대로(서버가 콤마 split 후 resolvePersonByName 라벨 안전망으로 이름별 해석),
+  // hidden id는 미사용("") — 명시 id는 단일 전용. 선택 정보줄(selInfo)도 생략(여러 명이라 모호).
+  const sel = !multi && selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
   // initialName: 선택 id 없이 이름 텍스트만 있는 레거시 값(예: 업체 대표자 owner_name) 표시·보존용 — sel 없을 때 초기값.
   // 표시 라벨 = 본명 + 호칭 + (활동명) — 담당자가 아티스트면 식별 + 선택 후 필드에 호칭도 표기(2026-07-05 사용자 요청, 청구서 제외).
   // 제출용 숨김 이름(pureName)은 순수 본명 유지 — 라벨이 그대로 저장돼 새 연락처 '박수한 대표님 (워터멜론)'이 생기는 것 방지(app.js labelOf와 형식 일치·쌍).
-  const pureName = sel ? sel.name : initialName || "";
+  const pureName = multi ? (initialName || "") : (sel ? sel.name : initialName || "");
   // 표시 = personName(본명 호칭 (활동명))로 통일(연락처 목록·상세와 동일 헬퍼·형식). app.js labelOf와도 형식 일치.
   const shown = sel ? personName(sel) : (initialName || "");
   // 선택된 담당자 정보줄(전화·이메일·소속 회사)을 서버에서도 렌더 — 편집 진입 시 JS 전 깜빡임 제거 + '필드 밑 회사 주석'(app.js setInfo와 동일 구조·내용).
@@ -549,8 +552,8 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   const inputCls = compact ? "input py-1.5 pr-9 text-sm" : "input pr-9";
   const rootCls = compact ? " class=\"min-w-0 flex-1\"" : "";
   return `
-    <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""} data-pc-entity="${esc(entityLabel)}">
-      <input type="hidden" name="${idField}" value="${sel ? sel.id : (selectedId || "")}" data-pc-id />
+    <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""}${multi ? ` data-pc-multi="1"` : ""} data-pc-entity="${esc(entityLabel)}">
+      <input type="hidden" name="${idField}" value="${multi ? "" : (sel ? sel.id : (selectedId || ""))}" data-pc-id />
       <input type="hidden" name="${nameField}" value="${esc(pureName)}" data-pc-name-hidden />
       <div class="relative">
         <!-- 보이는 검색칸은 name 없음(Chrome 자동완성 팝업이 앱 드롭다운을 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js가 동기화 -->

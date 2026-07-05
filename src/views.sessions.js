@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personLabel } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personLabel, personName } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
 
@@ -136,28 +136,18 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
          </div>
        </div>
        ${explain(`청구하려면 <b>세션 종류=녹음/촬영</b> + <b>단가 항목</b> 선택이 모두 필요합니다. (완료 처리 후 청구 탭에 노출)`)}`;
-  // 담당 디렉터 — 다대다(여러 명). 각 행이 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). '디렉터 추가'로 행 복제(template).
-  // 동적 clone 행은 app.js window.__initPersonCombos(new row)로 초기화(디렉터 add/remove 핸들러).
+  // 담당 디렉터 — 콤마로 여러 명(2026-07-05, 아티스트 콤보와 동일 UX·옛 행 복제(+추가/✕) 폐지):
+  // personCombo(multi) 하나 — 마지막 콤마 뒤 조각으로 검색, 선택·간이등록은 이어붙임, 제출=director_name 콤마 텍스트(라벨 포함).
+  // 서버 resolveDirectorIds가 콤마 split 후 이름별 해석(resolvePersonByName 라벨 안전망 — '박수한 대표님 (워터멜론)'도 그 사람으로).
   const allContacts = contactOptions();
   const companyOpts = partyOptions({ role: "company" }); // '새 담당자 등록' 모달 회사칸 검색 콤보 — 기존 회사 타이핑 검색·오타/중복 방지
-  // 옵션 중복 임베드 제거: 이 폼의 디렉터 콤보(행·템플릿·동적 추가)가 공유 옵션 스크립트 1개를 참조(optionsRef).
-  const dirOptsId = "__dir_opts_" + (s && s.id ? s.id : "new");
-  const dirRow = (d) => `
-        <div class="mt-1 flex items-start gap-2" data-director-row>
-          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, initialName: d ? (d.name || "") : "", options: allContacts, optionsRef: dirOptsId, companyOptions: companyOpts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
-          <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-border px-3 py-1.5 text-sm leading-5 text-danger hover:bg-elevated active:bg-elevated" data-director-remove aria-label="디렉터 제거">✕</button>
-        </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
+  const directorInitial = currentDirectors.map((d) => personName(d)).join(", "); // 편집 프리필 = 라벨 콤마 목록
   const directorField = `
-    <div class="mt-2" data-director-wrap>
-      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자)</span></label>
-      ${personComboOptionsScript(dirOptsId, allContacts)}
-      <div data-director-list>
-        ${(currentDirectors.length ? currentDirectors : [null]).map((d) => dirRow(d)).join("")}
-      </div>
-      <template data-director-template>${dirRow(null)}</template>
-      <button type="button" class="btn-ghost btn-xs mt-1" data-director-add>+ 디렉터 추가</button>
-      ${explain(`목록에 없는 이름을 입력하면 저장 시 새 연락처로 등록됩니다. 비워 둔 행은 무시됩니다.`)}
+    <div class="mt-2">
+      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자 — 콤마로 여러 명)</span></label>
+      ${personCombo({ idField: "director_contact_id", nameField: "director_name", initialName: directorInitial, options: allContacts, companyOptions: companyOpts, compact: true, multi: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록, 콤마로 여러 명" })}
+      ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다.`)}
     </div>`;
   // 시간 입력 = 구글 캘린더식(2026-07-04 그리드 폐지): [날짜][시작]–[종료][종료날짜(자동)] 타이핑 + 종일 + 소요 슬라이더.
   // 시작/종료는 콜론 자동 삽입(1400→14:00, app.js). 종료·슬라이더는 양방향 동기(종료 입력→소요 재계산, 소요 변경→종료 갱신).

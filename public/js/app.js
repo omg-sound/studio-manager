@@ -806,38 +806,7 @@
 
 // (옛 datalist 기반 syncCombo 콤보는 personCombo/payerCombo 커스텀 팝업으로 전면 대체 — 제거.)
 
-// 세션 담당 디렉터 반복 입력([data-director-list]): '+ 디렉터 추가'로 행 복제(template), '✕'로 제거.
-(function () {
-  "use strict";
-  document.addEventListener("click", function (e) {
-    // 안정 앵커: [data-director-wrap] 기준으로 list·template를 찾음(마크업 중첩이 바뀌어도 안전).
-    var addBtn = e.target.closest && e.target.closest("[data-director-add]");
-    if (addBtn) {
-      var wrap = addBtn.closest("[data-director-wrap]");
-      var list = wrap && wrap.querySelector("[data-director-list]");
-      var tpl = wrap && wrap.querySelector("[data-director-template]");
-      if (list && tpl && tpl.content) {
-        list.appendChild(tpl.content.cloneNode(true));
-        var last = list.lastElementChild;
-        if (window.__initPersonCombos) window.__initPersonCombos(last); // 새 행의 personCombo 초기화(검색·모달·선택 닫힘)
-        var inp = last && last.querySelector("[data-pc-input]"); if (inp) inp.focus();
-      }
-      return;
-    }
-    var rmBtn = e.target.closest && e.target.closest("[data-director-remove]");
-    if (rmBtn) {
-      var wrap2 = rmBtn.closest("[data-director-wrap]");
-      var list2 = wrap2 && wrap2.querySelector("[data-director-list]");
-      var row = rmBtn.closest("[data-director-row]");
-      if (row && row.parentNode) row.parentNode.removeChild(row);
-      // 마지막 행까지 지우면 빈 행 하나 남겨 계속 추가 가능하게
-      if (list2 && !list2.querySelector("[data-director-row]")) {
-        var t = wrap2.querySelector("[data-director-template]");
-        if (t && t.content) { list2.appendChild(t.content.cloneNode(true)); if (window.__initPersonCombos) window.__initPersonCombos(list2.lastElementChild); }
-      }
-    }
-  });
-})();
+// (옛 세션 디렉터 행 복제(+추가/✕) UI는 콤마 다중 personCombo(multi)로 대체 — 2026-07-05 제거.)
 
 // 곡·콘텐츠 작업 폼: 담당 엔지니어가 외주(data-external=1)일 때만 외주 지급단가 표시(하우스 엔지니어는 숨김).
 // (작업 폼은 이제 [data-dirty-form] — engineer_id+worker-rate가 있는 폼만 처리하고 나머지는 가드로 무시.)
@@ -1435,6 +1404,12 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var hidName = root.querySelector("[data-pc-name-hidden]"); // 제출용 이름(보이는 칸은 name 없음 — Chrome 자동완성 회피)
     var pop = root.querySelector("[data-pc-pop]");
     var info = root.querySelector("[data-pc-info]");
+    var multi = root.hasAttribute("data-pc-multi"); // 콤마 여러 명 모드(세션 디렉터 등, 2026-07-05) — 마지막 조각 검색·선택 이어붙임·id 미사용
+    function seg() {
+      var v = input.value;
+      var i = v.lastIndexOf(",");
+      return i === -1 ? { head: "", tail: v } : { head: v.slice(0, i + 1).replace(/\s*$/, "") + " ", tail: v.slice(i + 1) };
+    }
     // 옵션: 인라인(data-pc-options) 또는 페이지 공유 스크립트(data-pc-options-ref로 참조, 중복 임베드 제거)
     var refId = root.getAttribute("data-pc-options-ref");
     var dataEl = refId ? document.getElementById(refId) : root.querySelector("[data-pc-options]");
@@ -1479,20 +1454,24 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
     }
     function render() {
-      var q = input.value.trim().toLowerCase();
+      var raw = multi ? seg().tail.trim() : input.value.trim(); // multi=마지막 콤마 뒤 조각으로만 검색
+      var q = raw.toLowerCase();
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
         view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1) || labelOf(o).toLowerCase().indexOf(q) !== -1; }).slice(0, 12); // 본명·활동명·소속 회사·표시 라벨(선택 후 재열람) 검색
         html = view.map(function (o, i) { var nm = esc(o.name) + (o.honorific ? ' <span class="text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="text-muted">(' + esc(o.alt) + ')</span>' : ""); return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + nm + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
-        if (!view.some(function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q) || labelOf(o).toLowerCase() === q; })) html += newRow(input.value.trim());
+        if (!view.some(function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q) || labelOf(o).toLowerCase() === q; })) html += newRow(raw);
       }
       pop.innerHTML = html; show();
     }
-    function pick(o) { input.value = labelOf(o); hid.value = o.id; setInfo(o, false); fireInput(); hide(); }
+    function pick(o) {
+      if (multi) { input.value = seg().head + labelOf(o); hid.value = ""; fireInput(); hide(); return; } // 이어붙임 — 제출은 전체 텍스트(서버가 콤마 해석)
+      input.value = labelOf(o); hid.value = o.id; setInfo(o, false); fireInput(); hide();
+    }
     function openModal() {
       if (!modal) { hide(); return; }
-      var n = modal.querySelector("[data-pc-name]"); n.value = input.value.trim();
+      var n = modal.querySelector("[data-pc-name]"); n.value = multi ? seg().tail.trim() : input.value.trim(); // 콤마 다중이면 마지막 조각만 프리필
       ["[data-pc-activity]", "[data-pc-phone]", "[data-pc-email]", "[data-pc-company]", "[data-pc-job]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
       modal.querySelector("[data-pc-err]").classList.add("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
@@ -1522,7 +1501,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, activity: activity, phone: phone, email: email, company: company, isArtist: !!activity }); input.value = labelOf({ name: d.name, alt: activity }); hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기(표시=본명 (활동명), 제출 숨김 이름은 input 핸들러가 순수 본명으로)
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, activity: activity, phone: phone, email: email, company: company, isArtist: !!activity }); var lbl = labelOf({ name: d.name, alt: activity }); if (multi) { input.value = seg().head + lbl; hid.value = ""; } else { input.value = lbl; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); } closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기(표시=본명 (활동명); multi=이어붙임, 제출 숨김 이름은 input 핸들러가 동기화)
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
@@ -1570,6 +1549,11 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     input.addEventListener("click", render);
     input.addEventListener("input", function () {
       render();
+      if (multi) { // 콤마 여러 명: 제출 = 전체 텍스트(라벨 포함 — 서버 resolvePersonByName 라벨 안전망이 이름별 해석), id·정보줄 미사용
+        if (hidName) hidName.value = input.value;
+        hid.value = "";
+        return;
+      }
       var v = input.value.trim().toLowerCase();
       // 순수 본명 또는 표시 라벨('본명 (활동명)')과 정확 일치하면 선택 유지 — pick이 라벨을 넣어도 id가 안 풀리게.
       var m = opts.filter(function (o) { return String(o.name).toLowerCase() === v || labelOf(o).toLowerCase() === v; })[0];
