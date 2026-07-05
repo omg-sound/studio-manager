@@ -70,53 +70,10 @@ function invoiceBadge(inv) {
  * @param {object} inv 인보이스(+ paid_amount, tax_amount, discount_amount, status …)
  * @param {object} opts items=청구 항목, isAdmin=청구권자(폼 노출), returnTo=복귀 경로(open 포함)
  */
-/**
- * 입금 이력 블록(이력 목록 + '입금 추가' 폼 + '완납'). 전체 화면·청구 탭 펼침 공용.
- * paid_amount는 SUM(payments) 파생이라 이 블록이 입금의 단일 편집 지점(추가·삭제).
- */
-function paymentHistory(inv, payments = [], { ret = "", compact = false } = {}) {
-  const sz = compact ? "py-1.5 text-sm" : "";
-  const btn = compact ? "btn-sm" : "";
-  const retHidden = ret ? `<input type="hidden" name="return" value="${esc(ret)}" />` : "";
-  // 입금 이력에 날짜 개념 없음(2026-07-05 사용자 결정 — 입금일 입력·표시 제거, DB paid_on은 레거시 잔존): 메모만(없으면 '입금').
-  const rows = payments.length
-    ? payments
-        .map(
-          (p) => `
-        <div class="flex items-center justify-between gap-2 py-0.5">
-          <div class="min-w-0 text-xs text-muted">${p.memo ? esc(p.memo) : "입금"}</div>
-          <div class="flex shrink-0 items-center gap-2">
-            <span class="tabular text-sm font-medium">${formatKRW(p.amount)}</span>
-            <form method="post" action="/invoices/${inv.id}/payments/${p.id}/delete" data-confirm="이 입금 기록을 삭제할까요?">${retHidden}<button class="text-xs text-danger hover:underline" type="submit">삭제</button></form>
-          </div>
-        </div>`
-        )
-        .join("")
-    : `<div class="text-xs text-muted">입금 내역 없음</div>`;
-  const bal = balanceOf(inv);
-  const settled = bal <= 0 && (inv.paid_amount || 0) > 0; // 완납(잔금 0 + 입금 있음)
-  // 완납이면 추가 폼 대신 '완납 완료'만 — 초과 입금 방지. 정정은 이력 삭제로 재개.
-  const addForm = settled
-    ? `<div class="flex items-center gap-1.5 pt-1 text-xs text-success"><svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4 4 8-8"/></svg>완납 완료 — 정정하려면 위 이력을 삭제하세요.</div>`
-    : `<form method="post" action="/invoices/${inv.id}/pay" class="flex flex-wrap items-stretch gap-2 pt-1">
-        ${retHidden}
-        <input class="input ${sz} min-w-0 flex-1 text-right tabular" name="amount" inputmode="numeric" placeholder="입금액(원)" />
-        <button class="btn-ghost ${btn} shrink-0" type="submit">입금 추가</button>
-        <button class="btn-ghost ${btn} shrink-0 border-success/40 bg-success/10 text-success" name="full" value="1" title="남은 잔금 ${formatKRW(bal)}을 전액 입금 처리">완납</button>
-      </form>`;
-  return `
-    <div class="space-y-1">
-      <div class="flex items-center justify-between gap-2">
-        <label class="label mb-0 text-xs">입금 이력</label>
-        <span class="text-xs text-muted">받은 총액 <b class="tabular text-fg">${formatKRW(inv.paid_amount)}</b>${bal > 0 ? ` · 미수 <b class="tabular text-danger">${formatKRW(bal)}</b>` : ""}</span>
-      </div>
-      <div class="space-y-0.5 rounded-lg border border-border bg-surface/40 p-2">${rows}</div>
-      ${addForm}
-    </div>`;
-}
+// (입금 이력·수동 입금 UI는 2026-07-05 폐기 — 분납 없는 워크플로: 입금 처리는 [입금완료] 토글 하나.
+//  payments 인프라(addPayment·deletePayment 등)는 토글의 자동 완납·되돌리기가 사용하므로 데이터 레이어에 잔존.)
 
 function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, returnTo = "" } = {}) {
-  const bal = balanceOf(inv);
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행(미발행 초안도 견적서·내역서·거래명세서)
   const ret = esc(returnTo);
 
@@ -129,14 +86,12 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
       ${cell("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : '<span class="text-muted">미정</span>')}
     </dl>`;
 
+  // 입금액·미수금·납입상태 줄 제거(2026-07-05 사용자 결정 — 분납 없는 워크플로: 배지(발행/입금완료)가 입금 상태를 대체. 미수는 합계(목록 상단·대시보드)만).
   const amountGrid = `
     <dl class="grid grid-cols-1 gap-y-1.5 border-t border-border pt-2 sm:grid-cols-2 sm:gap-x-8">
       ${cell("총액", formatKRW(inv.amount))}
       ${inv.discount_amount ? cell("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
       ${inv.tax_amount ? cell("VAT", formatKRW(inv.tax_amount)) : ""}
-      ${cell("입금액", formatKRW(inv.paid_amount))}
-      ${cell("미수금", `<span class="${bal > 0 ? "font-semibold text-danger" : ""}">${formatKRW(bal)}</span>`)}
-      ${cell("납입 상태", esc(payStatusOf(inv)))}
     </dl>`;
 
   const itemList = items.length
@@ -195,14 +150,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
   const sub = compact
     ? esc(pname || "청구처 미지정")
     : `${esc(inv.project_title || "프로젝트 없음")}${pname ? " · " + esc(pname) : ""}`;
-  // 마감일 개념 삭제(2026-07-05 사용자 결정) — 목록 카드에서 마감/D-day 줄 제거.
-  // 완납(입금완료 또는 잔금 0+입금 있음)이면 '완납', 청구서 발행+잔금이면 '미수'. 배지가 상태를 이미 보여줘 미발행 텍스트는 생략.
-  let balLine = "";
-  if (inv.tax_status === "입금완료" || (bal <= 0 && (inv.paid_amount || 0) > 0)) {
-    balLine = `<div class="text-xs text-muted">완납</div>`;
-  } else if (inv.status === "발행" && bal > 0) {
-    balLine = `<div class="tabular text-xs text-danger">미수 ${formatKRW(bal)}</div>`;
-  }
+  // 마감일·미수/완납 줄 제거(2026-07-05 사용자 결정) — 배지(발행/입금완료)가 상태를 대체, 미수는 목록 상단 합계만.
 
   if (compact) {
     // 청구 탭 행: 클릭하면 그 자리에서 펼침(details). 처리 후 ?open=ID로 복귀하면 펼쳐진 채 유지.
@@ -218,7 +166,6 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
         <div class="flex shrink-0 items-center gap-2">
           <div class="text-right">
             <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
-            ${balLine}
           </div>
           ${detailsChevron()}
         </div>
@@ -233,8 +180,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
     <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
     <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
   const right = `
-    <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
-    ${balLine}`;
+    <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>`;
   // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(계산서·입금 처리 권한자=대표·치프만).
   // 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다(사용자 요청).
   // 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
@@ -333,4 +279,4 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </div>`;
 }
 
-module.exports = { invoiceBadge, invoiceRow, invoicesSection, payerInfoCard, paymentHistory, payerName }; // displayStatus는 내부 전용; payerName=청구처 표시명(본명 (활동명)) 헬퍼
+module.exports = { invoiceBadge, invoiceRow, invoicesSection, payerInfoCard, payerName }; // displayStatus는 내부 전용; payerName=청구처 표시명(본명 (활동명)) 헬퍼

@@ -11,7 +11,6 @@ const {
   getInvoiceForUser,
   listInvoiceItemsForInvoice,
   balanceOf,
-  payStatusOf,
   deleteInvoice,
   getStudioInfo,
   getStudioLogo,
@@ -25,7 +24,7 @@ const {
   deletePayment,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo, tabBar, personLabel } = require("../views");
-const { invoiceRow, invoiceBadge, payerInfoCard, paymentHistory } = require("../views.invoices");
+const { invoiceRow, invoiceBadge, payerInfoCard } = require("../views.invoices");
 const { formatYmdShort } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { parseMoney, cleanYmd } = require("../lib/forms");
 const { asyncHandler } = require("../lib/async");
@@ -136,7 +135,7 @@ router.get("/", requireBilling, (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "청구", desc: admin ? "발행·입금·미수금" : "내 청구 내역", action })}
+    ${pageHeader({ title: "청구", desc: admin ? "발행·입금" : "내 청구 내역", action })}
     ${dueNote}
     ${admin ? tabs : ""}
     ${searchBar}
@@ -215,10 +214,8 @@ router.get("/:id", requireBilling, (req, res) => {
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const admin = canBill(req.user); // 보기·삭제 권한(치프·대표·스태프)
   const canProcess = canInvoice(req.user); // 계산서·입금 처리 = 대표·치프
-  const bal = balanceOf(inv);
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
-  const payments = canProcess ? listPayments(inv.id) : [];
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
   // 청구처 정보(대표자·사업자번호·담당자 연락처) — 발행 시점 스냅샷 우선(payerView). biz_license 파일 링크만 실시간(현재 첨부).
   const { client: payerClient, contacts: payerContacts } = payerView(inv);
@@ -243,7 +240,6 @@ router.get("/:id", requireBilling, (req, res) => {
             <noscript><button class="btn-ghost">변경</button></noscript>
           </form>
         </div>
-        ${paymentHistory(inv, payments, {})}
       </div>`
     : "";
   // PDF 발행 — 통합 카드 맨 아래(처리 섹션 다음, 2026-07-05 재배치).
@@ -271,9 +267,6 @@ router.get("/:id", requireBilling, (req, res) => {
       ${row("총액", formatKRW(inv.amount))}
       ${inv.discount_amount ? row("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
       ${inv.tax_amount ? row("VAT", formatKRW(inv.tax_amount)) : ""}
-      ${row("입금액", formatKRW(inv.paid_amount))}
-      ${row("미수금", `<span class="${bal > 0 ? "text-danger font-semibold" : ""}">${formatKRW(bal)}</span>`)}
-      ${row("납입 상태", esc(payStatusOf(inv)))}
       ${row("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
       ${invoiceItemsSection(items)}
@@ -339,34 +332,8 @@ function invoiceItemsSection(items) {
 
 // ── 수정 라우트 없음: 발행=확정 원칙. 발행된 청구의 내용 변경은 삭제(POST /:id/delete) 후 다시 발행한다. ──
 
-// ── 입금 추가(관리자) ── 입금 1건을 이력(payments)에 추가한다(부분납 누적). paid_amount는 SUM(payments) 파생.
-router.post("/:id/pay", requireInvoice, (req, res) => {
-  const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
-  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  // '완납 처리'=남은 잔금 한 건 입금. 그 외=입력액 1건. 이력 방식이라 기존 입금은 그대로 두고 더한다.
-  const add = req.body.full === "1" ? balanceOf(inv) : parseMoney(req.body.amount);
-  const paid = addPayment(inv.id, { amount: add, paid_on: cleanYmd(req.body.paid_on), memo: req.body.pay_memo });
-  // 완납이면 계산서·입금 축을 입금완료로 자동 승격(강등은 이력 삭제 시). 누적 입금이 총액 이상.
-  if (inv.amount > 0 && paid >= inv.amount && inv.tax_status !== "입금완료") {
-    db().prepare("UPDATE invoices SET tax_status='입금완료' WHERE id=?").run(inv.id);
-    ensureInvoiceNumber({ ...inv, tax_status: "입금완료" });
-  }
-  res.redirect(returnTo(req, `/invoices/${inv.id}`, "paid"));
-});
+// (수동 입금(/pay)·입금 이력 삭제 라우트는 2026-07-05 폐기 — 입금 처리는 [입금완료] 토글(tax-status)만. payments 인프라는 토글의 자동 완납·되돌리기가 사용.)
 
-// ── 입금 이력 1건 삭제(관리자) ── 삭제 후 잔금이 생기면 입금완료→계산서 발행으로 강등(완납 취소 정합성).
-router.post("/:id/payments/:pid/delete", requireInvoice, (req, res) => {
-  const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
-  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const p = db().prepare("SELECT invoice_id FROM payments WHERE id = ?").get(Number(req.params.pid));
-  if (p && Number(p.invoice_id) === inv.id) {
-    const r = deletePayment(req.params.pid);
-    if (r && inv.tax_status === "입금완료" && r.paid < inv.amount) {
-      db().prepare("UPDATE invoices SET tax_status='계산서 발행' WHERE id=?").run(inv.id);
-    }
-  }
-  res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
-});
 
 // (청구서 상태 변경 라우트 폐기 — 생성=발행 단일 흐름이라 미발행↔발행 전환 UI·호출부 없음, 2026-07-04 죽은 라우트 제거)
 
@@ -418,7 +385,7 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
   const clientSelect = payerCombo({ selectedId: inv.payer_id, clientOptions: clients, contactOptions: contactOpts, hint: `클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.` });
   const retHidden = returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : "";
   const errBox = e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : "";
-  const payField = `<div class="grid gap-3 sm:grid-cols-2"><div><label class="label">입금액(원)</label><input class="input" name="paid_amount" inputmode="numeric" value="${inv.paid_amount ? esc(String(inv.paid_amount)) : ""}" placeholder="0" /></div></div>`;
+  // 입금액 수동 입력 폐기(2026-07-05) — 입금 처리는 [입금완료] 토글(선택 시 서버가 자동 완납)만. 계산서·입금 select에서 입금완료를 고르면 완납 저장.
   const statusField = `<div><label class="label">계산서 · 입금 <span class="font-normal text-muted text-xs">— 보통은 발행 후 청구 메뉴에서 처리</span></label><select name="tax_status" class="input max-w-xs">${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || TAX_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></div>`;
   const fields = `
       <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
@@ -431,7 +398,6 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
       <label class="flex items-center gap-1.5 text-sm">
         <input type="checkbox" name="vat_included" value="1" checked /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 총액에서 VAT를 빼고 현금 거래로(VAT 0)</span>
       </label>
-      ${payField}
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">발행일</label><input class="input" type="date" name="issued_date" value="${esc(inv.issued_date || "")}" /></div>
       </div>
