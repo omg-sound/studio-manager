@@ -5,7 +5,7 @@
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personLabel, personName } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
-const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
+const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers } = require("./data");
 
 /**
  * 룸 목록 보장 — 인자로 받으면 그대로, 아니면 활성 룸 조회(폴백).
@@ -38,6 +38,22 @@ function managerOptions(managers, current, placeholder = "담당자 미지정", 
     out.push(`<option value="${esc(m.name)}" ${m.name === current ? "selected" : ""}>${esc(m.name)}</option>`);
   }
   return out.join("");
+}
+
+/** 담당 엔지니어 다대다 행의 select 옵션 — value=담당자 마스터 id(이름 기반 managerOptions와 구분, 동명이인·이름변경에도 안전). */
+function managerOptionsById(managers, selectedId) {
+  const cur = selectedId == null ? "" : String(selectedId);
+  const out = [`<option value="">엔지니어 선택</option>`];
+  for (const m of managers) out.push(`<option value="${m.id}" ${String(m.id) === cur ? "selected" : ""}>${esc(m.name)}</option>`);
+  return out.join("");
+}
+
+/** 담당 엔지니어 한 행(select + 제거 버튼). selectedId 없으면 빈 선택(추가 행). */
+function engineerRow(managers, selectedId) {
+  return `<div class="mt-1.5 flex items-center gap-1.5" data-engineer-row>
+      <select class="input py-1.5 text-sm" name="engineer_ids">${managerOptionsById(managers, selectedId)}</select>
+      <button type="button" class="btn-ghost btn-xs shrink-0" data-engineer-remove aria-label="담당 엔지니어 제거">✕</button>
+    </div>`;
 }
 
 
@@ -110,8 +126,15 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
 function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker = "", pmName = "") {
   const initMins = s && s.start_time && s.end_time ? minutesBetween(s.start_time, s.end_time) : 0;
   const roomList = resolveRooms(rooms);
-  const engineerField = `<div><label class="label-sm">담당 엔지니어</label>
-        <select class="input py-1.5 text-sm" name="engineer_name">${managerOptions(managers, s.engineer_name || "", "엔지니어 미지정")}</select></div>`;
+  // 담당 엔지니어 다대다(2026-07-05 — 여러 명 가능): 배정된 엔지니어 수만큼 행(select) + '담당 엔지니어 추가하기' 버튼(template 복제, app.js).
+  const currentEngineers = s && s.id ? listSessionEngineers(s.id) : [];
+  const engineerField = `
+    <div>
+      <label class="label-sm">담당 엔지니어 <span class="font-normal text-muted">(여러 명 가능)</span></label>
+      <div data-engineer-list>${currentEngineers.map((e) => engineerRow(managers, e.id)).join("")}</div>
+      <template data-engineer-template>${engineerRow(managers, null)}</template>
+      <button type="button" class="btn-ghost btn-xs mt-1.5" data-engineer-add>+ 담당 엔지니어 추가하기</button>
+    </div>`;
   // 세션 종류는 항상 선택 가능. 단가 항목은 대관 세션(녹음·촬영·공연)일 때만 노출(app.js data-show-when="rec").
   // 단가 항목은 세션 종류 kind에 맞는 항목만 보인다 — 서버는 현재 kind로 렌더 + kind별 <template> 임베드, app.js가 종류 변경 시 옵션 교체.
   const rateKinds = [...new Set(Object.values(SESSION_TYPE_RATE_KIND))]; // recording·filming·performance …(config가 단일 진실원천)
@@ -252,9 +275,10 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
       infoLines.push(projLink(s.project_title));
     }
   }
+  const engineers = listSessionEngineers(s.id);
   const bookerEng = [
     s.booker_name ? `예약 ${esc(s.booker_name)}` : "",
-    s.engineer_name ? `엔지니어 ${esc(s.engineer_name)}` : "",
+    engineers.length ? `엔지니어 ${engineers.map((e) => esc(e.name)).join(", ")}` : "",
   ].filter(Boolean).join(" · ");
   if (bookerEng) infoLines.push(bookerEng); // 예약 담당자 · 담당 엔지니어 = 같은 줄
   if (directors.length) infoLines.push(`디렉터 ${directors.map((d) => esc(personLabel(d.name, d.activity_name))).join(", ")}`); // 디렉터 = 다음 줄, 아티스트면 본명 (활동명) 병기

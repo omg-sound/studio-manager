@@ -20,6 +20,7 @@ const {
   busySessionSlots,
   sessionAttendeeEmails,
   listSessionDirectors,
+  listSessionEngineers,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS, RENTAL_SESSION_TYPES } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox, personLabel } = require("../views");
@@ -51,10 +52,12 @@ function eventInputForSession(session, project) {
   const title = [company, project.artist].filter(Boolean).join(" · ") || project.title || "스튜디오 세션";
   // 담당 디렉터(다대다) 이름 — 본명 (활동명) 병기(전면 병기 통일, 2026-07-05). 캘린더 설명에 포함.
   const directors = session.id ? listSessionDirectors(session.id).map((d) => personLabel(d.name, d.activity_name)).filter(Boolean) : [];
+  // 담당 엔지니어(다대다, 2026-07-05) — 배정된 전원을 콤마로 병기(레거시 engineer_name은 첫 명뿐이라 여러 명일 때 누락됨).
+  const engineers = session.id ? listSessionEngineers(session.id).map((e) => e.name).filter(Boolean) : [];
   const description = [
     session.session_type ? `종류: ${sessionTypeLabel(session)}` : "",
     session.booker_name ? `예약: ${session.booker_name}` : "",
-    session.engineer_name ? `엔지니어: ${session.engineer_name}` : "",
+    engineers.length ? `엔지니어: ${engineers.join(", ")}` : "",
     directors.length ? `디렉터: ${directors.join(", ")}` : "",
     session.memo ? `메모: ${session.memo}` : "",
     config.baseUrl ? `${config.baseUrl}/projects/${session.project_id}` : "",

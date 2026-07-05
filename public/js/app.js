@@ -808,6 +808,37 @@
 
 // (옛 세션 디렉터 행 복제(+추가/✕) UI는 콤마 다중 personCombo(multi)로 대체 — 2026-07-05 제거.)
 
+// 세션 담당 엔지니어 반복 선택([data-engineer-list], 2026-07-05 — 여러 명 가능): '+ 담당 엔지니어 추가하기'로
+// 행(select) 복제(template), '✕'로 제거. 디렉터와 달리 자유 텍스트 등록이 없어(담당자 마스터에서만 선택)
+// personCombo 없이 단순 select 반복으로 충분 — 위임(delegation)으로 처리해 동적 추가 행도 자동 동작.
+(function () {
+  "use strict";
+  // 행 추가/제거는 클릭이라 [data-dirty-form] 감시(input/change 위임)가 못 잡는다 — 폼에 합성 change를 쏴 동기화.
+  function markDirty(form) { if (form) form.dispatchEvent(new Event("change", { bubbles: true })); }
+  document.addEventListener("click", function (e) {
+    var addBtn = e.target.closest && e.target.closest("[data-engineer-add]");
+    if (addBtn) {
+      var wrap = addBtn.parentNode;
+      var list = wrap && wrap.querySelector("[data-engineer-list]");
+      var tpl = wrap && wrap.querySelector("[data-engineer-template]");
+      if (list && tpl && tpl.content) {
+        list.appendChild(tpl.content.cloneNode(true));
+        var last = list.lastElementChild;
+        var sel = last && last.querySelector("select");
+        if (sel) sel.focus();
+      }
+      return;
+    }
+    var rmBtn = e.target.closest && e.target.closest("[data-engineer-remove]");
+    if (rmBtn) {
+      var row = rmBtn.closest("[data-engineer-row]");
+      var form = rmBtn.closest("form");
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+      markDirty(form);
+    }
+  });
+})();
+
 // 곡·콘텐츠 작업 폼: 담당 엔지니어가 외주(data-external=1)일 때만 외주 지급단가 표시(하우스 엔지니어는 숨김).
 // (작업 폼은 이제 [data-dirty-form] — engineer_id+worker-rate가 있는 폼만 처리하고 나머지는 가드로 무시.)
 (function () {

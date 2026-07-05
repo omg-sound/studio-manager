@@ -144,3 +144,45 @@ test("세션 디렉터: 콤마 텍스트(라벨 포함)를 이름별 해석 — 
   D.updateSession(CHIEF, s.id, { session_type: "믹싱", session_date: "2026-08-01", all_day: "1", status: "예정", director_contact_id: "", director_name: "표몽규 실장님 (몽규튠)" });
   assert.deepEqual(D.listSessionDirectors(s.id).map((d) => d.id), [dirA], "콤마 목록 수정 = 교체");
 });
+
+// ── 세션 담당 엔지니어 다대다(2026-07-05): engineer_ids[](담당자 마스터 id, 반복 select)로 여러 명 배정 ──
+test("세션 담당 엔지니어: 여러 명 배정 → session_engineers 저장 + engineer_name=첫 명(레거시 동기화)", () => {
+  const D = require("../src/data");
+  const CHIEF = { id: 1, role: "chief", email: "chief@omg.test" };
+  const mgrA = Number(db().prepare("INSERT INTO project_managers (name, active) VALUES ('김엔지', 1)").run().lastInsertRowid);
+  const mgrB = Number(db().prepare("INSERT INTO project_managers (name, active) VALUES ('박엔지', 1)").run().lastInsertRowid);
+  const projId = Number(db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('엔지니어다중','session',0)").run().lastInsertRowid);
+  const s = D.createSession(CHIEF, projId, {
+    session_type: "믹싱", session_date: "2026-08-02", all_day: "1", status: "예정",
+    engineer_ids: [String(mgrA), String(mgrB)],
+  });
+  const engs = D.listSessionEngineers(s.id);
+  assert.deepEqual(engs.map((e) => e.id).sort(), [mgrA, mgrB].sort(), "두 엔지니어 모두 저장");
+  const row = db().prepare("SELECT engineer_name FROM sessions WHERE id = ?").get(s.id);
+  assert.equal(row.engineer_name, "김엔지", "레거시 engineer_name = 첫 엔지니어(제출 순서 첫 값)");
+
+  // 수정: 한 명 제거 + 다른 한 명 추가 → 통째 교체(디렉터와 동일 정책)
+  const mgrC = Number(db().prepare("INSERT INTO project_managers (name, active) VALUES ('이엔지', 1)").run().lastInsertRowid);
+  D.updateSession(CHIEF, s.id, {
+    session_type: "믹싱", session_date: "2026-08-02", all_day: "1", status: "예정",
+    engineer_ids: [String(mgrB), String(mgrC)],
+  });
+  assert.deepEqual(D.listSessionEngineers(s.id).map((e) => e.id).sort(), [mgrB, mgrC].sort(), "수정 = 교체(김엔지 제거)");
+
+  // 전원 제거 → 빈 배열, 레거시 컬럼도 null로 복귀
+  D.updateSession(CHIEF, s.id, { session_type: "믹싱", session_date: "2026-08-02", all_day: "1", status: "예정" });
+  assert.deepEqual(D.listSessionEngineers(s.id), [], "engineer_ids 미전송이면 전원 제거");
+  assert.equal(db().prepare("SELECT engineer_name FROM sessions WHERE id = ?").get(s.id).engineer_name, null);
+});
+
+test("세션 담당 엔지니어: 존재하지 않는 id는 걸러내고 중복은 dedup", () => {
+  const D = require("../src/data");
+  const CHIEF = { id: 1, role: "chief", email: "chief@omg.test" };
+  const mgr = Number(db().prepare("INSERT INTO project_managers (name, active) VALUES ('정엔지', 1)").run().lastInsertRowid);
+  const projId = Number(db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('엔지니어검증','session',0)").run().lastInsertRowid);
+  const s = D.createSession(CHIEF, projId, {
+    session_type: "믹싱", session_date: "2026-08-03", all_day: "1", status: "예정",
+    engineer_ids: [String(mgr), "999999", String(mgr), ""], // 유효+존재안함+중복+빈값
+  });
+  assert.deepEqual(D.listSessionEngineers(s.id).map((e) => e.id), [mgr], "존재하지 않는 id 제외·중복 제거");
+});

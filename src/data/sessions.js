@@ -90,7 +90,7 @@ function sessionFields(input) {
   const { isExternalRoom } = require("./rooms"); // 무순환(rooms는 sessions를 require하지 않음)
   // 외부 장소(is_external)일 때만 주소(location) 저장 — 스튜디오 룸이면 null(기본 장소 사용).
   const location = roomId && isExternalRoom(roomId) ? String(input.location || "").trim() || null : null;
-  // 담당 디렉터는 다대다(session_directors)로 별도 처리 — 여기선 레거시 컬럼 자리만 null(caller가 첫 디렉터로 채움).
+  // 담당 디렉터·담당 엔지니어는 다대다(session_directors·session_engineers)로 별도 처리 — 여기선 레거시 컬럼 자리만 null(caller가 첫 명으로 채움).
   return {
     session_type: normalizeSessionType(input.session_type),
     session_date: date,
@@ -99,7 +99,7 @@ function sessionFields(input) {
     start_time: start,
     end_time: allDay ? null : resolveEndTime(input, start),
     booker_name: String(input.booker_name || "").trim() || null,
-    engineer_name: String(input.engineer_name || "").trim() || null,
+    engineer_name: null,
     status: normalizeSessionStatus(input.status),
     rate_item_id: rateItemId,
     room_id: roomId,
@@ -143,7 +143,39 @@ function setSessionDirectors(sessionId, ids) {
   d.prepare("UPDATE sessions SET director_party_id = ? WHERE id = ?").run(ids[0] || null, sessionId);
 }
 
-/** 세션 캘린더 참석자 이메일 — 프로젝트 매니저(project.manager_id)·예약담당자(booker_name)·담당엔지니어(engineer_name)의 이메일(중복·빈값 제거). */
+/** 세션 담당 엔지니어(다대다, 2026-07-05): engineer_ids[](담당자 마스터 id, 반복 select) → 유효 id 배열(중복 제거).
+ *  디렉터와 달리 자유 텍스트 등록이 없다(담당자 마스터에서만 선택) — 존재하지 않는(삭제된) id만 걸러내고,
+ *  비활성 담당자는 유지(기존 배정 보존 — validRoomId와 동일 철학: 목록에 안 보여도 이미 배정된 건 안 지운다). */
+function resolveEngineerIds(input) {
+  const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
+  const raw = [...new Set(asArr(input.engineer_ids).map((v) => Number(v)).filter(Boolean))];
+  if (!raw.length) return [];
+  const placeholders = raw.map(() => "?").join(",");
+  const valid = new Set(db().prepare(`SELECT id FROM project_managers WHERE id IN (${placeholders})`).all(...raw).map((r) => r.id));
+  return raw.filter((id) => valid.has(id));
+}
+
+/** 세션의 담당 엔지니어 목록을 통째로 교체(다대다). sessions.engineer_name=첫 엔지니어 이름(레거시 단일 컬럼 동기화 — 매출·검색·캘린더 호환). */
+function setSessionEngineers(sessionId, ids) {
+  const d = db();
+  d.prepare("DELETE FROM session_engineers WHERE session_id = ?").run(sessionId);
+  const ins = d.prepare("INSERT OR IGNORE INTO session_engineers (session_id, manager_id) VALUES (?, ?)");
+  for (const mid of ids) ins.run(sessionId, mid);
+  const first = ids.length ? d.prepare("SELECT name FROM project_managers WHERE id = ?").get(ids[0]) : null;
+  d.prepare("UPDATE sessions SET engineer_name = ? WHERE id = ?").run(first ? first.name : null, sessionId);
+}
+
+/** 세션의 담당 엔지니어(담당자 마스터) 목록. */
+function listSessionEngineers(sessionId) {
+  return db()
+    .prepare(
+      `SELECT pm.* FROM session_engineers se JOIN project_managers pm ON pm.id = se.manager_id
+       WHERE se.session_id = ? ORDER BY se.created_at, pm.name COLLATE NOCASE`
+    )
+    .all(Number(sessionId));
+}
+
+/** 세션 캘린더 참석자 이메일 — 프로젝트 매니저(project.manager_id)·예약담당자(booker_name)·담당엔지니어(전원, 다대다)의 이메일(중복·빈값 제거). */
 function sessionAttendeeEmails(session, project) {
   const d = db();
   const emails = new Set();
@@ -154,7 +186,7 @@ function sessionAttendeeEmails(session, project) {
   const byName = d.prepare("SELECT email FROM project_managers WHERE name = ? AND email IS NOT NULL AND TRIM(email) <> '' LIMIT 1");
   if (project && project.manager_id) add(d.prepare("SELECT email FROM project_managers WHERE id = ?").get(project.manager_id));
   if (session.booker_name) add(byName.get(session.booker_name));
-  if (session.engineer_name) add(byName.get(session.engineer_name));
+  for (const eng of listSessionEngineers(session.id)) add(eng);
   return [...emails];
 }
 
@@ -287,8 +319,11 @@ function createSession(user, projectId, input = {}) {
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
   f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
+  const engineerIds = resolveEngineerIds(input);
+  const firstEngineer = engineerIds.length ? db().prepare("SELECT name FROM project_managers WHERE id = ?").get(engineerIds[0]) : null;
+  f.engineer_name = firstEngineer ? firstEngineer.name : null; // 첫 엔지니어 이름(레거시 컬럼 동기화)
   assertNoSessionConflict(f, null, conflictOverride(input));
-  // 세션 행 + 다대다 디렉터를 한 트랜잭션으로 — 중간 실패 시 반쪽 세션(디렉터 없는)이 남지 않게.
+  // 세션 행 + 다대다 디렉터·엔지니어를 한 트랜잭션으로 — 중간 실패 시 반쪽 세션(디렉터·엔지니어 없는)이 남지 않게.
   const d = db();
   let newId;
   d.exec("BEGIN IMMEDIATE;");
@@ -301,6 +336,7 @@ function createSession(user, projectId, input = {}) {
       .run({ project_id: project.id, ...f });
     newId = info.lastInsertRowid;
     setSessionDirectors(newId, directorIds); // 다대다 디렉터 저장
+    setSessionEngineers(newId, engineerIds); // 다대다 엔지니어 저장
     d.exec("COMMIT;");
   } catch (e) {
     d.exec("ROLLBACK;");
@@ -317,8 +353,11 @@ function updateSession(user, sessionId, input = {}) {
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
   f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
+  const engineerIds = resolveEngineerIds(input);
+  const firstEngineer = engineerIds.length ? db().prepare("SELECT name FROM project_managers WHERE id = ?").get(engineerIds[0]) : null;
+  f.engineer_name = firstEngineer ? firstEngineer.name : null; // 첫 엔지니어 이름(레거시 컬럼 동기화)
   assertNoSessionConflict(f, s.id, conflictOverride(input));
-  // UPDATE + 디렉터 교체를 한 트랜잭션으로(디렉터만 지워지고 세션은 옛값으로 남는 반쪽 갱신 방지).
+  // UPDATE + 디렉터·엔지니어 교체를 한 트랜잭션으로(디렉터·엔지니어만 지워지고 세션은 옛값으로 남는 반쪽 갱신 방지).
   const d = db();
   d.exec("BEGIN IMMEDIATE;");
   try {
@@ -330,6 +369,7 @@ function updateSession(user, sessionId, input = {}) {
       )
       .run({ id: s.id, ...f });
     setSessionDirectors(s.id, directorIds); // 다대다 디렉터 교체
+    setSessionEngineers(s.id, engineerIds); // 다대다 엔지니어 교체
     d.exec("COMMIT;");
   } catch (e) {
     d.exec("ROLLBACK;");
@@ -406,6 +446,7 @@ module.exports = {
   getSessionForUser,
   sessionAttendeeEmails,
   listSessionDirectors,
+  listSessionEngineers,
   busySessionSlots,
   sessionRateAmount,
   createSession,

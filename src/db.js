@@ -290,6 +290,15 @@ function init() {
       PRIMARY KEY (session_id, contact_id)
     );
 
+    -- 세션 담당 엔지니어(다대다, 2026-07-05) — 한 세션에 스튜디오측 엔지니어 여러 명(담당자 마스터 참조).
+    -- 단일 sessions.engineer_name(첫 엔지니어 이름)은 매출·검색·캘린더 등 레거시 소비처 호환용으로 계속 동기화된다.
+    CREATE TABLE IF NOT EXISTS session_engineers (
+      session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      manager_id INTEGER NOT NULL REFERENCES project_managers(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (session_id, manager_id)
+    );
+
     -- 프로젝트 아티스트 다대다(2026-07-05 — 콤마로 여러 명 등록). projects.artist TEXT=콤마 표시 목록,
     -- projects.artist_id=첫(대표) 아티스트(청구처 파생·레거시 호환), 전체 목록은 이 테이블(각 아티스트 상세 '연결 프로젝트' 매칭).
     CREATE TABLE IF NOT EXISTS project_artists (
@@ -488,6 +497,18 @@ function init() {
   if (!getState("invoice_due_date_drop_v1")) {
     d.exec("UPDATE invoices SET due_date = NULL WHERE due_date IS NOT NULL");
     setState("invoice_due_date_drop_v1", "done");
+  }
+  // 기존 단일 담당 엔지니어(sessions.engineer_name)를 다대다 테이블(session_engineers)로 1회 복사(2026-07-05).
+  // 이름이 담당자 마스터(project_managers)와 유일하게 일치할 때만(동명이인 오연결 방지). 멱등(중복 무시).
+  if (!getState("session_engineers_backfill_v1")) {
+    d.exec(
+      `INSERT OR IGNORE INTO session_engineers (session_id, manager_id)
+       SELECT s.id, pm.id FROM sessions s
+       JOIN project_managers pm ON pm.name = s.engineer_name
+       WHERE s.engineer_name IS NOT NULL AND TRIM(s.engineer_name) <> ''
+         AND (SELECT COUNT(*) FROM project_managers pm2 WHERE pm2.name = s.engineer_name) = 1`
+    );
+    setState("session_engineers_backfill_v1", "done");
   }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.
