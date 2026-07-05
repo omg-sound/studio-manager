@@ -125,12 +125,22 @@ router.get("/", requireInvoice, (req, res) => {
           const unpaidSessions = sessionPayouts.filter((s) => !s.worker_paid && s.worker_rate > 0);
           const unpaidAmt = unpaid.reduce((s, t) => s + (t.worker_rate || 0), 0) + unpaidSessions.reduce((s, x) => s + (x.worker_rate || 0), 0);
           const unpaidCount = unpaid.length + unpaidSessions.length;
+          // 미지급 항목 미리보기(2026-07-06 사용자 요청 — 건수·금액만으론 뭔지 몰라 대략 어떤 항목인지 한 줄 더).
+          const itemLabels = [
+            ...unpaid.map((t) => taskTypeLabel(t.task_type)),
+            ...unpaidSessions.map((s) => `${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)}`),
+          ];
+          const PREVIEW_MAX = 3;
+          const itemPreview = itemLabels.slice(0, PREVIEW_MAX).join(", ") + (itemLabels.length > PREVIEW_MAX ? ` 외 ${itemLabels.length - PREVIEW_MAX}건` : "");
           const payoutBar = unpaidCount
-            ? `<div class="mt-1.5 flex items-center justify-between gap-2 border-t border-border pt-1.5 text-sm">
-                <span class="text-muted">미지급 <b class="text-danger">${formatKRW(unpaidAmt)}</b> (${unpaidCount}건)</span>
-                <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaidCount}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요?">
-                  <button class="btn-ghost btn-xs text-primary" type="submit">지급처리</button>
-                </form>
+            ? `<div class="mt-1.5 border-t border-border pt-1.5 text-sm">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">미지급 <b class="text-danger">${formatKRW(unpaidAmt)}</b> (${unpaidCount}건)</span>
+                  <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaidCount}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요?">
+                    <button class="btn-ghost btn-xs text-primary" type="submit">지급처리</button>
+                  </form>
+                </div>
+                <div class="mt-0.5 truncate text-xs text-muted">${esc(itemPreview)}</div>
               </div>`
             : "";
           return `
