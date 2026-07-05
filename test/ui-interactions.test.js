@@ -282,8 +282,8 @@ test("세션 편집 폼: 기존 담당 디렉터가 콤보에 채워짐(hidden i
   const visible = row.querySelector("[data-pc-input]");
   const hidName = row.querySelector("[data-pc-name-hidden]");
   assert.equal(String(hidId.value), String(pid), "디렉터 hidden id 프리필(제출됨)");
-  assert.equal(visible.value, "전범선 대표님", "디렉터 이름이 보이는 입력에 표시(pick·읽기전용과 동일 canonical name)");
-  assert.equal(hidName.value, "전범선 대표님", "제출용 hidden 이름도 채워짐");
+  assert.equal(visible.value, "전범선 대표님", "보이는 입력 = 본명 호칭(personName 표시)");
+  assert.equal(hidName.value, "전범선", "제출용 hidden 이름 = 순수 본명(호칭은 표시에만·name 정규화)");
   // 종일 세션이므로 시간 UI는 숨김, 종일 체크됨
   assert.equal(doc.querySelector("[data-all-day]").checked, true, "종일 세션 → 체크");
 });

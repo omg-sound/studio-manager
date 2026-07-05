@@ -19,14 +19,18 @@ const { formatPhone, formatBizNo } = require("../lib/format"); // 전화·사업
 const blankToNull = (v) => { const s = String(v == null ? "" : v).trim(); return s || null; };
 
 /** 표시명(name) 자동 생성(사람): 명시 name > 호칭+성+이름 > 활동명. 모두 없으면 예외. */
+// name(표시명) = **순수 본명**(성+이름). 호칭은 name에 넣지 않고 honorific 컬럼에만 둔다(2026-07-05 통일 —
+// 이전엔 '성이름 호칭'으로 조립해 연락처 폼 생성분만 name에 호칭이 박히고 대표자 자동등록분은 컬럼에만 있어
+// 목록 표시가 갈렸다. 표시는 personName 헬퍼가 honorific 컬럼으로 일관되게 붙인다).
 function resolveDisplayName({ name, honorific, family_name, given_name, activity_name } = {}) {
   const explicit = String(name || "").trim();
   if (explicit) return explicit;
   const full = `${String(family_name || "").trim()}${String(given_name || "").trim()}`;
-  const h = String(honorific || "").trim();
-  if (full || h) return [full, h].filter(Boolean).join(" ");
+  if (full) return full;
   const act = String(activity_name || "").trim();
   if (act) return act;
+  const h = String(honorific || "").trim();
+  if (h) return h; // 이름·활동명이 전혀 없을 때만 호칭이라도(엣지 폴백)
   throw new Error("PARTY_NAME_REQUIRED");
 }
 

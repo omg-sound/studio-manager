@@ -48,6 +48,21 @@ function personLabel(main, alt) {
   return a && a !== m ? `${m} (${a})` : m;
 }
 
+/**
+ * 연락처(사람) 표준 표시명 = **본명 + 호칭 + (활동명)** — 호칭을 `honorific` 컬럼에서 일관되게 붙인다(2026-07-05 통일).
+ * 연락처 목록·상세·suggest·관계자 탭·personCombo가 공통 사용. app.js labelOf와 동일 형식.
+ * name이 이미 호칭으로 끝나면(레거시: resolveDisplayName이 name에 호칭을 박아둔 데이터) 중복 안 붙임 — 마이그레이션 후엔 name=순수 본명이라 항상 컬럼으로 붙는다.
+ * person 행({name, honorific, activity_name|nickname|alt}) 하나를 받는다. 반환은 raw(호출부 esc 필요).
+ */
+function personName(p) {
+  if (!p) return "";
+  const n = String(p.name == null ? "" : p.name).trim();
+  const h = String(p.honorific == null ? "" : p.honorific).trim();
+  const a = String((p.activity_name != null ? p.activity_name : p.nickname != null ? p.nickname : p.alt) || "").trim();
+  const base = h && !n.endsWith(h) ? `${n} ${h}` : n;
+  return a && a !== n ? `${base} (${a})` : base;
+}
+
 /** bytes → "12.3 MB" 사람이 읽는 크기. */
 function formatBytes(bytes) {
   const n = Number(bytes || 0);
@@ -512,11 +527,8 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   // 표시 라벨 = 본명 + 호칭 + (활동명) — 담당자가 아티스트면 식별 + 선택 후 필드에 호칭도 표기(2026-07-05 사용자 요청, 청구서 제외).
   // 제출용 숨김 이름(pureName)은 순수 본명 유지 — 라벨이 그대로 저장돼 새 연락처 '박수한 대표님 (워터멜론)'이 생기는 것 방지(app.js labelOf와 형식 일치·쌍).
   const pureName = sel ? sel.name : initialName || "";
-  const shownHon = sel ? String(sel.honorific || "").trim() : "";
-  // name이 이미 호칭으로 끝나면(성+이름+호칭 조립) 중복 안 붙임 — app.js labelOf와 형식 일치.
-  const shownBase = sel ? (shownHon && String(sel.name).slice(-shownHon.length) !== shownHon ? sel.name + " " + shownHon : sel.name) : "";
-  const shownAlt = sel ? String(sel.activity_name || sel.alt || "").trim() : "";
-  const shown = sel ? (shownAlt && shownAlt !== sel.name ? shownBase + " (" + shownAlt + ")" : shownBase) : (initialName || "");
+  // 표시 = personName(본명 호칭 (활동명))로 통일(연락처 목록·상세와 동일 헬퍼·형식). app.js labelOf와도 형식 일치.
+  const shown = sel ? personName(sel) : (initialName || "");
   // 선택된 담당자 정보줄(전화·이메일·소속 회사)을 서버에서도 렌더 — 편집 진입 시 JS 전 깜빡임 제거 + '필드 밑 회사 주석'(app.js setInfo와 동일 구조·내용).
   const selOrg = sel ? String(sel.group_name || sel.group || sel.current_client || sel.company || "").trim() : "";
   const selTitle = sel ? String(sel.current_title || sel.job_title || "").trim() : "";
@@ -711,4 +723,4 @@ function companyCombo(fieldName, value, roleKey, label) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, copyable };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, copyable };

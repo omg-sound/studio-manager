@@ -452,6 +452,22 @@ function init() {
     if (sb) { const f = formatBizNo(sb); if (f && f !== sb) setState("studio_biz_no", f); }
     setState("biz_no_format_v1", "done");
   }
+  // 사람 name 정규화(2026-07-05): 과거 resolveDisplayName이 '성이름 호칭'으로 조립해 연락처 폼 생성분만
+  // name에 호칭이 박혀(예 '이민우 대표님') 목록 표시가 대표자 자동등록분(name 순수·honorific 컬럼만)과 갈렸다.
+  // name이 ' '+honorific으로 끝나면(honorific 컬럼과 정확 매칭 — 오탐 없음) name에서 호칭을 떼 순수 본명으로.
+  // 표시는 personName 헬퍼가 honorific 컬럼으로 일관되게 붙인다(대표자·연락처폼 생성분 모두 동일 표기).
+  if (!getState("person_name_honorific_split_v1")) {
+    for (const r of d.prepare("SELECT id, name, honorific FROM parties WHERE kind='person' AND honorific IS NOT NULL AND TRIM(honorific) <> ''").all()) {
+      const name = String(r.name || "").trim();
+      const hon = String(r.honorific || "").trim();
+      const suffix = " " + hon;
+      if (hon && name.endsWith(suffix)) {
+        const pure = name.slice(0, name.length - suffix.length).trim();
+        if (pure) d.prepare("UPDATE parties SET name = ? WHERE id = ?").run(pure, r.id);
+      }
+    }
+    setState("person_name_honorific_split_v1", "done");
+  }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.
   if (!getState("rooms_seed_v1")) {

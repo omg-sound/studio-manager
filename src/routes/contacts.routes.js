@@ -29,7 +29,7 @@ const {
 } = require("../data");
 const people = require("../people");
 const { asyncHandler } = require("../lib/async"); // async 라우트 예외를 전역 핸들러로 전달(People API throw 시 요청 행 방지)
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
 
 const router = express.Router();
 
@@ -83,7 +83,7 @@ router.get("/", (req, res) => {
           const typeBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
           // 클라이언트 목록과 동일 흐름: 이름(→연락처)·소속 회사(→회사 상세)를 각각 링크(밑줄 분리), 직함은 텍스트.
           // 우측 전화·이메일은 비링크 → 드래그·복사해도 상세로 안 들어감.
-          const nameLink = `<a href="/contacts/${c.id}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personLabel(c.name, c.nickname))}</a>`;
+          const nameLink = `<a href="/contacts/${c.id}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personName(c))}</a>`;
           let orgPart = "";
           if (cur && cur.client_id) {
             const orgA = `<a href="/clients/${cur.client_id}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
@@ -125,7 +125,7 @@ router.get("/suggest", (req, res) => {
   if (!q) return res.json([]);
   const rows = listContacts({ q }).slice(0, 8);
   res.json(rows.map((c) => ({
-    label: personLabel(c.name, c.activity_name), // 본명 (활동명) 병기 — 활동명은 부제에서 라벨로 승격
+    label: personName(c), // 본명 호칭 (활동명) — 목록과 동일 헬퍼
     sub: c.phone || "",
     href: `/contacts/${c.id}`,
   })));
@@ -386,7 +386,7 @@ router.get("/:id", (req, res) => {
   const backLabel = from ? "클라이언트" : "연락처";
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: personLabel(c.name, c.nickname), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}
+    ${pageHeader({ title: personName(c), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}
     ${infoCard}
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
     ${timeline}

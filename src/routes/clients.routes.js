@@ -22,7 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -175,7 +175,7 @@ router.get("/", (req, res) => {
             // 관계자(사람·비아티스트): 이름(→연락처)·소속 회사(→회사 상세) 각각 링크(밑줄 분리). 직함 텍스트 + 역할 배지.
             const cur = currentAffiliation(c.id);
             const roleBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
-            const nameLink = `<a href="/contacts/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personLabel(c.name, c.activity_name))}</a>`;
+            const nameLink = `<a href="/contacts/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personName(c))}</a>`;
             let orgPart = "";
             if (cur && cur.client_id) {
               const orgA = `<a href="/clients/${cur.client_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
