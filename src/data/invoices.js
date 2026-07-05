@@ -186,7 +186,7 @@ function listBillableSessionsForProject(user, projectId) {
          AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
          AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
          AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)
-       ORDER BY s.created_at ASC, s.id ASC`
+       ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
     )
     .all(project.id)
     .map((row) => ({ ...row, billing: sessionRateAmount(row) }))
