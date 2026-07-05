@@ -55,6 +55,7 @@ function eventInputForSession(session, project) {
   // 담당 엔지니어(다대다, 2026-07-05) — 배정된 전원을 콤마로 병기(레거시 engineer_name은 첫 명뿐이라 여러 명일 때 누락됨).
   const engineers = session.id ? listSessionEngineers(session.id).map((e) => e.name).filter(Boolean) : [];
   const description = [
+    project.title ? `프로젝트: ${project.title}` : "", // 맨 앞에 프로젝트명(2026-07-05 사용자 요청 — 캘린더 공유 시 식별용)
     session.session_type ? `종류: ${sessionTypeLabel(session)}` : "",
     session.booker_name ? `예약: ${session.booker_name}` : "",
     engineers.length ? `엔지니어: ${engineers.join(", ")}` : "",
