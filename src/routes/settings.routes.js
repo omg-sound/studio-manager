@@ -48,6 +48,7 @@ const { migrateLocalFilesToDrive, localFileCount, driveFileCount } = require("..
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const calendar = require("../calendar");
 const alerts = require("../notify");
+const { eventInputForSession } = require("./sessions.routes"); // 캘린더 재동기화 버튼 — 세션 캘린더 이벤트 입력(제목·설명) 재사용
 
 const router = express.Router();
 
@@ -252,6 +253,13 @@ async function studioCalendarSection() {
           </select>
           <button class="btn-primary shrink-0" type="submit">저장</button>
         </form>`;
+      if (current) {
+        // 이미 만들어진 캘린더 일정의 제목·설명을 현재 로직(예: 아티스트 먼저 표기)으로 다시 맞춘다 — 1회성 관리 액션.
+        inner += `<form method="post" action="/settings/resync-calendar" class="mt-2 border-t border-border pt-3" data-confirm="예정된(취소 제외) 세션의 캘린더 일정을 지금 로직으로 전부 다시 씁니다. 계속할까요?">
+            <button class="btn-ghost btn-sm" type="submit">기존 캘린더 일정 다시 동기화</button>
+            <p class="mt-1 text-xs text-muted">제목·설명 표기 방식을 바꾼 뒤(예: 아티스트 표기 순서) 이미 등록된 일정에도 반영하고 싶을 때 누르세요.</p>
+          </form>`;
+      }
     }
   }
   const location = `
@@ -498,6 +506,26 @@ router.post("/studio-calendar", requireEditor, (req, res) => {
   calendar.setStudioCalendarId(req.body.calendar_id);
   res.redirect("/settings?tab=settings&flash=saved");
 });
+
+// ── 기존 캘린더 일정 재동기화(1회성 관리 액션) — 제목·설명 포맷을 최신 로직으로 다시 적용 ──
+// gcal_event_id가 있는(=이미 구글 캘린더에 올라간) 취소 제외 세션 전부를 순회해 updateEvent만 다시 호출한다.
+// 실패는 개별 건너뛰고 계속(전체 중단 방지) — fail-safe. 결과는 notice로 안내.
+router.post("/resync-calendar", requireChief, asyncHandler(async (req, res) => {
+  const rows = db().prepare("SELECT * FROM sessions WHERE gcal_event_id IS NOT NULL AND status <> '취소'").all();
+  let ok = 0, fail = 0;
+  for (const s of rows) {
+    const project = db().prepare("SELECT * FROM projects WHERE id = ?").get(s.project_id);
+    if (!project) { fail++; continue; }
+    try {
+      const newId = await calendar.updateEvent(s.gcal_event_id, eventInputForSession(s, project));
+      if (newId) ok++; else fail++;
+    } catch (e) {
+      fail++;
+    }
+  }
+  const notice = `캘린더 재동기화 완료 — 성공 ${ok}건${fail ? ` · 실패 ${fail}건` : ""}(총 ${rows.length}건)`;
+  res.redirect(`/settings?tab=settings&notice=${encodeURIComponent(notice)}${fail ? "&notice_warn=1" : ""}`);
+}));
 
 // ── 예약 일정 기본 장소 저장 ──
 router.post("/studio-location", requireEditor, (req, res) => {

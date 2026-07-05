@@ -1,3 +1,19 @@
+// 자동 제출([data-autosubmit], 아래) 직전 저장한 스크롤 위치를 같은 경로(pathname)로 돌아왔을 때 복원.
+// 2026-07-05 사용자 리포트 — 프로젝트 목록에서 치프가 작성일을 인라인 수정하면 목록이 재정렬되며
+// 페이지 전체가 새로고침돼 맨 위로 튀어 원하던 프로젝트를 다시 찾아 스크롤해야 하던 불편.
+// 경로만 비교(쿼리의 flash= 등은 무시)하고 1회성으로 지워 이후 일반 이동에는 영향 없음.
+(function () {
+  "use strict";
+  var KEY = "scrollPos:" + location.pathname;
+  try {
+    var raw = sessionStorage.getItem(KEY);
+    if (raw != null) {
+      sessionStorage.removeItem(KEY);
+      window.scrollTo(0, parseInt(raw, 10) || 0);
+    }
+  } catch (e) {}
+})();
+
 // 클릭 복사([data-copy]) + 토스트 알림. 사업자등록번호 등 값을 눌러 클립보드에 복사.
 // window.__toast(msg)로 다른 곳에서도 짧은 토스트를 띄울 수 있다(CSP-safe, 인라인 0).
 (function () {
@@ -95,7 +111,12 @@
   "use strict";
   document.addEventListener("change", function (e) {
     var field = e.target.closest && e.target.closest("[data-autosubmit]");
-    if (field && field.form) { if (field.form.requestSubmit) field.form.requestSubmit(); else field.form.submit(); } // requestSubmit: submit 이벤트 발화(콤마정리·드래프트 핸들러 동작)
+    if (field && field.form) {
+      // 자동 제출은 같은 목록 페이지로 되돌아오는 경우가 많다(예: 프로젝트 목록 작성일 인라인 수정) —
+      // 제출 직전 스크롤을 저장해두면 재로드 후 맨 위로 튀지 않고 원래 보던 위치로 복원된다(아래 복원 IIFE).
+      try { sessionStorage.setItem("scrollPos:" + location.pathname, String(window.scrollY)); } catch (_e) {}
+      if (field.form.requestSubmit) field.form.requestSubmit(); else field.form.submit();
+    } // requestSubmit: submit 이벤트 발화(콤마정리·드래프트 핸들러 동작)
   });
 
   document.addEventListener("click", function (e) {

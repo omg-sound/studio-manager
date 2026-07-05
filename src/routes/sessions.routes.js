@@ -49,7 +49,7 @@ function sessionTypeLabel(session) {
 
 function eventInputForSession(session, project) {
   const company = project.production_company || project.artist_company; // 제작사 우선, 없으면 레이블(레이블 자체 제작분)
-  const title = [company, project.artist].filter(Boolean).join(" · ") || project.title || "스튜디오 세션";
+  const title = [project.artist, company].filter(Boolean).join(" · ") || project.title || "스튜디오 세션"; // 아티스트 먼저(2026-07-05 사용자 요청 — 이전엔 회사가 먼저)
   // 담당 디렉터(다대다) 이름 — 본명 (활동명) 병기(전면 병기 통일, 2026-07-05). 캘린더 설명에 포함.
   const directors = session.id ? listSessionDirectors(session.id).map((d) => personLabel(d.name, d.activity_name)).filter(Boolean) : [];
   // 담당 엔지니어(다대다, 2026-07-05) — 배정된 전원을 콤마로 병기(레거시 engineer_name은 첫 명뿐이라 여러 명일 때 누락됨).
@@ -311,3 +311,4 @@ router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res)
 }));
 
 module.exports = router;
+module.exports.eventInputForSession = eventInputForSession; // settings.routes.js 캘린더 재동기화 버튼에서 재사용(제목 포맷 통일)
