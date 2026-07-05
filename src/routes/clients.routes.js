@@ -478,6 +478,12 @@ router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, r
 router.get("/:id", asyncHandler(async (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  // 비아티스트 개인(관계자)은 클라이언트 화면이 아니라 연락처 상세가 정 화면(관계자 탭 링크와 동일 규칙) —
+  // 청구처 정보 카드 '클라이언트 ↗' 등이 관계자 청구처를 이 경로로 보낼 때 아티스트 편집 폼이 뜨던 어색함 제거(2026-07-05 전수점검).
+  if (c.kind === "person" && !c.is_artist) {
+    const from = String(req.query.from || "");
+    return res.redirect(`/contacts/${c.id}${from && /^[\w=&%.\-]*$/.test(from) ? `?from=${from}` : ""}`);
+  }
   const tab = req.query.tab === "invoices" ? "invoices" : "projects";
   const projects = listProjectsForParty(c.id); // c.id(숫자)를 넘겨야 함 — 객체를 넘기면 Number(c)=NaN이라 매칭 0(연결 프로젝트/청구 안 뜨던 버그)
   const invoices = listInvoicesForParty(c.id);

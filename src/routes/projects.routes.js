@@ -23,7 +23,6 @@ const {
   contactOptions,
   partyOptions,
   createGroup,
-  createCompany,
   resolvePersonByName,
   getParty,
   listProjectManagers,
@@ -53,6 +52,8 @@ const {
   listPersonsForOrg,
   getStudioInfo,
   getStudioLogo,
+  ensureCompanyParty,
+  resolvePartyByDisplay,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, payerCombo, companyCombo, tabBar: renderTabs, searchBox } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
@@ -69,13 +70,7 @@ function cleanYmd(v) {
   return isValidYmd(s) ? s : null;
 }
 
-/** 조직(company) party를 이름으로 찾거나 생성. 소속사/제작사 공용(roles는 첫 등록 라벨). */
-function ensureCompanyParty(name, role) {
-  const n = String(name || "").trim();
-  if (!n) return null;
-  const ex = db().prepare("SELECT id FROM parties WHERE kind = 'company' AND name = ? ORDER BY id LIMIT 1").get(n);
-  return ex ? ex.id : createCompany({ name: n, roles: role });
-}
+// ensureCompanyParty는 parties.js 공용을 사용(로컬 중복 제거 — 2026-07-05 전수점검).
 
 /** 사람 party를 아티스트로 표시(is_artist=1, 활동명 비어 있으면 채움). 그룹은 이미 is_artist라 무해. */
 function markArtistParty(partyId, activityName) {
@@ -111,13 +106,16 @@ function resolveProjectParties(b) {
     }
   }
   // 제작/운영: 콤보에서 사람(관계자·개인) 또는 회사를 선택하면 hidden production_party_id로 party id가 온다 → 그 party를 직접 사용
-  // (개인이 제작·운영하는 경우 지원, 2026-07-05). 없으면(새 이름 타이핑) 이름으로 회사 찾/생성. 다운스트림 client_id 파생은 kind 무관(COALESCE JOIN).
+  // (개인이 제작·운영하는 경우 지원, 2026-07-05). 없으면(새 이름 타이핑·id 미확정) ①기존 party 표시명 해석(resolvePartyByDisplay —
+  // 회사 상호·사람 본명/라벨/활동명; 사람 라벨 "조형우 (형우비트)"가 회사로 오생성되는 것 방지) ②그래도 없으면 새 회사 생성.
+  // 다운스트림 client_id 파생은 kind 무관(COALESCE JOIN).
   const prodPartyId = b.production_party_id ? Number(b.production_party_id) : null;
+  const prodText = String(b.production_company || "").trim();
   return {
     contactId,
     artistId,
     agencyId: ensureCompanyParty(b.artist_company, "소속사/레이블"),
-    productionId: prodPartyId || ensureCompanyParty(b.production_company, "제작사"),
+    productionId: prodPartyId || (prodText ? resolvePartyByDisplay(prodText) || ensureCompanyParty(prodText, "제작사") : null),
   };
 }
 

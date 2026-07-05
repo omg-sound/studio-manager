@@ -306,3 +306,44 @@ test("청구처 표시: 아티스트는 본명 (활동명), 회사는 상호 그
   const listed2 = D.listInvoices(CHIEF, {}).find((i) => i.id === invId2);
   assert.equal(listed2.client_name, "무지개레코드", "회사는 상호 그대로");
 });
+
+// ── 회귀(2026-07-05 전수점검): 이름 해석 안전망 — 표시 라벨 텍스트가 유령 party를 만들지 않게 ──
+test("resolvePersonByName: 라벨('본명 호칭'·'본명 (활동명)'·활동명) 텍스트도 기존 사람으로 해석", () => {
+  const p = D.createPerson({ name: "한도윤", nickname: "도윤사운드", honorific: "실장님" });
+  assert.equal(D.resolvePersonByName("한도윤"), p, "순수 본명");
+  assert.equal(D.resolvePersonByName("한도윤 실장님"), p, "본명+호칭 라벨");
+  assert.equal(D.resolvePersonByName("한도윤 (도윤사운드)"), p, "본명 (활동명) 라벨");
+  assert.equal(D.resolvePersonByName("한도윤 실장님 (도윤사운드)"), p, "본명 호칭 (활동명) 전체 라벨");
+  assert.equal(D.resolvePersonByName("도윤사운드"), p, "활동명 단독(유일)");
+  // 동명이인 2+ 활동명은 보수(생성) — 유일 매칭만 재사용
+  D.createPerson({ name: "김중복", nickname: "겹침" });
+  D.createPerson({ name: "이중복", nickname: "겹침" });
+  const created = D.resolvePersonByName("겹침");
+  assert.ok(created && D.getParty(created).name === "겹침", "2+ 매칭이면 임의 병합 대신 신규(보수)");
+  // 라벨 형식 신규는 본명·활동명으로 분해 저장
+  const parsed = D.resolvePersonByName("신규인물 (뉴비트)");
+  const np = D.getParty(parsed);
+  assert.equal(np.name, "신규인물", "라벨 신규 → name=본명");
+  assert.equal(np.activity_name, "뉴비트", "라벨 신규 → 활동명 분해 저장");
+});
+
+test("resolvePartyByDisplay: 회사 상호·사람 라벨 해석(생성 없음), 제작/운영 오생성 방지", () => {
+  const co = D.createCompany({ name: "표시해석상사" });
+  const pe = D.createPerson({ name: "표진표", nickname: "표비트" });
+  assert.equal(D.resolvePartyByDisplay("표시해석상사"), co, "회사 상호 정확");
+  assert.equal(D.resolvePartyByDisplay("표진표 (표비트)"), pe, "사람 라벨 → 그 사람(회사 오생성 없음)");
+  assert.equal(D.resolvePartyByDisplay("표비트"), pe, "활동명 단독");
+  assert.equal(D.resolvePartyByDisplay("전혀없는이름XYZ"), null, "미지 텍스트 = null(생성 없음 — 호출부가 결정)");
+  const before = db().prepare("SELECT COUNT(*) n FROM parties").get().n;
+  D.resolvePartyByDisplay("표진표 (표비트)");
+  assert.equal(db().prepare("SELECT COUNT(*) n FROM parties").get().n, before, "해석 경로는 party를 만들지 않음");
+});
+
+test("관계자 역할에 제작/운영 포함 + classifyParty 배지", () => {
+  const producer = D.createPerson({ name: "차제작", nickname: "차피디" }); // 아티스트 겸 개인 제작자
+  db().prepare("INSERT INTO projects (title, project_type, rate, production_id) VALUES ('개인제작역할','session',0,?)").run(producer);
+  assert.ok(D.listAssociates({}).some((p) => p.id === producer), "제작/운영으로 참조된 아티스트도 관계자 탭 유지");
+  const labels = D.classifyParty(producer).map((b) => b.label);
+  assert.ok(labels.includes("제작/운영"), "classifyParty에 제작/운영 배지");
+  assert.ok(labels.includes("아티스트"), "아티스트 배지 병존");
+});

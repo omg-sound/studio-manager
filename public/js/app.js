@@ -1255,10 +1255,18 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var opts = [];
     try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
     root.__ccOpts = opts; // fillAgency 등 외부에서 새 소속사를 옵션에 추가할 수 있게 노출
-    document.addEventListener("party-created", function (e) { // 어디서든 새 회사 생성되면 이 콤보 옵션에 추가
-      var p = e.detail; if (!p || p.kind !== "company") return;
-      if (opts.some(function (o) { return String(o.name) === String(p.name); })) return;
-      opts.push({ name: p.name, sub: "" });
+    document.addEventListener("party-created", function (e) { // 어디서든 새 party 생성되면 이 콤보 옵션에 추가(함정 #20)
+      var p = e.detail; if (!p) return;
+      if (p.kind === "company") {
+        if (opts.some(function (o) { return String(o.name) === String(p.name); })) return;
+        opts.push({ id: p.id, name: p.name, sub: "조직", kind: "company" });
+      } else if (p.kind === "person" && hidPid) {
+        // 사람 허용 콤보(제작/운영)만 — 다른 콤보(담당자 등)에서 만든 새 사람도 즉시 검색되게(재검색 시 '새 업체 등록' 유도로 중복 생성되던 클래스).
+        if (opts.some(function (o) { return String(o.id) === String(p.id) && o.kind === "person"; })) return;
+        var nm = p.realName || p.name; // 간이 등록 브로드캐스트(name=활동명·realName=본명) 정규화 — personCombo 리스너와 동일
+        var alt = p.realName ? p.name : (p.activity || "");
+        opts.push({ id: p.id, name: nm, sub: p.company || "관계자", kind: "person", alt: alt, honorific: "" });
+      }
     });
     var view = [];
     var rowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
@@ -1364,7 +1372,16 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     }
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
-    input.addEventListener("input", function () { if (hidCC) hidCC.value = input.value; if (hidPid) hidPid.value = ""; render(); }); // 제출용 숨김 업체명 동기화 + party id 해제(선택으로만 확정) (타이핑·pick·모달 모두 fireInput로 도달)
+    input.addEventListener("input", function () {
+      if (hidCC) hidCC.value = input.value; // 제출용 숨김 업체명 동기화(타이핑·pick·모달 모두 fireInput로 도달)
+      if (hidPid) {
+        // 순수 이름/표시 라벨과 정확 일치(유일)하면 id 유지 — pick이 라벨을 넣거나 라벨을 직접 타이핑해도 선택이 안 풀리게(personCombo와 대칭).
+        var v = input.value.trim().toLowerCase();
+        var ms = v ? opts.filter(function (o) { return dispOf(o).toLowerCase() === v || String(o.name).toLowerCase() === v; }) : [];
+        hidPid.value = ms.length === 1 && ms[0].id != null ? ms[0].id : "";
+      }
+      render();
+    });
     input.addEventListener("blur", function () { setTimeout(hide, 150); });
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) {

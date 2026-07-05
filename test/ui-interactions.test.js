@@ -426,3 +426,33 @@ test("companyCombo 제작/운영: 담당자가 이미 있으면 자동채움 안
   fire(win, cc.querySelector("[data-cc-pop] button[data-idx]"), "click");
   assert.equal(String(pcId.value), String(other), "이미 담당자 있으면 자동채움 안 함(존중)");
 });
+
+// ── ④c 전수점검(2026-07-05): 제작/운영 콤보 — 라벨 재타이핑 시 id 유지 + 새 사람 브로드캐스트 수신 ──
+test("companyCombo 제작/운영: 병기 라벨 정확 재입력 시 party-id 유지(선택 안 풀림)", () => {
+  const { createPerson } = require("../src/data");
+  const pid = createPerson({ name: "표길동", nickname: "길동비트" });
+  const html = `<form>${companyCombo("production_company", "", "제작사", "제작/운영", { partyIdField: "production_party_id" })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-cc-input]");
+  const hidPid = doc.querySelector("[data-cc-party-id]");
+  input.value = "길동비트"; fire(win, input, "input");
+  fire(win, doc.querySelector("[data-cc-pop] button[data-idx]"), "click");
+  assert.equal(String(hidPid.value), String(pid), "선택으로 id 확정");
+  // 라벨 그대로 재입력(예: 전체선택 후 동일 텍스트 붙여넣기) → 정확 일치 유일 → id 유지
+  input.value = "표길동 (길동비트)"; fire(win, input, "input");
+  assert.equal(String(hidPid.value), String(pid), "정확 라벨 재입력에도 id 유지");
+  input.value = "표길동 (길동비"; fire(win, input, "input");
+  assert.equal(hidPid.value, "", "부분 문자열은 id 해제(선택으로만 확정)");
+});
+test("companyCombo 제작/운영: 다른 콤보(personCombo 모달)에서 만든 새 사람이 즉시 검색됨(party-created)", () => {
+  const html = `<form>${companyCombo("production_company", "", "제작사", "제작/운영", { partyIdField: "production_party_id" })}</form>`;
+  const { win, doc } = mountDom(html);
+  // personCombo 간이 등록이 쏘는 브로드캐스트 재현(name=본명·activity)
+  win.eval(`document.dispatchEvent(new CustomEvent("party-created", { detail: { kind: "person", id: 777, name: "새담당제작", activity: "새비트" } }))`);
+  const input = doc.querySelector("[data-cc-input]");
+  input.value = "새비트"; fire(win, input, "input");
+  const row = doc.querySelector("[data-cc-pop] button[data-idx]");
+  assert.ok(row && row.textContent.includes("새담당제작") && row.textContent.includes("새비트"), "브로드캐스트로 즉시 검색·병기");
+  fire(win, row, "click");
+  assert.equal(doc.querySelector("[data-cc-party-id]").value, "777", "선택 시 그 사람 id");
+});

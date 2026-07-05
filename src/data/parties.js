@@ -377,6 +377,10 @@ function classifyParty(party) {
     "SELECT 1 FROM sessions WHERE director_party_id = @id UNION SELECT 1 FROM session_directors WHERE party_id = @id LIMIT 1"
   ).get({ id });
   if (director) badges.push({ label: "디렉터", cls: "badge-warning" });
+  // 개인이 프로젝트 제작/운영 주체로 참조(2026-07-05 — 제작/운영에 개인 허용). 회사는 '조직' 배지로 충분해 사람만.
+  if (p.kind === "person" && db().prepare("SELECT 1 FROM projects WHERE production_id = ? LIMIT 1").get(id)) {
+    badges.push({ label: "제작/운영", cls: "badge-success" });
+  }
   if (!badges.length) badges.push({ label: "지인·기타", cls: "badge-neutral" });
   return badges;
 }
@@ -467,13 +471,56 @@ function syncManagerToParty(managerId) {
 }
 
 /** 이름으로 사람 party 찾기 — 유일 매칭만 재사용(동명이인 오연결 방지), 아니면 새로 생성. 아티스트/담당자 연결용. */
+/** 표시 라벨 "본명 호칭 (활동명)" 파싱 — {base, activity}. 괄호 없으면 activity="". */
+function parseDisplayLabel(text) {
+  const t = String(text || "").trim();
+  const m = t.match(/^(.+?)\s*\((.+)\)$/);
+  return m ? { base: m[1].trim(), activity: m[2].trim() } : { base: t, activity: "" };
+}
+
+/** 사람 유일 매칭(0 또는 2+면 null) — 동명이인 임의 병합 방지(resolveContactForArtist와 동일 보수 정책). */
+function uniquePersonWhere(clause, args) {
+  const rows = db().prepare(`SELECT id FROM parties WHERE kind = 'person' AND ${clause}`).all(...args);
+  return rows.length === 1 ? rows[0].id : null;
+}
+
 function resolvePersonByName(name, { createIfMissing = true } = {}) {
   const n = String(name || "").trim();
   if (!n) return null;
   const rows = db().prepare("SELECT id FROM parties WHERE kind = 'person' AND name = ?").all(n);
   if (rows.length === 1) return rows[0].id;
+  // 표시 라벨 안전망(2026-07-05 전수점검): 콤보를 안 거치고 라벨 텍스트("박수한 대표님 (워터멜론)"·"박수한 대표님"·"워터멜론")가
+  // 그대로 제출돼도 기존 사람을 찾는다 — 라벨 그대로인 유령 연락처 생성 방지. 전부 유일 매칭만(동명이인 보수).
+  if (rows.length === 0) {
+    const byHon = uniquePersonWhere("TRIM(name || ' ' || COALESCE(honorific,'')) = ?", [n]); // "본명 호칭"
+    if (byHon) return byHon;
+    const { base, activity } = parseDisplayLabel(n);
+    if (activity) {
+      const byLabel = uniquePersonWhere(
+        "(name = @b OR TRIM(name || ' ' || COALESCE(honorific,'')) = @b) AND activity_name = @a",
+        [{ b: base, a: activity }]
+      ); // "본명[ 호칭] (활동명)"
+      if (byLabel) return byLabel;
+    }
+    const byActivity = uniquePersonWhere("activity_name = ? AND TRIM(COALESCE(activity_name,'')) <> ''", [n]); // 활동명 단독
+    if (byActivity) return byActivity;
+    if (createIfMissing && activity) return createPerson({ name: base, nickname: activity }); // 라벨 형식 신규 = 본명+활동명으로 분해 저장
+  }
   if (!createIfMissing) return null;
   return createPerson({ name: n });
+}
+
+/**
+ * 표시 텍스트 → 기존 party 해석(생성 없음): ①회사 상호 정확 ②사람 본명/라벨/활동명(유일) 순.
+ * 프로젝트 제작/운영처럼 회사·개인이 함께 들어가는 칸의 서버 안전망 — 콤보 미선택(hidden id 없음)으로
+ * 사람 라벨 텍스트가 오면 회사로 오생성하지 않고 그 사람을 재사용. 못 찾으면 null(호출부가 회사 생성 등 후속).
+ */
+function resolvePartyByDisplay(text) {
+  const n = String(text || "").trim();
+  if (!n) return null;
+  const co = resolveCompanyByName(n);
+  if (co) return co;
+  return resolvePersonByName(n, { createIfMissing: false });
 }
 
 /**
@@ -572,6 +619,7 @@ function listContacts({ q, tab, staff } = {}) {
  * 관계자 탭에 안 나온다(아티스트 탭 전용) — 관계자 목록이 아티스트로 오염되는 것 방지.
  */
 const ASSOCIATE_ROLE_SUBQUERY = `SELECT contact_party_id AS pid FROM projects WHERE contact_party_id IS NOT NULL
+        UNION SELECT production_id FROM projects WHERE production_id IS NOT NULL
         UNION SELECT party_id FROM session_directors WHERE party_id IS NOT NULL
         UNION SELECT owner_party_id FROM parties WHERE owner_party_id IS NOT NULL
         UNION SELECT contact_party_id FROM parties WHERE contact_party_id IS NOT NULL`;
@@ -801,6 +849,7 @@ module.exports = {
   syncPartyToManager,
   syncManagerToParty,
   resolvePersonByName,
+  resolvePartyByDisplay,
   resolveOwnerParty,
   ensureOwnerAffiliation,
   listProjectManagers,

@@ -133,3 +133,14 @@ test("ui-guardrail: personCombo 옵션 JSON 키 ↔ app.js 검색·표시 소비
   assert.ok(/o\.company/.test(APP), "app.js 검색이 소속 회사(company) 매칭");
   assert.ok(/o\.honorific/.test(APP), "app.js 라벨이 호칭(honorific) 표시");
 });
+
+// ── ⑥b companyCombo(사람 허용) 옵션 키 계약(제작/운영 개인 병기·자동채움 회귀 잠금, 2026-07-05) ──
+// 사고 이력 클래스: 옵션 임베드 키 ↔ app.js 소비 키 드리프트(⑥과 동일 클래스 — pc에서 2회 재발해 가드化).
+// 제작/운영 콤보는 회사+사람 혼합이라 kind로 사람 판별, alt(활동명)·honorific으로 병기 라벨(dispOf) 구성.
+test("ui-guardrail: companyCombo 사람 옵션 키(kind/alt/honorific) ↔ app.js dispOf·자동채움 소비 정합", () => {
+  const views = read(path.join("src", "views.js"));
+  assert.ok(/kind:\s*"person",\s*alt:/.test(views), "views.js companyCombo 사람 옵션에 kind:'person' + alt(활동명) 임베드");
+  assert.ok(/function dispOf/.test(APP), "app.js companyCombo dispOf(병기 라벨) 존재");
+  assert.ok(/o\.kind\s*!==\s*"person"|o\.kind\s*===\s*"person"/.test(APP), "app.js가 옵션 kind로 사람/회사 판별");
+  assert.ok(/__pcSetById/.test(APP), "app.js personCombo가 __pcSetById 노출(제작/운영→담당자 자동채움 계약)");
+});
