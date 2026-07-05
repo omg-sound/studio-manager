@@ -717,6 +717,7 @@
   var zeroFlag = form.querySelector("[data-confirm-zero-amount]");
   form.addEventListener("submit", function (e) {
     if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return; // 미리보기 PDF 제출은 드래프트·확인 건너뜀(청구 생성만 정리)
+    if (e.submitter && e.submitter.hasAttribute("data-waive-btn")) return; // 청구 안 함/되돌리기 제출은 별도 라우트라 0원 확인·드래프트 정리 불필요(2026-07-06)
     var hasZero = false;
     Array.prototype.forEach.call(form.querySelectorAll('input[type="checkbox"][data-line-amount]'), function (cb) {
       if (cb.checked && !(lineVal(cb) > 0)) hasZero = true;

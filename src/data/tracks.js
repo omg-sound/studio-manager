@@ -177,6 +177,20 @@ function setTaskStatus(user, taskId, status) {
   return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
 }
 
+/**
+ * '청구 안 함'(무료 처리) 토글(2026-07-06 사용자 요청 — 리허설 등 의도적 무료 작업). 청구 후보 화면에서만
+ * 노출·되돌리기 가능한 표시 플래그일 뿐 total_price는 건드리지 않는다(되돌리면 원래 금액이 그대로 보이게).
+ * 예산·미청구 집계(listProjects task_total·unbilled_cnt)에서는 waived=1을 제외한다.
+ * 폼 필드 없이 현재값을 뒤집는 순수 토글(청구 생성 폼 안 여러 행이 한 폼을 공유해 이름 충돌 없이 안전).
+ */
+function setTaskWaived(user, taskId) {
+  const task = getTaskForUser(user, taskId);
+  if (!task) return null;
+  if (task.is_invoiced) throw new Error("TASK_LOCKED");
+  db().prepare("UPDATE track_tasks SET waived = ? WHERE id = ?").run(task.waived ? 0 : 1, task.id);
+  return db().prepare("SELECT t.*, tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.id = ?").get(task.id);
+}
+
 function deleteTask(user, taskId) {
   const task = getTaskForUser(user, taskId);
   if (!task) return null;
@@ -226,6 +240,7 @@ module.exports = {
   setTaskAmount,
   updateTask,
   setTaskStatus,
+  setTaskWaived,
   deleteTask,
   createTask,
 };

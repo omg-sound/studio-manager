@@ -56,7 +56,8 @@ function sessionAmountsByProject(projectIds) {
          AND s.session_type IN (${RENTAL_IN})
          AND s.rate_item_id IS NOT NULL
          AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
-         AND s.status <> '취소'`
+         AND s.status <> '취소'
+         AND s.waived = 0`
     )
     .all(...projectIds);
   for (const row of rows) {
@@ -92,7 +93,7 @@ function listProjects(_user, { q } = {}) {
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        LEFT JOIN task_types tt ON tt.key = t.task_type
-       WHERE tr.project_id = p.id) AS task_total,
+       WHERE tr.project_id = p.id AND t.waived = 0) AS task_total,
       (SELECT COUNT(*) FROM sessions s
        WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS upcoming_cnt,
       (SELECT MIN(s.session_date) FROM sessions s
@@ -109,11 +110,13 @@ function listProjects(_user, { q } = {}) {
        + (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id)) AS content_cnt,
       -- 미청구 항목 수 = 미청구 작업 + 미청구 청구가능 세션(listBillableSessionsForProject와 동일 조건).
       -- 완료 탭에서 '청구 생성 안 한 프로젝트'를 위로 올리는 정렬·배지용(2026-07-05 사용자 요청).
+      -- 청구 안 함(waived) 처리한 항목은 더 이상 '필요'하지 않으므로 제외(2026-07-06 사용자 요청).
       ((SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id
-         WHERE tr.project_id = p.id AND t.is_invoiced = 0)
+         WHERE tr.project_id = p.id AND t.is_invoiced = 0 AND t.waived = 0)
        + (SELECT COUNT(*) FROM sessions s
            WHERE s.project_id = p.id AND s.status <> '취소' AND s.session_type IN (${RENTAL_IN})
              AND s.rate_item_id IS NOT NULL AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
+             AND s.waived = 0
              AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
              AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id))) AS unbilled_cnt,
       -- 청구서 단위 할인 합계 — 작업·세션이 연결된(from-tasks) 청구서만. 수동 청구서 라인은 프로젝트 버짓에
@@ -161,7 +164,7 @@ function getProjectForUser(user, id) {
        LEFT JOIN (
          SELECT tr.project_id, COALESCE(SUM(COALESCE(NULLIF(t.total_price, 0), tt.unit_price, 0)), 0) AS task_total
          FROM project_tracks tr
-         LEFT JOIN track_tasks t ON t.track_id = tr.id
+         LEFT JOIN track_tasks t ON t.track_id = tr.id AND t.waived = 0
          LEFT JOIN task_types tt ON tt.key = t.task_type
          GROUP BY tr.project_id
        ) task_sum ON task_sum.project_id = p.id

@@ -393,6 +393,20 @@ function setSessionStatus(user, sessionId, status) {
   return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
 }
 
+/**
+ * '청구 안 함'(무료 처리) 토글(2026-07-06 사용자 요청 — 리허설 등 의도적 무료 세션). 청구 후보 화면에서만
+ * 노출·되돌리기 가능한 표시 플래그. 예산·미청구 집계(sessionAmountsByProject·unbilled_cnt)에서 waived=1 제외.
+ * 폼 필드 없이 현재값을 뒤집는 순수 토글(청구 생성 폼 안 여러 행이 한 폼을 공유해 이름 충돌 없이 안전).
+ */
+function setSessionWaived(user, sessionId) {
+  const { isSessionInvoiced } = require("../data"); // invoices와 상호의존 → 지연 require
+  const s = getSessionForUser(user, sessionId);
+  if (!s) return null;
+  if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED");
+  db().prepare("UPDATE sessions SET waived = ? WHERE id = ?").run(s.waived ? 0 : 1, s.id);
+  return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
+}
+
 function deleteSession(user, sessionId) {
   const { isSessionInvoiced } = require("../data"); // invoices와 상호의존 → 지연 require
   const s = getSessionForUser(user, sessionId);
@@ -454,6 +468,7 @@ module.exports = {
   updateSession,
   setSessionEventId,
   setSessionStatus,
+  setSessionWaived,
   deleteSession,
   upcomingSessions,
   pastSessions,

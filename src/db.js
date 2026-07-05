@@ -427,6 +427,8 @@ function init() {
   addColumn("session_directors", "party_id", "INTEGER"); // 다대다 디렉터(parties.id, 기존 contact_id 대체)
   addColumn("parties", "group_id", "INTEGER"); // 아티스트(사람)의 소속 그룹(parties.id, kind='group'). 그룹↔멤버 연결
   addColumn("parties", "contact_party_id", "INTEGER"); // 그룹의 담당자(parties.id, 사람 — 멤버 또는 관계자)
+  addColumn("track_tasks", "waived", "INTEGER NOT NULL DEFAULT 0"); // 청구 안 함(무료 처리, 2026-07-06) — 청구 후보에서 되돌리기 가능하게 표시만, 예산·미청구 집계 제외
+  addColumn("sessions", "waived", "INTEGER NOT NULL DEFAULT 0"); // 청구 안 함(무료 처리, 2026-07-06) — 위와 동일
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_group ON parties(group_id);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_kind ON parties(kind, is_artist, name);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_user ON parties(user_id);");

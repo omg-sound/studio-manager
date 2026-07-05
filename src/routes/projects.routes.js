@@ -43,6 +43,7 @@ const {
   updateTask,
   setTaskAmount,
   setTaskStatus,
+  setTaskWaived,
   deleteTask,
   createInvoiceFromTasks,
   payerDocMeta,
@@ -680,6 +681,20 @@ router.post("/tasks/:taskId/status", requireEditor, (req, res) => {
   }
 });
 
+// ── 작업 '청구 안 함'(무료 처리) 토글(2026-07-06 사용자 요청 — 리허설 등 의도적 무료 작업) ──
+// 청구 생성 폼(청구 후보 목록)에서만 노출·되돌리기 가능. total_price는 안 건드려(되돌리면 원래 금액 보존).
+// 폼 필드 없는 순수 토글(같은 청구 생성 폼 안 여러 행이 formaction으로 이 라우트를 공유해도 이름 충돌 없음).
+router.post("/tasks/:taskId/waive", requireEditor, (req, res) => {
+  try {
+    const task = setTaskWaived(req.user, Number(req.params.taskId));
+    if (!task) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+    res.redirect(`/projects/${task.project_id}?tab=invoice`);
+  } catch (e) {
+    if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "처리 불가", message: "이미 청구된 작업은 청구 안 함으로 바꿀 수 없습니다.", user: req.user }));
+    throw e;
+  }
+});
+
 // 청구 폼에서 입력한 작업 금액을 즉시 작업에 저장(AJAX) — 초안이 아니라 바로 기록되어 목록·청구 폼 기본값에 반영.
 router.post("/tasks/:taskId/amount", requireEditor, (req, res) => {
   try {
@@ -1170,16 +1185,25 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   }
   // 세션 '완료 강제'와 규칙 통일: 완료 상태 작업만 기본 체크. 미완료(대기)는 체크 해제·흐리게(선택은 가능).
   const isDone = (t) => t.status === "Completed";
-  const hasPending = tasks.some((t) => !isDone(t)) || sessionRows.some((s) => s.status !== "완료"); // 미완료 작업(대기) 또는 예정 세션
+  // 무료 처리(waived)한 항목은 청구 후보 계산·체크에서 제외 — 이 폼에서만 되돌리기 위해 계속 노출(2026-07-06 사용자 요청).
+  const hasPending = tasks.some((t) => !t.waived && !isDone(t)) || sessionRows.some((s) => !s.waived && s.status !== "완료"); // 미완료 작업(대기) 또는 예정 세션
   // 작업 예상 금액 = 확정 total_price(>0) 우선, 없으면 종류 기본단가(taskTypeUnitPrice). 프로젝트 목록 합산과 동일 규칙.
   const taskAmt = (t) => (t.total_price > 0 ? t.total_price : taskTypeUnitPrice(t.task_type));
   const subtotal =
-    tasks.filter(isDone).reduce((sum, task) => sum + taskAmt(task), 0) +
-    sessionRows.filter((s) => s.status === "완료").reduce((sum, s) => sum + (s.billing ? s.billing.amount : 0), 0); // 완료 세션만 기본 집계(예정은 체크 시 합산)
+    tasks.filter((t) => !t.waived && isDone(t)).reduce((sum, task) => sum + taskAmt(task), 0) +
+    sessionRows.filter((s) => !s.waived && s.status === "완료").reduce((sum, s) => sum + (s.billing ? s.billing.amount : 0), 0); // 완료 세션만 기본 집계(예정은 체크 시 합산)
   const tax = Math.round(subtotal * 0.1);
+  // 무료 처리된 행 — 체크박스·금액칸 없이 배지 + 되돌리기 버튼만(2026-07-06). formaction으로 같은 폼에서 다른 라우트 제출(중첩 폼 회피).
+  const waivedRow = (label, waiveAction) => `
+    <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 opacity-60" data-line-row>
+      <span class="min-w-0 flex-1 text-sm">${label} <span class="badge bg-bg text-muted">무료 처리됨</span></span>
+      <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0">되돌리기</button>
+    </div>`;
   const taskList = tasks
     .map((task) => {
       const label = taskTypeLabel(task.task_type);
+      const waiveAction = `/projects/tasks/${task.id}/waive`;
+      if (task.waived) return waivedRow(`${esc(task.track_title)} · ${esc(label)}`, waiveAction);
       const done = isDone(task);
       const amt = taskAmt(task);
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(TASK_STATUS_LABELS[task.status] || task.status)}</span>`;
@@ -1191,17 +1215,20 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${amt || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
             <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
           </div>
+          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
         </div>`;
     })
     .join("");
   // 녹음 세션 직접 청구 후보(곡·콘텐츠/버튼 없이 자동 노출). 완료 세션은 기본 체크, 예정은 흐리게·체크 시 완료 확인(작업과 동일 규칙).
   const sessionList = sessionRows
     .map((s) => {
+      const label = `${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)} · ${s.billing.item.name}`; // 촬영 세션도 실제 종류로 표기
+      const waiveAction = `/sessions/${s.id}/waive`;
+      if (s.waived) return waivedRow(esc(label), waiveAction);
       const done = s.status === "완료";
       const mins = s.billing.minutes;
       const dur = `${Math.floor(mins / 60)}시간${mins % 60 ? " " + (mins % 60) + "분" : ""}`;
       const time = [s.start_time, s.end_time].filter(Boolean).join("–");
-      const label = `${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)} · ${s.billing.item.name}`; // 촬영 세션도 실제 종류로 표기
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(s.status)}</span>`;
       return `
         <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
@@ -1214,6 +1241,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="session_amount_${s.id}" value="${s.billing.amount || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
             <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
           </div>
+          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
         </div>`;
     })
     .join("");

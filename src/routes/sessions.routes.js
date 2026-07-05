@@ -15,6 +15,7 @@ const {
   createSession,
   updateSession,
   setSessionStatus,
+  setSessionWaived,
   setSessionEventId,
   deleteSession,
   busySessionSlots,
@@ -292,6 +293,23 @@ router.post("/sessions/:id/status", requireEditor, asyncHandler(async (req, res)
   await syncSessionEvent(req.user, r); // 상태변경(취소→일정 삭제) 캘린더 동기화
   res.redirect(`/projects/${r.project_id}?tab=sessions&flash=saved`);
 }));
+
+// ── 세션 '청구 안 함'(무료 처리) 토글(2026-07-06 사용자 요청 — 리허설 등 의도적 무료 세션) ──
+// 청구 생성 폼(청구 후보 목록)에서만 노출·되돌리기 가능.
+router.post("/sessions/:id/waive", requireEditor, (req, res) => {
+  let r;
+  try {
+    r = setSessionWaived(req.user, Number(req.params.id));
+  } catch (e) {
+    if (e.message === "SESSION_INVOICED") {
+      const ex = getSessionForUser(req.user, Number(req.params.id));
+      return res.redirect(`/projects/${ex ? ex.project_id : ""}?tab=invoice`);
+    }
+    throw e;
+  }
+  if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
+  res.redirect(`/projects/${r.project_id}?tab=invoice`);
+});
 
 // ── 세션 삭제 ──
 router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res) => {
