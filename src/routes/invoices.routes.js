@@ -80,13 +80,14 @@ router.get("/", requireBilling, (req, res) => {
   const admin = canBill(user);
   const invoicer = canInvoice(user); // 계산서·입금 처리(상태 토글) = 대표·치프만
   const q = (req.query.q || "").toString().trim();
-  // 계산서/현금영수증 '발행 필요'(미발행) / '발행 완료'(발행·입금완료) 탭 분리(사용자 요청).
-  const tab = req.query.tab === "done" ? "done" : "todo";
+  // 계산서/현금영수증 '발행 필요'(미발행) / '발행 완료'(계산서만 발행, 입금 전) / '입금완료' 3탭 분리
+  // (2026-07-06 사용자 요청 — 이전엔 발행완료 탭이 입금완료까지 함께 묶여 있어 입금만 따로 볼 수 없었음).
+  const tab = ["done", "paid"].includes(req.query.tab) ? req.query.tab : "todo";
   const allRows = listInvoices(user, {});
-  const issued = (i) => i.tax_status === "계산서 발행" || i.tax_status === "입금완료";
-  const todoRows = allRows.filter((i) => !issued(i));
-  const doneRows = allRows.filter(issued);
-  let rows = tab === "done" ? doneRows : todoRows;
+  const todoRows = allRows.filter((i) => i.tax_status !== "계산서 발행" && i.tax_status !== "입금완료");
+  const doneRows = allRows.filter((i) => i.tax_status === "계산서 발행");
+  const paidRows = allRows.filter((i) => i.tax_status === "입금완료");
+  let rows = tab === "done" ? doneRows : tab === "paid" ? paidRows : todoRows;
 
   // 라우트 레벨 q 필터(제목·채번·클라이언트명 부분일치, 소문자 비교). data.js 수정 없음.
   if (q) {
@@ -105,6 +106,7 @@ router.get("/", requireBilling, (req, res) => {
     tabs: [
       { key: "todo", label: `발행 필요 ${todoRows.length}` },
       { key: "done", label: `발행 완료 ${doneRows.length}` },
+      { key: "paid", label: `입금완료 ${paidRows.length}` },
     ],
     activeKey: tab,
     hrefFn: (k) => `/invoices?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
