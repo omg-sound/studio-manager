@@ -144,8 +144,8 @@ function contentTab() {
         </div>
         <form method="post" action="/settings/rate-items" class="space-y-2 rounded-lg border border-border bg-bg p-3">
           <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input py-1.5 text-sm" name="rate_name" placeholder="단가 항목명 (예: 보컬 녹음 · 뮤직비디오 촬영)" autocomplete="off" required />
-            <select class="input py-1.5 text-sm" name="category">${rateCategoryOptions()}</select>
+            <div><label class="label mb-0.5 text-xs">단가 항목명</label><input class="input py-1.5 text-sm" name="rate_name" placeholder="예: 보컬 녹음 · 뮤직비디오 촬영" autocomplete="off" required /></div>
+            <div><label class="label mb-0.5 text-xs">분류</label><select class="input py-1.5 text-sm" name="category">${rateCategoryOptions()}</select></div>
           </div>
           <div class="grid gap-2 sm:grid-cols-2">
             <div>
@@ -780,8 +780,8 @@ function rateItemRow(r) {
         <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>
         <form method="post" action="/settings/rate-items/${r.id}" class="mt-2 space-y-2" data-dirty-form>
           <div class="grid gap-2 sm:grid-cols-2">
-            <input class="input py-1.5 text-sm" name="rate_name" value="${esc(r.name)}" autocomplete="off" required />
-            <select class="input py-1.5 text-sm" name="category">${rateCategoryOptions(cat)}</select>
+            <div><label class="label mb-0.5 text-xs">단가 항목명</label><input class="input py-1.5 text-sm" name="rate_name" value="${esc(r.name)}" autocomplete="off" required /></div>
+            <div><label class="label mb-0.5 text-xs">분류</label><select class="input py-1.5 text-sm" name="category">${rateCategoryOptions(cat)}</select></div>
           </div>
           <div class="grid gap-2 sm:grid-cols-2">
             <div><label class="label mb-0.5 text-xs">기준 시간(시간)</label><input class="input py-1.5 text-sm" name="base_hours" inputmode="decimal" value="${esc(String(baseHours))}" /></div>
