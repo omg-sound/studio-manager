@@ -527,8 +527,11 @@ function projectMetaCard(p, err = "") {
 function projectAmount(project) {
   const task = Number(project.task_total || 0);
   const sess = Number(project.session_amount_total || 0);
+  // 청구서 단위 할인(from-tasks 청구서)은 라인 금액에 분배되지 않으므로 여기서 차감 — 할인 반영 실수령 기준(2026-07-05 사용자 리포트).
+  const disc = Number(project.invoice_discount_total || 0);
   const combined = task + sess;
-  return combined || Number(project.rate || 0) || 0;
+  if (combined) return Math.max(0, combined - disc);
+  return Number(project.rate || 0) || 0;
 }
 
 // ── 예전 수정 URL은 상세 편집 화면으로 정규화 ──
@@ -1201,6 +1204,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   const total = subtotal + tax;
   return `
     <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3" data-discount-form data-supply="${subtotal}">
+      <button type="submit" disabled hidden aria-hidden="true"></button><!-- 기본(첫) submit 버튼을 비활성 sentinel로: 필드에서 엔터=암묵 제출이 견적서 미리보기(첫 버튼)를 열던 것 차단 — 표준상 기본 버튼 disabled면 엔터 무동작 -->
       <div class="mb-2">
         <h3 class="text-sm font-semibold">청구 생성</h3>
       </div>

@@ -115,7 +115,13 @@ function listProjects(_user, { q } = {}) {
            WHERE s.project_id = p.id AND s.status <> '취소' AND s.session_type IN (${RENTAL_IN})
              AND s.rate_item_id IS NOT NULL AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
              AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
-             AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id))) AS unbilled_cnt
+             AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id))) AS unbilled_cnt,
+      -- 청구서 단위 할인 합계 — 작업·세션이 연결된(from-tasks) 청구서만. 수동 청구서 라인은 프로젝트 버짓에
+      -- 안 잡히므로 그 할인을 빼면 이중 차감이 된다. 목록·상세 금액 표시에서 확정 라인 합계에서 차감(2026-07-05).
+      (SELECT COALESCE(SUM(i.discount_amount), 0) FROM invoices i
+        WHERE i.project_id = p.id
+          AND EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.invoice_id = i.id
+                        AND (ii.task_id IS NOT NULL OR ii.session_id IS NOT NULL))) AS invoice_discount_total
     FROM projects p
     LEFT JOIN parties c ON c.id = COALESCE(p.production_id, p.agency_id, p.artist_id)
     LEFT JOIN project_managers m ON m.id = p.manager_id
@@ -138,7 +144,12 @@ function listProjects(_user, { q } = {}) {
 function getProjectForUser(user, id) {
   const row = db()
     .prepare(
-      `SELECT p.*, c.name AS client_name, m.name AS manager_name, ct.name AS contact_name, ct.phone AS contact_phone, tr_sum.track_titles, task_sum.task_total FROM projects p
+      `SELECT p.*, c.name AS client_name, m.name AS manager_name, ct.name AS contact_name, ct.phone AS contact_phone, tr_sum.track_titles, task_sum.task_total,
+         (SELECT COALESCE(SUM(i.discount_amount), 0) FROM invoices i
+           WHERE i.project_id = p.id
+             AND EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.invoice_id = i.id
+                           AND (ii.task_id IS NOT NULL OR ii.session_id IS NOT NULL))) AS invoice_discount_total
+       FROM projects p
        LEFT JOIN parties c ON c.id = COALESCE(p.production_id, p.agency_id, p.artist_id)
        LEFT JOIN project_managers m ON m.id = p.manager_id
        LEFT JOIN parties ct ON ct.id = p.contact_party_id
