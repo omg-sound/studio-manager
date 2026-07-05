@@ -19,6 +19,18 @@ const { canBill, canInvoice } = require("../auth");
 const { getProjectForUser } = require("./projects"); // 무순환
 const { getParty, listPersonsForOrg } = require("./parties"); // 무순환 — 청구처(payer)=parties.id
 
+// 청구처 화면 표시명 = **본명 (활동명)** — 아티스트(개인)가 현금영수증 명의(본명)와 직결돼 활동명만 보면 오해(2026-07-05 사용자 요청).
+// c = payer party alias. 회사·그룹은 활동명 없어 name 그대로. (거래명세서 PDF 상호는 별도로 본명(snapshot.name) 유지.)
+const PAYER_DISPLAY_SQL =
+  "CASE WHEN c.activity_name IS NOT NULL AND TRIM(c.activity_name) <> '' AND c.activity_name <> c.name THEN c.name || ' (' || c.activity_name || ')' ELSE c.name END";
+// JS 버전(party 객체용) — 위 SQL과 동일 규칙.
+function payerDisplayName(p) {
+  if (!p) return "";
+  const n = String(p.name || "");
+  const a = String(p.activity_name || "").trim();
+  return a && a !== n ? `${n} (${a})` : n;
+}
+
 /**
  * 발행 시점 청구처(payer) 정보 스냅샷(JSON 문자열). 이후 클라이언트 정보가 바뀌어도 과거 청구서 표시/PDF가
  * 발행 당시 정보로 고정된다(회계·법적 기록 정확성). 표시·PDF는 스냅샷 우선, 없으면(레거시) 실시간 폴백.
@@ -31,7 +43,8 @@ function snapshotPayer(payerId) {
   const c0 = contacts[0];
   return JSON.stringify({
     id: p.id,
-    name: p.name || "",
+    name: p.name || "", // 상호/공급받는자 = 본명(현금영수증 명의) — PDF는 이 값 그대로 사용
+    activity_name: p.activity_name || null, // 화면 표시 '본명 (활동명)' 병기용(PDF는 미사용)
     kind: p.kind || null,
     owner_name: p.owner_name || null,
     biz_no: p.biz_no || null,
@@ -380,7 +393,7 @@ function invoiceDraftForPdf(user, opts = {}) {
     issued_date: draft.issued,
     due_date: draft.dueDate,
     client_id: draft.resolvedPayerId,
-    client_name: client ? (client.activity_name || client.name) : "",
+    client_name: client ? payerDisplayName(client) : "", // 화면 표시 = 본명 (활동명)
   };
   return { project: draft.project, client: client || { name: "" }, invoice, items: draft.items };
 }
@@ -421,7 +434,7 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
     params.clientId = Number(clientId);
   }
   const sql = `
-    SELECT i.*, p.title AS project_title, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name, c.kind AS payer_kind, c.is_artist AS payer_is_artist
+    SELECT i.*, p.title AS project_title, ${PAYER_DISPLAY_SQL} AS client_name, c.kind AS payer_kind, c.is_artist AS payer_is_artist
     FROM invoices i
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN parties c ON c.id = i.payer_id
@@ -438,7 +451,7 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
 function getInvoiceForUser(_user, id) {
   const row = db()
     .prepare(
-      `SELECT i.*, p.title AS project_title, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name
+      `SELECT i.*, p.title AS project_title, ${PAYER_DISPLAY_SQL} AS client_name
        FROM invoices i
        LEFT JOIN projects p ON p.id = i.project_id
        LEFT JOIN parties c ON c.id = i.payer_id WHERE i.id = ?`
@@ -468,7 +481,7 @@ function listInvoicesForProject(user, projectId) {
   if (!project) return null;
   const rows = db()
     .prepare(
-      `SELECT i.*, COALESCE(NULLIF(c.activity_name, ''), c.name) AS client_name FROM invoices i
+      `SELECT i.*, ${PAYER_DISPLAY_SQL} AS client_name FROM invoices i
        LEFT JOIN parties c ON c.id = i.payer_id
        WHERE i.project_id = ? ORDER BY i.created_at DESC, i.id DESC`
     )

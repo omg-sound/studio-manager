@@ -276,3 +276,33 @@ test("personName: 레거시 name에 호칭 박혀 있어도 중복 안 붙임", 
   assert.equal(personName({ name: "이민우 대표님", honorific: "대표님" }), "이민우 대표님", "중복 방지");
   assert.equal(personName({ name: "이민우", honorific: "대표님" }), "이민우 대표님", "컬럼으로 붙임");
 });
+
+// ── 회귀(2026-07-05): 청구처가 아티스트면 표시 = 본명 (활동명) — 현금영수증 명의(본명) 오해 방지 ──
+test("청구처 표시: 아티스트는 본명 (활동명), 회사는 상호 그대로", () => {
+  const { payerName } = require("../src/views.invoices");
+  // 아티스트 청구처(현금영수증 정보 필요)
+  const artist = D.createPerson({ name: "조형우", nickname: "형우비트" });
+  db().prepare("UPDATE parties SET cash_receipt_no='010-9999-8888' WHERE id=?").run(artist);
+  const pid = Number(db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('청구처표기','task',0)").run().lastInsertRowid);
+  const tr = Number(db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(pid).lastInsertRowid);
+  const tk = Number(db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 100000, 100000, 'Completed', 0)").run(tr).lastInsertRowid);
+  const { id: invId } = D.createInvoiceFromTasks(CHIEF, { projectId: pid, taskIds: [tk], clientId: artist, issueDate: "2026-07-05" });
+  // 목록 client_name = 본명 (활동명)
+  const listed = D.listInvoices(CHIEF, {}).find((i) => i.id === invId);
+  assert.equal(listed.client_name, "조형우 (형우비트)", "목록 청구처명 = 본명 (활동명)");
+  // 스냅샷 = name(본명) + activity_name(활동명) → payerName 병기
+  const inv = db().prepare("SELECT * FROM invoices WHERE id=?").get(invId);
+  const snap = JSON.parse(inv.payer_snapshot);
+  assert.equal(snap.name, "조형우", "스냅샷 상호 = 본명(현금영수증 명의·PDF용)");
+  assert.equal(snap.activity_name, "형우비트", "스냅샷에 활동명도 보존(화면 병기용)");
+  assert.equal(payerName(inv), "조형우 (형우비트)", "payerName = 본명 (활동명)");
+
+  // 회사 청구처는 상호 그대로(병기 없음)
+  const co = D.createCompany({ name: "무지개레코드", roles: "제작사", biz_no: "123-45-67890" });
+  const pid2 = Number(db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('회사청구','task',0)").run().lastInsertRowid);
+  const tr2 = Number(db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(pid2).lastInsertRowid);
+  const tk2 = Number(db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 100000, 100000, 'Completed', 0)").run(tr2).lastInsertRowid);
+  const { id: invId2 } = D.createInvoiceFromTasks(CHIEF, { projectId: pid2, taskIds: [tk2], clientId: co, issueDate: "2026-07-05" });
+  const listed2 = D.listInvoices(CHIEF, {}).find((i) => i.id === invId2);
+  assert.equal(listed2.client_name, "무지개레코드", "회사는 상호 그대로");
+});

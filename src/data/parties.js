@@ -620,7 +620,7 @@ function contactOptions() {
 function clientOptions() {
   return db()
     .prepare(
-      `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name, p.kind,
+      `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name, p.name AS real_name, p.activity_name, p.kind,
               (SELECT g.name FROM parties g WHERE g.id = p.group_id AND g.kind = 'group') AS group_name,
               (SELECT o.name FROM affiliations a LEFT JOIN parties o ON o.id = a.org_id
                 WHERE a.person_id = p.id AND a.ended_on IS NULL ORDER BY a.started_on DESC, a.id DESC LIMIT 1) AS current_client

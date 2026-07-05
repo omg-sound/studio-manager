@@ -3,7 +3,7 @@
 /** 청구(인보이스) 렌더 — 목록 행/배지/프로젝트 상세 섹션. */
 
 const { INVOICE_STATUS_BADGE, DOC_TYPES, docNumberWithType } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, copyable } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, copyable, personLabel } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
 const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
 
@@ -34,7 +34,7 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
     rows.push(cell("담당자", parts.join(" · ")));
   }
   const head = `<div class="mb-1 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold">청구처 정보</h3><a href="/clients/${client.id}" class="text-xs text-muted hover:text-fg hover:underline">클라이언트 ↗</a></div>`;
-  const inner = `${head}<div class="font-semibold">${esc(client.name)}</div>${rows.join("")}`;
+  const inner = `${head}<div class="font-semibold">${esc(personLabel(client.name, client.activity_name))}</div>${rows.join("")}`; // 아티스트면 본명 (활동명) — 현금영수증 명의 오해 방지
   if (compact) return `<div class="rounded-lg border border-border bg-bg p-3 text-sm">${inner}</div>`;
   return `<div class="card mt-3"><div class="text-sm">${inner}</div></div>`;
 }
@@ -177,9 +177,9 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
   return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${amountGrid}${payer}${itemList}${pdfAndFull}${adminControls}</div>`;
 }
 
-/** 청구서 표시 청구처명: 발행 시점 스냅샷(payer_snapshot.name) 우선, 없으면(레거시) 실시간 client_name. */
+/** 청구서 표시 청구처명 = 본명 (활동명): 발행 시점 스냅샷(payer_snapshot) 우선, 없으면(레거시) 실시간 client_name(SQL이 이미 병기). 아티스트 현금영수증 명의(본명) 오해 방지(2026-07-05). */
 function payerName(inv) {
-  if (inv && inv.payer_snapshot) { try { const n = JSON.parse(inv.payer_snapshot).name; if (n) return n; } catch (_e) { /* 파싱 실패 폴백 */ } }
+  if (inv && inv.payer_snapshot) { try { const s = JSON.parse(inv.payer_snapshot); if (s.name) return personLabel(s.name, s.activity_name); } catch (_e) { /* 파싱 실패 폴백 */ } }
   return inv.client_name || "";
 }
 
@@ -331,4 +331,4 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </div>`;
 }
 
-module.exports = { invoiceBadge, invoiceRow, invoicesSection, payerInfoCard, paymentHistory }; // displayStatus는 내부 전용(외부 소비자 없음, 2026-07-04 표면 축소)
+module.exports = { invoiceBadge, invoiceRow, invoicesSection, payerInfoCard, paymentHistory, payerName }; // displayStatus는 내부 전용; payerName=청구처 표시명(본명 (활동명)) 헬퍼

@@ -25,7 +25,7 @@ const {
   addPayment,
   deletePayment,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo, tabBar } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo, tabBar, personLabel } = require("../views");
 const { invoiceRow, invoiceBadge, payerInfoCard, paymentHistory } = require("../views.invoices");
 const { formatYmdShort, ddayLabel } = require("../lib/date");
 const { parseMoney, cleanYmd } = require("../lib/forms");
@@ -259,7 +259,7 @@ router.get("/:id", requireBilling, (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: inv.title, desc: (payerClient && payerClient.name) || inv.client_name || "청구처 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
+    ${pageHeader({ title: inv.title, desc: (payerClient ? personLabel(payerClient.name, payerClient.activity_name) : "") || inv.client_name || "청구처 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
     <div class="card">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
       ${row("총액", formatKRW(inv.amount))}
