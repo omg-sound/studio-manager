@@ -49,16 +49,22 @@ function managerOptionsById(managers, selectedId) {
   return out.join("");
 }
 
-/** 담당 엔지니어 한 행(select + 외주 지급단가 칸[외주일 때만] + 제거 버튼). selectedId 없으면 빈 선택(추가 행). */
+/**
+ * 담당 엔지니어 한 행 — select+제거 버튼은 한 줄, 외주 지급단가는 **그 아래 줄에 전체 폭으로**(2026-07-06 사용자
+ * 리포트 '레이아웃이 찌그러진다' — 좁은 우측 사이드 칼럼[~220px]에 select+금액칸+X버튼 셋을 한 줄에 넣으니
+ * 이름이 "김오…"로 잘리고 금액칸도 비좁았음). selectedId 없으면 빈 선택(추가 행).
+ */
 function engineerRow(managers, selectedId, rate) {
   const external = selectedId != null && managers.some((m) => Number(m.id) === Number(selectedId) && !m.user_id);
-  return `<div class="mt-1.5 flex items-center gap-1.5" data-engineer-row>
-      <select class="input py-1.5 text-sm" name="engineer_ids">${managerOptionsById(managers, selectedId)}</select>
-      <div class="relative w-24 shrink-0 ${external ? "" : "hidden"}" data-engineer-rate>
-        <input class="input py-1.5 pr-6 text-right text-sm tabular" name="engineer_rates" inputmode="numeric" placeholder="0" value="${rate ? esc(String(rate)) : ""}" aria-label="외주 지급단가" />
-        <span class="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-xs text-muted">원</span>
+  return `<div class="mt-1.5" data-engineer-row>
+      <div class="flex items-center gap-1.5">
+        <select class="input min-w-0 flex-1 py-1.5 text-sm" name="engineer_ids">${managerOptionsById(managers, selectedId)}</select>
+        <button type="button" class="btn-ghost btn-xs shrink-0" data-engineer-remove aria-label="담당 엔지니어 제거">✕</button>
       </div>
-      <button type="button" class="btn-ghost btn-xs shrink-0" data-engineer-remove aria-label="담당 엔지니어 제거">✕</button>
+      <div class="relative mt-1 ${external ? "" : "hidden"}" data-engineer-rate>
+        <input class="input w-full py-1.5 pr-7 text-sm tabular" name="engineer_rates" inputmode="numeric" placeholder="외주 지급단가" value="${rate ? esc(String(rate)) : ""}" aria-label="외주 지급단가" />
+        <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+      </div>
     </div>`;
 }
 
