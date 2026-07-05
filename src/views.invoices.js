@@ -80,7 +80,7 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
   const cell = (label, value) =>
     `<div class="flex items-center justify-between gap-2"><dt class="text-muted">${esc(label)}</dt><dd class="tabular font-medium">${value}</dd></div>`;
 
-  // 재배치(2026-07-05 사용자 요청): 발행일 → 청구 항목 → 총액·VAT·입금액·미수금·납입상태 순. 마감일 개념 삭제(연체 파생 자연 소멸).
+  // 재배치(2026-07-05 사용자 요청): 발행일 → 청구 항목 → 총액·(할인)·VAT 순. 마감일·입금액·미수금·납입상태 개념 삭제.
   const issuedLine = `
     <dl class="grid grid-cols-1 gap-y-1.5">
       ${cell("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : '<span class="text-muted">미정</span>')}
@@ -133,7 +133,7 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
     </div>`;
 
   const payer = inv.payerCard || ""; // 라우트가 첨부한 청구처 정보 카드(compact)
-  // 순서(2026-07-05 사용자 요청): 청구처 → 발행일 → 청구 항목 → 총액·VAT·입금액·미수금·납입상태 → PDF → 삭제.
+  // 순서(2026-07-05 사용자 요청): 청구처 → 발행일 → 청구 항목 → 총액·(할인)·VAT → PDF → 삭제.
   return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${payer}${issuedLine}${itemList}${amountGrid}${pdfAndFull}${adminControls}</div>`;
 }
 
