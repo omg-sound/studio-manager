@@ -99,6 +99,17 @@ test("guardrail: app.js fetch body에 FormData 금지(urlencoded만)", () => {
   assert.ok(!/body:\s*new FormData/.test(s), "fetch body는 URLSearchParams로 변환할 것(함정 #14)");
 });
 
+// ── ⑤-b 간이 등록 모달 배경 클릭 닫기는 mousedown도 배경에서 시작했는지 확인해야(함정 #25) ──
+// 사고 이력(2026-07-06): 이름 입력칸에서 텍스트 드래그 선택 중 마우스를 모달 배경 위에서 떼면 click 이벤트의
+// target이 배경(mousedown·mouseup의 공통 조상)이 되어 '배경 클릭 닫기'가 오작동 — 그룹·아티스트·업체·담당자
+// 4개 간이 등록 모달에서 동시 재발. mousedown도 배경에서 시작했을 때만 진짜 배경 클릭으로 봐야 한다.
+test("guardrail: 모달 배경 클릭 닫기는 mousedown 배경 여부도 확인해야 한다(함정 #25)", () => {
+  const s = read(path.join("public", "js", "app.js"));
+  // 옛 불안전 패턴(mousedown 확인 없이 click만으로 target===modal 판정)이 다시 나타나면 실패.
+  const unsafe = /modal\.addEventListener\("click", function \(e\) \{ if \(e\.target === modal\) closeModal\(\); \}\);/;
+  assert.ok(!unsafe.test(s), "배경 클릭 닫기는 mdOnBackdrop(또는 동등한 mousedown 추적) 없이 click.target만 보면 안 됨(함정 #25)");
+});
+
 // ── ⑥ 행동: personCombo는 companyOptions 미전달이어도 모달 회사 검색이 산다 ──
 // 사고 이력: 세션 디렉터·업체 대표자 콤보가 companyOptions 미전달로 모달 회사칸이 평문(×2 재발) → 기본값화(2026-07-04).
 const { init, db } = require("../src/db");

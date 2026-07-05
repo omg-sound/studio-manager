@@ -150,7 +150,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 (`npm test`, 132개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 (`npm test`, 134개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -159,12 +159,12 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 | 층 | 파일 | 개수 | 검증 대상 |
 |---|---|---|---|
 | **① 단위** | `invoice-number`·`vat`·`rate-price`·`session-conflict`·`auth`·`party`·`payments`·`rental-session`·`task-status`·`rate-categories` | 90 | 금전 로직(채번·VAT·Pro블록 단가·할인·**프로젝트 금액 할인 차감**[invoice_discount_total — from-tasks만, 수동 제외]·**0원 항목 confirmZero 청구**·**청구 항목 날짜순**[item_date])·세션 겹침(야간교차·취소예외)·권한·당사자 모델·입금 이력·대관 세션(녹음/촬영/공연 kind 매핑·금액 미정 정액)·**세션 담당 엔지니어 다대다**(session_engineers 저장·교체·유효id 필터·dedup)·**작업 완료 토글**(setTaskStatus·updateTask 상태보존 회귀)·**단가표 분류**(locked 가드·이름변경 cascade·사용중 삭제거부) |
-| **② 정적 계약 가드** | `guardrails.test.js`(백엔드) + `guardrails-ui.test.js`(UI — companyCombo 옵션 키 ⑭ 포함) | 15 | 소스 양쪽을 스캔해 **반복 실수 클래스가 코드에 존재할 수 없게** — 아래 목록 |
-| **③ 상호작용(jsdom)** | `ui-interactions.test.js` + `helpers-dom.js` | 27 | 실제 views 렌더 위에서 **실제 app.js를 실행**해 동작 검증 — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)·선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·종일 토글·구글식 시간 콤보·디렉터 프리필·simpleModal·외부 장소 토글·**이름 병기**(라벨 pick·라벨 재열람 유지·서버 렌더 주석)·dirty 폼·**네비게이션 가드**(일반 링크 가로채기·`data-no-guard` 통과) |
+| **② 정적 계약 가드** | `guardrails.test.js`(백엔드) + `guardrails-ui.test.js`(UI — companyCombo 옵션 키 ⑭ 포함) | 16 | 소스 양쪽을 스캔해 **반복 실수 클래스가 코드에 존재할 수 없게** — 아래 목록 |
+| **③ 상호작용(jsdom)** | `ui-interactions.test.js` + `helpers-dom.js` | 28 | 실제 views 렌더 위에서 **실제 app.js를 실행**해 동작 검증 — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)·선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·종일 토글·구글식 시간 콤보·디렉터 프리필·simpleModal·외부 장소 토글·**이름 병기**(라벨 pick·라벨 재열람 유지·서버 렌더 주석)·dirty 폼·**네비게이션 가드**(일반 링크 가로채기·`data-no-guard` 통과)·**모달 배경클릭 드래그 구분**(mousedown 안쪽+click 배경=안 닫힘, 둘 다 배경=닫힘) |
 
 **② 가드 목록** (각 가드에 사고 이력 주석 있음 — 왜 존재하는지 파일에서 확인):
 
-- 백엔드(`guardrails.test.js`): ①보이는 input에 자동완성 카테고리 필드명(`name|company|address`) 금지(개명 완료: `party_name`/`worker_name`/`user_name`/`room_name`/`rate_name`/`biz_address`, 핸들러 구명 폴백) ②datalist 허용목록(`contact-artist-clients`만) ③'녹음' 하드코딩 비교/IN 금지(config `RENTAL_SESSION_TYPES`/`RENTAL_IN`만) ④에러코드 메시지 맵↔실제 구현 교차검증 ⑤app.js fetch body FormData 금지(함정 #14) ⑥personCombo 기본 companyOptions 임베드 ⑦`updateParty` 부분 갱신 계약(미전송=보존·빈 문자열=비움)
+- 백엔드(`guardrails.test.js`): ①보이는 input에 자동완성 카테고리 필드명(`name|company|address`) 금지(개명 완료: `party_name`/`worker_name`/`user_name`/`room_name`/`rate_name`/`biz_address`, 핸들러 구명 폴백) ②datalist 허용목록(`contact-artist-clients`만) ③'녹음' 하드코딩 비교/IN 금지(config `RENTAL_SESSION_TYPES`/`RENTAL_IN`만) ④에러코드 메시지 맵↔실제 구현 교차검증 ⑤app.js fetch body FormData 금지(함정 #14) ⑥personCombo 기본 companyOptions 임베드 ⑦`updateParty` 부분 갱신 계약(미전송=보존·빈 문자열=비움) ⑧모달 배경클릭 닫기의 mousedown 확인(함정 #25 — 드래그로 텍스트 선택 후 배경에서 마우스를 떼도 안 닫히게)
 - UI(`guardrails-ui.test.js`): ⑧**data-\* 마커 계약**(app.js가 찾는 모든 마커는 어딘가에서 렌더돼야 — 서버/JS 어느 쪽 리네임 드리프트든 실패. 도입 첫 실행에서 죽은 참조 5건 검출·제거) ⑨콤보 보이는 입력(data-pc/cc/pk-input) name 금지 ⑩CSP 계약(인라인 핸들러·`<script>` 금지 — 배포에서만 조용히 죽는 드리프트) ⑪IME 가드 강제(Enter/방향키 keydown엔 isComposing 필수) ⑫금액칸↔MONEY 정규식 계약 ⑬personCombo 옵션 JSON 키↔app.js 소비 정합
 
 **새 코드 쓸 때 가드에 걸리지 않는 법(=관례)**:
@@ -180,7 +180,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 132개(단위+가드+상호작용)
+npm test                                   # 전체 134개(단위+가드+상호작용)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 ```

@@ -863,7 +863,13 @@
       var gSave = modal.querySelector("[data-gc-save]"), gCancel = modal.querySelector("[data-gc-cancel]");
       var closeModal = function () { modal.classList.add("hidden"); modal.classList.remove("flex"); };
       gCancel.addEventListener("click", closeModal);
-      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+      // 배경 클릭 닫기 — 단, 텍스트 드래그 선택이 모달 배경에서 끝난 경우(mousedown은 안쪽, mouseup=click은 배경)는
+      // 닫지 않는다(2026-07-06 사용자 리포트: 이름 전체 선택하려 드래그했는데 마우스를 뗀 지점이 모달 밖이라 닫히던 버그).
+      // click 이벤트의 target은 mousedown·mouseup의 공통 조상이라, 드래그가 배경까지 번지면 안쪽에서 시작했어도
+      // target===modal이 될 수 있음 — mousedown도 배경에서 시작했을 때만 진짜 배경 클릭으로 간주.
+      var mdOnBackdrop = false;
+      modal.addEventListener("mousedown", function (e) { mdOnBackdrop = e.target === modal; });
+      modal.addEventListener("click", function (e) { if (e.target === modal && mdOnBackdrop) closeModal(); });
       modal.addEventListener("keydown", function (e) {
         if (e.isComposing || e.keyCode === 229) return;
         if (e.key === "Enter") { e.preventDefault(); gSave.click(); }
@@ -1254,7 +1260,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       function closeModal() { modal.classList.add("hidden"); modal.classList.remove("flex"); }
       mGroup.addEventListener("change", function () { mRealWrap.classList.toggle("hidden", mGroup.checked); });
       mCancel.addEventListener("click", closeModal);
-      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); }); // 배경 클릭 닫기
+      // 배경 클릭 닫기 — 단, 텍스트 드래그 선택이 모달 배경에서 끝난 경우(mousedown은 안쪽, mouseup=click은 배경)는
+      // 닫지 않는다(2026-07-06 사용자 리포트: 이름 전체 선택하려 드래그했는데 마우스를 뗀 지점이 모달 밖이라 닫히던 버그).
+      // click 이벤트의 target은 mousedown·mouseup의 공통 조상이라, 드래그가 배경까지 번지면 안쪽에서 시작했어도
+      // target===modal이 될 수 있음 — mousedown도 배경에서 시작했을 때만 진짜 배경 클릭으로 간주.
+      var mdOnBackdrop = false;
+      modal.addEventListener("mousedown", function (e) { mdOnBackdrop = e.target === modal; });
+      modal.addEventListener("click", function (e) { if (e.target === modal && mdOnBackdrop) closeModal(); }); // 배경 클릭 닫기
       mSave.addEventListener("click", function () {
         var mName = modal.querySelector("[data-am-name]"), mReal = modal.querySelector("[data-am-real]"),
             mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
@@ -1441,7 +1453,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var cSave = modal.querySelector("[data-cc-save]"), cCancel = modal.querySelector("[data-cc-cancel]");
       var closeModal = function () { modal.classList.add("hidden"); modal.classList.remove("flex"); };
       cCancel.addEventListener("click", closeModal);
-      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+      // 배경 클릭 닫기 — 단, 텍스트 드래그 선택이 모달 배경에서 끝난 경우(mousedown은 안쪽, mouseup=click은 배경)는
+      // 닫지 않는다(2026-07-06 사용자 리포트: 이름 전체 선택하려 드래그했는데 마우스를 뗀 지점이 모달 밖이라 닫히던 버그).
+      // click 이벤트의 target은 mousedown·mouseup의 공통 조상이라, 드래그가 배경까지 번지면 안쪽에서 시작했어도
+      // target===modal이 될 수 있음 — mousedown도 배경에서 시작했을 때만 진짜 배경 클릭으로 간주.
+      var mdOnBackdrop = false;
+      modal.addEventListener("mousedown", function (e) { mdOnBackdrop = e.target === modal; });
+      modal.addEventListener("click", function (e) { if (e.target === modal && mdOnBackdrop) closeModal(); });
       cSave.addEventListener("click", function () {
         var nm = modal.querySelector("[data-cc-name]").value.trim();
         var err = modal.querySelector("[data-cc-err]");
@@ -1624,7 +1642,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var pSave = modal.querySelector("[data-pc-save]"), pCancel = modal.querySelector("[data-pc-cancel]");
       var closeModal = function () { modal.classList.add("hidden"); modal.classList.remove("flex"); };
       pCancel.addEventListener("click", closeModal);
-      modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+      // 배경 클릭 닫기 — 단, 텍스트 드래그 선택이 모달 배경에서 끝난 경우(mousedown은 안쪽, mouseup=click은 배경)는
+      // 닫지 않는다(2026-07-06 사용자 리포트: 이름 전체 선택하려 드래그했는데 마우스를 뗀 지점이 모달 밖이라 닫히던 버그).
+      // click 이벤트의 target은 mousedown·mouseup의 공통 조상이라, 드래그가 배경까지 번지면 안쪽에서 시작했어도
+      // target===modal이 될 수 있음 — mousedown도 배경에서 시작했을 때만 진짜 배경 클릭으로 간주.
+      var mdOnBackdrop = false;
+      modal.addEventListener("mousedown", function (e) { mdOnBackdrop = e.target === modal; });
+      modal.addEventListener("click", function (e) { if (e.target === modal && mdOnBackdrop) closeModal(); });
       pSave.addEventListener("click", function () {
         var nm = modal.querySelector("[data-pc-name]").value.trim();
         var err = modal.querySelector("[data-pc-err]");

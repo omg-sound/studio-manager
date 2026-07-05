@@ -402,6 +402,29 @@ test("personCombo 새 등록 모달: 열림·IME 가드·바깥 폼과 분리", 
   assert.ok(!modal.querySelector("input[name]"), "모달 입력은 name 없음(바깥 폼 제출과 분리)");
 });
 
+// ── ⑤-b 새 등록 모달: 텍스트 드래그 선택이 배경에서 끝나도 닫히지 않아야 한다(2026-07-06 사용자 리포트) ──
+// 실제 버그: 이름 칸에서 드래그로 전체 선택 중 마우스를 모달 배경 위에서 떼면, click 이벤트의 target이
+// (mousedown=안쪽, mouseup=배경의 공통 조상인) 배경 자신이 되어 '배경 클릭 닫기'가 오작동해 모달이 닫혔다.
+// mousedown도 배경에서 시작했을 때만 진짜 배경 클릭으로 보는 수정 검증.
+test("personCombo 새 등록 모달: 안쪽에서 시작한 드래그가 배경에서 끝나도(mousedown≠배경) 안 닫힘, 진짜 배경 클릭은 닫힘", () => {
+  const { win, doc, pop, input } = mountPersonCombo();
+  input.value = "신규인물"; fire(win, input, "input");
+  fire(win, pop.querySelector("button[data-new]"), "click");
+  const modal = doc.querySelector("[data-pc-modal]");
+  const nameEl = modal.querySelector("[data-pc-new-name]") || modal.querySelector("input");
+  assert.ok(!modal.classList.contains("hidden"), "모달 열림(사전조건)");
+
+  // 드래그 시뮬레이션: mousedown은 이름 입력칸(안쪽), click은 배경(모달 자신)에서 발생.
+  fire(win, nameEl, "mousedown");
+  fire(win, modal, "click");
+  assert.ok(!modal.classList.contains("hidden"), "안쪽에서 시작한 드래그면 배경 클릭으로 안 쳐서 안 닫힘");
+
+  // 진짜 배경 클릭: mousedown·click 둘 다 배경(모달 자신)에서 발생 → 정상적으로 닫힘.
+  fire(win, modal, "mousedown");
+  fire(win, modal, "click");
+  assert.ok(modal.classList.contains("hidden"), "mousedown·click 둘 다 배경이면 닫힘(정상 동작 보존)");
+});
+
 test.after(() => cleanupDb(process.env.DB_PATH, db()));
 
 // ── ④ 제작/운영 companyCombo: 사람(관계자·개인) 선택 → hidden party-id 세팅(2026-07-05) ──
