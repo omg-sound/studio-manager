@@ -483,6 +483,12 @@ function init() {
     d.exec("INSERT OR IGNORE INTO project_artists (project_id, party_id) SELECT id, artist_id FROM projects WHERE artist_id IS NOT NULL");
     setState("project_artists_backfill_v1", "done");
   }
+  // 청구 마감일 개념 삭제(2026-07-05 사용자 결정): 기존 due_date 값을 비워 연체 파생(isOverdue)·D-day 표시를 자연 소멸.
+  // 컬럼은 레거시 잔존(입력·표시 UI 전부 제거 — 신규 청구는 항상 NULL). 연체 인프라(배지·대시보드 배너·cron)는 무발동 잔존.
+  if (!getState("invoice_due_date_drop_v1")) {
+    d.exec("UPDATE invoices SET due_date = NULL WHERE due_date IS NOT NULL");
+    setState("invoice_due_date_drop_v1", "done");
+  }
   seedDefaultCatalogs();
   // 기본 룸 1개 1회 시드(이후 치프가 /settings에서 CRUD). 멱등 게이트 + 기존 룸 있으면 건너뜀.
   if (!getState("rooms_seed_v1")) {

@@ -12,7 +12,6 @@ const {
   listInvoiceItemsForInvoice,
   balanceOf,
   payStatusOf,
-  isOverdue,
   deleteInvoice,
   getStudioInfo,
   getStudioLogo,
@@ -27,7 +26,7 @@ const {
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo, tabBar, personLabel } = require("../views");
 const { invoiceRow, invoiceBadge, payerInfoCard, paymentHistory } = require("../views.invoices");
-const { formatYmdShort, ddayLabel } = require("../lib/date");
+const { formatYmdShort } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { parseMoney, cleanYmd } = require("../lib/forms");
 const { asyncHandler } = require("../lib/async");
 const { renderInvoicePdf } = require("../invoice-pdf");
@@ -274,9 +273,8 @@ router.get("/:id", requireBilling, (req, res) => {
       ${inv.tax_amount ? row("VAT", formatKRW(inv.tax_amount)) : ""}
       ${row("입금액", formatKRW(inv.paid_amount))}
       ${row("미수금", `<span class="${bal > 0 ? "text-danger font-semibold" : ""}">${formatKRW(bal)}</span>`)}
-      ${row("납입 상태", esc(payStatusOf(inv)) + (isOverdue(inv) ? ' <span class="text-danger">(연체)</span>' : ""))}
+      ${row("납입 상태", esc(payStatusOf(inv)))}
       ${row("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "<span class='text-muted'>미정</span>")}
-      ${row("마감일", inv.due_date ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}` : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
       ${invoiceItemsSection(items)}
       ${processSection}
@@ -436,7 +434,6 @@ function invoiceForm(inv = {}, err = "", returnPath = "") {
       ${payField}
       <div class="grid gap-3 sm:grid-cols-2">
         <div><label class="label">발행일</label><input class="input" type="date" name="issued_date" value="${esc(inv.issued_date || "")}" /></div>
-        <div><label class="label">마감일</label><input class="input" type="date" name="due_date" value="${esc(inv.due_date || "")}" /></div>
       </div>
       ${statusField}
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(inv.memo || "")}</textarea></div>`;

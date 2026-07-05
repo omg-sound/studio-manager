@@ -5,7 +5,7 @@
 const { INVOICE_STATUS_BADGE, DOC_TYPES, docNumberWithType } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, copyable, personLabel } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
-const { formatYmdShort, ddayLabel } = require("./lib/date"); // todayYmd 미사용(입금일 입력 제거 — 서버가 기본 오늘)
+const { formatYmdShort } = require("./lib/date"); // todayYmd·ddayLabel 미사용(입금일·마감일 개념 제거, 2026-07-05)
 
 /**
  * 청구처(클라이언트) 정보 카드 — 대표자·사업자등록번호(첨부 사업자등록증 링크)·주소·담당자 연락처.
@@ -123,16 +123,20 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
   const cell = (label, value) =>
     `<div class="flex items-center justify-between gap-2"><dt class="text-muted">${esc(label)}</dt><dd class="tabular font-medium">${value}</dd></div>`;
 
+  // 재배치(2026-07-05 사용자 요청): 발행일 → 청구 항목 → 총액·VAT·입금액·미수금·납입상태 순. 마감일 개념 삭제(연체 파생 자연 소멸).
+  const issuedLine = `
+    <dl class="grid grid-cols-1 gap-y-1.5">
+      ${cell("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : '<span class="text-muted">미정</span>')}
+    </dl>`;
+
   const amountGrid = `
-    <dl class="grid grid-cols-1 gap-y-1.5 sm:grid-cols-2 sm:gap-x-8">
+    <dl class="grid grid-cols-1 gap-y-1.5 border-t border-border pt-2 sm:grid-cols-2 sm:gap-x-8">
       ${cell("총액", formatKRW(inv.amount))}
       ${inv.discount_amount ? cell("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
       ${inv.tax_amount ? cell("VAT", formatKRW(inv.tax_amount)) : ""}
       ${cell("입금액", formatKRW(inv.paid_amount))}
       ${cell("미수금", `<span class="${bal > 0 ? "font-semibold text-danger" : ""}">${formatKRW(bal)}</span>`)}
-      ${cell("납입 상태", esc(payStatusOf(inv)) + (isOverdue(inv) ? ' <span class="text-danger">(연체)</span>' : ""))}
-      ${cell("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : '<span class="text-muted">미정</span>')}
-      ${cell("마감일", inv.due_date ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}` : '<span class="text-muted">미정</span>')}
+      ${cell("납입 상태", esc(payStatusOf(inv)))}
     </dl>`;
 
   const itemList = items.length
@@ -174,7 +178,8 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
     </div>`;
 
   const payer = inv.payerCard || ""; // 라우트가 첨부한 청구처 정보 카드(compact)
-  return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${amountGrid}${payer}${itemList}${pdfAndFull}${adminControls}</div>`;
+  // 순서(2026-07-05 사용자 요청): 청구처 → 발행일 → 청구 항목 → 총액·VAT·입금액·미수금·납입상태 → PDF → 삭제.
+  return `<div class="mt-1 space-y-3 rounded-lg bg-elevated p-3 text-sm">${payer}${issuedLine}${itemList}${amountGrid}${pdfAndFull}${adminControls}</div>`;
 }
 
 /** 청구서 표시 청구처명 = 본명 (활동명): 발행 시점 스냅샷(payer_snapshot) 우선, 없으면(레거시) 실시간 client_name(SQL이 이미 병기). 아티스트 현금영수증 명의(본명) 오해 방지(2026-07-05). */
@@ -190,9 +195,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
   const sub = compact
     ? esc(pname || "청구처 미지정")
     : `${esc(inv.project_title || "프로젝트 없음")}${pname ? " · " + esc(pname) : ""}`;
-  const dueLine = inv.due_date
-    ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}`
-    : "마감 미정";
+  // 마감일 개념 삭제(2026-07-05 사용자 결정) — 목록 카드에서 마감/D-day 줄 제거.
   // 완납(입금완료 또는 잔금 0+입금 있음)이면 '완납', 청구서 발행+잔금이면 '미수'. 배지가 상태를 이미 보여줘 미발행 텍스트는 생략.
   let balLine = "";
   if (inv.tax_status === "입금완료" || (bal <= 0 && (inv.paid_amount || 0) > 0)) {
@@ -231,8 +234,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
     <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
   const right = `
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
-    ${balLine}
-    <div class="text-[11px] text-muted">${dueLine}</div>`;
+    ${balLine}`;
   // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(계산서·입금 처리 권한자=대표·치프만).
   // 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다(사용자 요청).
   // 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.

@@ -1248,10 +1248,6 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <label class="label mb-1 text-xs">발행일</label>
             <input class="input py-1.5 text-sm" type="date" name="issued_date" value="${esc(todayYmd())}" />
           </div>
-          <div>
-            <label class="label mb-1 text-xs">입금 마감일<span class="font-normal text-muted"> (선택)</span></label>
-            <input class="input py-1.5 text-sm" type="date" name="due_date" />
-          </div>
         </div>
         <div class="mb-2">
           <div class="mb-1 text-xs text-muted">문서 발행 <span class="font-normal">— 청구서를 만들지 않고 선택 항목으로 PDF만</span></div>
