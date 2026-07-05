@@ -1211,11 +1211,11 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
           <input class="shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${amt}" ${done ? "checked" : "data-confirm-pending"} id="task-cb-${task.id}" />
           <label for="task-cb-${task.id}" class="min-w-0 flex-1 cursor-pointer text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</label>
+          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
           <div class="relative w-28 shrink-0">
             <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${amt || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
             <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
           </div>
-          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
         </div>`;
     })
     .join("");
@@ -1237,11 +1237,11 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             <span class="block text-sm font-medium">${esc(label)}${statusTag}</span>
             <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}</span>
           </label>
+          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
           <div class="relative w-28 shrink-0">
             <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="session_amount_${s.id}" value="${s.billing.amount || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
             <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
           </div>
-          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
         </div>`;
     })
     .join("");
