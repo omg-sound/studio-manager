@@ -5,7 +5,7 @@
 const { INVOICE_STATUS_BADGE, DOC_TYPES, docNumberWithType } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, copyable, personLabel } = require("./views");
 const { balanceOf, payStatusOf, isOverdue } = require("./data");
-const { formatYmdShort, ddayLabel, todayYmd } = require("./lib/date");
+const { formatYmdShort, ddayLabel } = require("./lib/date"); // todayYmd 미사용(입금일 입력 제거 — 서버가 기본 오늘)
 
 /**
  * 청구처(클라이언트) 정보 카드 — 대표자·사업자등록번호(첨부 사업자등록증 링크)·주소·담당자 연락처.
@@ -78,12 +78,13 @@ function paymentHistory(inv, payments = [], { ret = "", compact = false } = {}) 
   const sz = compact ? "py-1.5 text-sm" : "";
   const btn = compact ? "btn-sm" : "";
   const retHidden = ret ? `<input type="hidden" name="return" value="${esc(ret)}" />` : "";
+  // 입금 이력에 날짜 개념 없음(2026-07-05 사용자 결정 — 입금일 입력·표시 제거, DB paid_on은 레거시 잔존): 메모만(없으면 '입금').
   const rows = payments.length
     ? payments
         .map(
           (p) => `
         <div class="flex items-center justify-between gap-2 py-0.5">
-          <div class="min-w-0 text-xs text-muted">${p.paid_on ? esc(formatYmdShort(p.paid_on)) : "날짜 미상"}${p.memo ? " · " + esc(p.memo) : ""}</div>
+          <div class="min-w-0 text-xs text-muted">${p.memo ? esc(p.memo) : "입금"}</div>
           <div class="flex shrink-0 items-center gap-2">
             <span class="tabular text-sm font-medium">${formatKRW(p.amount)}</span>
             <form method="post" action="/invoices/${inv.id}/payments/${p.id}/delete" data-confirm="이 입금 기록을 삭제할까요?">${retHidden}<button class="text-xs text-danger hover:underline" type="submit">삭제</button></form>
@@ -100,7 +101,6 @@ function paymentHistory(inv, payments = [], { ret = "", compact = false } = {}) 
     : `<form method="post" action="/invoices/${inv.id}/pay" class="flex flex-wrap items-stretch gap-2 pt-1">
         ${retHidden}
         <input class="input ${sz} min-w-0 flex-1 text-right tabular" name="amount" inputmode="numeric" placeholder="입금액(원)" />
-        <input class="input ${sz} w-36" type="date" name="paid_on" value="${todayYmd()}" aria-label="입금일" />
         <button class="btn-ghost ${btn} shrink-0" type="submit">입금 추가</button>
         <button class="btn-ghost ${btn} shrink-0 border-success/40 bg-success/10 text-success" name="full" value="1" title="남은 잔금 ${formatKRW(bal)}을 전액 입금 처리">완납</button>
       </form>`;

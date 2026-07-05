@@ -230,23 +230,29 @@ router.get("/:id", requireBilling, (req, res) => {
   const row = (label, value) =>
     `<div class="flex justify-between border-b border-border py-2 last:border-0"><span class="text-sm text-muted">${esc(label)}</span><span class="text-sm font-medium">${value}</span></div>`;
 
-  // 계산서·입금 처리(대표·치프만). 청구서 발행 상태 컨트롤은 제거(청구 생성=발행).
-  const processBlock = canProcess
+  // 계산서·입금 처리(대표·치프만) — 통합 카드 내부 섹션(2026-07-05 재배치: 금액·항목과 한 카드). 청구서 발행 상태 컨트롤은 제거(청구 생성=발행).
+  const processSection = canProcess
     ? `
-    <div class="card mt-3 space-y-3">
-      <h2 class="text-sm font-semibold">계산서 · 입금 처리</h2>
-      <div class="flex flex-wrap items-end gap-3">
-        <form method="post" action="/invoices/${inv.id}/tax-status">
-          <label class="label mb-0.5 text-xs">계산서 · 입금</label>
-          <select name="tax_status" class="input max-w-[10rem]" data-autosubmit>
-            ${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || "계산서 미발행") ? "selected" : ""}>${esc(s)}</option>`).join("")}
-          </select>
-          <noscript><button class="btn-ghost">변경</button></noscript>
-        </form>
-      </div>
-      ${paymentHistory(inv, payments, {})}
-    </div>`
+      <div class="mt-4 space-y-3 border-t border-border pt-3">
+        <h2 class="text-sm font-semibold">계산서 · 입금 처리</h2>
+        <div class="flex flex-wrap items-end gap-3">
+          <form method="post" action="/invoices/${inv.id}/tax-status">
+            <label class="label mb-0.5 text-xs">계산서 · 입금</label>
+            <select name="tax_status" class="input max-w-[10rem]" data-autosubmit>
+              ${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || "계산서 미발행") ? "selected" : ""}>${esc(s)}</option>`).join("")}
+            </select>
+            <noscript><button class="btn-ghost">변경</button></noscript>
+          </form>
+        </div>
+        ${paymentHistory(inv, payments, {})}
+      </div>`
     : "";
+  // PDF 발행 — 통합 카드 맨 아래(처리 섹션 다음, 2026-07-05 재배치).
+  const pdfSection = `
+      <div class="mt-4 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+        <span class="text-xs text-muted">PDF 발행:</span>
+        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement/${encodeURIComponent(docNumberWithType(inv.invoice_number, t) || t)}.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
+      </div>`;
   // 삭제(치프·대표·스태프=canBill). 청구 생성자가 잘못 만든 청구를 정리.
   const deleteBlock = admin
     ? `
@@ -255,12 +261,13 @@ router.get("/:id", requireBilling, (req, res) => {
       <span class="text-xs text-muted">수정이 필요하면 삭제 후 다시 발행하세요.</span>
     </div>`
     : "";
-  const adminControls = `${processBlock}${deleteBlock}`;
 
+  // 레이아웃(2026-07-05 사용자 요청): 청구처 정보 최상단 → 통합 카드(청구번호·금액·VAT + 청구 항목 + 계산서·입금 처리 + PDF) → 메모 → 삭제.
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: inv.title, desc: (payerClient ? personLabel(payerClient.name, payerClient.activity_name) : "") || inv.client_name || "청구처 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
-    <div class="card">
+    ${payerCard}
+    <div class="card mt-3">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
       ${row("총액", formatKRW(inv.amount))}
       ${inv.discount_amount ? row("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
@@ -271,15 +278,12 @@ router.get("/:id", requireBilling, (req, res) => {
       ${row("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "<span class='text-muted'>미정</span>")}
       ${row("마감일", inv.due_date ? `${esc(formatYmdShort(inv.due_date))} · ${esc(ddayLabel(inv.due_date))}` : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
+      ${invoiceItemsSection(items)}
+      ${processSection}
+      ${pdfSection}
     </div>
-    ${payerCard}
-    <div class="mt-3 flex flex-wrap items-center gap-1.5">
-        <span class="text-xs text-muted">PDF 발행:</span>
-        ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement/${encodeURIComponent(docNumberWithType(inv.invoice_number, t) || t)}.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
-      </div>
-    ${invoiceItemsCard(items)}
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
-    ${adminControls}`;
+    ${deleteBlock}`;
   res.send(layout({ title: inv.title, user: req.user, current: "/invoices", body }));
 });
 
@@ -309,7 +313,8 @@ router.get(["/:id/statement.pdf", "/:id/statement/:name"], requireBilling, async
   res.send(pdf);
 }));
 
-function invoiceItemsCard(items) {
+/** 청구 항목 섹션 — 통합 카드 내부용(카드 래퍼 없음, 2026-07-05 재배치: 청구번호·금액과 같은 카드). */
+function invoiceItemsSection(items) {
   if (!items.length) return "";
   const supply = items.reduce((sum, item) => sum + (item.amount || 0), 0);
   const rows = items
@@ -325,7 +330,7 @@ function invoiceItemsCard(items) {
     )
     .join("");
   return `
-    <div class="card mt-3">
+    <div class="mt-4 border-t border-border pt-3">
       <div class="mb-2 flex items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">청구 항목</h2>
         <span class="text-xs text-muted">공급가 ${formatKRW(supply)}</span>
