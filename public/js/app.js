@@ -1403,8 +1403,9 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
     function subOf(o) { return [o.group, o.company, o.phone].filter(Boolean).join(" · "); } // 소속 그룹·회사·전화로 식별
-    // 표시 라벨 = 본명 (활동명) — 담당자가 아티스트면 병기(청구서 제외 전면, 2026-07-05). 제출용 숨김 이름은 순수 본명(input 핸들러가 분리 동기화).
-    function labelOf(o) { var n = o ? String(o.name || "") : ""; var a = o && o.alt ? String(o.alt).trim() : ""; return a && a !== n ? n + " (" + a + ")" : n; }
+    // 표시 라벨 = 본명 + 호칭 + (활동명) — 아티스트 병기 + 선택 후 필드에 호칭 표기(2026-07-05, 청구서 제외). 제출용 숨김 이름은 순수 본명(input 핸들러가 분리 동기화). 서버 shown과 형식 동일.
+    // name 필드가 이미 호칭으로 끝나면(resolveDisplayName이 성+이름+호칭으로 조립한 경우) 중복 안 붙임.
+    function labelOf(o) { if (!o) return ""; var n = String(o.name || ""); var h = o.honorific ? String(o.honorific).trim() : ""; var a = o.alt ? String(o.alt).trim() : ""; var s = (h && n.slice(-h.length) !== h) ? n + " " + h : n; return a && a !== n ? s + " (" + a + ")" : s; }
     function setInfo(o, isNew) {
       while (info.firstChild) info.removeChild(info.firstChild);
       var nodes = [];

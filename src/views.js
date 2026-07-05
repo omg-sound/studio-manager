@@ -509,10 +509,14 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   if (companyOptions == null) companyOptions = require("./data").partyOptions({ role: "company" });
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
   // initialName: 선택 id 없이 이름 텍스트만 있는 레거시 값(예: 업체 대표자 owner_name) 표시·보존용 — sel 없을 때 초기값.
-  // 표시 = 본명 (활동명) 병기(담당자가 아티스트면 식별 — 청구서 제외 전면, 2026-07-05 사용자 요청).
-  // 제출용 숨김 이름(pureName)은 순수 본명 유지 — 라벨이 그대로 저장돼 새 연락처 '박수한 (워터멜론)'이 생기는 것 방지(app.js 동기화 규칙과 쌍).
+  // 표시 라벨 = 본명 + 호칭 + (활동명) — 담당자가 아티스트면 식별 + 선택 후 필드에 호칭도 표기(2026-07-05 사용자 요청, 청구서 제외).
+  // 제출용 숨김 이름(pureName)은 순수 본명 유지 — 라벨이 그대로 저장돼 새 연락처 '박수한 대표님 (워터멜론)'이 생기는 것 방지(app.js labelOf와 형식 일치·쌍).
   const pureName = sel ? sel.name : initialName || "";
-  const shown = sel ? personLabel(sel.name, sel.activity_name || sel.alt) : initialName || "";
+  const shownHon = sel ? String(sel.honorific || "").trim() : "";
+  // name이 이미 호칭으로 끝나면(성+이름+호칭 조립) 중복 안 붙임 — app.js labelOf와 형식 일치.
+  const shownBase = sel ? (shownHon && String(sel.name).slice(-shownHon.length) !== shownHon ? sel.name + " " + shownHon : sel.name) : "";
+  const shownAlt = sel ? String(sel.activity_name || sel.alt || "").trim() : "";
+  const shown = sel ? (shownAlt && shownAlt !== sel.name ? shownBase + " (" + shownAlt + ")" : shownBase) : (initialName || "");
   // 선택된 담당자 정보줄(전화·이메일·소속 회사)을 서버에서도 렌더 — 편집 진입 시 JS 전 깜빡임 제거 + '필드 밑 회사 주석'(app.js setInfo와 동일 구조·내용).
   const selOrg = sel ? String(sel.group_name || sel.group || sel.current_client || sel.company || "").trim() : "";
   const selTitle = sel ? String(sel.current_title || sel.job_title || "").trim() : "";
