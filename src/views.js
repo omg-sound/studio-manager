@@ -509,7 +509,21 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   if (companyOptions == null) companyOptions = require("./data").partyOptions({ role: "company" });
   const sel = selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
   // initialName: 선택 id 없이 이름 텍스트만 있는 레거시 값(예: 업체 대표자 owner_name) 표시·보존용 — sel 없을 때 초기값.
-  const shown = sel ? sel.name : initialName || "";
+  // 표시 = 본명 (활동명) 병기(담당자가 아티스트면 식별 — 청구서 제외 전면, 2026-07-05 사용자 요청).
+  // 제출용 숨김 이름(pureName)은 순수 본명 유지 — 라벨이 그대로 저장돼 새 연락처 '박수한 (워터멜론)'이 생기는 것 방지(app.js 동기화 규칙과 쌍).
+  const pureName = sel ? sel.name : initialName || "";
+  const shown = sel ? personLabel(sel.name, sel.activity_name || sel.alt) : initialName || "";
+  // 선택된 담당자 정보줄(전화·이메일·소속 회사)을 서버에서도 렌더 — 편집 진입 시 JS 전 깜빡임 제거 + '필드 밑 회사 주석'(app.js setInfo와 동일 구조·내용).
+  const selOrg = sel ? String(sel.group_name || sel.group || sel.current_client || sel.company || "").trim() : "";
+  const selTitle = sel ? String(sel.current_title || sel.job_title || "").trim() : "";
+  const selAff = `${selOrg}${selTitle ? " " + selTitle : ""}`.trim();
+  const selInfo = sel
+    ? [
+        sel.phone ? `<button type="button" data-copy="${esc(sel.phone)}" title="클릭하면 복사됩니다" class="font-medium text-info hover:underline">☎ ${esc(sel.phone)}</button>` : "",
+        sel.email ? `<button type="button" data-copy="${esc(sel.email)}" title="클릭하면 복사됩니다" class="text-info hover:underline">✉ ${esc(sel.email)}</button>` : "",
+        selAff ? `<span>소속: ${esc(selAff)}</span>` : "",
+      ].filter(Boolean).join(" · ")
+    : "";
   // 모달 '회사' 입력 = 커스텀 검색 콤보(기존 업체 검색 + '＋ …(으)로 새 업체 등록'). 프로젝트 폼 companyCombo와 동일 UX.
   // 옵션 JSON을 임베드하고 app.js initOne이 드롭다운을 구성한다(선택=회사명, '새 업체 등록'=입력한 이름 유지 → 저장 시 서버가 소속 회사 생성/연결).
   const companyJson = JSON.stringify((companyOptions || []).map((c) => ({ name: c.name || c }))).replace(/</g, "\\u003c");
@@ -521,7 +535,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   return `
     <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""} data-pc-entity="${esc(entityLabel)}">
       <input type="hidden" name="${idField}" value="${sel ? sel.id : (selectedId || "")}" data-pc-id />
-      <input type="hidden" name="${nameField}" value="${esc(shown)}" data-pc-name-hidden />
+      <input type="hidden" name="${nameField}" value="${esc(pureName)}" data-pc-name-hidden />
       <div class="relative">
         <!-- 보이는 검색칸은 name 없음(Chrome 자동완성 팝업이 앱 드롭다운을 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js가 동기화 -->
         <input class="${inputCls}" type="text" value="${esc(shown)}" data-pc-input autocomplete="off"
@@ -529,7 +543,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
         <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>
       </div>
-      <div class="mt-1.5 hidden ${compact ? "text-xs" : "text-sm"} text-muted" data-pc-info></div>
+      <div class="mt-1.5 ${selInfo ? "" : "hidden"} ${compact ? "text-xs" : "text-sm"} text-muted" data-pc-info>${selInfo}</div>
       ${inlineJson}
       <div data-pc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
         <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">

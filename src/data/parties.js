@@ -613,11 +613,11 @@ function clientOptions() {
     .all();
 }
 
-/** 업체(조직) 소속 아티스트 — affiliations 기반. */
+/** 업체(조직) 소속 아티스트 — affiliations 기반. real_name=본명(표시 병기용: 활동명 (본명)). */
 function listArtistsForAgency(orgId) {
   return db()
     .prepare(
-      `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name FROM affiliations a
+      `SELECT p.id, COALESCE(NULLIF(p.activity_name,''), p.name) AS name, p.name AS real_name FROM affiliations a
          JOIN parties p ON p.id = a.person_id
         WHERE a.org_id = ? AND a.ended_on IS NULL AND p.is_artist = 1 ORDER BY p.name`
     )
@@ -743,10 +743,10 @@ function listGroupsForPicker() {
   ).all();
 }
 
-/** 멤버 추가 콤보용 — 개인 아티스트(사람) 목록 {id, name, group_id}. 이미 이 그룹 소속이 아닌 사람만 후보로 쓰기 좋게 group_id 포함. */
+/** 멤버 추가 콤보용 — 개인 아티스트(사람) 목록 {id, name(활동명 우선), alt(본명 — 검색·병기), group_id}. 이미 이 그룹 소속이 아닌 사람만 후보로 쓰기 좋게 group_id 포함. */
 function artistPersonOptions() {
   return db().prepare(
-    `SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name, group_id
+    `SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name, name AS alt, group_id
        FROM parties WHERE kind = 'person' AND is_artist = 1 ORDER BY name COLLATE NOCASE`
   ).all();
 }

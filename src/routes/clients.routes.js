@@ -266,7 +266,7 @@ router.get("/suggest", (req, res) => {
     .filter((c) => String(c.name || "").toLowerCase().includes(ql) || String(c.activity_name || "").toLowerCase().includes(ql))
     .slice(0, 8);
   res.json(rows.map((c) => ({
-    label: c.name,
+    label: c.is_artist && c.kind === "person" ? personLabel(c.activity_name || c.name, c.name) : c.name, // 아티스트=활동명 (본명) 병기
     sub: c.kind === "company" ? "업체" : c.kind === "group" ? "그룹" : c.is_artist ? "아티스트" : "",
     href: `/clients/${c.id}`,
   })));
@@ -526,7 +526,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
         <h3 class="mb-2 font-display text-lg font-semibold text-fg">멤버 <span class="text-sm font-normal text-muted">· 그룹 소속 아티스트</span></h3>
         ${members.length
           ? listGroup({ rows: members.map((m) => listRow({
-              left: `<a href="/clients/${m.id}" class="font-medium text-fg hover:text-primary hover:underline">${esc(m.display_name)}</a>`,
+              left: `<a href="/clients/${m.id}" class="font-medium text-fg hover:text-primary hover:underline">${esc(personLabel(m.display_name, m.name))}</a>`,
               right: `<form method="post" action="/clients/${c.id}/members/${m.id}/remove" data-confirm="${esc(m.display_name)} 님을 이 그룹에서 제거할까요? (아티스트 자체는 삭제되지 않고 그룹 연결만 해제)"><button class="btn-ghost btn-sm text-danger" type="submit">제거</button></form>`,
             })) })
           : emptyState("아직 등록된 멤버가 없습니다.", { card: true })}
@@ -545,7 +545,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
   const rosterSection = c.kind === "company" && roster.length
     ? `<div class="mb-4">
         <h3 class="mb-2 text-sm font-medium text-muted">소속 아티스트</h3>
-        ${listGroup({ rows: roster.map((a) => listRow({ href: `/clients/${a.id}`, left: `<span class="font-medium">${esc(a.name)}</span>` })) })}
+        ${listGroup({ rows: roster.map((a) => listRow({ href: `/clients/${a.id}`, left: `<span class="font-medium">${esc(personLabel(a.name, a.real_name))}</span>` })) })}
       </div>`
     : "";
   const agencyLink = "";

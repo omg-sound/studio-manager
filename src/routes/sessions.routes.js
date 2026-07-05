@@ -22,7 +22,7 @@ const {
   listSessionDirectors,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS, RENTAL_SESSION_TYPES } = require("../config");
-const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox } = require("../views");
+const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox, personLabel } = require("../views");
 const { sessionProjectCard, monthCalendar } = require("../views.sessions");
 const { todayYmd } = require("../lib/date");
 const { asyncHandler } = require("../lib/async");
@@ -49,8 +49,8 @@ function sessionTypeLabel(session) {
 function eventInputForSession(session, project) {
   const company = project.production_company || project.artist_company; // 제작사 우선, 없으면 레이블(레이블 자체 제작분)
   const title = [company, project.artist].filter(Boolean).join(" · ") || project.title || "스튜디오 세션";
-  // 담당 디렉터(다대다) 이름 — 활동명 우선. 캘린더 설명에 포함.
-  const directors = session.id ? listSessionDirectors(session.id).map((d) => d.activity_name || d.name).filter(Boolean) : [];
+  // 담당 디렉터(다대다) 이름 — 본명 (활동명) 병기(전면 병기 통일, 2026-07-05). 캘린더 설명에 포함.
+  const directors = session.id ? listSessionDirectors(session.id).map((d) => personLabel(d.name, d.activity_name)).filter(Boolean) : [];
   const description = [
     session.session_type ? `종류: ${sessionTypeLabel(session)}` : "",
     session.booker_name ? `예약: ${session.booker_name}` : "",

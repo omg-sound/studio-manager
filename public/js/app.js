@@ -1403,6 +1403,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
     function subOf(o) { return [o.group, o.company, o.phone].filter(Boolean).join(" · "); } // 소속 그룹·회사·전화로 식별
+    // 표시 라벨 = 본명 (활동명) — 담당자가 아티스트면 병기(청구서 제외 전면, 2026-07-05). 제출용 숨김 이름은 순수 본명(input 핸들러가 분리 동기화).
+    function labelOf(o) { var n = o ? String(o.name || "") : ""; var a = o && o.alt ? String(o.alt).trim() : ""; return a && a !== n ? n + " (" + a + ")" : n; }
     function setInfo(o, isNew) {
       while (info.firstChild) info.removeChild(info.firstChild);
       var nodes = [];
@@ -1426,13 +1428,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명·소속 회사 검색(회사 이름이 먼저 생각날 때 — 사용자 요청)
+        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1) || labelOf(o).toLowerCase().indexOf(q) !== -1; }).slice(0, 12); // 본명·활동명·소속 회사·표시 라벨(선택 후 재열람) 검색
         html = view.map(function (o, i) { var nm = esc(o.name) + (o.honorific ? ' <span class="text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="text-muted">(' + esc(o.alt) + ')</span>' : ""); return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + nm + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
-        if (!view.some(function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q); })) html += newRow(input.value.trim());
+        if (!view.some(function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q) || labelOf(o).toLowerCase() === q; })) html += newRow(input.value.trim());
       }
       pop.innerHTML = html; show();
     }
-    function pick(o) { input.value = o.name; hid.value = o.id; setInfo(o, false); fireInput(); hide(); }
+    function pick(o) { input.value = labelOf(o); hid.value = o.id; setInfo(o, false); fireInput(); hide(); }
     function openModal() {
       if (!modal) { hide(); return; }
       var n = modal.querySelector("[data-pc-name]"); n.value = input.value.trim();
@@ -1465,7 +1467,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, activity: activity, phone: phone, email: email, company: company, isArtist: !!activity }); input.value = d.name; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, activity: activity, phone: phone, email: email, company: company, isArtist: !!activity }); input.value = labelOf({ name: d.name, alt: activity }); hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기(표시=본명 (활동명), 제출 숨김 이름은 input 핸들러가 순수 본명으로)
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
@@ -1512,10 +1514,11 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
     input.addEventListener("input", function () {
-      if (hidName) hidName.value = input.value; // 제출용 숨김 이름 동기화(타이핑·pick·모달 모두 fireInput로 여기 도달)
       render();
       var v = input.value.trim().toLowerCase();
-      var m = opts.filter(function (o) { return String(o.name).toLowerCase() === v; })[0];
+      // 순수 본명 또는 표시 라벨('본명 (활동명)')과 정확 일치하면 선택 유지 — pick이 라벨을 넣어도 id가 안 풀리게.
+      var m = opts.filter(function (o) { return String(o.name).toLowerCase() === v || labelOf(o).toLowerCase() === v; })[0];
+      if (hidName) hidName.value = m ? m.name : input.value; // 제출용 숨김 이름 = 순수 본명(라벨 그대로 저장돼 '박수한 (워터멜론)' 연락처가 생기는 것 방지) · 미일치 시 타이핑 텍스트
       if (m) { hid.value = m.id; setInfo(m, false); } else { hid.value = ""; setInfo(null, !!v); }
     });
     input.addEventListener("blur", function () { setTimeout(hide, 150); });

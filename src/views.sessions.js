@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, RECORDING_CATEGORIES, RATE_CATEGORIES, rateCategoryKind, SESSION_TYPE_RATE_KIND } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personLabel } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors } = require("./data");
 
@@ -144,7 +144,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const dirOptsId = "__dir_opts_" + (s && s.id ? s.id : "new");
   const dirRow = (d) => `
         <div class="mt-1 flex items-start gap-2" data-director-row>
-          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, initialName: d ? (d.name || "") : "", optionsRef: dirOptsId, companyOptions: companyOpts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
+          ${personCombo({ idField: "director_contact_id", nameField: "director_name", selectedId: d ? d.id : null, initialName: d ? (d.name || "") : "", options: allContacts, optionsRef: dirOptsId, companyOptions: companyOpts, compact: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록" })}
           <button type="button" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-border px-3 py-1.5 text-sm leading-5 text-danger hover:bg-elevated active:bg-elevated" data-director-remove aria-label="디렉터 제거">✕</button>
         </div>`;
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
@@ -267,7 +267,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
     s.engineer_name ? `엔지니어 ${esc(s.engineer_name)}` : "",
   ].filter(Boolean).join(" · ");
   if (bookerEng) infoLines.push(bookerEng); // 예약 담당자 · 담당 엔지니어 = 같은 줄
-  if (directors.length) infoLines.push(`디렉터 ${directors.map((d) => esc(d.name)).join(", ")}`); // 디렉터 = 다음 줄
+  if (directors.length) infoLines.push(`디렉터 ${directors.map((d) => esc(personLabel(d.name, d.activity_name))).join(", ")}`); // 디렉터 = 다음 줄, 아티스트면 본명 (활동명) 병기
   if (!bookerEng && !directors.length) infoLines.push("담당자 미정");
   if (s.memo) infoLines.push(esc(s.memo));
   const sub = infoLines.map((l) => `<div class="truncate">${l}</div>`).join("");

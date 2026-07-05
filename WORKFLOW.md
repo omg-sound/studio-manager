@@ -150,7 +150,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 (`npm test`, 87개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 (`npm test`, 98개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -158,9 +158,9 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 | 층 | 파일 | 개수 | 검증 대상 |
 |---|---|---|---|
-| **① 단위** | `invoice-number`·`vat`·`rate-price`·`session-conflict`·`auth`·`party`·`payments`·`rental-session` | 65 | 금전 로직(채번·VAT·Pro블록 단가·할인)·세션 겹침(야간교차·취소예외)·권한·당사자 모델·입금 이력·대관 세션(녹음/촬영/공연 kind 매핑·금액 미정 정액) |
+| **① 단위** | `invoice-number`·`vat`·`rate-price`·`session-conflict`·`auth`·`party`·`payments`·`rental-session` | 68 | 금전 로직(채번·VAT·Pro블록 단가·할인)·세션 겹침(야간교차·취소예외)·권한·당사자 모델·입금 이력·대관 세션(녹음/촬영/공연 kind 매핑·금액 미정 정액) |
 | **② 정적 계약 가드** | `guardrails.test.js`(백엔드 7종) + `guardrails-ui.test.js`(UI 6종) | 14 | 소스 양쪽을 스캔해 **반복 실수 클래스가 코드에 존재할 수 없게** — 아래 목록 |
-| **③ 상호작용(jsdom)** | `ui-interactions.test.js` + `helpers-dom.js` | 8 | 실제 views 렌더 위에서 **실제 app.js를 실행**해 동작 검증 — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)·선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·dirty 폼 |
+| **③ 상호작용(jsdom)** | `ui-interactions.test.js` + `helpers-dom.js` | 16 | 실제 views 렌더 위에서 **실제 app.js를 실행**해 동작 검증 — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)·선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·종일 토글·구글식 시간 콤보·디렉터 프리필·simpleModal·외부 장소 토글·**이름 병기**(라벨 pick·라벨 재열람 유지·서버 렌더 주석)·dirty 폼 |
 
 **② 가드 목록** (각 가드에 사고 이력 주석 있음 — 왜 존재하는지 파일에서 확인):
 
@@ -179,7 +179,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 87개(단위+가드+상호작용)
+npm test                                   # 전체 98개(단위+가드+상호작용)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 ```
@@ -220,7 +220,8 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 7. ✅ (완료) **data.js 모듈 분리** — 2049→58줄 순수 재export 허브 + 14개 도메인 모듈(`src/data/*.js`). 공개 export 124개 분리 전후 동일(매 커밋 대조). 상호의존(invoices↔sessions)만 지연 require, 나머지는 형제 모듈 직접 require. CLAUDE.md TODO 9 참조.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션)**: **UI 전면 개편(25커밋·라이브 배포)** — 사용자 요청 연속 반영. **목록 통일**: 프로젝트·일정·청구 목록을 프로젝트 카드 톤으로 통일(`rounded-xl border-border/60 bg-surface`), 각각 **탭 분리**(프로젝트 진행중/완료·일정 일정/지난·청구 발행필요/발행완료, `tabBar`). **세션**: 예정·완료 배지 제거→**완료 버튼 토글**(예정↔완료·글리프 −/✓·고정폭 크기불변)·폼 **상태 필드 제거**(hidden 보존)·담당 엔지니어를 상태 자리로·룸↔녹음단가 스왑(3열)·청구라인 `break-keep` wrap·소요 16h·모바일 프리셋 흐름정렬·시작 **직접입력 박스**(콜론 자동)·디렉터 X 버튼 정렬·일정 목록 프로젝트별 카드(헤더 비링크). **캘린더**: `.card` 제거+**그리드 라인**+`-mx`로 **화면 끝까지(full-bleed)**·모바일 시간숨김·칩 라벨=아티스트/프로젝트. **청구**: 카드별 접이식 '상태 처리'([계산서/현금영수증 발행 완료][입금완료] **토글**·상태 반영 불·**되돌리기 시 자동 완납입금만 제거**·색은 세션 완료 토글의 success 흐름)·청구처 유형별 계산서/현금영수증 구분. **검색 typeahead**(프로젝트·세션·클라이언트·연락처 `/suggest`)·**모달 스크롤 잠금**(전 모달)·**저장 안 한 변경 이탈 가드**(저장/저장하지 않음→목적지 이동, `beforeunload`)·personCombo **활동명 필드**(→is_artist)·회사 검색 콤보·프로젝트 **생성일 표시·정렬**. 연락처 수동 'Google 동기화' 버튼 제거. 61 테스트·build green, DEV_LOGIN 브라우저 E2E(탭·토글·되돌리기·full-bleed·typeahead) 검증. 상세는 git 커밋(`d929172`~`fc556cc`).
+> **완료(이번 세션·2026-07-04~05)**: ①**세션 폼 구글 캘린더식 개편**(시간 콤보·진짜 종일 `all_day`·다일 `end_date`) ②**룸→장소 + 외부 주소**(Google Places 자동완성 백엔드 프록시 `/sessions/place-suggest`·`GOOGLE_PLACES_API_KEY`) ③**가드레일 3계층 테스트 체계**(정적 가드 14 + jsdom 상호작용 — §6-0) ④**담당자 이름 전면 병기(2026-07-05 사용자 요청)**: 청구서 계열(payerCombo·PDF·거래명세서) 제외 전 표면 `본명 (활동명)` — personCombo **선택 표시=라벨**·**제출 숨김 이름=순수 본명 분리**(라벨이 연락처로 저장되는 것 방지)·**필드 밑 소속(회사) 주석 서버 렌더**(`data-pc-info`)·세션 목록/캘린더 설명 디렉터·그룹 멤버·업체 소속 아티스트·연락처/클라이언트 suggest 병기·dirRow `options` 전달(sel 라벨 조회). 98 테스트·DEV_LOGIN E2E(프로젝트 담당자·디렉터·suggest·무JS 재저장 회귀). 상세는 git·CLAUDE.md 프로젝트 메타 섹션.
+> **직전 완료(2026-07-04)**: **UI 전면 개편(25커밋·라이브 배포)** — 사용자 요청 연속 반영. **목록 통일**: 프로젝트·일정·청구 목록을 프로젝트 카드 톤으로 통일(`rounded-xl border-border/60 bg-surface`), 각각 **탭 분리**(프로젝트 진행중/완료·일정 일정/지난·청구 발행필요/발행완료, `tabBar`). **세션**: 예정·완료 배지 제거→**완료 버튼 토글**(예정↔완료·글리프 −/✓·고정폭 크기불변)·폼 **상태 필드 제거**(hidden 보존)·담당 엔지니어를 상태 자리로·룸↔녹음단가 스왑(3열)·청구라인 `break-keep` wrap·소요 16h·모바일 프리셋 흐름정렬·시작 **직접입력 박스**(콜론 자동)·디렉터 X 버튼 정렬·일정 목록 프로젝트별 카드(헤더 비링크). **캘린더**: `.card` 제거+**그리드 라인**+`-mx`로 **화면 끝까지(full-bleed)**·모바일 시간숨김·칩 라벨=아티스트/프로젝트. **청구**: 카드별 접이식 '상태 처리'([계산서/현금영수증 발행 완료][입금완료] **토글**·상태 반영 불·**되돌리기 시 자동 완납입금만 제거**·색은 세션 완료 토글의 success 흐름)·청구처 유형별 계산서/현금영수증 구분. **검색 typeahead**(프로젝트·세션·클라이언트·연락처 `/suggest`)·**모달 스크롤 잠금**(전 모달)·**저장 안 한 변경 이탈 가드**(저장/저장하지 않음→목적지 이동, `beforeunload`)·personCombo **활동명 필드**(→is_artist)·회사 검색 콤보·프로젝트 **생성일 표시·정렬**. 연락처 수동 'Google 동기화' 버튼 제거. 61 테스트·build green, DEV_LOGIN 브라우저 E2E(탭·토글·되돌리기·full-bleed·typeahead) 검증. 상세는 git 커밋(`d929172`~`fc556cc`).
 > **직전 완료**: **세션 겹침 = 하드 차단(409) → 경고+확인 후 강행**(사용자 요청). 같은 룸·같은 시간 겹침을 막지 않고 **확인 후 등록 허용**: 시작 시간 그리드의 예약 슬롯을 회색 비활성 대신 **주황(`slot-busy`)·선택 가능**으로, 선택 구간이 겹치면 **시작 시간 아래 경고**(`[data-conflict-warn]`·`overlapDetected`), **제출 시 confirm("이미 스케쥴이 있습니다. 그래도 등록하시겠습니까?")** → 승인 시 hidden `override_conflict=1` → 서버 `assertNoSessionConflict(...allowConflict)`가 검사 스킵(`conflictOverride`, create·update 공통). override 없는 겹침은 여전히 409(무JS·경합 안전망). 회귀 테스트 1건 추가(총 61). DEV_LOGIN E2E: 기준 세션 302 → 겹침 override 없음 409 → override=1 302 확인. src.css `.slot-busy`(components 레이어라 peer-checked가 위에서 우선)·build:css 반영.
 > **그 전 완료**: **data.js 모듈 분리 완료**(TODO 7) — `data.js` **2049→58줄**, 함수 본문 0의 **순수 재export 허브** + **14개 도메인 모듈**(`src/data/*.js`). 2차(client-files·revenue·deliverables·rooms·rate-items·task-types) 후 코어까지 전량 분리: `contacts`(사람+소속+담당자연동)·`clients`(거래처+담당자 마스터)·`projects`(deleteProject 포함)·`tracks`(트랙/작업 CRUD)·`invoices`(금액 파생·채번·초안/생성/삭제·목록/통계)·`dashboard`·`sessions`. **공개 export 124개 분리 전후 완전 동일**(매 커밋 HEAD 대조·added/removed 0). **패턴**: 형제 모듈 직접 require(무순환 대다수), 상호의존(invoices↔sessions: invoices→sessionRateAmount / sessions→isSessionInvoiced) 양방향만 함수 내부 지연 require("../data")로 순환 회피. 내부전용 헬퍼(normalizeTaskTypeDb·getManagerByUserId·nextInvoiceNumber·computeInvoiceDraft·resolveTaskEngineer·sessionFields 등) 공개 미노출. 고아 import 전량 정리(db·lib/date·config·auth·crypto·잔여 바인딩). 도메인별 개별 커밋·push, 각 40개 테스트 + 머니패스 스모크(VAT 110만/10만·채번 INV-·1Pro 30만·3Pro 90만·세션 겹침 차단·세션청구 33만·청구 잠금 양방향·dashboardStats 미수금) + 라우트 전체 로드 통과. **+ DEV_LOGIN 브라우저 E2E 검증**(치프·임시 DB·실데이터 무변경): 세션 목록·**생성**(운영시간 그리드→새 세션 추가 성공)·청구 목록/통계·인라인 상세·**입금 '완납 처리' 쓰기**(미수금 ₩250만→0·입금완료)·대시보드 교차모듈(dashboardStats→invoiceStats·upcomingSessions)·세션↔청구 상호의존(invoiced 플래그) — 읽기·쓰기·교차모듈 무회귀 확인.
 > **그 전 완료**: **v1.0 릴리스 위생 점검(/audit Top5)** — 버전 0.1.0→1.0.0·description 현행화, **GitHub Actions CI 신설**(Node 20/22: `npm test`+`build:css`, `checkout@v5`·`setup-node@v5`), 죽은 코드 제거(미사용 `issued`+2축 분리 후 죽은 `status==="입금완료"` 비교), **세션 겹침 검사 '취소' 예외**(취소 세션 룸 미점유·회귀 테스트 2건→총 40개), **data.js 모듈 분리 1차**(스튜디오 설정→`src/data/studio.js` 재export 허브·`cleanTime`→`lib/date` 공유); **모바일 목록 찌그러짐 전수 개선**(`.badge` `whitespace-nowrap`, 청구·클라이언트·연락처 목록 '제목 전폭→배지 줄→메타' 재구성, 375/390px 검증 — 함정 17); **긴 안내문 전수 접기**(`explain()` 헬퍼 — 설정 항목 설명·폼 안내를 기본 접힘 '설명' 토글로, 상태·오류·모달 경고는 유지).

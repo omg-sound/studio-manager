@@ -125,8 +125,8 @@ router.get("/suggest", (req, res) => {
   if (!q) return res.json([]);
   const rows = listContacts({ q }).slice(0, 8);
   res.json(rows.map((c) => ({
-    label: c.name,
-    sub: [c.activity_name && c.activity_name !== c.name ? c.activity_name : "", c.phone].filter(Boolean).join(" · "),
+    label: personLabel(c.name, c.activity_name), // 본명 (활동명) 병기 — 활동명은 부제에서 라벨로 승격
+    sub: c.phone || "",
     href: `/contacts/${c.id}`,
   })));
 });
