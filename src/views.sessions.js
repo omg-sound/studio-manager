@@ -40,18 +40,24 @@ function managerOptions(managers, current, placeholder = "담당자 미지정", 
   return out.join("");
 }
 
-/** 담당 엔지니어 다대다 행의 select 옵션 — value=담당자 마스터 id(이름 기반 managerOptions와 구분, 동명이인·이름변경에도 안전). */
+/** 담당 엔지니어 다대다 행의 select 옵션 — value=담당자 마스터 id(이름 기반 managerOptions와 구분, 동명이인·이름변경에도 안전).
+ *  data-external=외주 작업자(user_id 없음)면 1 — app.js가 그 행의 지급단가 칸 토글(작업 폼 engineerSelect와 동일 규칙). */
 function managerOptionsById(managers, selectedId) {
   const cur = selectedId == null ? "" : String(selectedId);
   const out = [`<option value="">엔지니어 선택</option>`];
-  for (const m of managers) out.push(`<option value="${m.id}" ${String(m.id) === cur ? "selected" : ""}>${esc(m.name)}</option>`);
+  for (const m of managers) out.push(`<option value="${m.id}" ${String(m.id) === cur ? "selected" : ""} data-external="${m.user_id ? "" : "1"}">${esc(m.name)}${m.user_id ? "" : " · 외주"}</option>`);
   return out.join("");
 }
 
-/** 담당 엔지니어 한 행(select + 제거 버튼). selectedId 없으면 빈 선택(추가 행). */
-function engineerRow(managers, selectedId) {
+/** 담당 엔지니어 한 행(select + 외주 지급단가 칸[외주일 때만] + 제거 버튼). selectedId 없으면 빈 선택(추가 행). */
+function engineerRow(managers, selectedId, rate) {
+  const external = selectedId != null && managers.some((m) => Number(m.id) === Number(selectedId) && !m.user_id);
   return `<div class="mt-1.5 flex items-center gap-1.5" data-engineer-row>
       <select class="input py-1.5 text-sm" name="engineer_ids">${managerOptionsById(managers, selectedId)}</select>
+      <div class="relative w-24 shrink-0 ${external ? "" : "hidden"}" data-engineer-rate>
+        <input class="input py-1.5 pr-6 text-right text-sm tabular" name="engineer_rates" inputmode="numeric" placeholder="0" value="${rate ? esc(String(rate)) : ""}" aria-label="외주 지급단가" />
+        <span class="pointer-events-none absolute inset-y-0 right-1.5 flex items-center text-xs text-muted">원</span>
+      </div>
       <button type="button" class="btn-ghost btn-xs shrink-0" data-engineer-remove aria-label="담당 엔지니어 제거">✕</button>
     </div>`;
 }
@@ -132,7 +138,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const engineerField = `
     <div>
       <label class="label-sm">담당 엔지니어 <span class="font-normal text-muted">(여러 명 가능)</span></label>
-      <div data-engineer-list>${currentEngineers.map((e) => engineerRow(managers, e.id)).join("")}</div>
+      <div data-engineer-list>${currentEngineers.map((e) => engineerRow(managers, e.id, e.worker_rate)).join("")}</div>
       <template data-engineer-template>${engineerRow(managers, null)}</template>
       <button type="button" class="btn-ghost btn-xs mt-1.5" data-engineer-add>+ 담당 엔지니어 추가하기</button>
     </div>`;

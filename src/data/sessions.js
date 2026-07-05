@@ -13,6 +13,7 @@
 
 const { db } = require("../db");
 const { todayYmd, isValidYmd, cleanTime, timeToMin, minutesBetween } = require("../lib/date");
+const { parseMoney } = require("../lib/forms");
 const { normalizeSessionType, normalizeSessionStatus, RENTAL_SESSION_TYPES } = require("../config");
 const { getProjectForUser } = require("./projects"); // 무순환
 const { resolvePersonByName } = require("./parties"); // 무순환 — 디렉터=parties.id(사람)
@@ -148,32 +149,84 @@ function setSessionDirectors(sessionId, ids) {
  *  디렉터와 달리 자유 텍스트 등록이 없다(담당자 마스터에서만 선택) — 존재하지 않는(삭제된) id만 걸러내고,
  *  비활성 담당자는 유지(기존 배정 보존 — validRoomId와 동일 철학: 목록에 안 보여도 이미 배정된 건 안 지운다). */
 function resolveEngineerIds(input) {
-  const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
-  const raw = [...new Set(asArr(input.engineer_ids).map((v) => Number(v)).filter(Boolean))];
-  if (!raw.length) return [];
-  const placeholders = raw.map(() => "?").join(",");
-  const valid = new Set(db().prepare(`SELECT id FROM project_managers WHERE id IN (${placeholders})`).all(...raw).map((r) => r.id));
-  return raw.filter((id) => valid.has(id));
+  return resolveEngineerAssignments(input).map((a) => a.id);
 }
 
-/** 세션의 담당 엔지니어 목록을 통째로 교체(다대다). sessions.engineer_name=첫 엔지니어 이름(레거시 단일 컬럼 동기화 — 매출·검색·캘린더 호환). */
-function setSessionEngineers(sessionId, ids) {
+/**
+ * 세션 담당 엔지니어 배정 + 외주 지급단가(2026-07-06 사용자 상담 — track_tasks와 동일 구조로 세션도 정산).
+ * engineer_ids[]/engineer_rates[]를 같은 인덱스로 페어링(폼의 반복 행과 1:1), 유효 id만·중복 제거(첫 값 유지).
+ * 하우스 엔지니어 행은 rate 입력이 폼에서 숨겨져 있어 보통 0으로 온다 — setSessionEngineers가 저장 시 무해.
+ */
+function resolveEngineerAssignments(input) {
+  const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
+  const idsRaw = asArr(input.engineer_ids);
+  const ratesRaw = asArr(input.engineer_rates);
+  const seen = new Set();
+  const pairs = [];
+  idsRaw.forEach((v, i) => {
+    const id = Number(v);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    pairs.push({ id, rate: parseMoney(ratesRaw[i]) });
+  });
+  if (!pairs.length) return [];
+  const placeholders = pairs.map(() => "?").join(",");
+  const valid = new Set(db().prepare(`SELECT id FROM project_managers WHERE id IN (${placeholders})`).all(...pairs.map((p) => p.id)).map((r) => r.id));
+  return pairs.filter((p) => valid.has(p.id));
+}
+
+/**
+ * 세션의 담당 엔지니어 배정을 교체(다대다) — 단, 계속 배정된 엔지니어의 worker_rate/worker_paid는 보존한다
+ * (2026-07-06 — 이전엔 DELETE 후 재삽입이라 매 저장마다 지급단가·지급상태가 초기화되던 문제).
+ * assignments = resolveEngineerAssignments 결과([{id, rate}]). sessions.engineer_name=첫 엔지니어 이름 동기화.
+ */
+function setSessionEngineers(sessionId, assignments) {
   const d = db();
-  d.prepare("DELETE FROM session_engineers WHERE session_id = ?").run(sessionId);
-  const ins = d.prepare("INSERT OR IGNORE INTO session_engineers (session_id, manager_id) VALUES (?, ?)");
-  for (const mid of ids) ins.run(sessionId, mid);
-  const first = ids.length ? d.prepare("SELECT name FROM project_managers WHERE id = ?").get(ids[0]) : null;
+  const existing = new Map(d.prepare("SELECT manager_id, worker_paid FROM session_engineers WHERE session_id = ?").all(sessionId).map((r) => [r.manager_id, r]));
+  const nextIds = new Set(assignments.map((a) => a.id));
+  for (const mid of existing.keys()) {
+    if (!nextIds.has(mid)) d.prepare("DELETE FROM session_engineers WHERE session_id = ? AND manager_id = ?").run(sessionId, mid);
+  }
+  const insert = d.prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)");
+  const updateRate = d.prepare("UPDATE session_engineers SET worker_rate = ? WHERE session_id = ? AND manager_id = ?");
+  for (const a of assignments) {
+    if (existing.has(a.id)) updateRate.run(a.rate, sessionId, a.id); // 이미 배정된 엔지니어 — worker_paid 보존, 단가만 갱신
+    else insert.run(sessionId, a.id, a.rate); // 새로 배정 — worker_paid=0(컬럼 기본값)
+  }
+  const first = assignments.length ? d.prepare("SELECT name FROM project_managers WHERE id = ?").get(assignments[0].id) : null;
   d.prepare("UPDATE sessions SET engineer_name = ? WHERE id = ?").run(first ? first.name : null, sessionId);
 }
 
-/** 세션의 담당 엔지니어(담당자 마스터) 목록. */
+/** 세션의 담당 엔지니어(담당자 마스터 + 세션별 지급단가/지급상태) 목록. */
 function listSessionEngineers(sessionId) {
   return db()
     .prepare(
-      `SELECT pm.* FROM session_engineers se JOIN project_managers pm ON pm.id = se.manager_id
+      `SELECT pm.*, se.worker_rate, se.worker_paid, se.worker_paid_date FROM session_engineers se JOIN project_managers pm ON pm.id = se.manager_id
        WHERE se.session_id = ? ORDER BY se.created_at, pm.name COLLATE NOCASE`
     )
     .all(Number(sessionId));
+}
+
+/** 외주 작업자의 세션 정산 대상(session_engineers에 실제 배정된 것만 — 레거시 engineer_name 폴백 매칭은 지급단가가 없어 제외). */
+function listSessionPayoutsForWorker(worker) {
+  if (!worker) return [];
+  return db()
+    .prepare(
+      `SELECT s.id AS session_id, s.session_type, s.session_date, s.project_id, p.title AS project_title,
+              se.worker_rate, se.worker_paid, se.worker_paid_date
+       FROM session_engineers se
+       JOIN sessions s ON s.id = se.session_id
+       JOIN projects p ON p.id = s.project_id
+       WHERE se.manager_id = ?
+       ORDER BY s.session_date DESC, s.id DESC`
+    )
+    .all(worker.id);
+}
+
+/** 외주 세션 지급 처리/해제(정산) — track_tasks의 setTaskPayout과 동일 규칙. */
+function setSessionEngineerPayout(sessionId, managerId, paid) {
+  const p = paid ? 1 : 0;
+  db().prepare("UPDATE session_engineers SET worker_paid = ?, worker_paid_date = ? WHERE session_id = ? AND manager_id = ?").run(p, p ? todayYmd() : null, Number(sessionId), Number(managerId));
 }
 
 /** 세션 캘린더 참석자 이메일 — 프로젝트 매니저(project.manager_id)·예약담당자(booker_name)·담당엔지니어(전원, 다대다)의 이메일(중복·빈값 제거). */
@@ -320,8 +373,8 @@ function createSession(user, projectId, input = {}) {
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
   f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
-  const engineerIds = resolveEngineerIds(input);
-  const firstEngineer = engineerIds.length ? db().prepare("SELECT name FROM project_managers WHERE id = ?").get(engineerIds[0]) : null;
+  const engineerAssignments = resolveEngineerAssignments(input);
+  const firstEngineer = engineerAssignments.length ? db().prepare("SELECT name FROM project_managers WHERE id = ?").get(engineerAssignments[0].id) : null;
   f.engineer_name = firstEngineer ? firstEngineer.name : null; // 첫 엔지니어 이름(레거시 컬럼 동기화)
   assertNoSessionConflict(f, null, conflictOverride(input));
   // 세션 행 + 다대다 디렉터·엔지니어를 한 트랜잭션으로 — 중간 실패 시 반쪽 세션(디렉터·엔지니어 없는)이 남지 않게.
@@ -337,7 +390,7 @@ function createSession(user, projectId, input = {}) {
       .run({ project_id: project.id, ...f });
     newId = info.lastInsertRowid;
     setSessionDirectors(newId, directorIds); // 다대다 디렉터 저장
-    setSessionEngineers(newId, engineerIds); // 다대다 엔지니어 저장
+    setSessionEngineers(newId, engineerAssignments); // 다대다 엔지니어 저장(+ 외주 지급단가)
     d.exec("COMMIT;");
   } catch (e) {
     d.exec("ROLLBACK;");
@@ -354,8 +407,8 @@ function updateSession(user, sessionId, input = {}) {
   const f = sessionFields(input);
   const directorIds = resolveDirectorIds(input);
   f.director_party_id = directorIds[0] || null; // 첫 디렉터(party id)
-  const engineerIds = resolveEngineerIds(input);
-  const firstEngineer = engineerIds.length ? db().prepare("SELECT name FROM project_managers WHERE id = ?").get(engineerIds[0]) : null;
+  const engineerAssignments = resolveEngineerAssignments(input);
+  const firstEngineer = engineerAssignments.length ? db().prepare("SELECT name FROM project_managers WHERE id = ?").get(engineerAssignments[0].id) : null;
   f.engineer_name = firstEngineer ? firstEngineer.name : null; // 첫 엔지니어 이름(레거시 컬럼 동기화)
   assertNoSessionConflict(f, s.id, conflictOverride(input));
   // UPDATE + 디렉터·엔지니어 교체를 한 트랜잭션으로(디렉터·엔지니어만 지워지고 세션은 옛값으로 남는 반쪽 갱신 방지).
@@ -370,7 +423,7 @@ function updateSession(user, sessionId, input = {}) {
       )
       .run({ id: s.id, ...f });
     setSessionDirectors(s.id, directorIds); // 다대다 디렉터 교체
-    setSessionEngineers(s.id, engineerIds); // 다대다 엔지니어 교체
+    setSessionEngineers(s.id, engineerAssignments); // 다대다 엔지니어 교체(+ 외주 지급단가, worker_paid 보존)
     d.exec("COMMIT;");
   } catch (e) {
     d.exec("ROLLBACK;");
@@ -462,6 +515,8 @@ module.exports = {
   sessionAttendeeEmails,
   listSessionDirectors,
   listSessionEngineers,
+  listSessionPayoutsForWorker,
+  setSessionEngineerPayout,
   busySessionSlots,
   sessionRateAmount,
   createSession,

@@ -447,6 +447,9 @@ function init() {
   addColumn("project_managers", "bank_name", "TEXT"); // 외주 작업자 정산 계좌 은행명
   addColumn("project_managers", "account_number", "TEXT"); // 외주 작업자 정산 계좌번호 — 암호화 저장(db.encrypt)
   addColumn("project_managers", "account_holder", "TEXT"); // 외주 작업자 예금주명(입금자명)
+  addColumn("session_engineers", "worker_rate", "INTEGER NOT NULL DEFAULT 0"); // 세션 외주 정산(2026-07-06 사용자 상담) — track_tasks와 동일 구조, 엔지니어별 지급단가
+  addColumn("session_engineers", "worker_paid", "INTEGER NOT NULL DEFAULT 0"); // 지급 처리 여부
+  addColumn("session_engineers", "worker_paid_date", "TEXT"); // 지급 처리일(YYYY-MM-DD)
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_group ON parties(group_id);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_kind ON parties(kind, is_artist, name);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_parties_user ON parties(user_id);");

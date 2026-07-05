@@ -10,6 +10,7 @@ const { requireInvoice, requireChief, isChief } = require("../auth");
 const {
   listProjectManagers, getWorker, listTasksForWorker, listSessionsForWorker, setTaskPayout, taskTypeLabel, syncManagerToParty, ensurePartyForManager, formatPhone,
   listWorkerFiles, getWorkerFile, upsertWorkerFile, deleteWorkerFile,
+  listSessionPayoutsForWorker, setSessionEngineerPayout,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -113,18 +114,21 @@ function workerFileSection(w, fileMap, fileErr, fileOk = {}) {
 // ── 외주 작업자 목록(치프는 추가 폼도) ──
 router.get("/", requireInvoice, (req, res) => {
   const workers = listProjectManagers({ includeInactive: true, externalOnly: true });
-  // 카드 밑 지급 요약 줄(2026-07-06 사용자 요청) — 미지급 건수·금액 한 줄 + 오른쪽 끝 일괄 지급처리.
-  // 소수 외주 작업자 대상 N+1은 무해(listTasksForWorker 재사용, 페이지당 소수).
+  // 카드 밑 지급 요약 줄(2026-07-06 사용자 요청) — 미지급 건수·금액 한 줄(작업+세션 합산) + 오른쪽 끝 일괄 지급처리.
+  // 소수 외주 작업자 대상 N+1은 무해(listTasksForWorker/listSessionPayoutsForWorker 재사용, 페이지당 소수).
   const list = workers.length
     ? workers
         .map((w) => {
           const tasks = listTasksForWorker(w);
+          const sessionPayouts = listSessionPayoutsForWorker(w);
           const unpaid = tasks.filter((t) => !t.worker_paid && t.worker_rate > 0);
-          const unpaidAmt = unpaid.reduce((s, t) => s + (t.worker_rate || 0), 0);
-          const payoutBar = unpaid.length
+          const unpaidSessions = sessionPayouts.filter((s) => !s.worker_paid && s.worker_rate > 0);
+          const unpaidAmt = unpaid.reduce((s, t) => s + (t.worker_rate || 0), 0) + unpaidSessions.reduce((s, x) => s + (x.worker_rate || 0), 0);
+          const unpaidCount = unpaid.length + unpaidSessions.length;
+          const payoutBar = unpaidCount
             ? `<div class="mt-1.5 flex items-center justify-between gap-2 border-t border-border pt-1.5 text-sm">
-                <span class="text-muted">미지급 <b class="text-danger">${formatKRW(unpaidAmt)}</b> (${unpaid.length}건)</span>
-                <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaid.length}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요?">
+                <span class="text-muted">미지급 <b class="text-danger">${formatKRW(unpaidAmt)}</b> (${unpaidCount}건)</span>
+                <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaidCount}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요?">
                   <button class="btn-ghost btn-xs text-primary" type="submit">지급처리</button>
                 </form>
               </div>`
@@ -212,10 +216,11 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
   if (!w) return res.status(404).send(errorPage({ code: 404, title: "외주 작업자를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tab = req.query.tab === "payout" ? "payout" : "tasks";
   const tasks = listTasksForWorker(w);
-  const sessions = listSessionsForWorker(w); // 세션 참여(2026-07-06 — 작업만 뜨고 세션 참여가 안 뜨던 것 개선). 정산 대상 아님(참고용).
+  const sessions = listSessionsForWorker(w); // 세션 참여(2026-07-06 — 작업만 뜨고 세션 참여가 안 뜨던 것 개선).
+  const sessionPayouts = listSessionPayoutsForWorker(w); // 세션 정산 대상(session_engineers에 실제 배정+지급단가 있는 것만, 2026-07-06 사용자 상담)
 
   const tabBarHtml = tabBar({
-    tabs: [{ key: "tasks", label: `참여 내역 ${tasks.length + sessions.length}` }, { key: "payout", label: `정산 ${tasks.length}` }],
+    tabs: [{ key: "tasks", label: `참여 내역 ${tasks.length + sessions.length}` }, { key: "payout", label: `정산 ${tasks.length + sessionPayouts.length}` }],
     activeKey: tab,
     hrefFn: (key) => `/workers/${w.id}?tab=${key}`,
   });
@@ -224,12 +229,16 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
 
   let content;
   if (tab === "payout") {
-    if (!tasks.length) {
-      content = emptyState("담당한 작업이 없습니다(세션은 정산 대상이 아닙니다).", { card: true });
+    if (!tasks.length && !sessionPayouts.length) {
+      content = emptyState("담당한 작업·세션 정산 대상이 없습니다.", { card: true });
     } else {
-      // 정산 합계는 외주 지급단가(worker_rate) 기준. 고객청구(total_price)는 마진 가시화용 참고 표기.
-      const payTotal = tasks.reduce((s, t) => s + (t.worker_rate || 0), 0);
-      const paid = tasks.filter((t) => t.worker_paid).reduce((s, t) => s + (t.worker_rate || 0), 0);
+      // 정산 합계 = 작업(worker_rate) + 세션(worker_rate) 통합. 고객청구(total_price)는 작업만 마진 가시화용 참고 표기.
+      const taskPayTotal = tasks.reduce((s, t) => s + (t.worker_rate || 0), 0);
+      const taskPaid = tasks.filter((t) => t.worker_paid).reduce((s, t) => s + (t.worker_rate || 0), 0);
+      const sessPayTotal = sessionPayouts.reduce((s, x) => s + (x.worker_rate || 0), 0);
+      const sessPaid = sessionPayouts.filter((x) => x.worker_paid).reduce((s, x) => s + (x.worker_rate || 0), 0);
+      const payTotal = taskPayTotal + sessPayTotal;
+      const paid = taskPaid + sessPaid;
       const unpaid = payTotal - paid;
       const clientTotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0);
       const summary = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
@@ -238,7 +247,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
           <span>미지급 <b class="${unpaid > 0 ? "text-danger" : "text-fg"}">${formatKRW(unpaid)}</b></span>
           <span class="text-muted">고객청구 ${formatKRW(clientTotal)} (참고)</span>
         </div>`;
-      const rows = tasks
+      const taskRows = tasks
         .map(
           (t) => `
           <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5">
@@ -256,7 +265,25 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
           </div>`
         )
         .join("");
-      content = summary + `<div class="space-y-2">${rows}</div>`;
+      // 세션 정산 행(2026-07-06 신설) — 작업 행과 동일 톤, 라벨만 세션 종류+날짜.
+      const sessionRows = sessionPayouts
+        .map(
+          (s) => `
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5">
+            <div class="min-w-0 text-sm">
+              <span class="font-medium">${esc(s.session_type || "녹음")} 세션</span><span class="text-xs text-muted"> · ${esc(s.project_title)} / ${esc(formatYmdShort(s.session_date))}</span>
+              ${s.worker_paid ? `<span class="badge ml-1 bg-success/10 text-success">지급완료 ${esc(s.worker_paid_date || "")}</span>` : `<span class="badge ml-1 bg-warning/10 text-warning">미지급</span>`}
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <span class="text-sm font-semibold">${formatKRW(s.worker_rate || 0)}</span>
+              <form method="post" action="/workers/${w.id}/session-payout/${s.session_id}">
+                <button class="btn-ghost btn-xs ${s.worker_paid ? "text-muted" : "text-primary"}" type="submit">${s.worker_paid ? "지급 취소" : "지급 처리"}</button>
+              </form>
+            </div>
+          </div>`
+        )
+        .join("");
+      content = summary + `<div class="space-y-2">${taskRows}${sessionRows}</div>`;
     }
   } else if (!tasks.length && !sessions.length) {
     content = emptyState("담당한 작업·세션이 없습니다.", { card: true });
@@ -341,12 +368,24 @@ router.post("/:id/payout/:taskId", requireInvoice, (req, res) => {
   res.redirect(`/workers/${w.id}?tab=payout`);
 });
 
+// ── 세션 지급 처리/해제(정산, 2026-07-06 사용자 상담 — 작업과 동일 구조) ──
+router.post("/:id/session-payout/:sessionId", requireInvoice, (req, res) => {
+  const w = getWorker(Number(req.params.id));
+  if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
+  const sessionId = Number(req.params.sessionId);
+  const eng = db().prepare("SELECT worker_paid FROM session_engineers WHERE session_id = ? AND manager_id = ?").get(sessionId, w.id);
+  if (eng) setSessionEngineerPayout(sessionId, w.id, !eng.worker_paid);
+  res.redirect(`/workers/${w.id}?tab=payout`);
+});
+
 // ── 미지급 전체 일괄 지급 처리(목록 카드 요약 줄의 [지급처리] 버튼, 2026-07-06 사용자 요청) ──
 router.post("/:id/payout-all", requireInvoice, (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
   const tasks = listTasksForWorker(w).filter((t) => !t.worker_paid && t.worker_rate > 0);
   tasks.forEach((t) => setTaskPayout(t.id, true));
+  const sessionPayouts = listSessionPayoutsForWorker(w).filter((s) => !s.worker_paid && s.worker_rate > 0);
+  sessionPayouts.forEach((s) => setSessionEngineerPayout(s.session_id, w.id, true));
   res.redirect("/workers?flash=saved");
 });
 

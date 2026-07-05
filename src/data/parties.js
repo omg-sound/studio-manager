@@ -554,8 +554,10 @@ function listProjectManagers({ includeInactive = false, externalOnly = false } =
   const where = [];
   if (!includeInactive) where.push("active = 1");
   if (externalOnly) where.push("user_id IS NULL");
+  // 정렬: 활성 우선 → 하우스 엔지니어(user_id 있음) 먼저·외주(user_id 없음) 나중 → 그룹 내 가나다순
+  // (2026-07-06 사용자 요청 — 이전엔 하우스·외주 구분 없이 전체 가나다순이라 보기 불편했음).
   return db().prepare(
-    `SELECT * FROM project_managers ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY active DESC, name COLLATE NOCASE`
+    `SELECT * FROM project_managers ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY active DESC, (user_id IS NULL) ASC, name COLLATE NOCASE`
   ).all();
 }
 

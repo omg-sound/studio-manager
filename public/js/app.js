@@ -535,7 +535,7 @@
 (function () {
   "use strict";
   // 천단위 콤마 대상 금액칸: 청구 총액·입금·할인, 단가표, 외주 지급단가, 작업·세션별 청구 금액(task_amount_<id>·session_amount_<id> 동적 name).
-  var MONEY = /^(unit_price|base_price|extra_price|amount|paid_amount|discount_amount|worker_rate|task_amount_\d+|session_amount_\d+)$/;
+  var MONEY = /^(unit_price|base_price|extra_price|amount|paid_amount|discount_amount|worker_rate|engineer_rates|task_amount_\d+|session_amount_\d+)$/;
   function fmt(v) {
     var d = String(v == null ? "" : v).replace(/[^\d]/g, "");
     return d ? Number(d).toLocaleString("en-US") : "";
@@ -957,6 +957,24 @@
       if (row && row.parentNode) row.parentNode.removeChild(row);
       markDirty(form);
     }
+  });
+})();
+
+// 세션 담당 엔지니어 행: 외주(data-external=1)일 때만 그 행의 지급단가 칸 표시(2026-07-06 — 작업 폼과 동일 규칙).
+// 위임(delegation)으로 처리해 '+ 담당 엔지니어 추가하기'로 복제된 행도 자동 동작.
+(function () {
+  "use strict";
+  function syncRow(sel) {
+    var row = sel.closest("[data-engineer-row]");
+    var wrap = row && row.querySelector("[data-engineer-rate]");
+    if (!wrap) return;
+    var opt = sel.options[sel.selectedIndex];
+    var external = opt && opt.getAttribute("data-external") === "1";
+    wrap.classList.toggle("hidden", !external);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-engineer-row] select[name="engineer_ids"]'), syncRow);
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.tagName === "SELECT" && e.target.name === "engineer_ids") syncRow(e.target);
   });
 })();
 
