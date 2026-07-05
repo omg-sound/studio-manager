@@ -557,13 +557,25 @@ function listContacts({ q, tab, staff } = {}) {
 }
 
 /**
- * 관계자(클라이언트 측 '사람' — 비아티스트): 대표·A&R·담당자·디렉터·작가 등.
- * person·is_artist=0·비스태프(user_id null)·비외주. 클라이언트 '관계자' 탭. 상세는 연락처(/contacts/:id).
+ * 관계자(클라이언트 측 '사람'): 대표·A&R·담당자·디렉터·작가 등.
+ * person·비스태프(user_id null)·비외주. 클라이언트 '관계자' 탭. 상세는 연락처(/contacts/:id).
+ *
+ * **is_artist=0(순수 관계자) 또는 관계자 역할로 참조된 사람**을 노출한다(2026-07-05 사용자 요청):
+ * 관계자에게 아티스트 활동명을 넣으면 `updateParty`가 is_artist=1로 바꿔 관계자 탭에서 사라지던 문제 해결.
+ * '아티스트 겸 관계자'(예: 김정환 — 디렉터인데 활동명도 있음)를 두 탭 모두에 노출.
+ * 관계자 역할 = 프로젝트 고객측 담당자(projects.contact_party_id)·세션 디렉터(session_directors.party_id)·
+ * 회사 대표(parties.owner_party_id)·그룹 담당자(parties.contact_party_id). 순수 솔로 아티스트(역할 없음)는
+ * 관계자 탭에 안 나온다(아티스트 탭 전용) — 관계자 목록이 아티스트로 오염되는 것 방지.
  */
+const ASSOCIATE_ROLE_SUBQUERY = `SELECT contact_party_id AS pid FROM projects WHERE contact_party_id IS NOT NULL
+        UNION SELECT party_id FROM session_directors WHERE party_id IS NOT NULL
+        UNION SELECT owner_party_id FROM parties WHERE owner_party_id IS NOT NULL
+        UNION SELECT contact_party_id FROM parties WHERE contact_party_id IS NOT NULL`;
 function listAssociates({ q } = {}) {
   const where = [
-    "p.kind = 'person'", "p.is_artist = 0", "p.user_id IS NULL",
+    "p.kind = 'person'", "p.user_id IS NULL",
     "p.id NOT IN (SELECT party_id FROM project_managers WHERE user_id IS NULL AND party_id IS NOT NULL)",
+    `(p.is_artist = 0 OR p.id IN (${ASSOCIATE_ROLE_SUBQUERY}))`,
   ];
   const args = [];
   const term = String(q || "").trim();
