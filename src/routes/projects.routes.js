@@ -110,11 +110,14 @@ function resolveProjectParties(b) {
       markArtistParty(artistId, artistName);
     }
   }
+  // 제작/운영: 콤보에서 사람(관계자·개인) 또는 회사를 선택하면 hidden production_party_id로 party id가 온다 → 그 party를 직접 사용
+  // (개인이 제작·운영하는 경우 지원, 2026-07-05). 없으면(새 이름 타이핑) 이름으로 회사 찾/생성. 다운스트림 client_id 파생은 kind 무관(COALESCE JOIN).
+  const prodPartyId = b.production_party_id ? Number(b.production_party_id) : null;
   return {
     contactId,
     artistId,
     agencyId: ensureCompanyParty(b.artist_company, "소속사/레이블"),
-    productionId: ensureCompanyParty(b.production_company, "제작사"),
+    productionId: prodPartyId || ensureCompanyParty(b.production_company, "제작사"),
   };
 }
 
@@ -476,8 +479,8 @@ function projectMetaLine(p) {
 function projectMetaReadonly(p) {
   const { left, amount } = projectMetaLine(p);
   const extra = [
-    p.artist_company ? `소속사 ${esc(p.artist_company)}` : "",
-    p.production_company ? `제작사/운영사 ${esc(p.production_company)}` : "",
+    p.artist_company ? `소속 ${esc(p.artist_company)}` : "",
+    p.production_company ? `제작/운영 ${esc(p.production_company)}` : "",
   ].filter(Boolean).join(" · ");
   return `
     <div class="card">
@@ -763,12 +766,12 @@ function projectForm(p = {}, err = "") {
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="label">소속사/레이블</label>
-          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속사/레이블")}
+          <label class="label">소속/레이블</label>
+          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
         </div>
         <div>
-          <label class="label">제작사/운영사</label>
-          ${companyCombo("production_company", p.production_company, "제작사", "제작사/운영사")}
+          <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
+          ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
         </div>
       </div>
       <div>
@@ -807,12 +810,12 @@ function projectEditForm(p = {}, err = "") {
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="label">소속사/레이블</label>
-          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속사/레이블")}
+          <label class="label">소속/레이블</label>
+          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
         </div>
         <div>
-          <label class="label">제작사/운영사</label>
-          ${companyCombo("production_company", p.production_company, "제작사", "제작사/운영사")}
+          <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
+          ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
         </div>
       </div>
       <div>
@@ -1181,7 +1184,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <input class="input" name="title" value="${esc(project.title)} 청구" />
       </div>
       <div class="mb-2">
-        <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작사 › 소속사 › 아티스트)</span></label>
+        <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작/운영 › 소속 › 아티스트)</span></label>
         ${payerCombo({ selectedId: project.production_id || project.agency_id || project.artist_id, clientOptions: clientOptions(), contactOptions: contactOptions(), ...payerDocMeta() })}
         <div data-payer-fix class="mt-1.5 hidden rounded-lg bg-warning/10 px-3 py-2">
           <p data-payer-warn class="text-sm text-warning"></p>

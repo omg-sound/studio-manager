@@ -672,10 +672,18 @@ function copyable(value, { cls = "", display = "" } = {}) {
  * @param {string} value 현재 업체명
  * @param {string} roleKey 모달 역할 체크 기본값("소속사/레이블" | "제작사")
  * @param {string} label 표시 라벨(placeholder·모달 제목)
+ * @param {object} [extra] 확장: { partyIdField, partyIdValue } — 지정 시 **사람(관계자·개인)도 검색·선택** 가능
+ *   (제작/운영에 개인이 들어가는 경우 — 2026-07-05 사용자 요청). 사람 선택 시 hidden partyIdField에 party id 제출,
+ *   저장부가 그 id를 production_id 등에 직접 사용(회사는 이름→ensureCompanyParty, 사람은 id 직접).
  */
-function companyCombo(fieldName, value, roleKey, label) {
+function companyCombo(fieldName, value, roleKey, label, extra = {}) {
   const { partyOptions } = require("./data"); // 지연 require(모듈 로드 순서·순환 회피 — data는 views를 require하지 않음)
-  const opts = partyOptions({ role: "company" }).map((o) => ({ name: o.name, sub: o.sub || "" }));
+  const withPeople = !!extra.partyIdField; // 사람(관계자/개인) 포함 여부
+  let opts = partyOptions({ role: "company" }).map((o) => ({ id: o.id, name: o.name, sub: o.sub || "조직" }));
+  if (withPeople) {
+    const people = partyOptions({ role: "person" }).map((o) => ({ id: o.id, name: o.name, sub: o.company || (o.is_artist ? "아티스트" : "관계자") }));
+    opts = opts.concat(people);
+  }
   const json = JSON.stringify(opts).replace(/</g, "\\u003c");
   const ownerOpts = partyOptions({ role: "person" }).map((o) => ({ id: o.id, name: o.name })); // 대표자 미니콤보(사람 검색)
   const ownerJson = JSON.stringify(ownerOpts).replace(/</g, "\\u003c");
@@ -683,6 +691,7 @@ function companyCombo(fieldName, value, roleKey, label) {
   return `
     <div data-company-combo>
       <input type="hidden" name="${fieldName}" value="${esc(value || "")}" data-cc-hidden />
+      ${withPeople ? `<input type="hidden" name="${esc(extra.partyIdField)}" value="${esc(extra.partyIdValue || "")}" data-cc-party-id />` : ""}
       <div class="relative">
         <!-- 보이는 입력은 name 없음(Chrome 조직 자동완성이 콤보 드롭다운 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js 동기화 -->
         <input class="input pr-9" type="text" value="${esc(value || "")}" data-cc-input autocomplete="off"
@@ -698,8 +707,8 @@ function companyCombo(fieldName, value, roleKey, label) {
           <div><label class="label">업체명</label><input class="input" data-cc-name placeholder="상호(업체명)" /></div>
           <div><label class="label">역할 <span class="text-xs font-normal text-muted">(겸업 가능)</span></label>
             <div class="flex flex-wrap gap-4">
-              <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" data-cc-agency ${isProd ? "" : "checked"} class="h-4 w-4 rounded border-border text-primary" /> 소속사/레이블</label>
-              <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" data-cc-prod ${isProd ? "checked" : ""} class="h-4 w-4 rounded border-border text-primary" /> 제작사/운영사</label>
+              <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" data-cc-agency ${isProd ? "" : "checked"} class="h-4 w-4 rounded border-border text-primary" /> 소속/레이블</label>
+              <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" data-cc-prod ${isProd ? "checked" : ""} class="h-4 w-4 rounded border-border text-primary" /> 제작/운영</label>
             </div>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">

@@ -1247,6 +1247,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   Array.prototype.forEach.call(document.querySelectorAll("[data-company-combo]"), function (root) {
     var input = root.querySelector("[data-cc-input]");
     var hidCC = root.querySelector("[data-cc-hidden]"); // 제출용 업체명(보이는 칸은 name 없음 — Chrome 자동완성 회피)
+    var hidPid = root.querySelector("[data-cc-party-id]"); // (선택) 사람/회사 선택 시 party id — 제작/운영에 관계자·개인 허용
     var pop = root.querySelector("[data-cc-pop]");
     var dataEl = root.querySelector("[data-cc-options]");
     var modal = root.querySelector("[data-cc-modal]");
@@ -1306,7 +1307,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "company", id: d.id, name: d.name }); if (ownerIdEl && ownerIdEl.value && owner) announceParty({ kind: "person", id: ownerIdEl.value, name: owner, company: d.name, job_title: "대표" }); input.value = d.name; closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 회사 + 대표자 소속·직책(대표) 브로드캐스트
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "company", id: d.id, name: d.name }); if (ownerIdEl && ownerIdEl.value && owner) announceParty({ kind: "person", id: ownerIdEl.value, name: owner, company: d.name, job_title: "대표" }); input.value = d.name; closeModal(); fireInput(); if (hidPid) hidPid.value = d.id; hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 회사 + 대표자 소속·직책(대표) 브로드캐스트 (새 회사 id를 party-id에도 — fireInput 뒤에)
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
@@ -1355,12 +1356,12 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     }
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
-    input.addEventListener("input", function () { if (hidCC) hidCC.value = input.value; render(); }); // 제출용 숨김 업체명 동기화(타이핑·pick·모달 모두 fireInput로 도달)
+    input.addEventListener("input", function () { if (hidCC) hidCC.value = input.value; if (hidPid) hidPid.value = ""; render(); }); // 제출용 숨김 업체명 동기화 + party id 해제(선택으로만 확정) (타이핑·pick·모달 모두 fireInput로 도달)
     input.addEventListener("blur", function () { setTimeout(hide, 150); });
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;
-      if (b.hasAttribute("data-idx")) { input.value = view[Number(b.getAttribute("data-idx"))].name; fireInput(); hide(); }
+      if (b.hasAttribute("data-idx")) { var o = view[Number(b.getAttribute("data-idx"))]; input.value = o.name; fireInput(); if (hidPid) hidPid.value = o.id || ""; hide(); } // fireInput이 hidPid를 지우므로 그 다음에 세팅(사람/회사 id 확정)
       else if (b.hasAttribute("data-new")) openModal();
     });
     comboKbdNav(input, pop); // 방향키 이동·엔터 선택

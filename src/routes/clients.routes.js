@@ -77,8 +77,8 @@ function companyRolesFrom(b) {
   const checked = [].concat(b.roles || []).filter((r) => COMPANY_ROLES.includes(r));
   return checked.length ? checked.join(",") : null;
 }
-/** 업체 역할 표시 라벨 — 내부값 '제작사'는 '제작사/운영사'로 표기(저장값은 '제작사' 유지, 프로젝트·마이그레이션 호환). */
-function companyRoleLabel(role) { return role === "제작사" ? "제작사/운영사" : role; }
+/** 업체 역할 표시 라벨 — 내부값 '제작사'→'제작/운영', '소속사/레이블'→'소속/레이블'로 표기(저장값은 원본 유지, 프로젝트·마이그레이션 호환, 2026-07-05). */
+function companyRoleLabel(role) { return role === "제작사" ? "제작/운영" : role === "소속사/레이블" ? "소속/레이블" : role; }
 /** 업체 역할 배열(roles CSV 우선, 없으면 kind 폴백). 배지 표시용. */
 function clientRoleList(c) {
   const r = String(c.roles || "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -686,7 +686,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
   const type = formType || (c.kind === "company" ? "company" : c.kind === "group" ? "group" : "artist");
   const typeLabel = type === "company" ? "업체" : type === "group" ? "그룹" : "아티스트";
   const nameLabel = type === "company" ? "상호(업체명)" : type === "group" ? "그룹명" : "이름 · 활동명";
-  const desc = type === "company" ? "업체 · 소속사/레이블 · 제작사/운영사" : type === "group" ? "그룹 · 밴드·아이돌 그룹" : "아티스트 · 개인(솔로)";
+  const desc = type === "company" ? "업체 · 소속/레이블 · 제작/운영" : type === "group" ? "그룹 · 밴드·아이돌 그룹" : "아티스트 · 개인(솔로)";
   const fileMap = {};
   files.forEach((f) => { fileMap[f.kind] = f; });
 

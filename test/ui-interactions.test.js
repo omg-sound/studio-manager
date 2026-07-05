@@ -12,7 +12,7 @@ const { mountDom, fire, tick } = require("./helpers-dom");
 const { init, db } = require("../src/db");
 init();
 const { createCompany } = require("../src/data");
-const { personCombo } = require("../src/views");
+const { personCombo, companyCombo } = require("../src/views");
 const { sessionBookingFields } = require("../src/views.sessions");
 
 /**
@@ -348,3 +348,33 @@ test("personCombo 새 등록 모달: 열림·IME 가드·바깥 폼과 분리", 
 });
 
 test.after(() => cleanupDb(process.env.DB_PATH, db()));
+
+// ── ④ 제작/운영 companyCombo: 사람(관계자·개인) 선택 → hidden party-id 세팅(2026-07-05) ──
+test("companyCombo 제작/운영: 관계자(사람) 검색·선택 시 party-id + 이름 세팅, 타이핑은 party-id 해제", () => {
+  const { createPerson } = require("../src/data");
+  const pid = createPerson({ name: "제작피디" }); // 관계자(개인 제작자)
+  const html = `<form>${companyCombo("production_company", "", "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: "" })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-cc-input]");
+  const hidName = doc.querySelector("[data-cc-hidden]");
+  const hidPid = doc.querySelector("[data-cc-party-id]");
+  assert.ok(hidPid, "party-id hidden 필드 존재(제작/운영만)");
+  // 사람 검색
+  input.value = "제작피디"; fire(win, input, "input");
+  const pop = doc.querySelector("[data-cc-pop]");
+  const row = pop.querySelector("button[data-idx]");
+  assert.ok(row && row.textContent.includes("제작피디"), "관계자가 드롭다운에 노출");
+  assert.ok(row.textContent.includes("관계자"), "부제에 관계자 표기");
+  fire(win, row, "click");
+  assert.equal(input.value, "제작피디", "선택 시 이름 채움");
+  assert.equal(hidName.value, "제작피디", "제출용 이름(production_company) 동기화");
+  assert.equal(String(hidPid.value), String(pid), "party-id = 그 사람 party id");
+  // 다시 타이핑하면 party-id 해제(선택으로만 확정)
+  input.value = "다른회사"; fire(win, input, "input");
+  assert.equal(hidPid.value, "", "타이핑 시 party-id 해제");
+});
+test("companyCombo 소속/레이블: partyIdField 없으면 party-id 필드도 없음(회사 전용)", () => {
+  const html = `<form>${companyCombo("artist_company", "", "소속사/레이블", "소속/레이블")}</form>`;
+  const { doc } = mountDom(html);
+  assert.equal(doc.querySelector("[data-cc-party-id]"), null, "소속/레이블은 party-id 없음(회사만)");
+});
