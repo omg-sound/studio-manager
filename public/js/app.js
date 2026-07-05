@@ -688,14 +688,21 @@
       }
     });
   }
-  // 3) 제출: 0원 항목 확인 → 통과 시 드래프트 정리
+  // 3) 제출: 0원 항목 확인 → 통과 시 hidden confirm_zero_amount=1 세팅(서버가 이 값 없으면 여전히 차단) + 드래프트 정리.
+  // (2026-07-05 버그수정: 이전엔 확인창만 띄우고 서버에 알리지 않아 '확인'을 눌러도 서버가 그대로 TASK_AMOUNT_REQUIRED로 되돌리던 것.)
+  var zeroFlag = form.querySelector("[data-confirm-zero-amount]");
   form.addEventListener("submit", function (e) {
     if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return; // 미리보기 PDF 제출은 드래프트·확인 건너뜀(청구 생성만 정리)
     var hasZero = false;
     Array.prototype.forEach.call(form.querySelectorAll('input[type="checkbox"][data-line-amount]'), function (cb) {
       if (cb.checked && !(lineVal(cb) > 0)) hasZero = true;
     });
-    if (hasZero && !window.confirm("금액이 0원인 청구 항목이 있습니다. 0원으로 청구할까요?")) { e.preventDefault(); return; }
+    if (hasZero) {
+      if (!window.confirm("금액이 0원인 청구 항목이 있습니다. 0원으로 청구할까요?")) { e.preventDefault(); return; }
+      if (zeroFlag) zeroFlag.value = "1";
+    } else if (zeroFlag) {
+      zeroFlag.value = "0";
+    }
     purgeDraft();
   });
 })();

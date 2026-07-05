@@ -714,6 +714,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
       vatIncluded: req.body.vat_included != null, // 부가세 포함 체크박스(기본 체크) — 해제 시 미전송 → false(현금 거래)
       taskAmounts: extractAmountMap(req.body, "task_amount"), // 금액은 청구 시점 확정 — 작업별 입력/조정 금액
       sessionAmounts: extractAmountMap(req.body, "session_amount"), // 녹음 세션도 작업처럼 금액 수정 가능
+      confirmZero: req.body.confirm_zero_amount === "1", // 0원 항목 확인 후 청구(폼이 window.confirm 후 세팅)
     });
     if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     // createInvoiceFromTasks는 즉시 '발행' 상태로 생성 → 발행 알림 발송(notify는 fail-safe·비차단, 청구 흐름 비차단).
@@ -721,7 +722,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
     // 청구 메뉴로 이탈하지 않고 프로젝트 청구 탭으로 복귀 + 방금 만든 인보이스를 펼친 채(open) 노출.
     res.redirect(`/projects/${req.params.id}?tab=invoice&open=${inv.id}&flash=created`);
   } catch (e) {
-    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다.", TASK_AMOUNT_REQUIRED: "청구할 작업·세션의 금액을 입력하세요(0원은 청구할 수 없습니다).", PAYER_TAX_INFO_REQUIRED: "청구처(회사)에 세금계산서 정보(사업자등록번호)가 없습니다. 클라이언트 상세에서 입력한 뒤 청구하세요.", PAYER_CASH_RECEIPT_REQUIRED: "청구처(개인)에 현금영수증 정보가 없습니다. 청구처 상세에서 입력한 뒤 청구하세요." };
+    const known = { TASK_IDS_REQUIRED: "청구할 작업·세션을 선택하세요.", TASK_NOT_BILLABLE: "청구 가능한 작업·세션만 선택할 수 있습니다.", CLIENT_NOT_FOUND: "선택한 청구처를 찾을 수 없습니다.", TASK_AMOUNT_REQUIRED: "0원인 항목이 있습니다. 그대로 청구하려면 확인 후 다시 시도하세요.", PAYER_TAX_INFO_REQUIRED: "청구처(회사)에 세금계산서 정보(사업자등록번호)가 없습니다. 클라이언트 상세에서 입력한 뒤 청구하세요.", PAYER_CASH_RECEIPT_REQUIRED: "청구처(개인)에 현금영수증 정보가 없습니다. 청구처 상세에서 입력한 뒤 청구하세요." };
     if (!known[e.message]) throw e; // 알 수 없는 오류(DB 등)는 전역 핸들러(500+로깅)로 — 검증 실패로 위장 방지
     return res.status(400).send(errorPage({ code: 400, title: "청구 오류", message: known[e.message], user: req.user }));
   }
@@ -1205,6 +1206,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   return `
     <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3" data-discount-form data-supply="${subtotal}">
       <button type="submit" disabled hidden aria-hidden="true"></button><!-- 기본(첫) submit 버튼을 비활성 sentinel로: 필드에서 엔터=암묵 제출이 견적서 미리보기(첫 버튼)를 열던 것 차단 — 표준상 기본 버튼 disabled면 엔터 무동작 -->
+      <input type="hidden" name="confirm_zero_amount" value="0" data-confirm-zero-amount /><!-- 체크한 항목 중 0원이 있으면 app.js가 제출 전 확인(window.confirm) 후 1로 세팅 — 서버는 이 값 없으면 여전히 차단(JS 미동작 안전망) -->
       <div class="mb-2">
         <h3 class="text-sm font-semibold">청구 생성</h3>
       </div>

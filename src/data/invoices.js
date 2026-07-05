@@ -322,9 +322,10 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
 function createInvoiceFromTasks(user, opts = {}) {
   const draft = computeInvoiceDraft(user, opts);
   if (!draft) return null;
-  // 0원 라인 차단(TASK_AMOUNT_REQUIRED) — 발행 시 작업·세션 모두 금액 > 0 필수(금액 미정 정액 항목은 폼에서 입력).
-  // 미리보기 PDF(invoiceDraftForPdf)는 참고용이라 0원 라인 허용(가드는 실제 발행에만).
-  if (draft.items.some((it) => !(it.amount > 0))) throw new Error("TASK_AMOUNT_REQUIRED");
+  // 0원 라인은 확인 후 허용(2026-07-05 사용자 결정 — 무료로 해준 작업도 기록·청구서에 남길 수 있게).
+  // opts.confirmZero(폼이 window.confirm 후 hidden confirm_zero_amount=1로 세팅)로만 우회 —
+  // 서버는 확인 없이는 여전히 차단(JS 미동작·경합 대비 안전망, 세션 겹침 override_conflict와 동일 패턴).
+  if (draft.items.some((it) => !(it.amount > 0)) && !opts.confirmZero) throw new Error("TASK_AMOUNT_REQUIRED");
   // 청구처 발행 정보 없으면 생성 차단(회사=세금계산서 정보 biz_no, 개인=현금영수증 정보). 폼에서도 막지만 서버가 최종 보루.
   if (draft.resolvedPayerId) {
     const miss = payerDocMissing(getParty(draft.resolvedPayerId));
