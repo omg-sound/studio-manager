@@ -1199,14 +1199,14 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   return `
     <form method="post" action="/projects/${project.id}/invoices/from-tasks" class="rounded-lg border border-border bg-bg p-3" data-discount-form data-supply="${subtotal}">
       <div class="mb-2">
-        <h3 class="text-sm font-semibold">청구 생성 <span class="text-xs font-normal text-muted">(미청구 작업 · 세션)</span></h3>
+        <h3 class="text-sm font-semibold">청구 생성</h3>
       </div>
       <div class="mb-2">
         <label class="label mb-1 text-xs">청구 제목</label>
         <input class="input" name="title" value="${esc(project.title)} 청구" />
       </div>
       <div class="mb-2">
-        <label class="label mb-1 text-xs">청구처 <span class="font-normal text-muted">— 미선택 시 자동(제작/운영 › 소속 › 아티스트)</span></label>
+        <label class="label mb-1 text-xs">청구처</label>
         ${payerCombo({ selectedId: project.production_id || project.agency_id || project.artist_id, clientOptions: clientOptions(), contactOptions: contactOptions(), ...payerDocMeta() })}
         <div data-payer-fix class="mt-1.5 hidden rounded-lg bg-warning/10 px-3 py-2">
           <p data-payer-warn class="text-sm text-warning"></p>
@@ -1222,7 +1222,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       ${hasPending ? explain(`미완료 항목(대기 작업·예정 세션)은 기본 선택에서 제외됩니다. 체크하면 완료로 바꿀지 확인 후 청구·완료 처리됩니다.`) : ""}
       <div class="mt-3 space-y-2">
         <div>
-          <label class="label mb-1 text-xs">할인 <span class="font-normal text-muted">(선택 — 체크한 항목 공급가 기준)</span></label>
+          <label class="label mb-1 text-xs">할인</label>
           <div class="flex gap-2">
             <div class="relative flex-1">
               <input class="input py-1.5 text-sm pr-8" inputmode="numeric" name="discount_amount" value="0" placeholder="0" data-discount-amount />
@@ -1250,7 +1250,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           </div>
         </div>
         <div class="mb-2">
-          <div class="mb-1 text-xs text-muted">문서 발행 <span class="font-normal">— 청구서를 만들지 않고 선택 항목으로 PDF만</span></div>
+          <div class="mb-1 text-xs text-muted">문서 발행</div>
           ${(() => {
             // 미리보기 PDF: 다운로드 파일명 = 문서번호(견적서=OMG-EST-…). Chrome는 inline PDF에서 URL 마지막 경로를
             // 파일명으로 쓰고 '다운로드'는 같은 URL을 GET 재요청하므로, formmethod=get으로 폼을 GET 제출(선택은 쿼리로).
