@@ -106,7 +106,16 @@ function listProjects(_user, { q } = {}) {
       (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id AND t.status = 'Pending') AS task_pending,
       (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id AND t.status = 'Completed') AS task_done,
       ((SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id)
-       + (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id)) AS content_cnt
+       + (SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = p.id)) AS content_cnt,
+      -- 미청구 항목 수 = 미청구 작업 + 미청구 청구가능 세션(listBillableSessionsForProject와 동일 조건).
+      -- 완료 탭에서 '청구 생성 안 한 프로젝트'를 위로 올리는 정렬·배지용(2026-07-05 사용자 요청).
+      ((SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id
+         WHERE tr.project_id = p.id AND t.is_invoiced = 0)
+       + (SELECT COUNT(*) FROM sessions s
+           WHERE s.project_id = p.id AND s.status <> '취소' AND s.session_type IN (${RENTAL_IN})
+             AND s.rate_item_id IS NOT NULL AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
+             AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
+             AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id))) AS unbilled_cnt
     FROM projects p
     LEFT JOIN parties c ON c.id = COALESCE(p.production_id, p.agency_id, p.artist_id)
     LEFT JOIN project_managers m ON m.id = p.manager_id

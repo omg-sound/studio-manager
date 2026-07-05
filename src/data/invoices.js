@@ -439,7 +439,7 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN parties c ON c.id = i.payer_id
     ${where.length ? "WHERE " + where.join(" AND ") : ""}
-    ORDER BY i.created_at DESC`; // 마감일 개념 삭제(2026-07-05) → 최신 생성순
+    ORDER BY COALESCE(i.issued_date, '') DESC, i.created_at DESC`; // 기본 = 발행일 최신순(2026-07-05 사용자 결정), 동일 발행일은 생성순
   let rows = db().prepare(sql).all(params);
   if (overdue) rows = rows.filter(isOverdue); // 연체는 파생값이라 코드에서 필터
   return rows;

@@ -156,7 +156,9 @@ router.get("/", requireAuth, (req, res) => {
   const searched = Boolean(q);
   // 진행 중 / 완료로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
   const ongoing = rows.filter((r) => !r.is_completed);
-  const done = rows.filter((r) => r.is_completed);
+  // 완료 탭 = 청구 대기 큐(2026-07-05 사용자 요청): 미청구 항목 있는 프로젝트를 위로, 청구 끝난 것은 아래로.
+  // 그룹 내 순서는 생성일 최신순 유지(Array.sort 안정 정렬 — SQL이 이미 created_at DESC).
+  const done = rows.filter((r) => r.is_completed).sort((a, b) => (Number(b.unbilled_cnt) > 0 ? 1 : 0) - (Number(a.unbilled_cnt) > 0 ? 1 : 0));
   // 접기 섹션 → 탭바(연락처 방식). ?tab=active(기본)/done, 검색어 유지. 활성 탭 목록만 렌더.
   const tab = req.query.tab === "done" ? "done" : "active";
   const activeRows = tab === "done" ? done : ongoing;
@@ -280,6 +282,7 @@ function projectListRow(p, summary, { isChief: chief = false, tab = "active", q 
       <a href="/projects/${p.id}" class="row-link flex items-start justify-between gap-3 px-4 pb-3 pt-1">
         <div class="min-w-0">
           <div class="truncate font-semibold">${esc(p.title)}</div>
+          ${tab === "done" && Number(p.unbilled_cnt) > 0 ? `<div class="mt-1"><span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span></div>` : ""}
           <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
           ${nextSessionLine(p)}
         </div>
