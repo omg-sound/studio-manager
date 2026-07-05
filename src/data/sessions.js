@@ -24,8 +24,9 @@ function listSessionsForProject(user, projectId) {
   const { isSessionInvoiced } = require("../data"); // invoices와 상호의존 → 지연 require
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
+  // 항상 날짜순(2026-07-05 사용자 요청 — 이전 작성순 created_at에서 전환). 같은 날은 시작 시각순, 동률은 id로 안정 정렬.
   const rows = db()
-    .prepare("SELECT * FROM sessions WHERE project_id = ? ORDER BY created_at ASC, id ASC")
+    .prepare("SELECT * FROM sessions WHERE project_id = ? ORDER BY session_date ASC, start_time ASC, id ASC")
     .all(projectId);
   return {
     project,

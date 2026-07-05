@@ -379,14 +379,14 @@ function explain(content, { label = "설명", cls = "mt-1" } = {}) {
 /**
  * 편집 폼 하단 버튼 줄 — UI 통일: **저장은 오른쪽, 삭제(파괴적 동작)는 왼쪽**, 같은 줄.
  * 삭제는 별도 hidden `<form id=deleteFormId>`에 `form=` 속성으로 연결(폼 중첩 회피). deleteFormId 없으면 저장만(오른쪽).
- * dirty 저장 패턴(data-dirty-save/hint)과 함께 쓴다. cancelHref 있으면 삭제 자리에 '취소' 링크.
+ * dirty 저장 패턴(data-dirty-save/hint)과 함께 쓴다. cancelHref 있으면 왼쪽에 '취소'(저장하지 않고 목록으로) 링크 —
+ * deleteFormId와 함께 주면 삭제 옆에 나란히 표시(2026-07-05 사용자 요청). 취소는 data-no-guard로 dirty 네비게이션
+ * 가드(저장/무시 모달)를 우회 — 취소 자체가 이미 '저장 안 함' 선택이라 다시 묻지 않는다.
  */
 function dirtyActionRow({ deleteFormId = "", deleteLabel = "삭제", saveLabel = "저장", cancelHref = "", dirty = true } = {}) {
-  const left = deleteFormId
-    ? `<button type="submit" form="${esc(deleteFormId)}" class="btn-ghost btn-sm text-danger">${esc(deleteLabel)}</button>`
-    : cancelHref
-      ? `<a href="${esc(cancelHref)}" class="btn-ghost btn-sm">취소</a>`
-      : `<span></span>`;
+  const deleteBtn = deleteFormId ? `<button type="submit" form="${esc(deleteFormId)}" class="btn-ghost btn-sm text-danger">${esc(deleteLabel)}</button>` : "";
+  const cancelBtn = cancelHref ? `<a href="${esc(cancelHref)}" class="btn-ghost btn-sm" data-no-guard>취소</a>` : "";
+  const left = deleteBtn || cancelBtn ? `<div class="flex items-center gap-2">${deleteBtn}${cancelBtn}</div>` : `<span></span>`;
   const saveBtn = dirty
     ? `<button type="submit" class="btn-primary transition" data-dirty-save>${esc(saveLabel)}</button>`
     : `<button type="submit" class="btn-primary">${esc(saveLabel)}</button>`;

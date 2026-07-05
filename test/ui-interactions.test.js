@@ -359,6 +359,37 @@ test("dirty 폼: 변경 → 힌트·강조, 원복 → 해제(__hasDirty 연동)
   assert.equal(win.__hasDirty(), false);
 });
 
+// ── ④-b 네비게이션 가드: 일반 링크=클릭 가로채 모달, data-no-guard 링크(취소)=모달 없이 통과 ──
+// 2026-07-05 발견 버그: data-no-guard가 커스텀 모달만 막고 beforeunload 프롬프트는 못 막던 것 —
+// 여기선 커스텀 모달·preventDefault 동작만 검증(네이티브 beforeunload 다이얼로그는 jsdom이 표시하지 않아 검증 불가 —
+// 실제 크롬 E2E로 확인: 취소 클릭 시 네이티브 프롬프트 없이 목록으로 이동).
+test("네비게이션 가드: 일반 링크는 dirty일 때 가로채 모달, data-no-guard(취소)는 통과", async () => {
+  const html = `
+    <form data-dirty-form>
+      <input type="text" name="memo" value="원래값" />
+      <button type="submit" data-dirty-save>저장</button>
+    </form>
+    <a href="/other">다른 링크</a>
+    <a href="/projects" data-no-guard>취소</a>`;
+  const { win, doc } = mountDom(html);
+  await tick();
+  const input = doc.querySelector('input[name="memo"]');
+  input.value = "바뀐값"; fire(win, input, "input");
+  await tick();
+  assert.equal(win.__hasDirty(), true);
+
+  const plainLink = doc.querySelector('a[href="/other"]');
+  const ev1 = fire(win, plainLink, "click");
+  assert.equal(ev1.defaultPrevented, true, "일반 링크는 dirty 상태에서 기본 동작 차단");
+  assert.ok(doc.querySelector("[data-nav-guard]"), "커스텀 저장/저장하지않음 모달 노출");
+  doc.querySelector("[data-nav-guard]").remove(); // 다음 검증을 위해 정리
+
+  const cancelLink = doc.querySelector('a[href="/projects"]');
+  const ev2 = fire(win, cancelLink, "click");
+  assert.equal(ev2.defaultPrevented, false, "data-no-guard 링크는 기본 동작(이동)을 막지 않음");
+  assert.ok(!doc.querySelector("[data-nav-guard]"), "커스텀 모달 없음");
+});
+
 // ── ⑤ 콤보 새 등록 모달: 열림 + IME Enter가 등록을 트리거하지 않음 ──
 test("personCombo 새 등록 모달: 열림·IME 가드·바깥 폼과 분리", () => {
   const { win, doc, pop, input } = mountPersonCombo();

@@ -150,7 +150,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 (`npm test`, 123개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 (`npm test`, 124개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -160,7 +160,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 |---|---|---|---|
 | **① 단위** | `invoice-number`·`vat`·`rate-price`·`session-conflict`·`auth`·`party`·`payments`·`rental-session` | 82 | 금전 로직(채번·VAT·Pro블록 단가·할인·**프로젝트 금액 할인 차감**[invoice_discount_total — from-tasks만, 수동 제외]·**0원 항목 confirmZero 청구**)·세션 겹침(야간교차·취소예외)·권한·당사자 모델·입금 이력·대관 세션(녹음/촬영/공연 kind 매핑·금액 미정 정액)·**세션 담당 엔지니어 다대다**(session_engineers 저장·교체·유효id 필터·dedup) |
 | **② 정적 계약 가드** | `guardrails.test.js`(백엔드) + `guardrails-ui.test.js`(UI — companyCombo 옵션 키 ⑭ 포함) | 15 | 소스 양쪽을 스캔해 **반복 실수 클래스가 코드에 존재할 수 없게** — 아래 목록 |
-| **③ 상호작용(jsdom)** | `ui-interactions.test.js` + `helpers-dom.js` | 26 | 실제 views 렌더 위에서 **실제 app.js를 실행**해 동작 검증 — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)·선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·종일 토글·구글식 시간 콤보·디렉터 프리필·simpleModal·외부 장소 토글·**이름 병기**(라벨 pick·라벨 재열람 유지·서버 렌더 주석)·dirty 폼 |
+| **③ 상호작용(jsdom)** | `ui-interactions.test.js` + `helpers-dom.js` | 27 | 실제 views 렌더 위에서 **실제 app.js를 실행**해 동작 검증 — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)·선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·종일 토글·구글식 시간 콤보·디렉터 프리필·simpleModal·외부 장소 토글·**이름 병기**(라벨 pick·라벨 재열람 유지·서버 렌더 주석)·dirty 폼·**네비게이션 가드**(일반 링크 가로채기·`data-no-guard` 통과) |
 
 **② 가드 목록** (각 가드에 사고 이력 주석 있음 — 왜 존재하는지 파일에서 확인):
 
@@ -180,7 +180,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 123개(단위+가드+상호작용)
+npm test                                   # 전체 124개(단위+가드+상호작용)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 ```

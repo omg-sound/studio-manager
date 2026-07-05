@@ -415,7 +415,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
 
   // ── 탭: 프로젝트 / 세션 일정 / 곡·콘텐츠 / 자료 전달 / 청구(청구권자만) ──
   // 메타 카드는 '프로젝트' 탭(첫 탭·기본). 유형 구분 없이 모든 프로젝트가 세션 일정 탭을 가진다.
-  const tabs = [{ key: "project", label: "프로젝트" }];
+  const tabs = [{ key: "project", label: "정보" }];
   tabs.push({ key: "sessions", label: "세션 일정" });
   tabs.push({ key: "tracks", label: "곡 · 콘텐츠" });
   if (editable) tabs.push({ key: "deliverables", label: "자료 전달" }); // 자료 전달은 편집자(치프·스태프)만, 대표 제외
@@ -857,7 +857,7 @@ function projectEditForm(p = {}, err = "") {
         <label class="label">메모</label>
         <textarea class="input" name="memo" rows="3">${esc(p.memo || "")}</textarea>
       </div>
-      ${dirtyActionRow({ deleteFormId: `del-proj-${p.id}`, deleteLabel: "프로젝트 삭제" })}
+      ${dirtyActionRow({ deleteFormId: `del-proj-${p.id}`, deleteLabel: "프로젝트 삭제", cancelHref: "/projects" })}
     </form>`;
 }
 

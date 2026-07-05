@@ -941,7 +941,11 @@
     if (!a) return;
     var href = a.getAttribute("href");
     if (!href || href.charAt(0) === "#" || /^(javascript:|mailto:|tel:)/i.test(href)) return;
-    if (a.target === "_blank" || a.hasAttribute("download") || a.hasAttribute("data-no-guard")) return;
+    if (a.target === "_blank" || a.hasAttribute("download")) return;
+    // data-no-guard(예: '취소'=저장하지 않고 목록으로): 커스텀 모달은 건너뛰지만, bypass 없이 두면
+    // 곧이어 일어날 실제 이동에서 beforeunload의 브라우저 기본 "나가시겠습니까?" 프롬프트가 그대로 뜬다
+    // (2026-07-05 발견 — data-no-guard가 모달만 막고 beforeunload는 못 막던 잠복 결함). bypass로 둘 다 통과.
+    if (a.hasAttribute("data-no-guard")) { bypass = true; setTimeout(function () { bypass = false; }, 1000); return; }
     e.preventDefault();
     openGuardModal(href);
   }, true);
