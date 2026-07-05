@@ -122,8 +122,9 @@ router.get("/", requireBilling, (req, res) => {
     : "";
 
   const retPath = `/invoices?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`;
+  const openId = req.query.open ? Number(req.query.open) : null; // 토글 처리 후 그 카드의 '상태 처리' 펼침 유지(+스크롤)
   const list = rows.length
-    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i, { isAdmin: admin, isInvoicer: invoicer, ret: retPath })).join("")}</div>`
+    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i, { isAdmin: admin, isInvoicer: invoicer, ret: retPath, openId })).join("")}</div>`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
