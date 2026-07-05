@@ -65,6 +65,22 @@ function invoiceBadge(inv) {
 }
 
 /**
+ * (계산서|현금영수증) 발행 완료 / 입금완료 토글 버튼 2개 — 청구 목록 카드·청구 상세 공용(2026-07-05 상세도 select→버튼 통일).
+ * 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다.
+ * 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
+ * 색 계열: 세션 완료 토글과 동일한 은은한 success(초록) 흐름. 무JS 동작(폼 제출).
+ */
+function taxToggleButtons(inv, retPath) {
+  const retHidden = `<input type="hidden" name="return" value="${esc(retPath || "/invoices")}" />`;
+  const taxDoc = taxDocOf(inv);
+  const taxIssued = inv.tax_status === "계산서 발행" || inv.tax_status === "입금완료";
+  const isPaid = inv.tax_status === "입금완료";
+  const toggleBtn = (target, label, lit) =>
+    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost btn-sm ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit"><span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(label)}</button></form>`;
+  return `${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", `${taxDoc} 발행 완료`, taxIssued)}${toggleBtn(isPaid ? "계산서 발행" : "입금완료", "입금완료", isPaid)}`;
+}
+
+/**
  * 펼침 본문(프로젝트 청구 탭 인라인): 금액 내역·청구 항목·관리자 폼(상태/입금/수정/삭제)·PDF·전체화면 링크.
  * 모든 변경 폼은 returnTo(프로젝트 청구 탭)로 복귀해 프로젝트를 벗어나지 않는다.
  * @param {object} inv 인보이스(+ paid_amount, tax_amount, discount_amount, status …)
@@ -183,24 +199,13 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
   const right = `
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>`;
   // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(계산서·입금 처리 권한자=대표·치프만).
-  // 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다(사용자 요청).
-  // 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
-  const retPath = ret || "/invoices";
-  const retHidden = `<input type="hidden" name="return" value="${esc(retPath)}" />`;
-  const taxDoc = taxDocOf(inv);
-  const taxIssued = inv.tax_status === "계산서 발행" || inv.tax_status === "입금완료";
-  const isPaid = inv.tax_status === "입금완료";
-  // 색 계열: 세션 완료 토글과 동일한 은은한 success(초록) 흐름 — 완료=초록 tint, 미완료=ghost+초록 텍스트(앰버/btn-primary는 너무 강해 배제, 사용자 요청).
-  const toggleBtn = (target, label, lit) =>
-    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost btn-sm ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit"><span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(label)}</button></form>`;
   const actions = isInvoicer
     ? `<details class="group">
          <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
            <span>상태 처리</span>${detailsChevron()}
          </summary>
          <div class="flex flex-wrap justify-end gap-2 border-t border-border/40 bg-elevated/40 px-4 py-3">
-           ${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", `${taxDoc} 발행 완료`, taxIssued)}
-           ${toggleBtn(isPaid ? "계산서 발행" : "입금완료", "입금완료", isPaid)}
+           ${taxToggleButtons(inv, ret || "/invoices")}
          </div>
        </details>`
     : "";
@@ -280,4 +285,4 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </div>`;
 }
 
-module.exports = { invoiceBadge, invoiceRow, invoicesSection, payerInfoCard, payerName }; // displayStatus는 내부 전용; payerName=청구처 표시명(본명 (활동명)) 헬퍼
+module.exports = { invoiceBadge, invoiceRow, invoicesSection, payerInfoCard, payerName, taxToggleButtons }; // displayStatus는 내부 전용; payerName=청구처 표시명(본명 (활동명)) 헬퍼

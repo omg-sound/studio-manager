@@ -24,7 +24,7 @@ const {
   deletePayment,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo, tabBar, personLabel } = require("../views");
-const { invoiceRow, invoiceBadge, payerInfoCard } = require("../views.invoices");
+const { invoiceRow, invoiceBadge, payerInfoCard, taxToggleButtons } = require("../views.invoices");
 const { formatYmdShort } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { parseMoney, cleanYmd } = require("../lib/forms");
 const { asyncHandler } = require("../lib/async");
@@ -226,20 +226,11 @@ router.get("/:id", requireBilling, (req, res) => {
   const row = (label, value) =>
     `<div class="flex justify-between border-b border-border py-2 last:border-0"><span class="text-sm text-muted">${esc(label)}</span><span class="text-sm font-medium">${value}</span></div>`;
 
-  // 계산서·입금 처리(대표·치프만) — 통합 카드 내부 섹션(2026-07-05 재배치: 금액·항목과 한 카드). 청구서 발행 상태 컨트롤은 제거(청구 생성=발행).
+  // 계산서·입금 처리(대표·치프만) — select 폐기, 청구 목록 '발행 필요' 카드와 동일한 토글 버튼 2개(2026-07-05 사용자 요청·taxToggleButtons 공용).
   const processSection = canProcess
     ? `
-      <div class="mt-4 space-y-3 border-t border-border pt-3">
-        <h2 class="text-sm font-semibold">계산서 · 입금 처리</h2>
-        <div class="flex flex-wrap items-end gap-3">
-          <form method="post" action="/invoices/${inv.id}/tax-status">
-            <label class="label mb-0.5 text-xs">계산서 · 입금</label>
-            <select name="tax_status" class="input max-w-[10rem]" data-autosubmit>
-              ${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || "계산서 미발행") ? "selected" : ""}>${esc(s)}</option>`).join("")}
-            </select>
-            <noscript><button class="btn-ghost">변경</button></noscript>
-          </form>
-        </div>
+      <div class="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+        ${taxToggleButtons(inv, `/invoices/${inv.id}`)}
       </div>`
     : "";
   // PDF 발행 — 통합 카드 맨 아래(처리 섹션 다음, 2026-07-05 재배치).
