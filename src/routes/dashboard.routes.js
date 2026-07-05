@@ -1,8 +1,8 @@
 "use strict";
 
 const express = require("express");
-const { requireAuth } = require("../auth");
-const { dashboardStats, upcomingSessions } = require("../data");
+const { requireAuth, canBill } = require("../auth");
+const { dashboardStats, upcomingSessions, listProjects } = require("../data");
 const { layout, pageHeader, esc, formatKRW, emptyState } = require("../views");
 const { todayYmd, formatYmdShort } = require("../lib/date");
 
@@ -73,6 +73,31 @@ router.get("/", requireAuth, (req, res) => {
         .join("")
     : emptyState("이번 주 예정된 세션이 없습니다.", { icon: "sessions" });
 
+  // 청구 필요 = 완료됐는데 미청구 항목이 남은 프로젝트(프로젝트 완료 탭 상단 그룹과 동일 정의, 2026-07-05 사용자 요청).
+  // 청구 생성 권한자(canBill=치프·대표·스태프) 전원에게 — 스태프가 청구 생성 담당. 상위 5개 + 완료 탭 전체 링크.
+  let unbilledCard = "";
+  if (canBill(user)) {
+    const needBilling = listProjects(user, {}).filter((p) => p.is_completed && Number(p.unbilled_cnt) > 0);
+    if (needBilling.length) {
+      const rowsHtml = needBilling.slice(0, 5).map((p) => `
+      <a href="/projects/${p.id}?tab=invoice" class="row-link flex items-center justify-between gap-3 border-b border-border py-2.5 last:border-0">
+        <div class="min-w-0">
+          <div class="truncate text-sm font-medium">${esc(p.title)}</div>
+          <div class="truncate text-xs text-muted">${esc([p.artist, p.client_name].filter(Boolean).join(" · ") || "정보 미정")}</div>
+        </div>
+        <span class="badge shrink-0 bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span>
+      </a>`).join("");
+      unbilledCard = `
+    <div class="card mt-4">
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <h2 class="font-display text-base font-semibold">청구 필요</h2>
+        <a href="/projects?tab=done" class="text-xs text-muted hover:text-fg hover:underline">완료 탭에서 전체 보기 ${needBilling.length}건 ↗</a>
+      </div>
+      ${rowsHtml}
+    </div>`;
+    }
+  }
+
   const body = `
     ${pageHeader({
       title: "대시보드",
@@ -86,7 +111,8 @@ router.get("/", requireAuth, (req, res) => {
         <span class="text-xs text-muted">오늘 ${todaySessions.length}건 · 이번 주 ${weekSessions.length}건</span>
       </div>
       ${sessionList}
-    </div>`;
+    </div>
+    ${unbilledCard}`;
 
   res.send(layout({ title: "대시보드", user, current: "/", body }));
 });
