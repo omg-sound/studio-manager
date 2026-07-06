@@ -67,6 +67,7 @@
 - **거래명세서 PDF**: 발행/입금완료 인보이스 → A4 PDF(`GET /invoices/:id/statement.pdf`, resvg+pdf-lib, `src/invoice-pdf.js`).
   레이아웃: 좌측 **제목**(거래명세서/내역서/견적서 — `?type=`로 선택, `DOC_TYPES`) + 공급자 헤더·**로고**(우측), 청구처 박스, **품목|금액** 표(수량·단가 생략 — 곡/세션 단위 고정), 소계/VAT/합계, **납부하실금액** 강조(견적서는 '견적 금액'·전용 푸터).
   공급자=스튜디오 세금정보·로고(환경설정), 공급받는자=클라이언트. `requireInvoice`·`no-store`·즉석 스트리밍(PII 최소화). 한글 폰트 `public/fonts`(서브셋 TTF) 번들.
+- **세금계산서 발행 이메일에 담당자 이메일 병기(2026-07-06 사용자 요청 — '담당자가 받아야 하는 경우도 있네')**: 발행 전에 어느 메일로 보내야 하는지 청구 목록·상세 둘 다에서 바로 보이게. `listInvoices`(`src/data/invoices.js`)가 `payer_email`(청구처 자체 이메일)과 `contact_email`(청구처가 업체일 때 현재 재직중 담당자 — `affiliations WHERE org_id=payer AND ended_on IS NULL` — 이메일 중 첫 건)을 파생. **청구 목록**(`invoiceRow` 비compact): 카드의 청구처명 줄 아래 이메일 줄 추가(둘 다 있으면 `클라이언트이메일 · 담당자이메일 (담당자)`, `copyable` 클릭 복사). **청구 상세·프로젝트 청구 탭**(`payerInfoCard`, 공용): 기존 "세금계산서 발행 이메일" 행(client.email 단독)에 담당자 이메일을 같은 행에 병기(다를 때만) — 그 아래 "담당자"(이름·전화·이메일) 행은 그대로 유지(이름 확인용). 새 쿼리 추가 없이 `listPersonsForOrg`/`affiliations` 기존 인프라 재사용.
 
 ### 클라이언트
 - 통칭 **클라이언트** 마스터(`clients`: 아티스트/소속사·레이블/제작사/기타, `?kind=` 탭 필터). 프로젝트 저장 시 분류별 자동 등록. **치프·스태프 모두 열람·편집**(`requireEditor`, NAV `access:"editor"`) — **첨부 서류도 스태프 개방**(2026-07-01, requireChief→requireEditor: 직원 업무 편의; 여전히 인증 다운로드·공개 링크 없음).
