@@ -126,8 +126,9 @@ router.get("/", requireInvoice, (req, res) => {
           const unpaidAmt = unpaid.reduce((s, t) => s + (t.worker_rate || 0), 0) + unpaidSessions.reduce((s, x) => s + (x.worker_rate || 0), 0);
           const unpaidCount = unpaid.length + unpaidSessions.length;
           // 미지급 항목 미리보기(2026-07-06 사용자 요청 — 건수·금액만으론 뭔지 몰라 대략 어떤 항목인지 한 줄 더).
+          // 작업 라벨에 날짜 추가(2026-07-06 후속 — 종류만으론 같은 종류 작업이 여럿일 때 구분이 안 돼 '정산할 때 어떤 항목인지 명확하지 않다'는 리포트).
           const itemLabels = [
-            ...unpaid.map((t) => taskTypeLabel(t.task_type)),
+            ...unpaid.map((t) => `${taskTypeLabel(t.task_type)} ${formatYmdShort(String(t.created_at || "").slice(0, 10))}`),
             ...unpaidSessions.map((s) => `${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)}`),
           ];
           const PREVIEW_MAX = 3;
@@ -235,7 +236,9 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
     hrefFn: (key) => `/workers/${w.id}?tab=${key}`,
   });
 
-  const taskMeta = (t) => `<span class="text-xs text-muted"> · ${esc(t.project_title)} / ${esc(t.track_title)}</span>`;
+  // 정산·참여 내역 행의 항목 식별 정보(2026-07-06 사용자 리포트 — '정산할 때 어떤 항목인지 명확하지 않음'):
+  // 프로젝트/트랙명만으론 부족해 아티스트·작업일을 덧붙인다(세션 행은 이미 날짜 있음, 작업 행에 통일).
+  const taskMeta = (t) => `<span class="text-xs text-muted"> · ${t.track_artist ? `${esc(t.track_artist)} · ` : ""}${esc(t.project_title)} / ${esc(t.track_title)} · ${esc(formatYmdShort(String(t.created_at || "").slice(0, 10)))}</span>`;
 
   let content;
   if (tab === "payout") {

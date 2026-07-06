@@ -571,7 +571,7 @@ function listTasksForWorker(worker) {
   if (!worker) return [];
   return db()
     .prepare(
-      `SELECT t.*, tr.title AS track_title, p.id AS project_id, p.title AS project_title
+      `SELECT t.*, tr.title AS track_title, COALESCE(NULLIF(tr.artist, ''), p.artist) AS track_artist, p.id AS project_id, p.title AS project_title
        FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        JOIN projects p ON p.id = tr.project_id
