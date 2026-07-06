@@ -191,35 +191,27 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
     </details>`;
   }
 
-  // 목록 페이지: 프로젝트 목록처럼 각 청구서를 개별 카드로(사용자 요청). 프로젝트 카드와 동일 톤(rounded-xl·border-border/60·row-link 호버).
-  const left = `
-    <div class="truncate font-medium">${esc(inv.title)}</div>
-    <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
-    <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
-  const right = `
-    <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>`;
-  // 프로젝트 카드처럼 하단에 접고 펴는 '상태 처리' 섹션 — (계산서|현금영수증) 발행 완료 / 입금완료 2버튼(계산서·입금 처리 권한자=대표·치프만).
-  // 토글 후 ?open=ID로 복귀 → 처리한 카드의 상태 처리를 펼친 채 유지 + 스크롤(app.js #inv-<id>) — 접혀버리던 문제 수정(2026-07-05 사용자 리포트).
-  const listOpen = openId != null && Number(openId) === inv.id;
+  // 목록 페이지: 프로젝트 목록처럼 각 청구서를 개별 카드로. **제목만 링크**(2026-07-06 사용자 요청 — 이전엔 카드 전체가 링크라
+  // 상태 처리 버튼과 히트 영역이 겹쳤음; listRowLinked와 동일한 '제목만 링크' 패턴). 상태 처리 버튼은 **접이식 폐기 — 금액 바로 밑에 항상 노출**
+  // (계산서|현금영수증 발행 완료 / 입금완료, 권한자=대표·치프만). 토글 후 ?open=ID로 복귀 → 그 카드로 스크롤(app.js #inv-<id>).
   const retBase = ret || "/invoices";
   const retWithOpen = retBase + (retBase.includes("?") ? "&" : "?") + "open=" + inv.id;
   const actions = isInvoicer
-    ? `<details class="group"${listOpen ? " open" : ""}>
-         <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
-           <span>상태 처리</span>${detailsChevron()}
-         </summary>
-         <div class="flex flex-wrap justify-end gap-2 border-t border-border/40 bg-elevated/40 px-4 py-3">
-           ${taxToggleButtons(inv, retWithOpen)}
-         </div>
-       </details>`
+    ? `<div class="mt-2 flex flex-wrap justify-end gap-2">${taxToggleButtons(inv, retWithOpen)}</div>`
     : "";
+  const left = `
+    <a href="/invoices/${inv.id}" class="inline-block max-w-full truncate align-bottom font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-primary/40">${esc(inv.title)}</a>
+    <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
+    <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
+  const right = `
+    <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
+    ${actions}`;
   return `
-    <div id="inv-${inv.id}" class="overflow-hidden rounded-xl border border-border/60 bg-surface">
-      <a href="/invoices/${inv.id}" class="row-link flex items-start justify-between gap-4 px-4 py-3">
+    <div id="inv-${inv.id}" class="overflow-hidden rounded-xl border border-border/60 bg-surface px-4 py-3">
+      <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">${left}</div>
         <div class="shrink-0 pl-2 text-right">${right}</div>
-      </a>
-      ${actions}
+      </div>
     </div>`;
 }
 
