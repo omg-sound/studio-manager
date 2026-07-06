@@ -127,9 +127,10 @@ router.get("/", requireInvoice, (req, res) => {
           const unpaidCount = unpaid.length + unpaidSessions.length;
           // 미지급 항목 미리보기(2026-07-06 사용자 요청 — 건수·금액만으론 뭔지 몰라 대략 어떤 항목인지 한 줄 더).
           // 작업 라벨에 날짜 추가(2026-07-06 후속 — 종류만으론 같은 종류 작업이 여럿일 때 구분이 안 돼 '정산할 때 어떤 항목인지 명확하지 않다'는 리포트).
+          // 프로젝트명 추가(2026-07-06 후속 — 어느 프로젝트 작업인지도 보여야 정산 시 헷갈리지 않음).
           const itemLabels = [
-            ...unpaid.map((t) => `${taskTypeLabel(t.task_type)} ${formatYmdShort(String(t.created_at || "").slice(0, 10))}`),
-            ...unpaidSessions.map((s) => `${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)}`),
+            ...unpaid.map((t) => `${t.project_title} · ${taskTypeLabel(t.task_type)} ${formatYmdShort(String(t.created_at || "").slice(0, 10))}`),
+            ...unpaidSessions.map((s) => `${s.project_title} · ${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)}`),
           ];
           const PREVIEW_MAX = 3;
           const itemPreview = itemLabels.slice(0, PREVIEW_MAX).join(", ") + (itemLabels.length > PREVIEW_MAX ? ` 외 ${itemLabels.length - PREVIEW_MAX}건` : "");
