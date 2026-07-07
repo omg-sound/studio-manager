@@ -142,8 +142,12 @@ function isStaffRole(user) {
 function isLoggedInRole(user) {
   return isOwner(user) || isChief(user) || isStaffRole(user);
 }
-/** 프로젝트·항목·작업·자료 편집 권한(치프/스태프). 대표는 열람만. */
+/** 프로젝트·항목·작업·클라이언트·연락처 편집 권한(치프/스태프/대표 — 2026-07-07 대표 전면 개방). */
 function canEdit(user) {
+  return isChief(user) || isStaffRole(user) || isOwner(user);
+}
+/** 치프/스태프(실무진) 전용 — 자료 전달·관리(/settings)는 대표에게 숨김(2026-07-07 사용자 결정). */
+function isStaffOrChief(user) {
   return isChief(user) || isStaffRole(user);
 }
 /** 청구(발행·입금·매출) 권한(치프/대표). 스태프는 제외. */
@@ -179,8 +183,10 @@ function gate(predicate, denyMessage) {
   };
 }
 
-/** 치프/스태프 — 프로젝트·항목·작업·자료 편집(대표 열람전용 차단). */
+/** 치프/스태프/대표 — 프로젝트·항목·작업·클라이언트·연락처 편집. */
 const requireEditor = gate(canEdit, "권한이 없습니다(편집 권한 필요).");
+/** 치프/스태프 전용 — 자료 전달·관리(/settings). 대표 차단. */
+const requireStaff = gate(isStaffOrChief, "권한이 없습니다(치프·스태프 전용).");
 /** 치프 전용 — 스태프·담당자·클라이언트·설정 관리. */
 const requireChief = gate(isChief, "권한이 없습니다(치프 엔지니어 전용).");
 /** 치프/대표 — 청구(발행·입금·매출). */
@@ -211,10 +217,12 @@ module.exports = {
   isStaffRole,
   isLoggedInRole,
   canEdit,
+  isStaffOrChief,
   canInvoice,
   canBill,
   requireAuth,
   requireEditor,
+  requireStaff,
   requireChief,
   requireInvoice,
   requireBilling,

@@ -72,17 +72,18 @@ DEV_LOGIN=1 npm run dev     # build:css 후 서버 (http://localhost:3000)
 
 | 기능 | 대표(owner) | 치프(chief) | 스태프(staff) |
 |---|:---:|:---:|:---:|
-| 프로젝트·곡콘텐츠·작업·자료 **보기** | ✅ | ✅ | ✅ |
-| 프로젝트·곡콘텐츠·작업·자료 **편집** | ❌ 열람만 | ✅ | ✅ |
+| 프로젝트·곡콘텐츠·작업 **보기** | ✅ | ✅ | ✅ |
+| 프로젝트·곡콘텐츠·작업·클라이언트(첨부 포함)·연락처 **편집**(`requireEditor`) | ✅ (2026-07-07 개방) | ✅ | ✅ |
+| **자료 전달**(`/deliverables`·프로젝트 탭) `requireStaff` | ❌ 숨김 | ✅ | ✅ |
 | **청구서 발행·입금·삭제**(`requireBilling`) | ✅ | ✅ | ✅ |
 | **매출 현황**(`/revenue`)·**외주 정산**(`/workers` 열람·지급) `requireInvoice` | ✅ | ✅ | ❌ |
 | 외주 작업자 **마스터**(추가·삭제·수정) `requireChief` | ❌ | ✅ | ❌ |
-| 스태프·담당자·클라이언트·설정 **관리** | ❌ | ✅ | 일부(설정 열람·편집) |
+| **관리 메뉴**(`/settings`) `requireStaff` (계정·웹훅은 `requireChief`) | ❌ 숨김 | ✅ | 일부(설정 열람·편집) |
 
 - **인증**: 전원 Google OAuth + 화이트리스트(`users` 행). 비밀번호 로그인 폐기.
 - **부트스트랩**: `ADMIN_EMAIL` = 최초 치프(자동 생성). 대표·스태프는 치프가 `/settings`에서 등록.
-- **미들웨어**(`src/auth.js`): `requireAuth`(보기) · `requireEditor`(편집=치프·스태프) · `requireBilling`(청구서 발행=전원) · `requireInvoice`(매출·외주 정산=치프·대표) · `requireChief`(관리·외주 마스터).
-- **술어**: `isOwner`/`isChief`/`isStaffRole`/`canEdit`/`canBill`/`canInvoice`.
+- **미들웨어**(`src/auth.js`): `requireAuth`(보기) · `requireEditor`(편집=치프·스태프·대표[2026-07-07 개방]) · `requireStaff`(자료 전달·관리=치프·스태프, 대표 숨김) · `requireBilling`(청구서 발행=전원) · `requireInvoice`(매출·외주 정산=치프·대표) · `requireChief`(계정 관리·외주 마스터).
+- **술어**: `isOwner`/`isChief`/`isStaffRole`/`canEdit`(대표 포함)/`isStaffOrChief`/`canBill`/`canInvoice`.
 - **외주 작업자**(`/workers`, 2026-07-03): 열람·정산(지급) = 대표·치프(`requireInvoice`), 마스터(추가·삭제·수정) = 치프(`requireChief`). 스태프는 외주 지급단가를 작업 편집에서 입력만.
 
 ---
@@ -196,7 +197,7 @@ node -e 'const{db}=require("./src/db");const d=db();console.log(d.prepare("PRAGM
 
 # 권한 스모크(서버 기동 후, curl 절대경로 — 서브셸 PATH 함정 회피)
 for r in owner chief staff; do /usr/bin/curl -s -c /tmp/$r.txt -X POST -H "Origin: http://localhost:3000" --data "as=$r" http://localhost:3000/dev-login -o /dev/null; done
-# /invoices → owner 200·chief 200·staff 403 / /settings → chief만 200
+# /invoices → 전원 200(requireBilling) / /settings·/deliverables → chief·staff 200, owner 403(requireStaff) / /revenue → owner·chief 200, staff 403
 
 # cron/백업 스모크(BACKUP_TOKEN=<t> 로 서버 기동 후)
 /usr/bin/curl -s -X POST -H "Authorization: Bearer <t>" http://localhost:3000/internal/cron/daily   # 200 + 백업 생성

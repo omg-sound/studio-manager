@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireAuth, requireEditor, requireBilling, requireChief, canEdit, canBill, isChief } = require("../auth");
+const { requireAuth, requireEditor, requireBilling, requireChief, canEdit, canBill, isChief, isStaffOrChief } = require("../auth");
 const {
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
@@ -404,7 +404,8 @@ router.post("/:id/delete", requireEditor, (req, res) => {
 });
 
 function renderProjectDetail(req, res, p, formState = null, err = "") {
-  const editable = canEdit(req.user); // 치프/스태프는 편집, 대표는 열람 전용
+  const editable = canEdit(req.user); // 치프/스태프/대표 편집(2026-07-07 대표 개방)
+  const showDeliverables = isStaffOrChief(req.user); // 자료 전달 탭은 치프·스태프만(대표 숨김)
   const showInvoice = canBill(req.user); // 청구 섹션=치프·대표·스태프(청구서 발행)
   const managers = editable ? listProjectManagers() : []; // 작업·세션 엔지니어 선택용(담당자 마스터)
 
@@ -419,7 +420,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   const tabs = [{ key: "project", label: "정보" }];
   tabs.push({ key: "sessions", label: "세션 일정" });
   tabs.push({ key: "tracks", label: "곡 · 콘텐츠" });
-  if (editable) tabs.push({ key: "deliverables", label: "자료 전달" }); // 자료 전달은 편집자(치프·스태프)만, 대표 제외
+  if (showDeliverables) tabs.push({ key: "deliverables", label: "자료 전달" }); // 자료 전달은 치프·스태프만, 대표 제외
   if (showInvoice) tabs.push({ key: "invoice", label: "청구" });
   const validKeys = tabs.map((t) => t.key);
   const defaultTab = "project";
@@ -434,7 +435,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   } else if (tab === "tracks") {
     const trackBundle = listTracksForProject(req.user, p.id);
     tabContent = tracksSection({ project: p, tracks: trackBundle ? trackBundle.tracks : [], isAdmin: editable, managers, expandTaskId: Number(req.query.expand) || null });
-  } else if (tab === "deliverables" && editable) {
+  } else if (tab === "deliverables" && showDeliverables) {
     const deliv = listDeliverablesForProject(req.user, p.id);
     tabContent = deliverablesSection({ project: p, rows: deliv ? deliv.rows : [], isAdmin: editable, baseUrl: config.baseUrl, collapsed: false });
   } else if (tab === "invoice" && showInvoice) {

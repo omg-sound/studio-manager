@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { db } = require("../db");
-const { requireChief, requireEditor, isChief, syncUserToManager, findUserById } = require("../auth");
+const { requireChief, requireStaff, isChief, syncUserToManager, findUserById } = require("../auth");
 const { config, ROLES, ROLE_LABELS, normalizeRole, BILLING_TYPES, BILLING_TYPE_LABELS } = require("../config");
 
 const RATE_KIND_LABELS = { recording: "녹음", filming: "촬영", performance: "공연" };
@@ -80,7 +80,7 @@ const SETTINGS_TABS = [
   { key: "settings", label: "환경설정" },
 ];
 
-router.get("/", requireEditor, asyncHandler(async (req, res) => {
+router.get("/", requireStaff, asyncHandler(async (req, res) => {
   const tab = SETTINGS_TABS.some((t) => t.key === req.query.tab) ? req.query.tab : "people";
   const tabBar = `<div class="mb-4 flex gap-1 overflow-x-auto border-b border-border">
       ${SETTINGS_TABS.map((t) => `<a href="/settings?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
@@ -505,7 +505,7 @@ function checkMagicBytes(buf, mime) {
 }
 
 // ── 거래명세서 로고 업로드/삭제(base64 data URI, admin_state) ──
-router.post("/studio-logo", requireEditor, logoUpload.single("logo"), (req, res) => {
+router.post("/studio-logo", requireStaff, logoUpload.single("logo"), (req, res) => {
   const f = req.file;
   if (f && f.buffer && f.buffer.length) {
     const mime = f.mimetype || "";
@@ -515,12 +515,12 @@ router.post("/studio-logo", requireEditor, logoUpload.single("logo"), (req, res)
   }
   res.redirect("/settings?tab=settings&flash=saved");
 });
-router.post("/default-booker", requireEditor, (req, res) => {
+router.post("/default-booker", requireStaff, (req, res) => {
   setDefaultBooker(req.body.default_booker);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 // Drive 저장 폴더 점검 — 실제 Drive API로 폴더 존재 확인 + 바로가기 링크. 없으면 생성.
-router.get("/drive-check", requireEditor, asyncHandler(async (req, res) => {
+router.get("/drive-check", requireStaff, asyncHandler(async (req, res) => {
   if (!drive.isLinked()) return res.redirect("/settings?tab=settings&flash=drive_unlinked");
   const driveN = driveFileCount();
   let card;
@@ -563,20 +563,20 @@ router.get("/drive-check", requireEditor, asyncHandler(async (req, res) => {
 }));
 
 // 로컬 저장 파일(client_files·deliverables)을 Google Drive로 이관. Drive 연동 필요.
-router.post("/migrate-drive", requireEditor, asyncHandler(async (req, res) => {
+router.post("/migrate-drive", requireStaff, asyncHandler(async (req, res) => {
   const r = await migrateLocalFilesToDrive();
   if (!r.ok) return res.redirect("/settings?tab=settings&flash=drive_unlinked");
   // 결과는 섹션 재렌더(남은 로컬 수)로 확인. 실패분이 있으면 로그.
   if (r.failed.length) console.warn("[migrate-drive] failed:", JSON.stringify(r.failed));
   res.redirect(`/settings?tab=settings&flash=${r.failed.length ? "drive_partial" : "drive_done"}`);
 }));
-router.post("/studio-logo/delete", requireEditor, (req, res) => {
+router.post("/studio-logo/delete", requireStaff, (req, res) => {
   setStudioLogo(null);
   res.redirect("/settings?tab=settings&flash=deleted");
 });
 
 // ── 스튜디오 캘린더 선택 저장 ──
-router.post("/studio-calendar", requireEditor, (req, res) => {
+router.post("/studio-calendar", requireStaff, (req, res) => {
   calendar.setStudioCalendarId(req.body.calendar_id);
   res.redirect("/settings?tab=settings&flash=saved");
 });
@@ -602,26 +602,26 @@ router.post("/resync-calendar", requireChief, asyncHandler(async (req, res) => {
 }));
 
 // ── 예약 일정 기본 장소 저장 ──
-router.post("/studio-location", requireEditor, (req, res) => {
+router.post("/studio-location", requireStaff, (req, res) => {
   calendar.setStudioLocation(req.body.studio_location);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 기본 1Pro 시간(분) 저장 — 시간 입력 → 분 변환 ──
-router.post("/pro-minutes", requireEditor, (req, res) => {
+router.post("/pro-minutes", requireStaff, (req, res) => {
   const hours = parseFloat(req.body.pro_hours);
   setProMinutes(Number.isFinite(hours) && hours > 0 ? Math.round(hours * 60) : null);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 운영시간(예약 그리드 범위) 저장 ──
-router.post("/studio-hours", requireEditor, (req, res) => {
+router.post("/studio-hours", requireStaff, (req, res) => {
   setStudioHours(req.body.hours_start, req.body.hours_end);
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
 // ── 공급자(스튜디오) 세금정보 저장 — 거래명세서 PDF용. 평문 admin_state ──
-router.post("/studio-info", requireEditor, (req, res) => {
+router.post("/studio-info", requireStaff, (req, res) => {
   setStudioInfo(req.body);
   res.redirect("/settings?tab=settings&flash=saved");
 });
@@ -717,7 +717,7 @@ router.post("/users/:id/edit", requireChief, (req, res) => {
 });
 
 // ── 단가표(과금 항목) 관리 ──
-router.post("/rate-items", requireEditor, (req, res) => {
+router.post("/rate-items", requireStaff, (req, res) => {
   try {
     createRateItem(req.body);
   } catch (e) {
@@ -726,7 +726,7 @@ router.post("/rate-items", requireEditor, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/rate-items/:id", requireEditor, (req, res) => {
+router.post("/rate-items/:id", requireStaff, (req, res) => {
   try {
     updateRateItem(Number(req.params.id), req.body);
   } catch (e) {
@@ -735,13 +735,13 @@ router.post("/rate-items/:id", requireEditor, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/rate-items/:id/delete", requireEditor, (req, res) => {
+router.post("/rate-items/:id/delete", requireStaff, (req, res) => {
   deleteRateItem(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
 });
 
 // ── 단가표 분류 관리(2026-07-05) — 기본 분류는 잠금(locked), 치프가 추가한 분류만 수정·삭제 ──
-router.post("/rate-categories", requireEditor, (req, res) => {
+router.post("/rate-categories", requireStaff, (req, res) => {
   try {
     createRateCategory({ name: req.body.cat_name, kind: req.body.kind });
   } catch (e) {
@@ -750,7 +750,7 @@ router.post("/rate-categories", requireEditor, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/rate-categories/:id", requireEditor, (req, res) => {
+router.post("/rate-categories/:id", requireStaff, (req, res) => {
   try {
     updateRateCategory(Number(req.params.id), { name: req.body.cat_name, kind: req.body.kind });
   } catch (e) {
@@ -761,7 +761,7 @@ router.post("/rate-categories/:id", requireEditor, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/rate-categories/:id/delete", requireEditor, (req, res) => {
+router.post("/rate-categories/:id/delete", requireStaff, (req, res) => {
   try {
     deleteRateCategory(Number(req.params.id));
   } catch (e) {
@@ -773,7 +773,7 @@ router.post("/rate-categories/:id/delete", requireEditor, (req, res) => {
 });
 
 // ── 룸(스튜디오 공간) 관리(추가·삭제) ──
-router.post("/rooms", requireEditor, (req, res) => {
+router.post("/rooms", requireStaff, (req, res) => {
   try {
     createRoom(req.body);
   } catch (e) {
@@ -782,13 +782,13 @@ router.post("/rooms", requireEditor, (req, res) => {
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
-router.post("/rooms/:id/delete", requireEditor, (req, res) => {
+router.post("/rooms/:id/delete", requireStaff, (req, res) => {
   deleteRoom(Number(req.params.id)); // 참조 세션 room_id → NULL 후 행 삭제(data.deleteRoom)
   res.redirect("/settings?tab=settings&flash=deleted");
 });
 
 // ── 작업 종류 카탈로그 관리(삭제-only) ──
-router.post("/task-types", requireEditor, (req, res) => {
+router.post("/task-types", requireStaff, (req, res) => {
   try {
     createTaskType(req.body);
   } catch (e) {
@@ -797,7 +797,7 @@ router.post("/task-types", requireEditor, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/task-types/:id", requireEditor, (req, res) => {
+router.post("/task-types/:id", requireStaff, (req, res) => {
   const isFetch = req.get("X-Requested-With") === "fetch"; // 자동저장(AJAX)
   try {
     updateTaskType(Number(req.params.id), req.body);
@@ -809,7 +809,7 @@ router.post("/task-types/:id", requireEditor, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
-router.post("/task-types/:id/delete", requireEditor, (req, res) => {
+router.post("/task-types/:id/delete", requireStaff, (req, res) => {
   deleteTaskType(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
 });

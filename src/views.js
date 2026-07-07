@@ -139,19 +139,19 @@ function icon(name, cls = "h-5 w-5") {
 }
 
 // 네비게이션 단일 정의(사이드바 그룹 렌더 + navItemsFor 공유).
-// access: all=전원 / editor=편집자(치프·스태프) / invoice=치프·대표 / chief=치프 전용.
+// access: all=전원 / editor=편집자(치프·스태프·대표) / staff=치프·스태프(대표 숨김: 자료 전달·관리) / invoice=치프·대표 / chief=치프 전용.
 // group: 사이드바 그룹 키(ops 운영 / billing 청구 / manage 관리) — navItemsFor 필터(access)와는 무관.
 const NAV = [
   { href: "/", label: "대시보드", key: "dashboard", access: "all", group: "ops" },
   { href: "/projects", label: "프로젝트", key: "projects", access: "all", group: "ops" },
   { href: "/sessions", label: "일정", key: "sessions", access: "all", group: "ops" },
-  { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "editor", group: "ops" },
+  { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "staff", group: "ops" },
   { href: "/invoices", label: "청구", key: "invoices", access: "billing", group: "billing" },
   { href: "/contacts", label: "연락처", key: "contacts", access: "editor", group: "manage" },
   { href: "/clients", label: "클라이언트", key: "clients", access: "editor", group: "manage" },
   { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
   { href: "/revenue", label: "매출", key: "revenue", access: "invoice", group: "billing" },
-  { href: "/settings", label: "관리", key: "settings", access: "editor", group: "manage" },
+  { href: "/settings", label: "관리", key: "settings", access: "staff", group: "manage" },
 ];
 
 // 사이드바 그룹 순서·소제목. navItemsFor 결과를 group 키로 묶어 렌더(빈 그룹은 자동 생략).
@@ -166,12 +166,14 @@ function navItemsFor(user) {
   const canInvoice = role === "chief" || role === "owner";
   const canBill = role === "chief" || role === "owner" || role === "staff"; // 청구서=전원(매출·정산은 invoice 유지)
   const isChief = role === "chief";
-  const canEditNav = role === "chief" || role === "staff"; // 편집자(대표 제외)
+  const canEditNav = role === "chief" || role === "staff" || role === "owner"; // 편집자(대표 포함, 2026-07-07)
+  const isStaffNav = role === "chief" || role === "staff"; // 자료 전달·관리는 대표 숨김
   return NAV.filter((i) => {
     if (i.access === "billing") return canBill;
     if (i.access === "invoice") return canInvoice;
     if (i.access === "chief") return isChief;
     if (i.access === "editor") return canEditNav;
+    if (i.access === "staff") return isStaffNav;
     return true; // all
   });
 }

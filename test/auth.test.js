@@ -10,7 +10,7 @@ process.env.DB_PATH = tempDbPath();
 const test = require("node:test");
 const assert = require("node:assert");
 
-const { canEdit, canInvoice, requireEditor, requireInvoice } = require("../src/auth");
+const { canEdit, isStaffOrChief, canInvoice, requireEditor, requireStaff, requireInvoice } = require("../src/auth");
 
 const OWNER = { role: "owner" };
 const CHIEF = { role: "chief" };
@@ -45,13 +45,20 @@ function runGate(mw, user, { path = "/projects", accepts = () => false } = {}) {
 
 test.after(() => cleanupDb(process.env.DB_PATH));
 
-test("canEdit: 치프·스태프 true / 대표·비로그인 false", () => {
+test("canEdit: 치프·스태프·대표 true / 비로그인 false (2026-07-07 대표 개방)", () => {
   assert.strictEqual(canEdit(CHIEF), true);
   assert.strictEqual(canEdit(STAFF), true);
-  assert.strictEqual(canEdit(OWNER), false); // 대표는 열람만
+  assert.strictEqual(canEdit(OWNER), true); // 대표도 편집 전면 개방
   assert.strictEqual(canEdit(null), false);
   assert.strictEqual(canEdit(undefined), false);
   assert.strictEqual(canEdit({ role: "client" }), false);
+});
+
+test("isStaffOrChief: 치프·스태프 true / 대표 false (자료 전달·관리 숨김)", () => {
+  assert.strictEqual(isStaffOrChief(CHIEF), true);
+  assert.strictEqual(isStaffOrChief(STAFF), true);
+  assert.strictEqual(isStaffOrChief(OWNER), false);
+  assert.strictEqual(isStaffOrChief(null), false);
 });
 
 test("canInvoice: 치프·대표 true / 스태프·비로그인 false", () => {
@@ -61,10 +68,20 @@ test("canInvoice: 치프·대표 true / 스태프·비로그인 false", () => {
   assert.strictEqual(canInvoice(null), false);
 });
 
-test("requireEditor: 대표(owner)는 403 차단(next 미호출)", () => {
+test("requireEditor: 대표(owner)도 통과(2026-07-07 대표 개방)", () => {
   const r = runGate(requireEditor, OWNER, { path: "/projects/1/edit", accepts: () => "html" });
-  assert.strictEqual(r.next, false, "owner 는 통과하면 안 된다");
-  assert.strictEqual(r.status, 403);
+  assert.strictEqual(r.next, true, "owner 도 편집 통과");
+  assert.strictEqual(r.status, null);
+});
+
+test("requireStaff: 대표(owner)는 403 차단(자료 전달·관리) / 치프·스태프 통과", () => {
+  const owner = runGate(requireStaff, OWNER, { path: "/deliverables", accepts: () => "html" });
+  assert.strictEqual(owner.next, false, "owner 는 자료 전달·관리 접근 불가");
+  assert.strictEqual(owner.status, 403);
+  const chief = runGate(requireStaff, CHIEF);
+  const staff = runGate(requireStaff, STAFF);
+  assert.strictEqual(chief.next, true);
+  assert.strictEqual(staff.next, true);
 });
 
 test("requireEditor: 치프·스태프는 통과(next 호출)", () => {

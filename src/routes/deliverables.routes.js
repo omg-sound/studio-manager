@@ -9,7 +9,7 @@ const multer = require("multer");
 const { config, DELIVERABLE_KINDS, normalizeDeliverableKind } = require("../config");
 const { notifyAsync } = require("../notify");
 const { db } = require("../db");
-const { requireEditor, canEdit } = require("../auth");
+const { requireStaff, isStaffOrChief } = require("../auth");
 const {
   getProjectForUser,
   listDeliverablesForProject,
@@ -54,9 +54,9 @@ function newToken() {
 }
 
 // ── 자료 타임라인(인증) — admin 전체 / client 자기 프로젝트 ──
-router.get("/deliverables", requireEditor, (req, res) => {
+router.get("/deliverables", requireStaff, (req, res) => {
   const rows = recentDeliverables(req.user);
-  const admin = canEdit(req.user);
+  const admin = isStaffOrChief(req.user);
   const list = rows.length
     ? rows
         .map((dv) => {
@@ -88,14 +88,14 @@ router.get("/deliverables", requireEditor, (req, res) => {
 });
 
 // ── 업로드 폼(관리자) ──
-router.get("/projects/:pid/deliverables/new", requireEditor, (req, res) => {
+router.get("/projects/:pid/deliverables/new", requireStaff, (req, res) => {
   const project = getProjectForUser(req.user, Number(req.params.pid));
   if (!project) return res.status(404).send("프로젝트를 찾을 수 없습니다.");
   res.send(layout({ title: "자료 업로드", user: req.user, current: "/deliverables", body: uploadForm(project) }));
 });
 
 // ── 업로드 처리(관리자) ──
-router.post("/projects/:pid/deliverables", requireEditor, upload.single("file"), asyncHandler(async (req, res) => {
+router.post("/projects/:pid/deliverables", requireStaff, upload.single("file"), asyncHandler(async (req, res) => {
   const project = getProjectForUser(req.user, Number(req.params.pid));
   if (!project) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
@@ -150,14 +150,14 @@ router.post("/projects/:pid/deliverables", requireEditor, upload.single("file"),
 }));
 
 // ── 인증 다운로드(프록시 스트리밍, 범위 강제) ──
-router.get("/deliverables/:id/raw", requireEditor, asyncHandler(async (req, res) => {
+router.get("/deliverables/:id/raw", requireStaff, asyncHandler(async (req, res) => {
   const dv = getDeliverableForUser(req.user, Number(req.params.id));
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
   await sendFile(dv, res);
 }));
 
 // ── 공유 토큰 발급/갱신(관리자) ──
-router.post("/deliverables/:id/token", requireEditor, (req, res) => {
+router.post("/deliverables/:id/token", requireStaff, (req, res) => {
   const dv = db().prepare("SELECT * FROM deliverables WHERE id = ?").get(Number(req.params.id));
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
   const isNew = !dv.access_token;
@@ -176,7 +176,7 @@ router.post("/deliverables/:id/token", requireEditor, (req, res) => {
 });
 
 // ── 철회/복구 토글(관리자) ──
-router.post("/deliverables/:id/revoke", requireEditor, (req, res) => {
+router.post("/deliverables/:id/revoke", requireStaff, (req, res) => {
   const dv = db().prepare("SELECT * FROM deliverables WHERE id = ?").get(Number(req.params.id));
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
   db().prepare("UPDATE deliverables SET revoked=? WHERE id=?").run(dv.revoked ? 0 : 1, dv.id);
@@ -184,7 +184,7 @@ router.post("/deliverables/:id/revoke", requireEditor, (req, res) => {
 });
 
 // ── 삭제(관리자) — 파일 + 행 ──
-router.post("/deliverables/:id/delete", requireEditor, asyncHandler(async (req, res) => {
+router.post("/deliverables/:id/delete", requireStaff, asyncHandler(async (req, res) => {
   const dv = db().prepare("SELECT * FROM deliverables WHERE id = ?").get(Number(req.params.id));
   if (!dv) return res.status(404).send("자료를 찾을 수 없습니다.");
   await storage.remove(dv.storage_backend, dv.file_id);
