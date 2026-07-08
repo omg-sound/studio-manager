@@ -36,7 +36,7 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
     if (c.email) parts.push(copyable(c.email));
     rows.push(cell("담당자", parts.join(" · "))); // 이름·전화 확인용(홈택스 밖 부가 정보라 맨 아래)
   }
-  if (client.kind) rows.push(cell("분류", client.kind === "company" ? "업체" : client.kind === "group" ? "그룹" : "개인")); // 내부 kind(company 등) 대신 우리 용어 — 부가 메타
+  // ('분류' 행은 2026-07-08 사용자 요청으로 삭제 — 세금계산서 기입에 안 쓰는 부가 메타)
   const head = `<div class="mb-1 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold">청구처 정보</h3><a href="/clients/${client.id}" class="text-xs text-muted hover:text-fg hover:underline">클라이언트 ↗</a></div>`;
   const inner = `${head}${rows.join("")}${footer}`; // footer=우하단 부가 블록(스냅샷 변경 경고+새로고침 — 청구 상세만 전달)
   if (compact) return `<div class="rounded-lg border border-border bg-bg p-3 text-sm">${inner}</div>`;

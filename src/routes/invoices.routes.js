@@ -262,19 +262,23 @@ router.get("/:id", requireBilling, (req, res) => {
     </div>`
     : "";
 
-  // 레이아웃(2026-07-05 사용자 요청): 청구처 정보 최상단 → 통합 카드(청구번호·금액·VAT + 청구 항목 + 계산서·입금 처리 + PDF) → 메모 → 삭제.
+  // 레이아웃(2026-07-05 사용자 요청, 2026-07-08 순서 재배치 '헷갈린다'): 청구처 정보 최상단 →
+  // 통합 카드(청구번호 → 발행일 → 프로젝트 → 청구 항목 → 소계·할인·VAT·총액[영수증식 아래 합산] → PDF·처리) → 메모 → 삭제.
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: inv.title, desc: (payerClient ? personLabel(payerClient.name, payerClient.activity_name) : "") || inv.client_name || "청구처 미지정", back: { href: backHref, label: "청구" }, action: invoiceBadge(inv) })}
     ${payerCard}
     <div class="card mt-3">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
-      ${row("총액", formatKRW(inv.amount))}
-      ${inv.discount_amount ? row("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
-      ${inv.tax_amount ? row("VAT", formatKRW(inv.tax_amount)) : ""}
       ${row("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "<span class='text-muted'>미정</span>")}
       ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
       ${invoiceItemsSection(items)}
+      <div${items.length ? ' class="border-t border-border"' : ""}>
+        ${items.length ? row("소계", formatKRW(items.reduce((s, it) => s + (it.amount || 0), 0))) : ""}
+        ${inv.discount_amount ? row("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
+        ${inv.tax_amount ? row("VAT", formatKRW(inv.tax_amount)) : ""}
+        ${row("총액", `<span class="text-base font-semibold">${formatKRW(inv.amount)}</span>`)}
+      </div>
       ${pdfSection}
     </div>
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
@@ -311,7 +315,6 @@ router.get(["/:id/statement.pdf", "/:id/statement/:name"], requireBilling, async
 /** 청구 항목 섹션 — 통합 카드 내부용(카드 래퍼 없음, 2026-07-05 재배치: 청구번호·금액과 같은 카드). */
 function invoiceItemsSection(items) {
   if (!items.length) return "";
-  const supply = items.reduce((sum, item) => sum + (item.amount || 0), 0);
   const rows = items
     .map(
       (item) => `
@@ -326,12 +329,10 @@ function invoiceItemsSection(items) {
     .join("");
   // border-t 없음(2026-07-06 사용자 리포트 '프로젝트랑 청구 항목 사이에 줄이 2개') — 바로 위 row()가 이미
   // border-b를 그리므로 여기서 또 border-t를 그으면 사실상 같은 자리에 선이 두 겹으로 겹쳐 보인다.
+  // 헤더 우측 '공급가'는 제거(2026-07-08 사용자 요청) — 항목 아래 '소계' 행이 그 역할(supply는 라우트에서 소계 행으로 렌더).
   return `
     <div class="mt-3">
-      <div class="mb-2 flex items-center justify-between gap-3">
-        <h2 class="font-display text-base font-semibold">청구 항목</h2>
-        <span class="text-xs text-muted">공급가 ${formatKRW(supply)}</span>
-      </div>
+      <h2 class="mb-2 font-display text-base font-semibold">청구 항목</h2>
       ${rows}
     </div>`;
 }
