@@ -21,7 +21,7 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   const rows = [];
   if (client.biz_no) {
     // 번호 클릭 = 클립보드 복사. 등록증 보기 링크는 번호 앞(2026-07-08 사용자 요청).
-    const viewLink = hasBizFile ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" data-popup-view class="mr-2 whitespace-nowrap text-xs text-primary hover:underline">등록증 보기 ↗</a>` : "";
+    const viewLink = hasBizFile ? `<a href="/clients/${client.id}/files/biz_license/view" target="_blank" rel="noopener" data-popup-view class="mr-2 whitespace-nowrap text-xs text-primary hover:underline">등록증 보기 ↗</a>` : "";
     rows.push(cell("사업자등록번호", `${viewLink}${copyable(client.biz_no, { cls: "font-medium" })}`));
   }
   if (client.cash_receipt_no) rows.push(cell("현금영수증", copyable(client.cash_receipt_no, { cls: "font-medium" }))); // 개인(사업자등록증 없음) — 발행 식별번호라 등록번호 자리

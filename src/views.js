@@ -662,6 +662,18 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
  * @param {string} value 복사될 값(표시값과 동일, display 지정 시 표시만 다름)
  * @param {{cls?:string, display?:string}} [opts]
  */
+/**
+ * 첨부 이미지 전용 뷰어 문서(팝업용, 2026-07-08) — raw 이미지를 직접 열면 브라우저가 원본 크기로 좌상단에 붙여
+ * 팝업(화면 50%)에 여백이 크게 남는다 → 이미지를 창에 꽉 채우는(object-contain) 단독 HTML로 감싼다.
+ * CSP가 인라인 스타일을 막으므로 app.css 유틸 클래스 사용. PDF는 브라우저 내장 뷰어가 이미 꽉 채워 이 뷰어를 안 쓴다(라우트에서 raw 리다이렉트).
+ */
+function fileViewerPage({ title, rawUrl }) {
+  return `<!doctype html>
+<html lang="ko"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${esc(title)}</title><link rel="stylesheet" href="/css/app.css?v=${ASSET_VERSION}" /></head>
+<body class="bg-black"><img src="${esc(rawUrl)}" alt="${esc(title)}" class="h-screen w-screen object-contain" /></body></html>`;
+}
+
 function copyable(value, { cls = "", display = "" } = {}) {
   if (value == null || value === "") return "";
   const v = esc(String(value));
@@ -777,4 +789,4 @@ function groupCombo(fieldName, selectedId, currentName, groups = []) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, groupCombo, copyable };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };

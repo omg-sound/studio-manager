@@ -22,7 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo, groupCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo, groupCombo, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
 const router = express.Router();
@@ -444,6 +444,19 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
 }));
 
 // ── 첨부 서류 인증 다운로드(치프·스태프 인증 후 프록시 — 공개 URL 없음) ──
+// ── 첨부 서류 뷰어(팝업 전용, 2026-07-08) — 이미지가 팝업 창을 꽉 채우게. PDF는 내장 뷰어가 이미 꽉 채워 raw로 리다이렉트.
+router.get("/:id/files/:kind/view", requireEditor, (req, res) => {
+  const id = Number(req.params.id);
+  const kind = req.params.kind;
+  const meta = FILE_KINDS.find((k) => k.key === kind);
+  if (!meta) return res.status(404).send("파일을 찾을 수 없습니다.");
+  const cf = getClientFile(id, kind);
+  if (!cf) return res.status(404).send(errorPage({ code: 404, title: "파일이 없습니다", message: "아직 업로드된 파일이 없습니다.", user: req.user }));
+  if ((cf.mime_type || "").includes("pdf")) return res.redirect(`/clients/${id}/files/${kind}/raw`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(fileViewerPage({ title: meta.label, rawUrl: `/clients/${id}/files/${kind}/raw` }));
+});
+
 router.get("/:id/files/:kind/raw", requireEditor, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
@@ -630,7 +643,7 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
       : "";
     const existingRow = existing && ok
       ? `<div class="mb-2 flex flex-wrap items-center gap-3 text-sm">
-            <a href="/clients/${c.id}/files/${key}/raw" target="_blank" rel="noopener" data-popup-view class="font-medium text-primary hover:underline">${esc(label)} 보기</a>
+            <a href="/clients/${c.id}/files/${key}/view" target="_blank" rel="noopener" data-popup-view class="font-medium text-primary hover:underline">${esc(label)} 보기</a>
             <span class="max-w-[12rem] truncate text-xs text-muted">${esc(existing.file_name)}</span>
             ${backendTag}
             <form method="post" action="/clients/${c.id}/files/${key}/delete" class="inline" data-confirm="${esc(label)}을 삭제할까요?">
