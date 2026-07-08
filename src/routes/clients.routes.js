@@ -482,9 +482,15 @@ router.get("/:id", asyncHandler(async (req, res) => {
   // 청구처 정보 카드 '클라이언트 ↗' 등이 관계자 청구처를 이 경로로 보낼 때 아티스트 편집 폼이 뜨던 어색함 제거(2026-07-05 전수점검).
   if (c.kind === "person" && !c.is_artist) {
     const from = String(req.query.from || "");
-    return res.redirect(`/contacts/${c.id}${from && /^[\w=&%.\-]*$/.test(from) ? `?from=${from}` : ""}`);
+    const retQ = String(req.query.return || "");
+    const qs = [
+      from && /^[\w=&%.\-]*$/.test(from) ? `from=${from}` : "",
+      /^\/(?![/\\])/.test(retQ) ? `return=${encodeURIComponent(retQ)}` : "", // 청구·프로젝트 복귀 경로 보존(2026-07-08)
+    ].filter(Boolean).join("&");
+    return res.redirect(`/contacts/${c.id}${qs ? `?${qs}` : ""}`);
   }
-  const tab = req.query.tab === "invoices" ? "invoices" : "projects";
+  // 탭 3구성(2026-07-08 사용자 요청): 상세 정보(기본) / 프로젝트 / 청구·결제 — 이전엔 프로젝트·청구 2탭 아래 상세 폼이 항상 붙어 길었음.
+  const tab = ["info", "projects", "invoices"].includes(req.query.tab) ? req.query.tab : "info";
   const projects = listProjectsForParty(c.id); // c.id(숫자)를 넘겨야 함 — 객체를 넘기면 Number(c)=NaN이라 매칭 0(연결 프로젝트/청구 안 뜨던 버그)
   const invoices = listInvoicesForParty(c.id);
   const files = listClientFiles(c.id);
@@ -495,12 +501,22 @@ router.get("/:id", asyncHandler(async (req, res) => {
     catch (_e) { fileOk[f.kind] = true; }
   }
   // 목록에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만 허용).
+  // 청구·프로젝트 청구처 카드에서 넘어왔으면 ?return=(내부 절대경로만)으로 그 화면 복귀(2026-07-08 사용자 요청).
   const from = String(req.query.from || "");
-  const clientsBackHref = from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/clients";
+  const fromOk = from && /^[\w=&%.\-]*$/.test(from);
+  const retQ = String(req.query.return || "");
+  const ret = /^\/(?![/\\])/.test(retQ) ? retQ : null;
+  const clientsBackHref = ret || (fromOk ? `/clients?${from}` : "/clients");
+  const backLabel = ret ? (ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : "돌아가기") : "클라이언트";
+  const keepQ = [fromOk ? `from=${from}` : "", ret ? `return=${encodeURIComponent(ret)}` : ""].filter(Boolean).join("&"); // 탭 전환 시 복귀 경로 유실 방지
   const tabBarHtml = tabBar({
-    tabs: [{ key: "projects", label: `프로젝트 ${projects.length}` }, { key: "invoices", label: `청구·결제 ${invoices.length}` }],
+    tabs: [
+      { key: "info", label: "상세 정보" },
+      { key: "projects", label: `프로젝트 ${projects.length}` },
+      { key: "invoices", label: `청구·결제 ${invoices.length}` },
+    ],
     activeKey: tab,
-    hrefFn: (key) => `/clients/${c.id}?tab=${key}`,
+    hrefFn: (key) => `/clients/${c.id}?tab=${key}${keepQ ? `&${keepQ}` : ""}`,
   });
 
   let content;
@@ -572,19 +588,19 @@ router.get("/:id", asyncHandler(async (req, res) => {
   const filesBlock = clientFilesBlock(c, files, fileErr, fileOk); // 자체 '첨부 서류' 헤딩 포함 · 깨진 링크는 경고
   // 삭제는 편집 폼(clientForm)의 저장 줄 왼쪽 버튼으로 이동(UI 통일: 저장 우측·삭제 좌측·같은 줄).
 
-  // 섹션 순서(사용자 지정): ① 프로젝트/청구·결제 → ② 상세 정보(편집 폼) → ③ 담당자 연락처 → ④ 첨부 서류 → 삭제
-  const body = `
-    ${flashBanner(req.query)}
-    ${pageHeader({ title: c.is_artist ? personLabel(c.activity_name || c.name, c.name) : c.name, desc: c.is_artist ? (c.kind === "group" ? "그룹 아티스트" : "아티스트") : "업체", back: { href: clientsBackHref, label: "클라이언트" } })}
-    ${tabBarHtml}
-    ${content}
-    <h3 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">상세 정보</h3>
+  // 탭 3구성(2026-07-08): 상세 정보(편집 폼·첨부·멤버·소속 아티스트, 기본 탭) / 프로젝트 / 청구·결제 — 한 화면에 다 쌓지 않고 탭으로 분리.
+  const infoContent = `
     ${editCard}
     <div class="mt-3">${filesBlock}</div>
     ${crossRefBlock}
     ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}
     ${agencyLink ? `<div class="mt-3">${agencyLink}</div>` : ""}
     ${rosterSection}`;
+  const body = `
+    ${flashBanner(req.query)}
+    ${pageHeader({ title: c.is_artist ? personLabel(c.activity_name || c.name, c.name) : c.name, desc: c.is_artist ? (c.kind === "group" ? "그룹 아티스트" : "아티스트") : "업체", back: { href: clientsBackHref, label: backLabel } })}
+    ${tabBarHtml}
+    ${tab === "info" ? infoContent : content}`;
   res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
 }));
 

@@ -448,7 +448,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
             ...r,
             items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [],
             // 청구처 정보(대표자·사업자번호·담당자) 카드 — 청구 탭 펼침에서 바로 확인. 프로젝트당 인보이스 소수라 N+1 무해.
-            payerCard: pc ? payerInfoCard(pc, listPersonsForOrg(pc.id), !!getClientFile(pc.id, "biz_license"), { compact: true }) : "",
+            payerCard: pc ? payerInfoCard(pc, listPersonsForOrg(pc.id), !!getClientFile(pc.id, "biz_license"), { compact: true, returnTo: `/projects/${p.id}?tab=invoice&open=${r.id}` }) : "",
           };
         })
       : [];

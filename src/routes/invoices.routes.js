@@ -237,7 +237,7 @@ router.get("/:id", requireBilling, (req, res) => {
        </div>`
     : "";
   const payerCard = payerClient
-    ? payerInfoCard(payerClient, payerContacts, payerClient.id ? !!getClientFile(payerClient.id, "biz_license") : false, { footer: payerStaleFooter })
+    ? payerInfoCard(payerClient, payerContacts, payerClient.id ? !!getClientFile(payerClient.id, "biz_license") : false, { footer: payerStaleFooter, returnTo: selfRet })
     : "";
 
   // 행 자체엔 줄 없음(2026-07-08 사용자 요청 '청구번호-발행일, 소계-VAT-총액 사이 줄 없애줘') — 구분선은 그룹 래퍼(border)로만.

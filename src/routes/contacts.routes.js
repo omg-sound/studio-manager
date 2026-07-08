@@ -381,9 +381,12 @@ router.get("/:id", (req, res) => {
     : emptyState("담당 디렉터로 지정된 세션이 없습니다.", { card: true });
 
   // 클라이언트 '관계자' 탭 등에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만). 아니면 연락처 목록.
+  // 청구·프로젝트 청구처 카드 → (관계자 리다이렉트) → 여기로 온 경우 ?return=(내부 절대경로만)으로 그 화면 복귀(2026-07-08).
   const from = String(req.query.from || "");
-  const backHref = from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/contacts";
-  const backLabel = from ? "클라이언트" : "연락처";
+  const retQ = String(req.query.return || "");
+  const ret = /^\/(?![/\\])/.test(retQ) ? retQ : null;
+  const backHref = ret || (from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/contacts");
+  const backLabel = ret ? (ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : "돌아가기") : from ? "클라이언트" : "연락처";
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: personName(c), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}
