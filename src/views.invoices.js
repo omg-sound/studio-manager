@@ -19,18 +19,16 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   // 등록번호 → 상호·성명(대표자) → 사업장 주소 → 이메일(세금계산서 발행) → 이메일(담당자). 개인은 등록번호 자리에 현금영수증 번호.
   const rows = [];
   if (client.biz_no) {
-    // 번호 클릭 = 클립보드 복사, 등록증 보기는 별도 링크로 분리.
-    const viewLink = hasBizFile ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" class="ml-2 whitespace-nowrap text-xs text-primary hover:underline">등록증 보기 ↗</a>` : "";
-    rows.push(cell("사업자등록번호", `${copyable(client.biz_no, { cls: "font-medium" })}${viewLink}`));
+    // 번호 클릭 = 클립보드 복사. 등록증 보기 링크는 번호 앞(2026-07-08 사용자 요청).
+    const viewLink = hasBizFile ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" class="mr-2 whitespace-nowrap text-xs text-primary hover:underline">등록증 보기 ↗</a>` : "";
+    rows.push(cell("사업자등록번호", `${viewLink}${copyable(client.biz_no, { cls: "font-medium" })}`));
   }
   if (client.cash_receipt_no) rows.push(cell("현금영수증", copyable(client.cash_receipt_no, { cls: "font-medium" }))); // 개인(사업자등록증 없음) — 발행 식별번호라 등록번호 자리
-  rows.push(cell(client.kind === "person" ? "성명" : "상호", `<span class="font-semibold">${esc(personLabel(client.name, client.activity_name))}</span>`)); // 아티스트면 본명 (활동명) — 현금영수증 명의 오해 방지
-  if (client.owner_name) rows.push(cell("성명(대표자)", esc(client.owner_name)));
+  rows.push(cell(client.kind === "person" ? "성명" : "상호", copyable(client.name, { cls: "font-semibold", display: personLabel(client.name, client.activity_name) }))); // 표시=본명 (활동명)(현금영수증 명의 오해 방지), 복사=순수 본명(홈택스 붙여넣기용, 2026-07-08)
+  if (client.owner_name) rows.push(cell("성명(대표자)", copyable(client.owner_name, { cls: "font-medium" }))); // 클릭 복사(2026-07-08)
   if (client.address) rows.push(cell("사업장 주소", copyable(client.address, { cls: "font-medium" })));
-  // 이메일 2행 분리(발행 → 담당자 순, 2026-07-08 — 홈택스도 이메일 칸이 2개): contacts[0]=현재 재직중 담당자 1명.
-  const contactEmail = contacts && contacts[0] && contacts[0].email && contacts[0].email !== client.email ? contacts[0].email : null;
+  // 담당자 이메일 행은 삭제(2026-07-08 사용자 요청 — 아래 '담당자' 행의 이메일과 중복). 발행 이메일만 단독 행.
   if (client.email) rows.push(cell("세금계산서 발행 이메일", copyable(client.email)));
-  if (contactEmail) rows.push(cell("담당자 이메일", copyable(contactEmail)));
   if (contacts && contacts.length) {
     const c = contacts[0];
     const parts = [`<span class="font-medium">${esc(c.name)}</span>`];
