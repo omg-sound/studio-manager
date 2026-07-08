@@ -240,8 +240,9 @@ router.get("/:id", requireBilling, (req, res) => {
     ? payerInfoCard(payerClient, payerContacts, payerClient.id ? !!getClientFile(payerClient.id, "biz_license") : false, { footer: payerStaleFooter })
     : "";
 
+  // 행 자체엔 줄 없음(2026-07-08 사용자 요청 '청구번호-발행일, 소계-VAT-총액 사이 줄 없애줘') — 구분선은 그룹 래퍼(border)로만.
   const row = (label, value) =>
-    `<div class="flex justify-between border-b border-border py-2 last:border-0"><span class="text-sm text-muted">${esc(label)}</span><span class="text-sm font-medium">${value}</span></div>`;
+    `<div class="flex justify-between py-1.5"><span class="text-sm text-muted">${esc(label)}</span><span class="text-sm font-medium">${value}</span></div>`;
 
   // PDF 발행 + 계산서·입금 처리(대표·치프만)를 한 줄에(2026-07-06 사용자 요청 — 이전엔 각자 border-t로 줄이 나뉘어 있었음).
   // 왼쪽=PDF 발행(항상), 오른쪽=처리 토글 버튼 2개(canProcess만, 청구 목록 '발행 필요' 카드와 동일한 taxToggleButtons 공용).
@@ -269,11 +270,13 @@ router.get("/:id", requireBilling, (req, res) => {
     ${pageHeader({ title: inv.title, desc: (payerClient ? personLabel(payerClient.name, payerClient.activity_name) : "") || inv.client_name || "청구처 미지정", back: { href: backHref, label: "청구" }, action: invoiceBadge(inv) })}
     ${payerCard}
     <div class="card mt-3">
-      ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
-      ${row("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "<span class='text-muted'>미정</span>")}
-      ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
+      <div class="border-b border-border pb-1">
+        ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
+        ${row("발행일", inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "<span class='text-muted'>미정</span>")}
+        ${inv.project_title ? row("프로젝트", `<a href="/projects/${inv.project_id}" class="text-primary hover:underline">${esc(inv.project_title)}</a>`) : ""}
+      </div>
       ${invoiceItemsSection(items)}
-      <div${items.length ? ' class="border-t border-border"' : ""}>
+      <div${items.length ? ' class="border-t border-border pt-1"' : ' class="pt-1"'}>
         ${items.length ? row("소계", formatKRW(items.reduce((s, it) => s + (it.amount || 0), 0))) : ""}
         ${inv.discount_amount ? row("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
         ${inv.tax_amount ? row("VAT", formatKRW(inv.tax_amount)) : ""}
