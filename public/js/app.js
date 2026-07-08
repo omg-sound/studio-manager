@@ -2147,8 +2147,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var s = window.screen || {};
     var sw = s.availWidth || s.width || 1280;
     var sh = s.availHeight || s.height || 800;
-    var w = Math.round(sw / 2);
-    var h = Math.round(sh / 2);
+    // 세로 문서(사업자등록증 A4 스캔) 기본 비율로 크게(2026-07-08 사용자 요청 — 50%×50% 가로창은 작고 비율이 안 맞음).
+    // 높이=화면 92%, 폭=높이×0.72(A4 근사). 실제 이미지 비율은 뷰어(viewer.js)가 로드 후 창을 재조정.
+    var h = Math.round(sh * 0.92);
+    var w = Math.min(Math.round(h * 0.72), Math.round(sw * 0.9));
     var left = (s.availLeft || 0) + sw - w; // 오른쪽 끝
     var top = s.availTop || 0; // 위쪽 끝
     var win = window.open(a.href, "attachmentView", "popup=yes,width=" + w + ",height=" + h + ",left=" + left + ",top=" + top);

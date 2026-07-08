@@ -671,7 +671,7 @@ function fileViewerPage({ title, rawUrl }) {
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(title)}</title><link rel="stylesheet" href="/css/app.css?v=${ASSET_VERSION}" /></head>
-<body class="bg-black"><img src="${esc(rawUrl)}" alt="${esc(title)}" class="h-screen w-screen object-contain" /></body></html>`;
+<body class="bg-black"><img src="${esc(rawUrl)}" alt="${esc(title)}" data-viewer-img class="h-screen w-screen object-contain" /><script src="/js/viewer.js?v=${ASSET_VERSION}" defer></script></body></html>`;
 }
 
 function copyable(value, { cls = "", display = "" } = {}) {
