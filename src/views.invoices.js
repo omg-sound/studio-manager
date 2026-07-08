@@ -15,34 +15,32 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   if (!client || !client.id) return "";
   const cell = (label, value) =>
     `<div class="flex items-start justify-between gap-3 py-0.5"><span class="text-xs text-muted">${esc(label)}</span><span class="text-right text-sm font-medium">${value}</span></div>`;
+  // 행 순서 = 홈택스 세금계산서 '공급받는자' 입력 순서(2026-07-08 사용자 요청 — 대표가 발행 시 그대로 옮겨 적게, 배치만 동일):
+  // 등록번호 → 상호·성명(대표자) → 사업장 주소 → 이메일(세금계산서 발행) → 이메일(담당자). 개인은 등록번호 자리에 현금영수증 번호.
   const rows = [];
-  if (client.kind) rows.push(cell("분류", client.kind === "company" ? "업체" : client.kind === "group" ? "그룹" : "개인")); // 내부 kind(company 등) 대신 우리 용어
-  if (client.owner_name) rows.push(cell("대표자", esc(client.owner_name)));
   if (client.biz_no) {
     // 번호 클릭 = 클립보드 복사, 등록증 보기는 별도 링크로 분리.
     const viewLink = hasBizFile ? `<a href="/clients/${client.id}/files/biz_license/raw" target="_blank" rel="noopener" class="ml-2 whitespace-nowrap text-xs text-primary hover:underline">등록증 보기 ↗</a>` : "";
     rows.push(cell("사업자등록번호", `${copyable(client.biz_no, { cls: "font-medium" })}${viewLink}`));
   }
-  if (client.address) rows.push(cell("주소", copyable(client.address, { cls: "font-medium" })));
-  // 세금계산서 발행 이메일 = 청구처 자체 이메일 + 담당자 이메일(2026-07-06 사용자 요청 — 담당자가 받아야 하는 경우도 있어
-  // 발행 전에 두 이메일을 한 줄에서 같이 보이게. contacts[0]=현재 재직중 담당자 1명).
+  if (client.cash_receipt_no) rows.push(cell("현금영수증", copyable(client.cash_receipt_no, { cls: "font-medium" }))); // 개인(사업자등록증 없음) — 발행 식별번호라 등록번호 자리
+  rows.push(cell(client.kind === "person" ? "성명" : "상호", `<span class="font-semibold">${esc(personLabel(client.name, client.activity_name))}</span>`)); // 아티스트면 본명 (활동명) — 현금영수증 명의 오해 방지
+  if (client.owner_name) rows.push(cell("성명(대표자)", esc(client.owner_name)));
+  if (client.address) rows.push(cell("사업장 주소", copyable(client.address, { cls: "font-medium" })));
+  // 이메일 2행 분리(발행 → 담당자 순, 2026-07-08 — 홈택스도 이메일 칸이 2개): contacts[0]=현재 재직중 담당자 1명.
   const contactEmail = contacts && contacts[0] && contacts[0].email && contacts[0].email !== client.email ? contacts[0].email : null;
-  if (client.email || contactEmail) {
-    const emailParts = [];
-    if (client.email) emailParts.push(copyable(client.email));
-    if (contactEmail) emailParts.push(`${copyable(contactEmail)} <span class="text-xs text-muted">(담당자)</span>`);
-    rows.push(cell("세금계산서 발행 이메일", emailParts.join(" · ")));
-  }
-  if (client.cash_receipt_no) rows.push(cell("현금영수증", copyable(client.cash_receipt_no, { cls: "font-medium" }))); // 개인(사업자등록증 없음)
+  if (client.email) rows.push(cell("세금계산서 발행 이메일", copyable(client.email)));
+  if (contactEmail) rows.push(cell("담당자 이메일", copyable(contactEmail)));
   if (contacts && contacts.length) {
     const c = contacts[0];
     const parts = [`<span class="font-medium">${esc(c.name)}</span>`];
     if (c.phone) parts.push(copyable(c.phone));
     if (c.email) parts.push(copyable(c.email));
-    rows.push(cell("담당자", parts.join(" · ")));
+    rows.push(cell("담당자", parts.join(" · "))); // 이름·전화 확인용(홈택스 밖 부가 정보라 맨 아래)
   }
+  if (client.kind) rows.push(cell("분류", client.kind === "company" ? "업체" : client.kind === "group" ? "그룹" : "개인")); // 내부 kind(company 등) 대신 우리 용어 — 부가 메타
   const head = `<div class="mb-1 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold">청구처 정보</h3><a href="/clients/${client.id}" class="text-xs text-muted hover:text-fg hover:underline">클라이언트 ↗</a></div>`;
-  const inner = `${head}<div class="font-semibold">${esc(personLabel(client.name, client.activity_name))}</div>${rows.join("")}`; // 아티스트면 본명 (활동명) — 현금영수증 명의 오해 방지
+  const inner = `${head}${rows.join("")}`;
   if (compact) return `<div class="rounded-lg border border-border bg-bg p-3 text-sm">${inner}</div>`;
   return `<div class="card mt-3"><div class="text-sm">${inner}</div></div>`;
 }
