@@ -321,7 +321,7 @@ function invoiceItemsSection(items) {
   const rows = items
     .map(
       (item) => `
-      <div class="flex items-start justify-between gap-3 border-b border-border py-2 last:border-0">
+      <div class="flex items-start justify-between gap-3 py-1.5">
         <div class="min-w-0">
           <div class="text-sm font-medium">${esc(item.description)}</div>
           <div class="mt-0.5 text-xs text-muted">${esc(String(item.quantity))} x ${formatKRW(item.unit_price)}</div>

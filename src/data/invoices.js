@@ -334,9 +334,9 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
     items.push({ task_id: t.id, session_id: null, track_title: t.track_title, task_type: t.task_type, description: `${t.track_title} - ${taskTypeLabel(t.task_type)}`, quantity: t.quantity, unit_price: t.unit_price, amount: t.total_price, item_date: String(t.created_at || "").slice(0, 10) || null });
   }
   for (const { session, calc, amount } of billSessions) {
-    const hh = Math.floor(calc.minutes / 60), mm = calc.minutes % 60;
-    const durLabel = calc.allDay ? "종일" : `${hh}시간${mm ? " " + mm + "분" : ""}`; // 종일 세션은 '종일'로 스냅샷(시간 없음)
-    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: `${session.session_type || "녹음"} 세션 ${formatYmdShort(session.session_date)} · ${calc.item.name} (${durLabel})`, quantity: 1, unit_price: amount, amount, item_date: session.session_date || null }); // 촬영 세션도 실제 종류로 스냅샷(거래명세서 품목명)
+    // 형식 = "7월 8일 아티스트명 보컬녹음"(2026-07-08 사용자 요청 — '녹음 세션' 접두·소요시간 제거, 날짜·아티스트·단가 항목명만).
+    const desc = [formatYmdShort(session.session_date), project.artist, calc.item.name].filter(Boolean).join(" ");
+    items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: desc, quantity: 1, unit_price: amount, amount, item_date: session.session_date || null });
   }
   items.sort((a, b) => (a.item_date || "").localeCompare(b.item_date || "")); // 날짜순(동일 날짜는 원래 순서 유지 — Array#sort는 안정 정렬)
   return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedPayerId };
