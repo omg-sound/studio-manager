@@ -1223,7 +1223,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   // 녹음 세션 직접 청구 후보(곡·콘텐츠/버튼 없이 자동 노출). 완료 세션은 기본 체크, 예정은 흐리게·체크 시 완료 확인(작업과 동일 규칙).
   const sessionList = sessionRows
     .map((s) => {
-      const label = [formatYmdShort(s.session_date), project.artist, s.billing.item.name].filter(Boolean).join(" "); // 청구 항목 스냅샷과 동일 형식 "7월 8일 아티스트 보컬녹음"(2026-07-08 — '녹음 세션' 접두 제거)
+      const label = [formatYmdShort(s.session_date), project.artist, s.billing.item.name].filter(Boolean).join(" · "); // 청구 항목 스냅샷과 동일 형식 "7월 8일 · 아티스트 · 보컬녹음"(2026-07-08 — 접두 제거·· 구분)
       const waiveAction = `/sessions/${s.id}/waive`;
       if (s.waived) return waivedRow(esc(label), waiveAction);
       const done = s.status === "완료";

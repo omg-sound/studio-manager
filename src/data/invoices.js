@@ -335,7 +335,7 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
   }
   for (const { session, calc, amount } of billSessions) {
     // 형식 = "7월 8일 아티스트명 보컬녹음"(2026-07-08 사용자 요청 — '녹음 세션' 접두·소요시간 제거, 날짜·아티스트·단가 항목명만).
-    const desc = [formatYmdShort(session.session_date), project.artist, calc.item.name].filter(Boolean).join(" ");
+    const desc = [formatYmdShort(session.session_date), project.artist, calc.item.name].filter(Boolean).join(" · ");
     items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: desc, quantity: 1, unit_price: amount, amount, item_date: session.session_date || null });
   }
   items.sort((a, b) => (a.item_date || "").localeCompare(b.item_date || "")); // 날짜순(동일 날짜는 원래 순서 유지 — Array#sort는 안정 정렬)
