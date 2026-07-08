@@ -93,7 +93,7 @@ router.get("/", requireBilling, (req, res) => {
   const searchBar = `
     <form method="get" action="/invoices" class="mb-4 flex gap-2">
       <input type="hidden" name="tab" value="${esc(tab)}" />
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="제목 · 채번 · 클라이언트 검색" aria-label="청구 검색" />
+      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="제목 · 청구번호 · 클라이언트 검색" aria-label="청구 검색" />
       <button class="btn-primary shrink-0" type="submit">검색</button>
     </form>`;
   const resultNote = q
