@@ -3,10 +3,8 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireBilling, requireInvoice, canBill, canInvoice } = require("../auth");
-const { TAX_STATUSES, normalizeTaxStatus, normalizeDocType, DOC_TYPES, docNumberWithType } = require("../config");
+const { normalizeTaxStatus, normalizeDocType, DOC_TYPES, docNumberWithType } = require("../config");
 const {
-  clientOptions,
-  contactOptions,
   listInvoices,
   getInvoiceForUser,
   listInvoiceItemsForInvoice,
@@ -24,13 +22,11 @@ const {
   addPayment,
   deletePayment,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, explain, payerCombo, tabBar, personLabel } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, tabBar, personLabel } = require("../views");
 const { invoiceRow, invoiceBadge, payerInfoCard, taxToggleButtons } = require("../views.invoices");
 const { formatYmdShort } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
-const { parseMoney, cleanYmd } = require("../lib/forms");
 const { asyncHandler } = require("../lib/async");
 const { renderInvoicePdf } = require("../invoice-pdf");
-const { notifyInvoiceIssued } = require("../notify");
 
 const router = express.Router();
 
@@ -52,28 +48,8 @@ function returnTo(req, fallback, flash, extra) {
   return path;
 }
 
-function projectOptions() {
-  return db().prepare("SELECT id, title, COALESCE(production_id, agency_id, artist_id) AS client_id FROM projects ORDER BY created_at DESC").all();
-}
-
-function resolveInvoiceRefs(body) {
-  // 청구처(payer) = parties.id. client_id·payer_contact_id 둘 다 party id(콤보가 어느 쪽에 넣든 동일 의미).
-  const projectId = body.project_id ? Number(body.project_id) : null;
-  let clientId = (body.client_id ? Number(body.client_id) : null) || (body.payer_contact_id ? Number(body.payer_contact_id) : null);
-
-  if (projectId) {
-    const p = db().prepare("SELECT id, production_id, agency_id, artist_id FROM projects WHERE id = ?").get(projectId);
-    if (!p) return { error: "선택한 프로젝트를 찾을 수 없습니다." };
-    if (!clientId) clientId = p.production_id || p.agency_id || p.artist_id || null; // 미선택 시 프로젝트에서 파생
-  }
-
-  if (clientId) {
-    const c = db().prepare("SELECT id FROM parties WHERE id = ?").get(clientId);
-    if (!c) return { error: "선택한 청구처를 찾을 수 없습니다." };
-  }
-
-  return { projectId, clientId };
-}
+// (수동 청구 생성 폼·resolveInvoiceRefs·projectOptions는 2026-07-08 폐지 — 청구는 프로젝트 청구 탭에서만 생성.
+//  임의(커스텀) 청구가 필요해지면 그때 다시 빌드하기로 사용자 결정.)
 
 // ── 목록(URL = 필터) ──
 router.get("/", requireBilling, (req, res) => {
@@ -130,9 +106,9 @@ router.get("/", requireBilling, (req, res) => {
     ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i, { isAdmin: admin, isInvoicer: invoicer, ret: retPath, openId })).join("")}</div>`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
-      : emptyState(`청구 내역이 없습니다.${admin ? ' <a href="/invoices/new" class="text-primary hover:underline">새로 추가</a>' : ""}`, { card: true });
+      : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });
 
-  const action = admin ? `<a href="/invoices/new" class="btn-primary">+ 새 청구</a>` : "";
+  const action = ""; // '+ 새 청구'(수동 청구) 폐지(2026-07-08) — 청구 생성은 프로젝트 청구 탭에서만
   const dueNote = totalDue > 0
     ? `<div class="card mb-4 flex items-center justify-between"><span class="text-sm text-muted">미수금 합계</span><span class="tabular text-lg font-bold text-danger">${formatKRW(totalDue)}</span></div>`
     : "";
@@ -148,58 +124,7 @@ router.get("/", requireBilling, (req, res) => {
   res.send(layout({ title: "청구", user, current: "/invoices", body }));
 });
 
-// ── 새 청구(관리자) ──
-router.get("/new", requireBilling, (req, res) => {
-  const projectId = req.query.projectId ? Number(req.query.projectId) : null;
-  const prefill = projectId ? { project_id: projectId } : {};
-  const ret = projectId ? `/projects/${projectId}?tab=invoice` : ""; // 프로젝트에서 왔으면 그 청구 탭으로 복귀
-  res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm(prefill, "", ret) }));
-});
-
-router.post("/", requireBilling, (req, res) => {
-  const b = req.body;
-  const ret = safePath(b.return) || ""; // 프로젝트 청구 탭에서 온 복귀 경로(있으면 생성 후 그쪽으로 + 사이드바 프로젝트 유지)
-  const reErr = (msg) => res.send(layout({ title: "새 청구", user: req.user, current: ret ? "/projects" : "/invoices", body: invoiceForm({ ...b, _err: msg }, "", ret) }));
-  const title = String(b.title || "").trim();
-  if (!title) return reErr("제목을 입력하세요.");
-  const refs = resolveInvoiceRefs(b);
-  if (refs.error) return reErr(refs.error);
-  const amount = parseMoney(b.amount);
-  if (amount <= 0) return reErr("청구 금액을 입력하세요.");
-  const status = "발행"; // 청구 생성 = 청구서 발행(생성=발행 단일 흐름). 미발행 상태·컨트롤 폐기.
-  const taxStatus = normalizeTaxStatus(b.tax_status); // 계산서·입금 축
-  // 계산서·입금이 입금완료면 입금액=총액 자동
-  const paid = taxStatus === "입금완료" ? amount : parseMoney(b.paid_amount);
-
-  const discount = parseMoney(b.discount_amount);
-  const info = db()
-    .prepare(
-      `INSERT INTO invoices (project_id, payer_id, payer_snapshot, title, amount, tax_amount, discount_amount, paid_amount, status, tax_status, issued_date, due_date, memo)
-       VALUES (@project_id,@payer_id,@payer_snapshot,@title,@amount,@tax,@discount,@paid,@status,@tax_status,@issued_date,@due_date,@memo)`
-    )
-    .run({
-      project_id: refs.projectId,
-      payer_id: refs.clientId,
-      payer_snapshot: snapshotPayer(refs.clientId), // 발행 시점 청구처 정보 고정
-      title,
-      amount,
-      tax: b.vat_included != null ? Math.round(amount - amount / 1.1) : 0, // 부가세 포함 체크 시 역산, 현금(미포함)이면 0
-      discount,
-      paid,
-      status,
-      tax_status: taxStatus,
-      issued_date: cleanYmd(b.issued_date),
-      due_date: cleanYmd(b.due_date),
-      memo: String(b.memo || "").trim() || null,
-    });
-  const id = info.lastInsertRowid;
-  // 수동 인보이스가 발행 상태로 생성되면 채번 보장 + 발행 알림(from-tasks·상태전이 경로와 일원화). 미발행이면 스킵.
-  if (status === "발행" || taxStatus === "계산서 발행" || taxStatus === "입금완료") {
-    ensureInvoiceNumber(db().prepare("SELECT * FROM invoices WHERE id = ?").get(id));
-    notifyInvoiceIssued(getInvoiceForUser(req.user, id));
-  }
-  res.redirect(returnTo(req, `/invoices/${id}`, "created", { open: id }));
-});
+// (GET /new·POST / 수동 청구 라우트는 2026-07-08 폐지 — 청구 생성은 프로젝트 청구 탭 from-tasks 경로만.)
 
 // ── 상세 ──
 // 청구처 정보: 발행 시점 스냅샷(payer_snapshot) 우선 — 이후 클라이언트 정보가 바뀌어도 과거 청구서 표시/PDF 고정.
@@ -387,52 +312,5 @@ router.post("/:id/delete", requireBilling, (req, res) => {
   // 삭제 후엔 인보이스가 없으니 청구 탭 복귀 시 open=ID는 무시됨(그 행 미생성). 기본은 청구 목록.
   res.redirect(returnTo(req, "/invoices", "deleted"));
 });
-
-// ── 수동 청구 생성 폼(금액 직접 입력 경로) ── 수정 폼은 폐기(발행=확정, 변경은 삭제 후 재발행).
-function invoiceForm(inv = {}, err = "", returnPath = "") {
-  const e = err || inv._err || "";
-  const action = "/invoices";
-  const clients = clientOptions();
-  const projects = projectOptions();
-  const projSelect = `
-    <select name="project_id" class="input">
-      <option value="">프로젝트 미지정</option>
-      ${projects.map((p) => `<option value="${p.id}" ${Number(inv.project_id) === p.id ? "selected" : ""}>${esc(p.title)}</option>`).join("")}
-    </select>`;
-  // 청구처 콤보(클라이언트 + 담당자) — from-tasks와 동일 공용 payerCombo. 담당자 선택 시 payer_contact_id → ensureClientFromContact로 개인 청구처 변환.
-  const contactOpts = contactOptions();
-  const clientSelect = payerCombo({ selectedId: inv.payer_id, clientOptions: clients, contactOptions: contactOpts, hint: `클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동/미지정.` });
-  const retHidden = returnPath ? `<input type="hidden" name="return" value="${esc(returnPath)}" />` : "";
-  const errBox = e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : "";
-  // 입금액 수동 입력 폐기(2026-07-05) — 입금 처리는 [입금완료] 토글(선택 시 서버가 자동 완납)만. 계산서·입금 select에서 입금완료를 고르면 완납 저장.
-  const statusField = `<div><label class="label">계산서 · 입금 <span class="font-normal text-muted text-xs">— 보통은 발행 후 청구 메뉴에서 처리</span></label><select name="tax_status" class="input max-w-xs">${TAX_STATUSES.map((s) => `<option value="${esc(s)}" ${s === (inv.tax_status || TAX_STATUSES[0]) ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></div>`;
-  const fields = `
-      <div><label class="label">제목</label><input class="input" name="title" value="${esc(inv.title || "")}" placeholder="예: 루나 1집 믹싱비" required /></div>
-      <div><label class="label">프로젝트</label>${projSelect}</div>
-      <div><label class="label">청구처(프로젝트 선택 시 자동)</label>${clientSelect}</div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">총액(원) <span class="font-normal text-muted text-xs">입력 금액 기준</span></label><input class="input" name="amount" inputmode="numeric" value="${inv.amount ? esc(String(inv.amount)) : ""}" placeholder="0" /></div>
-        <div><label class="label">할인(원) <span class="font-normal text-muted text-xs">선택 — 표시용</span></label><input class="input" name="discount_amount" inputmode="numeric" value="${inv.discount_amount ? esc(String(inv.discount_amount)) : ""}" placeholder="0" /></div>
-      </div>
-      <label class="flex items-center gap-1.5 text-sm">
-        <input type="checkbox" name="vat_included" value="1" checked /> 부가세(VAT 10%) 포함 <span class="text-xs text-muted">— 해제 시 총액에서 VAT를 빼고 현금 거래로(VAT 0)</span>
-      </label>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">발행일</label><input class="input" type="date" name="issued_date" value="${esc(inv.issued_date || "")}" /></div>
-      </div>
-      ${statusField}
-      <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(inv.memo || "")}</textarea></div>`;
-  return `
-    ${pageHeader({ title: "새 청구", back: returnPath ? { href: returnPath, label: "프로젝트 청구" } : null })}
-    <form method="post" action="${action}" class="card space-y-4" data-vat-amount-form>
-      ${retHidden}${errBox}
-      ${explain(`프로젝트 청구 탭의 청구 생성 체크리스트에서 항목을 선택하면 청구서를 자동으로 만들 수 있습니다. 이 폼은 금액을 직접 입력하는 수동 경로입니다.`)}
-      ${fields}
-      <div class="flex gap-2">
-        <button class="btn-primary" type="submit">추가</button>
-        <a href="${returnPath || "/invoices"}" class="btn-ghost">취소</a>
-      </div>
-    </form>`;
-}
 
 module.exports = router;

@@ -246,10 +246,7 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
         )
         .join("")
     : emptyState("청구 내역이 없습니다.");
-  // 수동 경로: unbilledForm 체크리스트가 주 진입점, 직접 입력 폼은 보조 링크로 격하
-  const manualLink = isAdmin
-    ? `<a href="/invoices/new?projectId=${project.id}" class="text-xs text-muted hover:text-fg hover:underline">금액 직접 입력</a>`
-    : "";
+  // ('금액 직접 입력' 수동 청구 링크는 2026-07-08 폐지 — 청구는 이 탭의 청구 생성 체크리스트에서만.)
   const total = rows.reduce((s, i) => s + (i.amount || 0), 0);
   const due = rows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0);
   const summary = rows.length
@@ -268,7 +265,6 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     const body = `
       ${summary}
       ${list}
-      ${manualLink ? `<div class="mt-2 flex justify-end">${manualLink}</div>` : ""}
       ${unbilledForm ? `<div class="mt-4 border-t border-border pt-4">${unbilledForm}</div>` : ""}`;
     return `
     <details class="card group mt-3"${open}>
@@ -285,7 +281,6 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     <div class="card mt-3">
       <div class="mb-2 flex items-center justify-between">
         <h2 class="font-display text-base font-semibold">청구</h2>
-        ${manualLink}
       </div>
       ${summary}
       ${list}

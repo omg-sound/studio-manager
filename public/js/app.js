@@ -1958,22 +1958,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   setTimeout(function () { el.scrollIntoView({ block: "center" }); }, 60);
 })();
 
-// 청구 수정/수동 생성 폼([data-vat-amount-form]): 부가세 포함 토글 시 총액(amount)에 VAT 가감.
-// 포함=공급가×1.1(VAT 더함), 해제=÷1.1(총액에서 VAT 제거) → 부가세 토글이 총액에 즉시 반영(서버 저장도 일치).
-(function () {
-  "use strict";
-  Array.prototype.forEach.call(document.querySelectorAll("[data-vat-amount-form]"), function (form) {
-    var vat = form.querySelector('input[name="vat_included"]');
-    var amount = form.querySelector('input[name="amount"]');
-    if (!vat || !amount) return;
-    vat.addEventListener("change", function () {
-      var v = parseInt(String(amount.value).replace(/[^\d]/g, "") || "0", 10) || 0;
-      if (!v) return;
-      // 천단위 콤마 유지(프로그램 .value 대입은 input 이벤트가 안 떠 콤마 포맷터가 안 돎 → 직접 포맷).
-      amount.value = (vat.checked ? Math.round(v * 1.1) : Math.round(v / 1.1)).toLocaleString("en-US");
-    });
-  });
-})();
+// (수동 청구 폼의 VAT 토글 핸들러는 2026-07-08 수동 청구 폐지와 함께 제거 — from-tasks 청구 폼의 VAT 계산은 할인 폼 경로가 담당.)
 
 // 클라이언트 목록: 상세 갔다 돌아오면 스크롤 위치 복원(필터는 서버 ?from= 로 백링크에 유지).
 // 상세 링크 클릭 시 현재 목록 URL+스크롤을 저장하고, 같은 URL로 목록이 다시 로드되면 스크롤 복원.
