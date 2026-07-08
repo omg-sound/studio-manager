@@ -540,8 +540,8 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   const selAff = `${selOrg}${selTitle ? " " + selTitle : ""}`.trim();
   const selInfo = sel
     ? [
-        sel.phone ? `<button type="button" data-copy="${esc(sel.phone)}" title="클릭하면 복사됩니다" class="font-medium text-info hover:underline">☎ ${esc(sel.phone)}</button>` : "",
-        sel.email ? `<button type="button" data-copy="${esc(sel.email)}" title="클릭하면 복사됩니다" class="text-info hover:underline">✉ ${esc(sel.email)}</button>` : "",
+        sel.phone ? `<button type="button" data-copy="${esc(sel.phone)}" title="클릭하면 복사됩니다" class="copyable font-medium text-info">☎ ${esc(sel.phone)}</button>` : "",
+        sel.email ? `<button type="button" data-copy="${esc(sel.email)}" title="클릭하면 복사됩니다" class="copyable text-info">✉ ${esc(sel.email)}</button>` : "",
         selAff ? `<span>소속: ${esc(selAff)}</span>` : "",
       ].filter(Boolean).join(" · ")
     : "";
@@ -666,8 +666,8 @@ function copyable(value, { cls = "", display = "" } = {}) {
   if (value == null || value === "") return "";
   const v = esc(String(value));
   const shown = display ? esc(String(display)) : v;
-  // 아이콘 없이 값만 — 클릭 시 복사(hover 밑줄로 복사 가능 암시, title 툴팁). app.js [data-copy].
-  return `<button type="button" data-copy="${v}" class="rounded text-left hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}</button>`;
+  // 평소엔 값만, hover 시 copy 커서+배경 하이라이트+⧉ 아이콘(.copyable, src.css) — 링크의 밑줄 관습과 분리(2026-07-08). app.js [data-copy].
+  return `<button type="button" data-copy="${v}" class="copyable focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${cls}" title="클릭하면 복사됩니다">${shown}</button>`;
 }
 
 /**

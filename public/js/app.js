@@ -1619,8 +1619,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function setInfo(o, isNew) {
       while (info.firstChild) info.removeChild(info.firstChild);
       var nodes = [];
-      if (o && o.phone) { var a = document.createElement("button"); a.type = "button"; a.setAttribute("data-copy", o.phone); a.title = "클릭하면 복사됩니다"; a.textContent = "☎ " + o.phone; a.className = "font-medium text-info hover:underline"; nodes.push(a); }
-      if (o && o.email) { var em = document.createElement("button"); em.type = "button"; em.setAttribute("data-copy", o.email); em.title = "클릭하면 복사됩니다"; em.textContent = "✉ " + o.email; em.className = "text-info hover:underline"; nodes.push(em); }
+      if (o && o.phone) { var a = document.createElement("button"); a.type = "button"; a.setAttribute("data-copy", o.phone); a.title = "클릭하면 복사됩니다"; a.textContent = "☎ " + o.phone; a.className = "copyable font-medium text-info"; nodes.push(a); }
+      if (o && o.email) { var em = document.createElement("button"); em.type = "button"; em.setAttribute("data-copy", o.email); em.title = "클릭하면 복사됩니다"; em.textContent = "✉ " + o.email; em.className = "copyable text-info"; nodes.push(em); }
       // 소속 = 그룹 또는 회사 + 직책(예: '(주)크레오엔터테인먼트 대표')
       var org = o ? (o.group || o.company || "") : "";
       var aff = (org + (o && o.job_title ? " " + o.job_title : "")).trim();

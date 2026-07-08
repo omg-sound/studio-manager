@@ -89,6 +89,23 @@
 
 /* 재사용 컴포넌트 클래스 */
 @layer components {
+  /* 클릭 복사 값(2026-07-08 사용자 결정) — 링크(밑줄·pointer)와 신호 분리: copy 커서 + hover 배경 하이라이트 + ⧉ 아이콘(hover에만).
+     밑줄은 링크 전용 관습으로 돌려주고, 복사는 커서 모양 자체가 '이동 아님'을 말한다. 아이콘은 평소 미표시(과거 상시 아이콘 제거 결정 유지). */
+  .copyable {
+    @apply -mx-0.5 rounded px-0.5 text-left transition-colors duration-100;
+    cursor: copy;
+  }
+  .copyable:hover {
+    @apply bg-primary/10;
+  }
+  .copyable::after {
+    content: "⧉";
+    @apply ml-1 align-middle text-[0.8em] text-muted;
+    display: none;
+  }
+  .copyable:hover::after {
+    display: inline;
+  }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50;
   }
