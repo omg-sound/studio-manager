@@ -56,6 +56,25 @@ function snapshotPayer(payerId) {
 }
 
 /**
+ * 발행 스냅샷 이후 청구처 정보가 바뀌었는지 — 청구 상세 '새로고침' 안내 노출 판정(2026-07-08 사용자 요청).
+ * 의미 필드만 골라 비교(JSON 문자열 비교 금지 — 옛 스냅샷은 이후 추가된 키가 없어 내용이 같아도 오탐).
+ * 스냅샷 없는 레거시(실시간 표시)·청구처 삭제·미지정은 false(새로고침 개념 없음).
+ */
+function payerSnapshotChanged(inv) {
+  if (!inv || !inv.payer_id || !inv.payer_snapshot) return false;
+  const cur = snapshotPayer(inv.payer_id);
+  if (!cur) return false; // 청구처 party 삭제됨
+  let a, b;
+  try { a = JSON.parse(inv.payer_snapshot); b = JSON.parse(cur); } catch (_e) { return false; }
+  const norm = (v) => (v == null ? "" : String(v).trim());
+  const fields = ["name", "activity_name", "owner_name", "biz_no", "address", "email", "cash_receipt_no"];
+  if (fields.some((f) => norm(a[f]) !== norm(b[f]))) return true;
+  const ca = (a.contacts && a.contacts[0]) || {};
+  const cb = (b.contacts && b.contacts[0]) || {};
+  return ["name", "phone", "email"].some((f) => norm(ca[f]) !== norm(cb[f]));
+}
+
+/**
  * 청구처(payer) 후보별 발행 정보 — 회사=세금계산서 정보(사업자등록번호 biz_no) 보유, 개인=현금영수증 정보(cash_receipt_no) 보유 party id 집합.
  * 청구 생성 폼이 청구처 유형(회사=계산서 / 개인=현금영수증)·정보 누락 경고·차단에 쓴다.
  * (사업자등록증 파일은 첨부 서류일 뿐 세금계산서 발행 필수 아님 → biz_no 기준.)
@@ -511,6 +530,7 @@ module.exports = {
   invoiceAmountsFromSupply,
   createInvoiceFromTasks,
   snapshotPayer,
+  payerSnapshotChanged,
   payerDocMeta,
   payerDocMissing,
   invoiceDraftForPdf,

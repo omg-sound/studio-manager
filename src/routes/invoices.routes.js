@@ -18,6 +18,7 @@ const {
   getClientFile,
   listPersonsForOrg,
   snapshotPayer,
+  payerSnapshotChanged,
   ensureInvoiceNumber,
   listPayments,
   addPayment,
@@ -227,8 +228,16 @@ router.get("/:id", requireBilling, (req, res) => {
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
   // 청구처 정보(대표자·사업자번호·담당자 연락처) — 발행 시점 스냅샷 우선(payerView). biz_license 파일 링크만 실시간(현재 첨부).
   const { client: payerClient, contacts: payerContacts } = payerView(inv);
+  // 발행 후 클라이언트 정보가 바뀐 경우에만 카드 우하단에 경고 + 새로고침(스냅샷만 현재 정보로 갱신 — 금액·항목·번호 불변, 2026-07-08 사용자 요청).
+  const payerStaleFooter = payerSnapshotChanged(inv)
+    ? `<div class="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-2">
+         <span aria-hidden="true">⚠️</span>
+         <span class="text-xs text-warning">청구처 정보가 업데이트되었습니다 — 아래는 발행 당시 정보입니다.</span>
+         <form method="post" action="/invoices/${inv.id}/refresh-payer"><input type="hidden" name="return" value="${esc(selfRet)}" /><button class="btn-ghost btn-sm" type="submit">새로고침</button></form>
+       </div>`
+    : "";
   const payerCard = payerClient
-    ? payerInfoCard(payerClient, payerContacts, payerClient.id ? !!getClientFile(payerClient.id, "biz_license") : false)
+    ? payerInfoCard(payerClient, payerContacts, payerClient.id ? !!getClientFile(payerClient.id, "biz_license") : false, { footer: payerStaleFooter })
     : "";
 
   const row = (label, value) =>
@@ -333,6 +342,15 @@ function invoiceItemsSection(items) {
 
 
 // (청구서 상태 변경 라우트 폐기 — 생성=발행 단일 흐름이라 미발행↔발행 전환 UI·호출부 없음, 2026-07-04 죽은 라우트 제거)
+
+// ── 청구처 스냅샷 새로고침 ── 발행 후 클라이언트 정보가 보강·수정된 경우 payer_snapshot만 현재 party 정보로 갱신.
+// 금액·항목·청구번호·입금 상태는 불변(정보 보정일 뿐 재발행 아님). 변경 없으면 상세 카드에 버튼 자체가 안 뜬다(payerSnapshotChanged).
+router.post("/:id/refresh-payer", requireBilling, (req, res) => {
+  const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (inv.payer_id) db().prepare("UPDATE invoices SET payer_snapshot = ? WHERE id = ?").run(snapshotPayer(inv.payer_id), inv.id);
+  res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
+});
 
 // ── 계산서·입금 상태 변경(관리자) ── 계산서 미발행 → 계산서 발행 → 입금완료(자유 선택). 입금완료 선택=완납, 벗어나면 입금액 0.
 router.post("/:id/tax-status", requireInvoice, (req, res) => {

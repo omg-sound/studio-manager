@@ -307,6 +307,31 @@ test("청구처 표시: 아티스트는 본명 (활동명), 회사는 상호 그
   assert.equal(listed2.client_name, "무지개레코드", "회사는 상호 그대로");
 });
 
+// ── 청구처 스냅샷 변경 감지(2026-07-08): 발행 후 클라이언트 정보 변경 시에만 새로고침 노출 ──
+test("payerSnapshotChanged: 변경 없으면 false, 주소·이메일 보강 시 true, 새로고침 후 다시 false, 레거시(스냅샷 없음) false", () => {
+  const co = D.createCompany({ name: "스냅샷검사사", roles: "제작사", biz_no: "555-66-77788" });
+  const pid = Number(db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('스냅샷','task',0)").run().lastInsertRowid);
+  const tr = Number(db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(pid).lastInsertRowid);
+  const tk = Number(db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 100000, 100000, 'Completed', 0)").run(tr).lastInsertRowid);
+  const { id: invId } = D.createInvoiceFromTasks(CHIEF, { projectId: pid, taskIds: [tk], clientId: co, issueDate: "2026-07-08" });
+  const inv = () => db().prepare("SELECT * FROM invoices WHERE id=?").get(invId);
+  assert.equal(D.payerSnapshotChanged(inv()), false, "발행 직후 = 변경 없음");
+  // 발행 후 주소·이메일 보강 → 변경 감지
+  db().prepare("UPDATE parties SET address='서울시 마포구', email='tax@snap.kr' WHERE id=?").run(co);
+  assert.equal(D.payerSnapshotChanged(inv()), true, "주소·이메일 보강 = 변경 감지");
+  // 새로고침(스냅샷 재저장) → 다시 false
+  db().prepare("UPDATE invoices SET payer_snapshot=? WHERE id=?").run(D.snapshotPayer(co), invId);
+  assert.equal(D.payerSnapshotChanged(inv()), false, "새로고침 후 = 변경 없음");
+  // 담당자 이메일 변경도 감지(스냅샷 contacts[0] 비교)
+  const person = D.createPerson({ name: "담당자김" });
+  db().prepare("UPDATE parties SET email='dd@snap.kr' WHERE id=?").run(person);
+  D.addAffiliation(person, { client_id: co, title: "과장" });
+  assert.equal(D.payerSnapshotChanged(inv()), true, "담당자(이메일) 추가 = 변경 감지");
+  // 레거시(스냅샷 없음)=실시간 표시라 대상 아님
+  db().prepare("UPDATE invoices SET payer_snapshot=NULL WHERE id=?").run(invId);
+  assert.equal(D.payerSnapshotChanged(inv()), false, "스냅샷 없는 레거시 = false");
+});
+
 // ── 회귀(2026-07-05 전수점검): 이름 해석 안전망 — 표시 라벨 텍스트가 유령 party를 만들지 않게 ──
 test("resolvePersonByName: 라벨('본명 호칭'·'본명 (활동명)'·활동명) 텍스트도 기존 사람으로 해석", () => {
   const p = D.createPerson({ name: "한도윤", nickname: "도윤사운드", honorific: "실장님" });
