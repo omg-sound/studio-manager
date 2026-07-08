@@ -2137,3 +2137,21 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     pop.addEventListener("mousemove", function (e) { var b = e.target.closest("[data-place-val]"); if (!b) return; var rs = pop.children; for (var k = 0; k < rs.length; k++) if (rs[k] === b) { setHi(k); break; } });
   });
 })();
+
+// ── 첨부 파일 '보기' 팝업(사업자등록증 등) — 새 창을 디스플레이 오른쪽 위에 50% 크기로(2026-07-08 사용자 요청).
+// 탭(target=_blank)은 위치·크기 지정이 불가해 window.open 팝업으로. 팝업 차단 시 기존 새 탭 폴백(preventDefault 안 함).
+(function () {
+  document.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest ? e.target.closest("a[data-popup-view]") : null;
+    if (!a) return;
+    var s = window.screen || {};
+    var sw = s.availWidth || s.width || 1280;
+    var sh = s.availHeight || s.height || 800;
+    var w = Math.round(sw / 2);
+    var h = Math.round(sh / 2);
+    var left = (s.availLeft || 0) + sw - w; // 오른쪽 끝
+    var top = s.availTop || 0; // 위쪽 끝
+    var win = window.open(a.href, "attachmentView", "popup=yes,width=" + w + ",height=" + h + ",left=" + left + ",top=" + top);
+    if (win) { e.preventDefault(); try { win.focus(); } catch (_e) {} }
+  });
+})();

@@ -614,7 +614,7 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
       : "";
     const existingRow = existing && ok
       ? `<div class="mb-2 flex flex-wrap items-center gap-3 text-sm">
-            <a href="/clients/${c.id}/files/${key}/raw" target="_blank" rel="noopener" class="font-medium text-primary hover:underline">${esc(label)} 보기</a>
+            <a href="/clients/${c.id}/files/${key}/raw" target="_blank" rel="noopener" data-popup-view class="font-medium text-primary hover:underline">${esc(label)} 보기</a>
             <span class="max-w-[12rem] truncate text-xs text-muted">${esc(existing.file_name)}</span>
             ${backendTag}
             <form method="post" action="/clients/${c.id}/files/${key}/delete" class="inline" data-confirm="${esc(label)}을 삭제할까요?">
