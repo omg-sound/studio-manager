@@ -214,7 +214,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
   if (inv.contact_email && inv.contact_email !== inv.payer_email) emailParts.push(`${copyable(inv.contact_email)} <span class="text-muted">(담당자)</span>`);
   const emailLine = emailParts.length ? `<div class="mt-0.5 truncate text-xs text-muted">${emailParts.join(" · ")}</div>` : "";
   const left = `
-    <a href="/invoices/${inv.id}" class="inline-block max-w-full truncate align-bottom font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-primary/40">${esc(inv.title)}</a>
+    <a href="/invoices/${inv.id}?return=${encodeURIComponent(retWithOpen)}" class="inline-block max-w-full truncate align-bottom font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-primary/40">${esc(inv.title)}</a>
     <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
     <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
     ${emailLine}`;

@@ -217,6 +217,11 @@ router.get("/:id", requireBilling, (req, res) => {
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const admin = canBill(req.user); // 보기·삭제 권한(치프·대표·스태프)
   const canProcess = canInvoice(req.user); // 계산서·입금 처리 = 대표·치프
+  // 목록에서 넘어온 복귀 경로(?return= — 보던 탭·검색·open 카드 보존, 2026-07-08 사용자 요청
+  // '입금완료 탭에서 상세 갔다가 뒤로 가면 발행 필요로 떨어짐'). 내부 절대경로만(safePath), 없으면 기본 목록.
+  const backHref = safePath(req.query.return) || "/invoices";
+  // 상세에서 계산서·입금 토글 후에도 상세로 복귀하되 return을 유지해 백링크가 계속 원래 탭을 가리키게.
+  const selfRet = `/invoices/${inv.id}` + (backHref !== "/invoices" ? `?return=${encodeURIComponent(backHref)}` : "");
   const itemBundle = listInvoiceItemsForInvoice(req.user, inv.id);
   const items = itemBundle ? itemBundle.rows : [];
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행 허용(미발행 초안도 견적서·내역서·거래명세서)
@@ -237,7 +242,7 @@ router.get("/:id", requireBilling, (req, res) => {
           <span class="text-xs text-muted">PDF 발행:</span>
           ${pdfTypes.map((t) => `<a href="/invoices/${inv.id}/statement/${encodeURIComponent(docNumberWithType(inv.invoice_number, t) || t)}.pdf?type=${encodeURIComponent(t)}" class="btn-ghost btn-sm" target="_blank" rel="noopener">${esc(t)}</a>`).join("")}
         </div>
-        ${canProcess ? `<div class="flex flex-wrap gap-2">${taxToggleButtons(inv, `/invoices/${inv.id}`)}</div>` : ""}
+        ${canProcess ? `<div class="flex flex-wrap gap-2">${taxToggleButtons(inv, selfRet)}</div>` : ""}
       </div>`;
   // 삭제(치프·대표·스태프=canBill). 청구 생성자가 잘못 만든 청구를 정리.
   const deleteBlock = admin
@@ -251,7 +256,7 @@ router.get("/:id", requireBilling, (req, res) => {
   // 레이아웃(2026-07-05 사용자 요청): 청구처 정보 최상단 → 통합 카드(청구번호·금액·VAT + 청구 항목 + 계산서·입금 처리 + PDF) → 메모 → 삭제.
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: inv.title, desc: (payerClient ? personLabel(payerClient.name, payerClient.activity_name) : "") || inv.client_name || "청구처 미지정", back: { href: "/invoices", label: "청구" }, action: invoiceBadge(inv) })}
+    ${pageHeader({ title: inv.title, desc: (payerClient ? personLabel(payerClient.name, payerClient.activity_name) : "") || inv.client_name || "청구처 미지정", back: { href: backHref, label: "청구" }, action: invoiceBadge(inv) })}
     ${payerCard}
     <div class="card mt-3">
       ${inv.invoice_number ? row("청구번호", esc(inv.invoice_number)) : ""}
