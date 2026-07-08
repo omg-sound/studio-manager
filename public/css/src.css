@@ -100,8 +100,11 @@
   }
   .copyable::after {
     content: "⧉";
-    @apply ml-1 align-middle text-[0.8em] text-muted;
+    @apply ml-1 text-[0.8em] text-muted;
     display: none;
+    /* 아이콘이 줄 높이에 개입하지 않게(2026-07-08 사용자 리포트 'hover 하니까 줄간격이 바뀜') —
+       line-height:0이면 인라인 박스가 라인박스 계산에 0으로 기여해 글리프만 그려지고 행 높이는 불변. align-middle 금지(라인박스 확장). */
+    line-height: 0;
   }
   .copyable:hover::after {
     display: inline;
