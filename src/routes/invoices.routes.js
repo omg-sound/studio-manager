@@ -22,8 +22,8 @@ const {
   addPayment,
   deletePayment,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, tabBar, personLabel } = require("../views");
-const { invoiceRow, invoiceBadge, payerInfoCard, taxToggleButtons } = require("../views.invoices");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, tabBar, copyable } = require("../views");
+const { invoiceRow, payerInfoCard, taxToggleButtons } = require("../views.invoices");
 const { formatYmdShort } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { asyncHandler } = require("../lib/async");
 const { renderInvoicePdf } = require("../invoice-pdf");
@@ -192,7 +192,7 @@ router.get("/:id", requireBilling, (req, res) => {
   // 통합 카드(청구번호 → 발행일 → 프로젝트 → 청구 항목 → 소계·할인·VAT·총액[영수증식 아래 합산] → PDF·처리) → 메모 → 삭제.
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: inv.title, desc: (payerClient ? personLabel(payerClient.name, payerClient.activity_name) : "") || inv.client_name || "청구처 미지정", back: { href: backHref, label: "청구" }, action: invoiceBadge(inv) })}
+    ${pageHeader({ title: inv.title, back: { href: backHref, label: "청구" } })}
     ${payerCard}
     <div class="card mt-3">
       <div class="border-b border-border pb-1">
@@ -202,10 +202,10 @@ router.get("/:id", requireBilling, (req, res) => {
       </div>
       ${invoiceItemsSection(items)}
       <div${items.length ? ' class="border-t border-border pt-1"' : ' class="pt-1"'}>
-        ${items.length ? row("소계", formatKRW(items.reduce((s, it) => s + (it.amount || 0), 0))) : ""}
-        ${inv.discount_amount ? row("할인", `<span class="text-success">-${formatKRW(inv.discount_amount)}</span>`) : ""}
-        ${inv.tax_amount ? row("VAT", formatKRW(inv.tax_amount)) : ""}
-        ${row("총액", `<span class="text-base font-semibold">${formatKRW(inv.amount)}</span>`)}
+        ${items.length ? row("소계", copyable(String(items.reduce((s, it) => s + (it.amount || 0), 0)), { display: formatKRW(items.reduce((s, it) => s + (it.amount || 0), 0)) })) : ""}
+        ${inv.discount_amount ? row("할인", copyable(String(inv.discount_amount), { cls: "text-success", display: `-${formatKRW(inv.discount_amount)}` })) : ""}
+        ${inv.tax_amount ? row("VAT", copyable(String(inv.tax_amount), { display: formatKRW(inv.tax_amount) })) : ""}
+        ${row("총액", copyable(String(inv.amount || 0), { cls: "text-base font-semibold", display: formatKRW(inv.amount) }))}
       </div>
       ${pdfSection}
     </div>
@@ -248,10 +248,10 @@ function invoiceItemsSection(items) {
       (item) => `
       <div class="flex items-start justify-between gap-3 py-1.5">
         <div class="min-w-0">
-          <div class="text-sm font-medium">${esc(item.description)}</div>
+          <div class="text-sm">${copyable(item.description, { cls: "font-medium" })}</div>
           <div class="mt-0.5 text-xs text-muted">${esc(String(item.quantity))} x ${formatKRW(item.unit_price)}</div>
         </div>
-        <div class="shrink-0 text-sm font-semibold">${formatKRW(item.amount)}</div>
+        ${copyable(String(item.amount || 0), { cls: "shrink-0 text-sm font-semibold", display: formatKRW(item.amount) })}
       </div>`
     )
     .join("");
