@@ -457,14 +457,9 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
     where.push("i.payer_id = @clientId");
     params.clientId = Number(clientId);
   }
-  // payer_email=청구처 자체 이메일, contact_email=청구처가 업체일 때 현재 담당자(재직중) 이메일 중 첫 건
-  // (2026-07-06 사용자 요청 — 청구 목록에서도 세금계산서를 누구 메일로 보내야 하는지 바로 보이게. 담당자가 받아야 하는 경우 대비).
+  // (목록 이메일 파생 payer_email·contact_email은 2026-07-08 목록 이메일 줄 폐지와 함께 제거 — 발행 이메일은 상세 청구처 카드에서.)
   const sql = `
-    SELECT i.*, p.title AS project_title, ${PAYER_DISPLAY_SQL} AS client_name, c.kind AS payer_kind, c.is_artist AS payer_is_artist,
-      c.email AS payer_email,
-      (SELECT p2.email FROM affiliations af JOIN parties p2 ON p2.id = af.person_id
-         WHERE af.org_id = c.id AND af.ended_on IS NULL AND p2.email IS NOT NULL AND TRIM(p2.email) <> ''
-         ORDER BY p2.name COLLATE NOCASE LIMIT 1) AS contact_email
+    SELECT i.*, p.title AS project_title, ${PAYER_DISPLAY_SQL} AS client_name, c.kind AS payer_kind, c.is_artist AS payer_is_artist
     FROM invoices i
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN parties c ON c.id = i.payer_id

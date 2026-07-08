@@ -204,17 +204,14 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
   const actions = isInvoicer
     ? `<div class="mt-2 flex flex-wrap justify-end gap-2">${taxToggleButtons(inv, retWithOpen)}</div>`
     : "";
-  // 세금계산서 발행 이메일(청구처 자체) + 담당자 이메일(2026-07-06 사용자 요청 — 목록에서도 발행 전 누구 메일로
-  // 보낼지 바로 보이게. 담당자가 받아야 하는 경우도 있어 둘 다 표시).
-  const emailParts = [];
-  if (inv.payer_email) emailParts.push(copyable(inv.payer_email));
-  if (inv.contact_email && inv.contact_email !== inv.payer_email) emailParts.push(`${copyable(inv.contact_email)} <span class="text-muted">(담당자)</span>`);
-  const emailLine = emailParts.length ? `<div class="mt-0.5 truncate text-xs text-muted">${emailParts.join(" · ")}</div>` : "";
+  // (이메일 줄은 2026-07-08 폐지 — 계산서 발행은 어차피 상세를 보며 하는 흐름이라 목록 중복 정보. 상세 청구처 카드에 유지.)
+  // 배지(계산서·입금 상태)는 제목 뒤 같은 줄(2026-07-08 사용자 요청 — 별도 줄에서 이동). 함정 #17: 제목 '앞'만 금지, 뒤는 truncate 안전(shrink-0 배지).
   const left = `
-    <a href="/invoices/${inv.id}?return=${encodeURIComponent(retWithOpen)}" class="inline-block max-w-full truncate align-bottom font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-primary/40">${esc(inv.title)}</a>
-    <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
-    <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
-    ${emailLine}`;
+    <div class="flex min-w-0 items-center gap-2">
+      <a href="/invoices/${inv.id}?return=${encodeURIComponent(retWithOpen)}" class="min-w-0 truncate font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-primary/40">${esc(inv.title)}</a>
+      ${invoiceBadge(inv)}
+    </div>
+    <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
   const right = `
     <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
     ${actions}`;
