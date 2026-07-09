@@ -145,7 +145,17 @@
 (function () {
   "use strict";
   // 추가 폼 + 각 세션 편집 폼이 모두 동일 인터랙션(그리드·슬라이더·가용성)을 갖도록 폼별로 초기화.
-  Array.prototype.forEach.call(document.querySelectorAll("[data-session-form]"), initSessionForm);
+  // 접힌 편집 폼(<details>)은 처음 펼칠 때 1회 초기화 — 대량 목록에서 로드 시 전 폼을 즉시 초기화하던 비용(시간목록·콤보·슬라이더 등) 회피(2026-07-10 스케일 점검).
+  Array.prototype.forEach.call(document.querySelectorAll("[data-session-form]"), function (form) {
+    var det = form.closest("details");
+    if (det && !det.open) {
+      det.addEventListener("toggle", function onOpen() {
+        if (det.open) { det.removeEventListener("toggle", onOpen); initSessionForm(form); }
+      });
+    } else {
+      initSessionForm(form); // 이미 보이는 폼(추가 폼·서버가 펼쳐 렌더한 편집 폼)은 즉시
+    }
+  });
 
   function initSessionForm(form) {
   var dateInput = form.querySelector("[data-session-date]");
@@ -1684,7 +1694,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       // 모달 '회사' 검색 콤보 — 기존 업체 검색 + '＋ …(으)로 새 업체 등록'(입력 이름 유지, 저장 시 서버가 소속 회사 생성/연결).
       var coInput = modal.querySelector("[data-pc-company]"), coPop = modal.querySelector("[data-pc-company-pop]");
       if (coInput && coPop) {
-        var coDataEl = modal.querySelector("[data-pc-company-options]");
+        // 회사 옵션: 모달 안 인라인 스크립트 우선, 없으면 페이지 공유 스크립트(data-pc-company-ref) 참조(세션 목록 중복 제거 — 스케일 점검).
+        var coDataEl = modal.querySelector("[data-pc-company-options]") || document.getElementById(modal.getAttribute("data-pc-company-ref") || "");
         var coOpts = [];
         try { coOpts = JSON.parse((coDataEl && coDataEl.textContent) || "[]"); } catch (e2) { coOpts = []; }
         document.addEventListener("party-created", function (e) { var p = e.detail; if (!p || p.kind !== "company" || !p.name) return; if (!coOpts.some(function (o) { return String(o.name) === String(p.name); })) coOpts.push({ name: p.name }); }); // 새 업체 생성 시 옵션 반영

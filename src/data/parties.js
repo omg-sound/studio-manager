@@ -192,7 +192,7 @@ function deleteParty(id) {
   const orphanFiles = d.prepare("SELECT storage_backend, file_id FROM client_files WHERE client_id = ?").all(pid);
   if (orphanFiles.length) setImmediate(() => {
     const storage = require("../storage");
-    for (const f of orphanFiles) Promise.resolve(storage.remove(f.storage_backend, f.file_id)).catch(() => {});
+    for (const f of orphanFiles) Promise.resolve(storage.remove(f.storage_backend, f.file_id)).catch((e) => console.warn("[deleteParty] 첨부 삭제 실패(고아 파일 잔존):", f.storage_backend, f.file_id, e && e.message));
   });
   d.prepare("UPDATE invoices SET payer_id = NULL WHERE payer_id = ?").run(pid);
   d.prepare("UPDATE projects SET artist_id = NULL WHERE artist_id = ?").run(pid);

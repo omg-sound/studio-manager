@@ -23,9 +23,10 @@ const {
   listSessionDirectors,
   listSessionEngineers,
   contactOptions,
+  partyOptions,
 } = require("../data");
 const { config, SESSION_TIME_SLOTS, RENTAL_SESSION_TYPES } = require("../config");
-const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox, personLabel, personComboOptionsScript } = require("../views");
+const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox, personLabel, personComboOptionsScript, personComboCompanyScript } = require("../views");
 const { sessionProjectCard, monthCalendar } = require("../views.sessions");
 const { todayYmd } = require("../lib/date");
 const { asyncHandler } = require("../lib/async");
@@ -157,9 +158,9 @@ router.get("/sessions", requireAuth, (req, res) => {
       if (!gIdx.has(s.project_id)) { gIdx.set(s.project_id, groups.length); groups.push([]); }
       groups[gIdx.get(s.project_id)].push(s);
     }
-    // 연락처 옵션 JSON은 페이지당 1회(공유 스크립트) — 행마다 편집 폼이 전체 임베드하면 목록이 수 MB로 불음(2026-07-09 스케일 점검).
+    // 연락처·회사 옵션 JSON은 페이지당 1회(공유 스크립트) — 행마다 편집 폼이 전체 임베드하면 목록이 수 MB로 불음(2026-07-09~10 스케일 점검).
     const optionsRef = editable && activeSess.length ? "pc-shared-contacts" : "";
-    const sharedOpts = optionsRef ? personComboOptionsScript(optionsRef, contactOptions()) : "";
+    const sharedOpts = optionsRef ? personComboOptionsScript(optionsRef, contactOptions()) + personComboCompanyScript("pc-company-shared", partyOptions({ role: "company" })) : "";
     const listHtml = activeSess.length
       ? `${sharedOpts}<div class="space-y-3">${groups.map((g) => sessionProjectCard(g, { isAdmin: editable, managers, rateItems, rooms, optionsRef })).join("")}</div>`
       : emptyState(

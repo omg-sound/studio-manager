@@ -546,7 +546,7 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, entityLabel = "담당자", initialName = "", simpleModal = false, multi = false } = {}) {
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, companyOptionsRef = "", entityLabel = "담당자", initialName = "", simpleModal = false, multi = false } = {}) {
   // companyOptions 미전달 시 업체 목록을 스스로 조회 — '새 담당자 등록' 모달 회사칸이 조용히 평문이 되던 반복 실수 차단
   // (세션 디렉터·업체 대표자에서 각각 재발한 이력, 2026-07-04 기본값화. 명시 전달 시 그대로 사용.)
   if (companyOptions == null) companyOptions = require("./data").partyOptions({ role: "company" });
@@ -573,7 +573,8 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
     : "";
   // 모달 '회사' 입력 = 커스텀 검색 콤보(기존 업체 검색 + '＋ …(으)로 새 업체 등록'). 프로젝트 폼 companyCombo와 동일 UX.
   // 옵션 JSON을 임베드하고 app.js initOne이 드롭다운을 구성한다(선택=회사명, '새 업체 등록'=입력한 이름 유지 → 저장 시 서버가 소속 회사 생성/연결).
-  const companyJson = JSON.stringify((companyOptions || []).map((c) => ({ name: c.name || c }))).replace(/</g, "\\u003c");
+  // companyOptionsRef 지정 시 인라인 임베드 대신 페이지 공유 스크립트(id=ref)를 참조 — 한 페이지에 콤보가 많을 때(세션 목록) 회사 옵션 중복 제거(2026-07-10 스케일 점검).
+  const companyJson = companyOptionsRef ? "" : JSON.stringify((companyOptions || []).map((c) => ({ name: c.name || c }))).replace(/</g, "\\u003c");
   // optionsRef 지정 시 옵션 JSON을 인라인 임베드하지 않고 페이지의 공유 스크립트(id=optionsRef)를 참조 →
   // 같은 옵션(연락처 목록)을 쓰는 콤보가 여러 개인 폼(세션 디렉터 다중 행 등)에서 중복 임베드 제거(페이지 축소).
   const inlineJson = optionsRef ? "" : `<script type="application/json" data-pc-options>${JSON.stringify(options.map((o) => ({ id: o.id, name: o.name, alt: o.activity_name || o.alt || "", honorific: o.honorific || "", phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "", job_title: o.current_title || o.job_title || "", group: o.group_name || o.group || "" }))).replace(/</g, "\\u003c")}</script>`;
@@ -592,7 +593,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
       </div>
       <div class="mt-1.5 ${selInfo ? "" : "hidden"} ${compact ? "text-xs" : "text-sm"} text-muted" data-pc-info>${selInfo}</div>
       ${inlineJson}
-      <div data-pc-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+      <div data-pc-modal${companyOptionsRef ? ` data-pc-company-ref="${esc(companyOptionsRef)}"` : ""} class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
         <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
           <div class="font-display text-lg font-semibold">새 ${esc(entityLabel)} 등록</div>
           ${simpleModal ? `<p class="text-xs text-muted">이 업체의 ${esc(entityLabel)}로 등록됩니다 — 회사·직책은 자동 지정.</p>` : ""}
@@ -608,7 +609,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
               <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
               <div class="absolute left-0 right-0 z-20 mt-1 hidden max-h-48 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-company-pop role="listbox"></div>
             </div>
-            <script type="application/json" data-pc-company-options>${companyJson}</script>
+            ${companyOptionsRef ? "" : `<script type="application/json" data-pc-company-options>${companyJson}</script>`}
           </div>
           <div><label class="label">직책</label><input class="input" data-pc-job autocomplete="off" /></div>`}
           <div class="flex items-center gap-2 pt-1">
@@ -625,6 +626,12 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
 function personComboOptionsScript(id, options) {
   const jopts = (options || []).map((o) => ({ id: o.id, name: o.name, alt: o.activity_name || o.alt || "", honorific: o.honorific || "", phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "", job_title: o.current_title || o.job_title || "", group: o.group_name || o.group || "" }));
   return `<script type="application/json" id="${esc(id)}" data-pc-shared-options>${JSON.stringify(jopts).replace(/</g, "\\u003c")}</script>`;
+}
+
+/** personCombo 모달 '회사' 콤보 공유 옵션 스크립트 — companyOptionsRef로 참조(페이지당 1회, 세션 목록처럼 콤보가 많을 때). */
+function personComboCompanyScript(id, companyOptions) {
+  const jopts = (companyOptions || []).map((c) => ({ name: c.name || c }));
+  return `<script type="application/json" id="${esc(id)}" data-pc-company-options>${JSON.stringify(jopts).replace(/</g, "\\u003c")}</script>`;
 }
 
 /**
@@ -815,4 +822,4 @@ function groupCombo(fieldName, selectedId, currentName, groups = []) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };

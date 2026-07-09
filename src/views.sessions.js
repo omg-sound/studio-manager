@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, SESSION_TYPE_RATE_KIND } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personLabel, personName } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personComboCompanyScript, personLabel, personName } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers, listRateCategories, rateCategoryKind } = require("./data");
 
@@ -176,13 +176,14 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   // personCombo(multi) 하나 — 마지막 콤마 뒤 조각으로 검색, 선택·간이등록은 이어붙임, 제출=director_name 콤마 텍스트(라벨 포함).
   // 서버 resolveDirectorIds가 콤마 split 후 이름별 해석(resolvePersonByName 라벨 안전망 — '박수한 대표님 (워터멜론)'도 그 사람으로).
   const allContacts = contactOptions();
-  const companyOpts = partyOptions({ role: "company" }); // '새 담당자 등록' 모달 회사칸 검색 콤보 — 기존 회사 타이핑 검색·오타/중복 방지
+  // 회사 옵션도 optionsRef가 있으면(세션 목록 — 폼이 여럿) 페이지 공유 스크립트를 참조해 행마다 중복 임베드 안 함(2026-07-10 스케일 점검).
+  const companyOpts = optionsRef ? [] : partyOptions({ role: "company" }); // '새 담당자 등록' 모달 회사칸 검색 콤보 — 기존 회사 타이핑 검색·오타/중복 방지
   const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
   const directorInitial = currentDirectors.map((d) => personName(d)).join(", "); // 편집 프리필 = 라벨 콤마 목록
   const directorField = `
     <div class="mt-2">
       <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자 — 콤마로 여러 명)</span></label>
-      ${personCombo({ idField: "director_contact_id", nameField: "director_name", initialName: directorInitial, options: allContacts, companyOptions: companyOpts, optionsRef, compact: true, multi: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록, 콤마로 여러 명" })}
+      ${personCombo({ idField: "director_contact_id", nameField: "director_name", initialName: directorInitial, options: allContacts, companyOptions: companyOpts, companyOptionsRef: optionsRef ? "pc-company-shared" : "", optionsRef, compact: true, multi: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록, 콤마로 여러 명" })}
       ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다.`)}
     </div>`;
   // 시간 입력 = 구글 캘린더식(2026-07-04 그리드 폐지): [날짜][시작]–[종료][종료날짜(자동)] 타이핑 + 종일 + 소요 슬라이더.
@@ -397,9 +398,9 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
   const pmName = (managers.find((m) => Number(m.id) === Number(project.manager_id)) || {}).name || "";
   const roomList = resolveRooms(rooms); // 룸 1회 조회 후 폼·행에 전달(호출부가 안 넘겨도 채워짐)
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
-  // 연락처 옵션 JSON은 페이지당 1회(공유 스크립트) — 세션 폼(행 편집+추가)마다 전체 임베드가 페이지를 불리던 것(2026-07-09 스케일 점검).
+  // 연락처·회사 옵션 JSON은 페이지당 1회(공유 스크립트) — 세션 폼(행 편집+추가)마다 전체 임베드가 페이지를 불리던 것(2026-07-09~10 스케일 점검).
   const optionsRef = isAdmin ? "pc-shared-contacts" : "";
-  const sharedOpts = isAdmin ? personComboOptionsScript(optionsRef, contactOptions()) : "";
+  const sharedOpts = isAdmin ? personComboOptionsScript(optionsRef, contactOptions()) + personComboCompanyScript("pc-company-shared", partyOptions({ role: "company" })) : "";
   const list = rows.length
     ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms: roomList, projectTitle: project.title, pmName, optionsRef })).join("")
     : emptyState("등록된 세션이 없습니다.");

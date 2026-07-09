@@ -173,7 +173,7 @@ router.post("/:id/delete", requireChief, (req, res) => {
   // DB 삭제 전에 목록을 확보하고, 실제로 삭제됐을 때만(changes>0 — 하우스는 이 라우트로 안 지워짐) best-effort 제거(비동기 fail-safe·흐름 비차단).
   const orphanFiles = listWorkerFiles(Number(req.params.id));
   const r = db().prepare("DELETE FROM project_managers WHERE id = ? AND user_id IS NULL").run(Number(req.params.id));
-  if (r.changes > 0) for (const f of orphanFiles) Promise.resolve(storage.remove(f.storage_backend, f.file_id)).catch(() => {});
+  if (r.changes > 0) for (const f of orphanFiles) Promise.resolve(storage.remove(f.storage_backend, f.file_id)).catch((e) => console.warn("[worker.delete] 첨부 삭제 실패(고아 파일 잔존):", f.storage_backend, f.file_id, e && e.message));
   if (wDel && r.changes > 0) logAudit(req.user, "worker.delete", `#${wDel.id} ${wDel.name || ""}`);
   res.redirect("/workers?flash=deleted");
 });
