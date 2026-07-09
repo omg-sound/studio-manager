@@ -95,8 +95,8 @@ router.get("/", requireInvoice, (req, res) => {
         .map((w) => {
           const tasks = listTasksForWorker(w);
           const sessionPayouts = listSessionPayoutsForWorker(w);
-          const unpaid = tasks.filter((t) => !t.worker_paid && t.worker_rate > 0);
-          const unpaidSessions = sessionPayouts.filter((s) => !s.worker_paid && s.worker_rate > 0);
+          const unpaid = tasks.filter((t) => !t.worker_paid); // 0원(단가 미입력)도 지급 대상(2026-07-09 사용자 결정)
+          const unpaidSessions = sessionPayouts.filter((s) => !s.worker_paid);
           const unpaidAmt = unpaid.reduce((s, t) => s + (t.worker_rate || 0), 0) + unpaidSessions.reduce((s, x) => s + (x.worker_rate || 0), 0);
           const unpaidCount = unpaid.length + unpaidSessions.length;
           // 미지급 항목 미리보기(2026-07-06 사용자 요청 — 건수·금액만으론 뭔지 몰라 대략 어떤 항목인지 한 줄 더).
@@ -262,31 +262,32 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
           ${whLine}
         </div>`;
 
-      // 단가 0 미지급 = '단가 미입력'(지급할 금액이 없어 일괄 지급에서도 제외됨) — 배지로 구분하고 지급 버튼 대신 입력 안내(2026-07-09).
+      // 0원(단가 미입력)도 지급·정산 가능(2026-07-09 사용자 결정 — 무료로 도운 작업·세션도 정산 완료로 정리).
+      // '단가 미입력' 배지는 누락 실수 감지용 정보 표시로 유지(버튼은 항상 제공).
       const payRow = (x) => `
           <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5">
             <div class="min-w-0 text-sm">
               <span class="font-medium">${esc(x.label)}</span>${x.metaHtml}
-              ${x.paid ? `<span class="badge ml-1 bg-success/10 text-success">지급완료 ${esc(x.paidDate)}</span>` : x.rate > 0 ? `<span class="badge ml-1 bg-warning/10 text-warning">미지급</span>` : `<span class="badge ml-1 bg-warning/10 text-warning" title="${x.kind === "task" ? "작업 편집에서 외주 지급단가를 입력해야 지급할 수 있습니다" : "세션 편집에서 이 작업자의 지급단가를 입력해야 지급할 수 있습니다"}">단가 미입력</span>`}
+              ${x.paid ? `<span class="badge ml-1 bg-success/10 text-success">지급완료 ${esc(x.paidDate)}</span>` : `<span class="badge ml-1 bg-warning/10 text-warning">미지급</span>`}
+              ${!x.paid && !(x.rate > 0) ? `<span class="badge ml-1 bg-warning/10 text-warning" title="지급단가가 입력되지 않았습니다 — 의도한 무료(0원)라면 그대로 지급 처리하세요. 아니라면 ${x.kind === "task" ? "작업" : "세션"} 편집에서 단가를 입력하세요.">단가 미입력</span>` : ""}
             </div>
             <div class="flex shrink-0 items-center gap-2">
               <span class="text-sm font-semibold">${formatKRW(x.rate)}</span>
               ${x.clientPrice ? `<span class="text-xs text-muted">/ 고객 ${formatKRW(x.clientPrice)}</span>` : ""}
-              ${x.paid || x.rate > 0 ? `<form method="post" action="${x.kind === "task" ? `/workers/${w.id}/payout/${x.id}` : `/workers/${w.id}/session-payout/${x.id}`}">
+              <form method="post" action="${x.kind === "task" ? `/workers/${w.id}/payout/${x.id}` : `/workers/${w.id}/session-payout/${x.id}`}">
                 <button class="btn-ghost btn-xs ${x.paid ? "text-muted" : "text-primary"}" type="submit">${x.paid ? "지급 취소" : "지급 처리"}</button>
-              </form>` : ""}
+              </form>
             </div>
           </div>`;
 
       // ③ 미지급(위) — 최근 일자순. [전부 지급처리]에 지급일 입력(실제 이체일 소급 기록 가능).
       const unpaidItems = payItems.filter((x) => !x.paid).sort((a, b) => (b.sortDate || "").localeCompare(a.sortDate || ""));
-      const payableCnt = unpaidItems.filter((x) => x.rate > 0).length;
-      const noRateCnt = unpaidItems.length - payableCnt;
+      const noRateCnt = unpaidItems.filter((x) => !(x.rate > 0)).length; // 0원(단가 미입력)도 지급 대상 — 참고 표기만(2026-07-09 사용자 결정)
       const unpaidSection = unpaidItems.length
         ? `<div class="mb-4">
             <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-              <div class="text-xs font-medium text-muted">미지급 ${payableCnt}건 · ${formatKRW(unpaid)} <span class="font-normal">(실지급 ${formatKRW(whUnpaid.net)})</span>${noRateCnt ? ` <span class="font-normal text-warning">· 단가 미입력 ${noRateCnt}건</span>` : ""}</div>
-              <form method="post" action="/workers/${w.id}/payout-all" class="flex flex-wrap items-center gap-1.5" data-confirm="미지급 ${payableCnt}건 · ${esc(formatKRW(unpaid))}을 전부 지급 처리할까요? (원천세 3.3% 제외 실지급 ${esc(formatKRW(whUnpaid.net))})">
+              <div class="text-xs font-medium text-muted">미지급 ${unpaidItems.length}건 · ${formatKRW(unpaid)} <span class="font-normal">(실지급 ${formatKRW(whUnpaid.net)})</span>${noRateCnt ? ` <span class="font-normal text-warning">· 단가 미입력 ${noRateCnt}건 포함</span>` : ""}</div>
+              <form method="post" action="/workers/${w.id}/payout-all" class="flex flex-wrap items-center gap-1.5" data-confirm="미지급 ${unpaidItems.length}건 · ${esc(formatKRW(unpaid))}을 전부 지급 처리할까요? (원천세 3.3% 제외 실지급 ${esc(formatKRW(whUnpaid.net))})">
                 <input type="hidden" name="return" value="detail" />
                 <label class="text-xs text-muted" for="payall-date">지급일</label>
                 <input id="payall-date" class="input w-36 py-1 text-xs" type="date" name="paid_on" value="${todayYmd()}" />
@@ -348,7 +349,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
         (s) => `
         <a href="/projects/${s.project_id}?tab=sessions" class="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5 hover:opacity-80">
           <div class="min-w-0 text-sm"><span class="font-medium">${esc(s.session_type || "녹음")} 세션</span> <span class="text-xs text-muted">· ${esc(s.project_title)} · ${esc(formatYmdShort(s.session_date))}</span></div>
-          <span class="flex shrink-0 items-center gap-1">${s.my_assigned && !(s.my_rate > 0) ? `<span class="badge bg-warning/10 text-warning" title="세션 편집에서 이 작업자의 지급단가를 입력해야 정산 대상이 됩니다">지급단가 미입력</span>` : ""}<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span></span>
+          <span class="flex shrink-0 items-center gap-1">${s.my_assigned && !(s.my_rate > 0) ? `<span class="badge bg-warning/10 text-warning" title="지급단가가 입력되지 않았습니다 — 의도한 무료(0원)면 정산 탭에서 그대로 지급 처리, 아니면 세션 편집에서 단가를 입력하세요">지급단가 미입력</span>` : ""}<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span></span>
         </a>`
       )
       .join("");
@@ -438,9 +439,10 @@ router.post("/:id/payout-all", requireInvoice, (req, res) => {
   if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
   // 지급일 소급(2026-07-09): 상세 정산 탭의 일괄 지급 폼이 paid_on(기본 오늘)을 보냄 — 실제 이체일 기록.
   const paidOn = isValidYmd(String(req.body.paid_on || "")) ? String(req.body.paid_on) : null;
-  const tasks = listTasksForWorker(w).filter((t) => !t.worker_paid && t.worker_rate > 0);
+  // 0원(단가 미입력)도 포함해 전부 지급 처리(2026-07-09 사용자 결정 — 무료 작업도 정산 완료로 정리).
+  const tasks = listTasksForWorker(w).filter((t) => !t.worker_paid);
   tasks.forEach((t) => setTaskPayout(t.id, true, paidOn));
-  const sessionPayouts = listSessionPayoutsForWorker(w).filter((s) => !s.worker_paid && s.worker_rate > 0);
+  const sessionPayouts = listSessionPayoutsForWorker(w).filter((s) => !s.worker_paid);
   sessionPayouts.forEach((s) => setSessionEngineerPayout(s.session_id, w.id, true, paidOn));
   // 상세 정산 탭에서 눌렀으면 그 자리로 복귀(목록 카드의 버튼은 기존대로 목록).
   if (req.body.return === "detail") return res.redirect(`/workers/${w.id}?tab=payout&flash=saved`);
