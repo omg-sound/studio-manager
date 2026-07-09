@@ -741,6 +741,23 @@ function ensureCompanyParty(name, role) {
   return resolveCompanyByName(n) || createCompany({ name: n, roles: role || null });
 }
 
+/**
+ * 회사 party의 역할(roles CSV)에 role을 추가 — 이미 있으면 no-op, 회사가 아니면 무시(사람은 roles 개념 없음).
+ * 프로젝트에서 소속사·제작사로 지정된 기존 회사의 클라이언트 역할에도 그 역할을 반영하기 위함(2026-07-10 사용자 요청 —
+ * 예: 소속사로 등록된 회사를 프로젝트 제작/운영 필드에 넣으면 그 회사도 '제작/운영' 역할을 갖게).
+ */
+function addCompanyRole(partyId, role) {
+  const pid = Number(partyId);
+  const r = String(role || "").trim();
+  if (!pid || !r) return;
+  const p = db().prepare("SELECT kind, roles FROM parties WHERE id = ?").get(pid);
+  if (!p || p.kind !== "company") return; // 사람(개인 제작자)은 production_id 참조로 classifyParty가 배지 파생 — roles 미사용
+  const roles = String(p.roles || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (roles.includes(r)) return; // 멱등
+  roles.push(r);
+  db().prepare("UPDATE parties SET roles = ? WHERE id = ?").run(roles.join(","), pid);
+}
+
 // ── 그룹 ↔ 소속 멤버 연결(parties.group_id) ──
 
 /** 사람(아티스트)의 소속 그룹 지정/해제. groupId=null이면 그룹에서 제거. group 파티만 유효(아니면 무시). */
@@ -904,6 +921,7 @@ module.exports = {
   listArtistsForAgency,
   resolveCompanyByName,
   ensureCompanyParty,
+  addCompanyRole,
   currentAgencyName,
   setPartyGroup,
   listGroupMembers,
