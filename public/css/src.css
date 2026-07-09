@@ -98,14 +98,6 @@
   .copyable:hover {
     @apply bg-primary/10;
   }
-  /* 좌우 대칭(2026-07-09 사용자 요청 — 오른쪽 아이콘 자리만 비우니 여백이 한쪽으로 쏠려 보임):
-     왼쪽에도 같은 글리프를 투명(항상 opacity:0)으로 두어 동일 폭을 확보 → hover 배경 안에서 텍스트가 가운데. */
-  .copyable::before {
-    content: "⧉";
-    @apply mr-1 text-[0.8em];
-    opacity: 0;
-    line-height: 0;
-  }
   .copyable::after {
     content: "⧉";
     @apply ml-1 text-[0.8em] text-muted;
