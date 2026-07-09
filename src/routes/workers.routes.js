@@ -1,10 +1,7 @@
 "use strict";
 
-const os = require("os");
 const fs = require("fs");
-const crypto = require("crypto");
 const express = require("express");
-const multer = require("multer");
 const { db, encrypt, decrypt } = require("../db");
 const { requireInvoice, requireChief, isChief } = require("../auth");
 const {
@@ -14,6 +11,7 @@ const {
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
+const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
 const { formatYmdShort } = require("../lib/date");
@@ -24,32 +22,7 @@ const router = express.Router();
 // 작업 편집(requireEditor)에서 입력하고, 실제 지급/정산은 대표·치프가 이 화면에서 실행한다.
 
 // 첨부 서류 업로드(2026-07-06, clients.routes와 동일 패턴 — 디스크 multer + 매직바이트 검증).
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, os.tmpdir()),
-    filename: (_req, _file, cb) => cb(null, "omgwf_" + crypto.randomBytes(8).toString("hex")),
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
-
-/** multipart 파일명 latin1 → UTF-8 복원(한글 파일명 보존). */
-function decodeName(name) {
-  try { return Buffer.from(String(name || ""), "latin1").toString("utf8"); } catch { return String(name || ""); }
-}
-
-/** 파일 첫 4바이트 매직바이트로 실제 형식 검증(Content-Type 스푸핑 방어). PNG·JPEG·PDF만 허용. */
-function detectMimeFromFile(filePath) {
-  const buf = Buffer.alloc(4);
-  let fd;
-  try {
-    fd = fs.openSync(filePath, "r");
-    fs.readSync(fd, buf, 0, 4, 0);
-  } catch { return null; } finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
-  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
-  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return "application/pdf";
-  return null;
-}
+const upload = buildUpload("omgwf_"); // 공용 첨부 업로더(lib/attachments — 매직바이트·한도 정책 단일화)
 
 /** 첨부 서류 종류 목록(화이트리스트) — 주민등록증 사본·통장사본(2026-07-06 사용자 요청, 외주 정산·본인확인용). */
 const FILE_KINDS = [

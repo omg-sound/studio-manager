@@ -1,10 +1,7 @@
 "use strict";
 
-const os = require("os");
 const fs = require("fs");
-const crypto = require("crypto");
 const express = require("express");
-const multer = require("multer");
 const { db } = require("../db");
 const { requireEditor } = require("../auth");
 const { COMPANY_ROLES } = require("../config");
@@ -20,6 +17,7 @@ const {
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
+const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
@@ -31,36 +29,7 @@ const router = express.Router();
 router.use(requireEditor); // 클라이언트 전 라우트(목록·상세·편집·첨부 서류) 편집자(치프·스태프). 매출만 별도 제한(revenue).
 
 // 첨부 서류 업로드: 디스크 스토리지(메모리 금지 — OOM 방지, 플레이북 §3-2), 10MB 제한
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, os.tmpdir()),
-    filename: (_req, _file, cb) => cb(null, "omgcf_" + crypto.randomBytes(8).toString("hex")),
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
-
-/** multipart 파일명 latin1 → UTF-8 복원(한글 파일명 보존). */
-function decodeName(name) {
-  try { return Buffer.from(String(name || ""), "latin1").toString("utf8"); } catch { return String(name || ""); }
-}
-
-/**
- * 파일 첫 4바이트 매직바이트로 실제 형식 검증(Content-Type 스푸핑 방어).
- * PNG(89 50 4E 47)·JPEG(FF D8 FF)·PDF(25 50 44 46) 만 허용.
- * 반환: 검증된 MIME 타입 문자열, 또는 null(불허).
- */
-function detectMimeFromFile(filePath) {
-  const buf = Buffer.alloc(4);
-  let fd;
-  try {
-    fd = fs.openSync(filePath, "r");
-    fs.readSync(fd, buf, 0, 4, 0);
-  } catch { return null; } finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
-  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
-  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return "application/pdf";
-  return null;
-}
+const upload = buildUpload("omgcf_"); // 공용 첨부 업로더(lib/attachments — 매직바이트·한도 정책 단일화)
 
 /** 첨부 서류 종류 목록(화이트리스트). */
 const FILE_KINDS = [
