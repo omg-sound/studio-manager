@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, SESSION_TYPE_RATE_KIND } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personLabel, personName } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personLabel, personName } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers, listRateCategories, rateCategoryKind } = require("./data");
 
@@ -136,7 +136,7 @@ function rateSelectGrouped(rateItems, currentId, required = false) {
  * 녹음 프로젝트: '녹음 종류'(단가표 항목을 분류로 묶음) 한 필드 + session_type='녹음' 고정.
  * 그 외(믹스 등): '세션 종류'(session_type) + '녹음 종류'(단가표 항목) 두 필드. 라벨은 편집 폼과 통일.
  */
-function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker = "", pmName = "") {
+function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker = "", pmName = "", optionsRef = "") {
   const initMins = s && s.start_time && s.end_time ? minutesBetween(s.start_time, s.end_time) : 0;
   const roomList = resolveRooms(rooms);
   // 담당 엔지니어 다대다(2026-07-05 — 여러 명 가능): 배정된 엔지니어 수만큼 행(select) + '담당 엔지니어 추가하기' 버튼(template 복제, app.js).
@@ -182,21 +182,19 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const directorField = `
     <div class="mt-2">
       <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자 — 콤마로 여러 명)</span></label>
-      ${personCombo({ idField: "director_contact_id", nameField: "director_name", initialName: directorInitial, options: allContacts, companyOptions: companyOpts, compact: true, multi: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록, 콤마로 여러 명" })}
+      ${personCombo({ idField: "director_contact_id", nameField: "director_name", initialName: directorInitial, options: allContacts, companyOptions: companyOpts, optionsRef, compact: true, multi: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록, 콤마로 여러 명" })}
       ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다.`)}
     </div>`;
   // 시간 입력 = 구글 캘린더식(2026-07-04 그리드 폐지): [날짜][시작]–[종료][종료날짜(자동)] 타이핑 + 종일 + 소요 슬라이더.
   // 시작/종료는 콜론 자동 삽입(1400→14:00, app.js). 종료·슬라이더는 양방향 동기(종료 입력→소요 재계산, 소요 변경→종료 갱신).
   // 종료 날짜는 저장 필드가 아니라 자동 표시(자정 넘김이면 +1일 — 스키마는 session_date 하나, 야간 세션은 end<start로 표현).
   // 시간 박스 = 타이핑 + 30분 단위 드롭다운(00:00~23:30, 구글식 — 포커스 시 전체선택·목록, app.js [data-time-combo]).
-  const TIME_OPTS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
   // 보이는 입력은 name 없음(Chrome 과거값 제안·자동완성 원천 차단 — 함정 #19 패턴), 제출은 hidden(data-time-hidden, app.js 동기화).
   const timeBox = (name, val, ph, extra = "") => `<div class="relative" data-time-combo>
         <input type="hidden" name="${name}" value="${esc(val || "")}" data-time-hidden />
         <input class="input w-[5.5rem] py-1.5 text-center text-sm tabular" type="text" inputmode="numeric" value="${esc(val || "")}" placeholder="${ph}" maxlength="5" autocomplete="off" ${extra} />
-        <div class="absolute left-0 z-30 mt-1 hidden max-h-56 w-24 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-time-pop role="listbox">
-          ${TIME_OPTS.map((t) => `<button type="button" class="block w-full px-3 py-1.5 text-center text-sm tabular hover:bg-elevated active:bg-elevated" data-time-opt="${t}">${t}</button>`).join("")}
-        </div>
+        <!-- 30분 단위 시간 목록은 app.js가 초기화 시 생성(48개 × 폼당 2박스가 서버 HTML을 불리던 것 — 2026-07-09 스케일 점검) -->
+        <div class="absolute left-0 z-30 mt-1 hidden max-h-56 w-24 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-time-pop role="listbox"></div>
       </div>`;
   const endDateInit = (() => {
     const d = s.session_date || todayYmd();
@@ -254,11 +252,11 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
 }
 
 /** 프로젝트 상세용 세션 추가 폼(버튼형 예약 UX). */
-function sessionCreateForm(project, managers, rateItems = [], rooms, defaultBooker = "", pmName = "") {
+function sessionCreateForm(project, managers, rateItems = [], rooms, defaultBooker = "", pmName = "", optionsRef = "") {
   return `
     <form method="post" action="/sessions" class="rounded-lg border border-border bg-bg p-3" data-session-form>
       <input type="hidden" name="project_id" value="${project.id}" />
-      ${sessionBookingFields({}, managers, rateItems, rooms, defaultBooker, pmName)}
+      ${sessionBookingFields({}, managers, rateItems, rooms, defaultBooker, pmName, optionsRef)}
       <div class="mt-4 flex justify-end">
         <button class="btn-primary btn-sm" type="submit">+ 세션 추가</button>
       </div>
@@ -266,7 +264,7 @@ function sessionCreateForm(project, managers, rateItems = [], rooms, defaultBook
 }
 
 /** 세션 한 행. showProject=true면 프로젝트명 링크 표시(전역 일정). tracks 전달 시 청구 작업 생성 폼 노출. */
-function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, showProject = false, projectTitle = "", pmName = "" } = {}) {
+function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, showProject = false, projectTitle = "", pmName = "", optionsRef = "" } = {}) {
   const typeBadge = `<span class="badge bg-bg text-muted">${esc(s.session_type)}</span>`;
   // 상태 배지: 예정·완료는 배지 없음(완료 버튼 토글이 상태를 나타냄 — 라벨 불필요). 취소 등만 배지 표시.
   const statusBadge = s.status === "예정" || s.status === "완료"
@@ -361,7 +359,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
       <div class="border-t border-border p-3">
         <form id="del-sess-${s.id}" method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?" class="hidden"></form>
         <form method="post" action="/sessions/${s.id}" data-session-form data-session-id="${s.id}" data-dirty-form>
-          ${sessionBookingFields(s, managers, rateItems, rooms, "", pmName)}
+          ${sessionBookingFields(s, managers, rateItems, rooms, "", pmName, optionsRef)}
           <div class="mt-3 border-t border-border/50"></div>
           ${dirtyActionRow({ deleteFormId: `del-sess-${s.id}`, deleteLabel: "삭제", saveLabel: "세션 저장" })}
         </form>
@@ -373,7 +371,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
  * 전역 일정 목록용 — 한 프로젝트의 세션들을 한 카드(판)에 묶는다(프로젝트 목록과 통일감, 2026-07-04 사용자 요청).
  * 헤더 = 프로젝트 제목 + 아티스트·회사 링크(프로젝트 목록 카드와 동일 톤), 본문 = 세션 행(showProject=false, 프로젝트는 헤더에).
  */
-function sessionProjectCard(sessions, { isAdmin = false, managers = [], rateItems = [], rooms } = {}) {
+function sessionProjectCard(sessions, { isAdmin = false, managers = [], rateItems = [], rooms, optionsRef = "" } = {}) {
   const p = sessions[0] || {};
   const company = String(p.production_company || p.artist_company || "").trim();
   const artist = String(p.artist || "").trim();
@@ -388,7 +386,7 @@ function sessionProjectCard(sessions, { isAdmin = false, managers = [], rateItem
         <span class="shrink-0 pl-2 text-sm text-muted">세션 ${sessions.length}</span>
       </div>
       <div class="space-y-2 border-t border-border/40 p-3">
-        ${sessions.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms, showProject: false })).join("")}
+        ${sessions.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms, showProject: false, optionsRef })).join("")}
       </div>
     </div>`;
 }
@@ -399,12 +397,16 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
   const pmName = (managers.find((m) => Number(m.id) === Number(project.manager_id)) || {}).name || "";
   const roomList = resolveRooms(rooms); // 룸 1회 조회 후 폼·행에 전달(호출부가 안 넘겨도 채워짐)
   const upcoming = rows.filter((s) => s.status !== "취소" && s.session_date >= todayYmd()).length;
+  // 연락처 옵션 JSON은 페이지당 1회(공유 스크립트) — 세션 폼(행 편집+추가)마다 전체 임베드가 페이지를 불리던 것(2026-07-09 스케일 점검).
+  const optionsRef = isAdmin ? "pc-shared-contacts" : "";
+  const sharedOpts = isAdmin ? personComboOptionsScript(optionsRef, contactOptions()) : "";
   const list = rows.length
-    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms: roomList, projectTitle: project.title, pmName })).join("")
+    ? rows.map((s) => sessionRow(s, { isAdmin, managers, rateItems, rooms: roomList, projectTitle: project.title, pmName, optionsRef })).join("")
     : emptyState("등록된 세션이 없습니다.");
   const badge = rows.length ? `<span class="text-sm font-normal text-muted">${upcoming ? "예정 " + upcoming : rows.length}</span>` : "";
   return `
     <section class="card mt-3 space-y-3">
+      ${sharedOpts}
       <div class="flex items-center justify-between gap-3">
         <h2 class="font-display text-base font-semibold">세션 일정 ${badge}</h2>
       </div>
@@ -413,9 +415,9 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
         ? rows.length
           ? `<details class="group border-t border-border pt-3">
                <summary class="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">${detailsChevron()} 새 세션 추가</summary>
-               <div class="mt-2">${sessionCreateForm(project, managers, rateItems, roomList, defaultBooker, pmName)}</div>
+               <div class="mt-2">${sessionCreateForm(project, managers, rateItems, roomList, defaultBooker, pmName, optionsRef)}</div>
              </details>`
-          : `<div class="border-t border-border pt-3"><div class="mb-2 text-sm font-medium text-muted">새 세션 추가</div>${sessionCreateForm(project, managers, rateItems, roomList, defaultBooker, pmName)}</div>`
+          : `<div class="border-t border-border pt-3"><div class="mb-2 text-sm font-medium text-muted">새 세션 추가</div>${sessionCreateForm(project, managers, rateItems, roomList, defaultBooker, pmName, optionsRef)}</div>`
         : ""}
     </section>`;
 }

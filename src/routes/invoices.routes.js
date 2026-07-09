@@ -21,7 +21,7 @@ const {
   ensureInvoiceNumber,
   recomputePaid,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, tabBar, copyable } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, capList, tabBar, copyable } = require("../views");
 const { invoiceRow, payerInfoCard, taxToggleButtons } = require("../views.invoices");
 const { formatYmdShort, todayYmd } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { asyncHandler } = require("../lib/async");
@@ -98,8 +98,10 @@ router.get("/", requireBilling, (req, res) => {
 
   const retPath = `/invoices?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`;
   const openId = req.query.open ? Number(req.query.open) : null; // 토글 처리 후 그 카드의 '상태 처리' 펼침 유지(+스크롤)
-  const list = rows.length
-    ? `<div class="space-y-2">${rows.map((i) => invoiceRow(i, { isAdmin: admin, isInvoicer: invoicer, ret: retPath, openId })).join("")}</div>`
+  // 목록 상한(2026-07-09 스케일 점검) — 입금완료 탭은 해가 갈수록 누적되므로 기본 100건 + 더 보기.
+  const cap = capList(rows, req.query, (n) => `${retPath}&limit=${n}`);
+  const list = cap.shown.length
+    ? `<div class="space-y-2">${cap.shown.map((i) => invoiceRow(i, { isAdmin: admin, isInvoicer: invoicer, ret: retPath, openId })).join("")}</div>${cap.more}`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });

@@ -23,4 +23,17 @@ function listAudit(limit = 50) {
   } catch (_e) { return []; }
 }
 
-module.exports = { logAudit, listAudit };
+/**
+ * 감사 로그 보존 정책(2026-07-09 스케일 점검 — 보존 정책 없이 무한 증가하던 것): 일일 cron에서 호출.
+ * 180일 지난 기록 삭제 + 안전 상한(최신 20,000건 초과분 삭제 — 폭주 시 디스크 보호). fail-safe.
+ */
+function pruneAudit({ days = 180, max = 20000 } = {}) {
+  try {
+    const d = db();
+    const aged = d.prepare("DELETE FROM audit_log WHERE at < datetime('now', ?)").run(`-${Math.max(1, Number(days) || 180)} days`).changes;
+    const over = d.prepare("DELETE FROM audit_log WHERE id <= (SELECT id FROM audit_log ORDER BY id DESC LIMIT 1 OFFSET ?)").run(Math.max(100, Number(max) || 20000)).changes;
+    return { pruned: aged + over };
+  } catch (_e) { return { pruned: 0 }; }
+}
+
+module.exports = { logAudit, listAudit, pruneAudit };

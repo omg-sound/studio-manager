@@ -397,6 +397,16 @@
     var inp = wrap.querySelector('input[type="text"]'); // 첫 input은 제출용 hidden — 보이는 텍스트 입력을 잡는다
     var pop = wrap.querySelector("[data-time-pop]");
     if (!inp || !pop) return;
+    // 30분 단위 목록(00:00~23:30)은 여기서 생성 — 서버가 폼마다 96개 버튼을 렌더하면 세션 목록 HTML이 불어(스케일 점검) 빈 pop만 렌더한다.
+    if (!pop.firstElementChild) {
+      var timeHtml = "";
+      for (var ti = 0; ti < 48; ti++) {
+        var th = Math.floor(ti / 2);
+        var tt = (th < 10 ? "0" + th : "" + th) + ":" + (ti % 2 ? "30" : "00");
+        timeHtml += '<button type="button" class="block w-full px-3 py-1.5 text-center text-sm tabular hover:bg-elevated active:bg-elevated" data-time-opt="' + tt + '">' + tt + "</button>";
+      }
+      pop.innerHTML = timeHtml;
+    }
     function openPop() {
       if (inp.readOnly) return;
       pop.classList.remove("hidden");

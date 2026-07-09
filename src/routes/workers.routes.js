@@ -169,8 +169,12 @@ router.post("/", requireChief, (req, res) => {
 
 router.post("/:id/delete", requireChief, (req, res) => {
   const wDel = getWorker(Number(req.params.id));
-  db().prepare("DELETE FROM project_managers WHERE id = ? AND user_id IS NULL").run(Number(req.params.id));
-  if (wDel) logAudit(req.user, "worker.delete", `#${wDel.id} ${wDel.name || ""}`);
+  // 첨부 실파일(주민등록증·통장사본)도 함께 회수 — 행만 CASCADE 삭제하면 Drive/로컬에 PII 스캔본이 고아로 남음(2026-07-09 PII 수명주기 점검).
+  // DB 삭제 전에 목록을 확보하고, 실제로 삭제됐을 때만(changes>0 — 하우스는 이 라우트로 안 지워짐) best-effort 제거(비동기 fail-safe·흐름 비차단).
+  const orphanFiles = listWorkerFiles(Number(req.params.id));
+  const r = db().prepare("DELETE FROM project_managers WHERE id = ? AND user_id IS NULL").run(Number(req.params.id));
+  if (r.changes > 0) for (const f of orphanFiles) Promise.resolve(storage.remove(f.storage_backend, f.file_id)).catch(() => {});
+  if (wDel && r.changes > 0) logAudit(req.user, "worker.delete", `#${wDel.id} ${wDel.name || ""}`);
   res.redirect("/workers?flash=deleted");
 });
 

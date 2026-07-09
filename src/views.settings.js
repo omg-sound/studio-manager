@@ -651,9 +651,20 @@ function systemWarnings() {
   const b = lastBackupInfo();
   if (!b.latest) warns.push("DB 백업 파일이 없습니다 — 일일 백업(cron)이 아직 안 돌았거나 실패 중입니다.");
   else if (Date.now() - b.latest.mtimeMs > 26 * 3600 * 1000) warns.push(`마지막 DB 백업이 ${Math.floor((Date.now() - b.latest.mtimeMs) / 3600000)}시간 전입니다 — 일일 cron 실패 여부를 확인하세요.`);
+  // 디스크 여유(2026-07-09 스케일 점검): 디스크가 차면 SQLite 쓰기 실패 = 전면 장애인데 감시가 없었음. 500MB 미만이면 경고.
+  const free = diskFreeBytes();
+  if (free != null && free < 500 * 1024 * 1024) warns.push(`디스크 여유 공간이 ${formatBytes(free)}뿐입니다 — 가득 차면 DB 저장이 실패합니다(백업 보존 축소·디스크 증설 검토).`);
   if (config.googleConfigured && !drive.isLinked()) warns.push("구글 Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
   if (!getState("studio_calendar_id")) warns.push("스튜디오 캘린더 미설정 — 세션의 구글 캘린더 자동 연동이 꺼져 있습니다.");
   return warns;
+}
+
+/** DB가 있는 디스크의 여유 바이트(측정 불가 플랫폼은 null — 경고·표시 생략). */
+function diskFreeBytes() {
+  try {
+    const st = fs.statfsSync(path.dirname(config.dbPath));
+    return Number(st.bavail) * Number(st.bsize);
+  } catch (_e) { return null; }
 }
 
 /** 시스템 탭 — 연동 상태 / 백업 / 데이터 / 앱 정보 / 감사 로그(최근 50). chief=수동 백업 버튼 노출. */
@@ -703,6 +714,7 @@ function systemTab(chief) {
       <h2 class="mb-2 text-sm font-semibold">데이터 현황</h2>
       <div class="flex flex-wrap gap-x-6 gap-y-1.5 text-sm text-muted">
         <span>DB <b class="text-fg">${formatBytes(dbSize)}</b>${walSize ? ` <span class="text-xs">(+WAL ${formatBytes(walSize)})</span>` : ""}</span>
+        ${diskFreeBytes() != null ? `<span>디스크 여유 <b class="${diskFreeBytes() < 500 * 1024 * 1024 ? "text-warning" : "text-fg"}">${formatBytes(diskFreeBytes())}</b></span>` : ""}
         <span>프로젝트 <b class="text-fg">${cnt("projects")}</b></span>
         <span>청구 <b class="text-fg">${cnt("invoices")}</b></span>
         <span>클라이언트·연락처 <b class="text-fg">${cnt("parties")}</b></span>

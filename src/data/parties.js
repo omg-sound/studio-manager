@@ -187,6 +187,13 @@ function deleteParty(id) {
   // 하드 삭제([[delete-only-management]]): affiliations CASCADE. 역할 참조(FK 없음)는 코드가 SET NULL 의미로 정리.
   const pid = Number(id);
   const d = db();
+  // 첨부 실파일(사업자등록증 등)도 함께 회수 — 행만 CASCADE 삭제하면 Drive/로컬에 스캔본이 고아로 남음(2026-07-09 PII 수명주기 점검).
+  // DB 삭제 전에 목록 확보 → 삭제 후 best-effort 제거(storage.remove는 fail-safe라 삭제 흐름 비차단, 지연 require=순환 방지).
+  const orphanFiles = d.prepare("SELECT storage_backend, file_id FROM client_files WHERE client_id = ?").all(pid);
+  if (orphanFiles.length) setImmediate(() => {
+    const storage = require("../storage");
+    for (const f of orphanFiles) Promise.resolve(storage.remove(f.storage_backend, f.file_id)).catch(() => {});
+  });
   d.prepare("UPDATE invoices SET payer_id = NULL WHERE payer_id = ?").run(pid);
   d.prepare("UPDATE projects SET artist_id = NULL WHERE artist_id = ?").run(pid);
   d.prepare("UPDATE projects SET agency_id = NULL WHERE agency_id = ?").run(pid);

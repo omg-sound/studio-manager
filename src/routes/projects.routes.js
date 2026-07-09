@@ -51,7 +51,7 @@ const {
   resolvePartyByDisplay,
   setProjectArtists,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, tabBar: renderTabs, searchBox } = require("../views");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, capList, tabBar: renderTabs, searchBox } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
 const { invoicesSection, payerInfoCard } = require("../views.invoices");
 const { sessionsSection } = require("../views.sessions");
@@ -156,7 +156,6 @@ router.get("/", requireAuth, (req, res) => {
   const canCreate = canEdit(user); // 대표(열람전용)는 새 프로젝트 버튼 숨김
   const q = (req.query.q || "").toString().trim();
   const rows = listProjects(user, { q });
-  const summaries = listProjectSummaries(rows.map((r) => r.id)); // 인라인 요약(배치 2쿼리)
 
   const searched = Boolean(q);
   // 진행 중 / 완료로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
@@ -186,7 +185,10 @@ router.get("/", requireAuth, (req, res) => {
     list = emptyState(tab === "done" ? "완료된 프로젝트가 없습니다." : "진행 중인 프로젝트가 없습니다.", { card: true });
   } else {
     const chief = isChief(req.user); // 치프만 목록에서 작성일 인라인 수정
-    list = `<div class="space-y-2">${activeRows.map((p) => projectListRow(p, summaries[p.id], { isChief: chief, tab, q })).join("")}</div>`;
+    // 목록 상한(2026-07-09 스케일 점검) — 완료 탭이 해가 갈수록 누적되므로 기본 100건 + 더 보기. 요약도 표시분만 배치 조회.
+    const cap = capList(activeRows, req.query, (n) => `/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
+    const summaries = listProjectSummaries(cap.shown.map((r) => r.id)); // 인라인 요약(배치 2쿼리)
+    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { isChief: chief, tab, q })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";

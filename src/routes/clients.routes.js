@@ -22,7 +22,7 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 const { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
 
@@ -66,6 +66,10 @@ router.get("/", (req, res) => {
     const ql = q.toLowerCase();
     displayed = q ? rows.filter((c) => c.name.toLowerCase().includes(ql)) : rows;
   }
+  // 목록 상한(2026-07-09 스케일 점검) — 아티스트·관계자 탭이 계속 누적되므로 기본 100건 + 더 보기(검색·개수 라벨은 전체 기준).
+  const capTotal = displayed.length;
+  const capped = capList(displayed, req.query, (n) => `/clients?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
+  displayed = capped.shown;
 
   const qs = (params) => {
     const p = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
@@ -92,7 +96,7 @@ router.get("/", (req, res) => {
 
   const clearQHref = group === "company" && activeKind ? `/clients?group=company&kind=${encodeURIComponent(activeKind)}` : group ? `/clients?group=${group}` : "/clients";
   const resultNote = q
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${displayed.length}건 · <a href="${clearQHref}" class="text-primary hover:underline">전체 보기</a></div>`
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${capTotal}건 · <a href="${clearQHref}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
   // 상세로 넘어갈 때 현재 필터를 from으로 전달 → 상세의 '← 클라이언트' 백링크가 같은 필터로 복귀.
@@ -177,7 +181,7 @@ router.get("/", (req, res) => {
             <div class="shrink-0 text-right">${right}</div>
           </div>`;
         }),
-      })
+      }) + capped.more
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "group" ? "그룹이 없습니다." : group === "associate" ? "관계자가 없습니다." : group === "company" ? "업체가 없습니다." : "클라이언트가 없습니다.", {

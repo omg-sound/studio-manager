@@ -187,6 +187,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 npm test                                   # 전체 142개(단위+가드+상호작용)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
+node --test test/smoke.test.js             # 실서버 기동 스모크(주요 화면 21개 200 — '조용히 죽는' 회귀 검출)
 ```
 
 ```bash

@@ -438,6 +438,21 @@ function tabBar({ tabs, activeKey, hrefFn }) {
 }
 
 /**
+ * 목록 상한 + '더 보기'(2026-07-09 스케일 점검 — 서버렌더 목록이 수백 건 누적되면 HTML이 MB 단위로 불어나는 것 방지).
+ * rows를 ?limit(기본 def)까지 자르고, 남으면 moreHrefFn(늘어난 limit)으로 이동하는 링크 HTML을 함께 반환.
+ * 탭 개수 라벨·합계는 원본(total)을 쓰고, 렌더는 shown만. 검색은 전체 대상(자르기 전에 필터할 것).
+ */
+function capList(rows, query, moreHrefFn, { def = 100, step = 200 } = {}) {
+  const limit = Math.max(20, Math.min(parseInt((query || {}).limit, 10) || def, 10000));
+  const total = rows.length;
+  const shown = rows.slice(0, limit);
+  const more = total > shown.length
+    ? `<div class="mt-3 text-center"><a class="btn-ghost btn-sm" href="${esc(moreHrefFn(limit + step))}">더 보기 — ${shown.length} / ${total}</a></div>`
+    : "";
+  return { shown, total, more };
+}
+
+/**
  * 검색 박스(+ 타이핑 제안 typeahead). suggestUrl 지정 시 app.js가 타이핑하면 매칭 결과를 드롭다운으로 제안(클릭·엔터로 해당 상세로 이동).
  * hidden = 함께 제출할 hidden input HTML(탭·뷰 등 유지). suggestUrl JSON = [{label, sub?, href}].
  */
@@ -800,4 +815,4 @@ function groupCombo(fieldName, selectedId, currentName, groups = []) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };

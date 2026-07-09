@@ -158,7 +158,10 @@ async function runDailyMaintenance(opts = {}) {
       })),
     });
   }
-  return { ok: !backupError, ranAt, backup, backupError, driveBackup, uploadsBackup, uploadsBackupError, overdue, overdueError };
+  // 감사 로그 보존(180일·최대 2만 건) — 무한 증가로 DB·백업이 커지는 것 방지(2026-07-09 스케일 점검). fail-safe.
+  let auditPruned = 0;
+  try { auditPruned = require("./audit").pruneAudit().pruned; } catch (_e) { /* 비차단 */ }
+  return { ok: !backupError, ranAt, backup, backupError, driveBackup, uploadsBackup, uploadsBackupError, overdue, overdueError, auditPruned };
 }
 
 module.exports = {

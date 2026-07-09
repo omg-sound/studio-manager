@@ -31,7 +31,7 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
 
 const router = express.Router();
 
@@ -78,9 +78,11 @@ router.get("/", (req, res) => {
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts?tab=${tab}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
+  // 목록 상한(2026-07-09 스케일 점검) — 연락처는 계속 누적되므로 기본 100건 + 더 보기(검색은 전체 대상).
+  const cap = capList(rows, req.query, (n) => `/contacts?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   const list = rows.length
     ? listGroup({
-        rows: rows.map((c) => {
+        rows: cap.shown.map((c) => {
           const cur = currentAffiliation(c.id);
           const typeBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
           // 클라이언트 목록과 동일 흐름: 이름(→연락처)·소속 회사(→회사 상세)를 각각 링크(밑줄 분리), 직함은 텍스트.
@@ -102,7 +104,7 @@ router.get("/", (req, res) => {
             ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
           </div>`;
         }),
-      })
+      }) + cap.more
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : tab === "staff"
