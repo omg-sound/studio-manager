@@ -15,6 +15,7 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
 const { formatYmdShort } = require("../lib/date");
+const { withholding33 } = require("../lib/tax"); // 외주 원천징수 3.3% 표시(2026-07-09 사용자 요청)
 
 const router = express.Router();
 // 권한 분리(2026-07-03, 사용자 결정): 열람·상세·정산(지급 처리/취소) = 치프·대표(requireInvoice, 재무 성격),
@@ -107,14 +108,16 @@ router.get("/", requireInvoice, (req, res) => {
           ];
           const PREVIEW_MAX = 3;
           const itemPreview = itemLabels.slice(0, PREVIEW_MAX).join(", ") + (itemLabels.length > PREVIEW_MAX ? ` 외 ${itemLabels.length - PREVIEW_MAX}건` : "");
+          const wh = withholding33(unpaidAmt); // 원천징수 3.3%(사업소득) — 표시 참고용(lib/tax)
           const payoutBar = unpaidCount
             ? `<div class="mt-1.5 border-t border-border pt-1.5 text-sm">
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">미지급 <b class="text-danger">${formatKRW(unpaidAmt)}</b> (${unpaidCount}건)</span>
-                  <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaidCount}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요?">
+                  <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaidCount}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요? (원천세 3.3% ${esc(formatKRW(wh.total))} 제외 시 실지급 ${esc(formatKRW(wh.net))})">
                     <button class="btn-ghost btn-xs text-primary" type="submit">지급처리</button>
                   </form>
                 </div>
+                ${wh.total ? `<div class="mt-0.5 text-xs text-muted">원천세 3.3% −${formatKRW(wh.total)} → 실지급 <b class="text-fg">${formatKRW(wh.net)}</b></div>` : ""}
                 <div class="mt-0.5 truncate text-xs text-muted">${esc(itemPreview)}</div>
               </div>`
             : "";
@@ -228,11 +231,17 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
       const paid = taskPaid + sessPaid;
       const unpaid = payTotal - paid;
       const clientTotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0);
+      // 원천징수 3.3%(개인 사업소득 기준·표시 참고용 — 소액부징수·사업자 외주 예외 미반영, lib/tax)
+      const whUnpaid = withholding33(unpaid);
+      const whLine = unpaid > 0
+        ? `<div class="mt-1 w-full border-t border-border pt-1.5 text-xs text-muted">미지급 기준 원천징수 3.3%(소득세 ${formatKRW(whUnpaid.incomeTax)} + 지방소득세 ${formatKRW(whUnpaid.localTax)}) = <b class="text-fg">−${formatKRW(whUnpaid.total)}</b> → 실지급 <b class="text-fg">${formatKRW(whUnpaid.net)}</b> <span class="opacity-80">· 개인(사업소득) 기준, 사업자 외주(세금계산서)는 원천징수 없음</span></div>`
+        : "";
       const summary = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
           <span>지급 합계 <b class="text-fg">${formatKRW(payTotal)}</b></span>
           <span>지급완료 <b class="text-success">${formatKRW(paid)}</b></span>
           <span>미지급 <b class="${unpaid > 0 ? "text-danger" : "text-fg"}">${formatKRW(unpaid)}</b></span>
           <span class="text-muted">고객청구 ${formatKRW(clientTotal)} (참고)</span>
+          ${whLine}
         </div>`;
       const taskRows = tasks
         .map(
