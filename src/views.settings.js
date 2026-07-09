@@ -1,6 +1,6 @@
 "use strict";
 
-/** 관리(/settings) 렌더 — 담당자·컨텐츠·환경설정 탭 섹션 + 행 렌더러. src/routes/settings.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션). */
+/** 관리(/settings) 렌더 — 환경설정·콘텐츠·담당자·시스템 탭 섹션 + 행 렌더러. src/routes/settings.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션). */
 
 const { db } = require("./db");
 const { isChief } = require("./auth");
@@ -29,6 +29,10 @@ const { listAudit } = require("./lib/audit");
 const { getState } = require("./db");
 
 const RATE_KIND_LABELS = { recording: "녹음", filming: "촬영", performance: "공연" };
+
+// 환경설정 그룹 카드 안의 섹션 블록(2026-07-09 사용자 요청 '스튜디오 운영·Google 연동이 자리를 너무 차지' —
+// 섹션마다 .card 하나씩(p-5 × N)이던 것을 그룹당 카드 1개 + border-t 구분으로 압축, 제목도 text-lg→text-sm).
+const SETTING_BLOCK = "space-y-3 border-t border-border pt-4 mt-4 first:mt-0 first:border-t-0 first:pt-0";
 
 /** 단가 항목 카테고리 select 옵션 — kind(녹음/촬영/공연)별 optgroup, DB 분류 순서(2026-07-05 config 하드코딩에서 전환). current 선택 반영. */
 function rateCategoryOptions(current = "") {
@@ -155,7 +159,7 @@ function rateCategoriesSection() {
     </details>`;
 }
 
-/** 컨텐츠 탭: 단가표·녹음 종류 + 작업 종류 카탈로그. */
+/** 콘텐츠 탭: 단가표·녹음 종류 + 작업 종류 카탈로그. */
 function contentTab() {
   const rates = listRateItems({ includeInactive: true });
   const taskTypes = listTaskTypes({ includeInactive: true });
@@ -242,19 +246,19 @@ function driveStorageSection() {
   const check = linked
     ? `<div class="flex flex-wrap gap-2 border-t border-border pt-2"><a class="btn-ghost btn-sm" href="/settings/drive-check">Drive 연결 테스트 (폴더·업로드 확인) ↗</a><a class="btn-ghost btn-sm" href="/auth/google?drive=1">${esc(studioAcct)} 계정으로 다시 연결</a></div>`
     : `<div class="border-t border-border pt-2"><a class="btn-primary btn-sm" href="/auth/google?drive=1">${esc(studioAcct)} 계정으로 로그인해 Drive 연결</a></div>`;
-  return `<section class="card mt-3 space-y-2">
+  return `<div class="${SETTING_BLOCK}">
     <div>
-      <h2 class="font-display text-lg font-semibold">자료 저장 (구글 Drive)</h2>
+      <h2 class="text-sm font-semibold">자료 저장 (구글 Drive)</h2>
       ${explain(`첨부 서류·자료 전달 파일의 실제 저장 위치. 최소 권한(<code>drive.file</code>)으로 앱이 만든 전용 폴더에만 접근합니다. 그 폴더를 원하는 위치로 옮기거나 공유해 쓰실 수 있습니다.`)}
     </div>
     ${status}${migrate}${check}
-  </section>`;
+  </div>`;
 }
 
 /** 스튜디오 캘린더(구글) 선택 섹션 — 세션 겹침 검사 대상. */
 async function studioCalendarSection() {
   const title = `<div>
-      <h2 class="font-display text-lg font-semibold">스튜디오 캘린더 (구글)</h2>
+      <h2 class="text-sm font-semibold">스튜디오 캘린더 (구글)</h2>
       ${explain(`<span class="text-fg font-medium">세션을 예약하면 이 캘린더에 일정이 자동 생성·수정·삭제됩니다.</span> <span class="text-warning font-medium">'사용 안 함'으로 두면 캘린더 자동 연동이 꺼집니다</span> — 구글 캘린더로 넘기려면 반드시 스튜디오 캘린더를 선택하세요. <span class="text-muted">스튜디오 전용 캘린더를 권장</span>합니다(개인 일정과 섞이지 않게).`)}
     </div>`;
   let inner;
@@ -295,7 +299,7 @@ async function studioCalendarSection() {
         <button class="btn-primary shrink-0 btn-sm" type="submit">저장</button>
       </form>
     </div>`;
-  return `<section class="card space-y-4">${title}${inner}${location}</section>`;
+  return `<div class="${SETTING_BLOCK}">${title}${inner}${location}</div>`;
 }
 
 /** 룸(스튜디오 공간) 관리 — 추가·삭제(단가표와 동일한 삭제-only 톤). 룸별 시간 겹침 검사의 기준. */
@@ -303,9 +307,9 @@ function roomsSection() {
   const rooms = listRooms({ includeInactive: true });
   const rows = rooms.length ? rooms.map((r) => roomRow(r)).join("") : emptyState("등록된 룸이 없습니다.");
   return `
-    <section class="card space-y-4">
+    <div class="${SETTING_BLOCK}">
       <div>
-        <h2 class="font-display text-lg font-semibold">장소 (스튜디오 룸 · 외부)</h2>
+        <h2 class="text-sm font-semibold">장소 (스튜디오 룸 · 외부)</h2>
         ${explain(`세션 예약 시 장소를 지정하면 <span class="text-fg">같은 장소끼리만 시간 겹침을 검사</span>합니다(다른 장소는 같은 시간 병렬 예약 허용). 장소를 삭제하면 그 장소로 잡힌 세션은 '장소 미지정'으로 바뀝니다. <span class="text-fg">외부 장소</span>로 표시하면 세션 폼에서 주소 입력칸이 나오고 캘린더 일정 장소로 쓰입니다.`)}
       </div>
       <form method="post" action="/settings/rooms" class="flex flex-wrap items-center gap-2">
@@ -314,7 +318,7 @@ function roomsSection() {
         <button class="btn-primary shrink-0 btn-sm" type="submit">장소 추가</button>
       </form>
       <div class="space-y-2">${rows}</div>
-    </section>`;
+    </div>`;
 }
 
 /** 룸 행(삭제-only). */
@@ -334,9 +338,9 @@ function roomRow(r) {
 function studioHoursSection() {
   const { start, end } = getStudioHours();
   return `
-    <section class="card space-y-4">
+    <div class="${SETTING_BLOCK}">
       <div>
-        <h2 class="font-display text-lg font-semibold">운영시간 <span class="text-sm font-normal text-muted">(예약 시작 그리드 범위)</span></h2>
+        <h2 class="text-sm font-semibold">운영시간 <span class="text-xs font-normal text-muted">(예약 시작 그리드 범위)</span></h2>
         ${explain(`세션 예약 폼의 '시작 시간 그리드'에 표시되는 시간 범위입니다(30분 단위). 그리드 바깥 시각은 '직접입력'으로 예약할 수 있습니다.`)}
       </div>
       <form method="post" action="/settings/studio-hours" class="flex flex-wrap items-end gap-2">
@@ -358,7 +362,7 @@ function studioHoursSection() {
         <span class="pb-2 text-sm text-muted">시간</span>
         <button class="btn-primary btn-sm shrink-0" type="submit">저장</button>
       </form>
-    </section>`;
+    </div>`;
 }
 
 /** 기본 예약 담당자 — 세션 예약 폼에서 예약 담당자로 기본 선택될 담당자(이름). */
@@ -366,9 +370,9 @@ function defaultBookerSection() {
   const cur = getDefaultBooker() || "";
   const managers = listProjectManagers();
   return `
-    <section class="card space-y-4">
+    <div class="${SETTING_BLOCK}">
       <div>
-        <h2 class="font-display text-lg font-semibold">기본 예약 담당자</h2>
+        <h2 class="text-sm font-semibold">기본 예약 담당자</h2>
         ${explain(`새 세션 예약 폼에서 '예약 담당자'로 기본 선택됩니다.`)}
       </div>
       <form method="post" action="/settings/default-booker" class="flex flex-wrap items-end gap-2">
@@ -378,7 +382,7 @@ function defaultBookerSection() {
         </select>
         <button class="btn-primary btn-sm shrink-0" type="submit">저장</button>
       </form>
-    </section>`;
+    </div>`;
 }
 
 /** 공급자(스튜디오) 세금정보 — 거래명세서 PDF의 '공급자'란. */
@@ -388,9 +392,9 @@ function studioInfoSection() {
   const field = (name, label, ph = "") =>
     `<div><label class="label mb-0.5 text-xs">${esc(label)}</label><input class="input py-1.5 text-sm" name="${esc(name)}" value="${esc(s[name] || "")}" placeholder="${esc(ph)}" /></div>`;
   return `
-    <section class="card space-y-4">
+    <div class="${SETTING_BLOCK}">
       <div>
-        <h2 class="font-display text-lg font-semibold">공급자(스튜디오) 세금정보</h2>
+        <h2 class="text-sm font-semibold">공급자(스튜디오) 세금정보</h2>
         ${explain(`발행된 청구의 <span class="text-fg">거래명세서 PDF</span> '공급자'란에 들어갑니다. (세금계산서가 아닌 참고용 문서)`)}
       </div>
       <form method="post" action="/settings/studio-info" class="space-y-2">
@@ -418,7 +422,7 @@ function studioInfoSection() {
           ${logo ? `<form method="post" action="/settings/studio-logo/delete" data-confirm="로고를 삭제할까요?"><button class="btn-ghost btn-xs text-danger" type="submit">로고 삭제</button></form>` : ""}
         </div>
       </div>
-    </section>`;
+    </div>`;
 }
 
 /** 알림 채널(웹훅) — 연체·청구 발행·자료 공유 팀 알림. URL은 암호화 저장. */
@@ -437,14 +441,14 @@ function alertWebhookSection(chief = true) {
       ${canTest ? `<form method="post" action="/settings/alert-webhook/test"><button class="btn-ghost btn-sm" type="submit">테스트 알림 보내기</button></form>` : ""}`
     : `<p class="text-sm text-muted">${url || alerts.envWebhookActive() ? "알림 웹훅이 설정되어 있습니다." : "알림 웹훅 미설정."} 변경은 <span class="text-fg">치프 엔지니어</span>만 가능합니다(알림이 외부로 전송되는 보안 설정).</p>`;
   return `
-    <section class="card space-y-4">
+    <div class="${SETTING_BLOCK}">
       <div>
-        <h2 class="font-display text-lg font-semibold">알림 (웹훅)</h2>
+        <h2 class="text-sm font-semibold">알림 (웹훅)</h2>
         ${explain(`연체·청구 발행·자료 공유 시 Slack/Discord 등으로 팀 알림을 보냅니다. Incoming Webhook URL을 넣으세요(비우면 알림 끔). 저장 시 암호화됩니다.`)}
         ${envNote}
       </div>
       ${controls}
-    </section>`;
+    </div>`;
 }
 
 /** last_login(ISO UTC) → '오늘/어제/N일 전/미로그인' 상대 표시(계정 위생, 2026-07-09 관리 개선). */
@@ -610,14 +614,14 @@ function googleContactsSection(chief) {
        </form>`
     : "";
   return `
-  <section class="card space-y-3">
+  <div class="${SETTING_BLOCK}">
     <div>
-      <h2 class="font-display text-lg font-semibold">Google 연락처</h2>
+      <h2 class="text-sm font-semibold">Google 연락처</h2>
       ${explain(`앱에서 연락처를 만들거나 수정하면 구글 주소록에 자동 반영(push)됩니다. 아래 버튼은 아직 구글에 없는 기존 연락처를 한 번에 내보내는 1회성 작업입니다. 실패분은 서버 로그([people])에 남습니다.`)}
     </div>
     ${status}
     ${action}
-  </section>`;
+  </div>`;
 }
 
 

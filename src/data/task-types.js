@@ -2,7 +2,7 @@
 
 /**
  * 작업 종류 카탈로그 도메인(task_types) — 곡·콘텐츠 후반작업 종류.
- * config.TASK_TYPES를 1회 시드 후 DB가 단일 진실원천. 치프가 /settings 컨텐츠 탭 CRUD.
+ * config.TASK_TYPES를 1회 시드 후 DB가 단일 진실원천. 치프가 /settings 콘텐츠 탭 CRUD.
  * data.js에서 분리한 모듈(도메인 모듈화). data.js가 재export하므로 소비자 무변경.
  *
  * 라벨·기본단가 해석은 자주 호출되므로 모듈 캐시(쓰기 시 무효화)로 동기 접근한다.

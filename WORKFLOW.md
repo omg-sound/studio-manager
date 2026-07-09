@@ -127,7 +127,7 @@ src/
   views.sessions.js      세션 폼(추가/편집 통일 그리드+슬라이더+룸 select)·세션 행 토글·월 캘린더 그리드
   views.projects.js      프로젝트 목록 행·메타/생성 폼·곡콘텐츠 섹션·청구 생성 폼(2026-07-09 라우트에서 분리 — 1328→627줄)
   views.clients.js       클라이언트 폼·첨부 블록·FILE_KINDS(2026-07-09 분리)
-  views.settings.js      관리 3탭 섹션 렌더(담당자·컨텐츠·환경설정, 2026-07-09 분리 — 948→399줄)
+  views.settings.js      관리 4탭 섹션 렌더(환경설정·콘텐츠·담당자·시스템, 2026-07-09 분리 — 948→399줄)
   views.deliverables.js  자료 행/섹션
   routes/
     auth.routes.js       /login · OAuth(state 논스) · safeNext(역슬래시 차단) · /dev-login

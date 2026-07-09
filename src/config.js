@@ -114,7 +114,7 @@ const PROJECT_SERVICES = [
   { key: "mixing", label: "믹싱" },
   { key: "mastering", label: "마스터링" },
 ];
-// 단가표 분류의 **1회 시드 데이터**(2026-07-05부터 진실원천은 DB `rate_categories` 테이블 — 치프가 관리>컨텐츠에서
+// 단가표 분류의 **1회 시드 데이터**(2026-07-05부터 진실원천은 DB `rate_categories` 테이블 — 치프가 관리>콘텐츠에서
 // 커스텀 분류를 추가·수정·삭제할 수 있게 전환. 이 4개는 시드 시 locked=1로 들어가 수정·삭제 불가). db.js seedDefaultCatalogs만 참조.
 // 분류→kind 조회·검증은 이제 DB 기반(`src/data/rate-categories.js`의 rateCategoryKind/listRateCategories)을 쓴다.
 const RECORDING_CATEGORIES = ["스튜디오 녹음", "로케이션 녹음"];
