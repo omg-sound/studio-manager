@@ -202,13 +202,18 @@ router.post("/:id/edit", requireChief, (req, res) => {
 router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send(errorPage({ code: 404, title: "외주 작업자를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const tab = req.query.tab === "payout" ? "payout" : "tasks";
+  // 탭 3구성(2026-07-09 사용자 요청): 기본 정보(정보 수정+첨부 서류, 기본 탭) / 참여 내역 / 정산.
+  const tab = ["info", "tasks", "payout"].includes(req.query.tab) ? req.query.tab : "info";
   const tasks = listTasksForWorker(w);
   const sessions = listSessionsForWorker(w); // 세션 참여(2026-07-06 — 작업만 뜨고 세션 참여가 안 뜨던 것 개선).
   const sessionPayouts = listSessionPayoutsForWorker(w); // 세션 정산 대상(session_engineers에 실제 배정+지급단가 있는 것만, 2026-07-06 사용자 상담)
 
   const tabBarHtml = tabBar({
-    tabs: [{ key: "tasks", label: `참여 내역 ${tasks.length + sessions.length}` }, { key: "payout", label: `정산 ${tasks.length + sessionPayouts.length}` }],
+    tabs: [
+      { key: "info", label: "기본 정보" },
+      { key: "tasks", label: `참여 내역 ${tasks.length + sessions.length}` },
+      { key: "payout", label: `정산 ${tasks.length + sessionPayouts.length}` },
+    ],
     activeKey: tab,
     hrefFn: (key) => `/workers/${w.id}?tab=${key}`,
   });
@@ -322,9 +327,9 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
 
       content = transferCard + summary + unpaidSection + paidBlock;
     }
-  } else if (!tasks.length && !sessions.length) {
+  } else if (tab === "tasks" && !tasks.length && !sessions.length) {
     content = emptyState("담당한 작업·세션이 없습니다.", { card: true });
-  } else {
+  } else if (tab === "tasks") {
     const taskRows = tasks
       .map(
         (t) => `
@@ -356,22 +361,28 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
   const unpaidForDelete = tasks.filter((t) => !t.worker_paid && t.worker_rate > 0).reduce((s2, t) => s2 + t.worker_rate, 0)
     + sessionPayouts.filter((x) => !x.worker_paid && x.worker_rate > 0).reduce((s2, x) => s2 + x.worker_rate, 0);
 
+  // 정보 수정 = 펼침 카드(2026-07-09 사용자 요청 — 접어 놓지 않음, 기본 정보 탭의 본문).
   const editForm = isChief(req.user)
-    ? `<details class="card mb-3">
-        <summary class="cursor-pointer text-sm font-medium text-muted hover:text-fg">정보 수정 (이름 · 전화 · 이메일 · 정산 정보)</summary>
+    ? `<section class="card mb-3">
+        <h2 class="text-sm font-semibold">정보 수정 <span class="font-normal text-muted">이름 · 전화 · 이메일 · 정산 정보</span></h2>
         <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3" data-dirty-form>
-          <input class="input py-1.5 text-sm" name="worker_name" value="${esc(w.name || "")}" placeholder="이름" autocomplete="off" required />
-          <input class="input py-1.5 text-sm" name="email" value="${esc(w.email || "")}" placeholder="이메일" />
-          <input class="input py-1.5 text-sm" name="phone" autocomplete="off" value="${esc(w.phone || "")}" placeholder="전화" />
-          <input class="input py-1.5 text-sm sm:col-span-3" name="id_number" value="${esc(decrypt(w.id_number) || "")}" placeholder="주민등록번호 또는 사업자등록번호" autocomplete="off" />
-          <input class="input py-1.5 text-sm" name="bank_name" value="${esc(w.bank_name || "")}" placeholder="은행" autocomplete="off" />
-          <input class="input py-1.5 text-sm" name="account_number" value="${esc(decrypt(w.account_number) || "")}" placeholder="계좌번호" autocomplete="off" />
-          <input class="input py-1.5 text-sm" name="account_holder" value="${esc(w.account_holder || "")}" placeholder="입금자명(예금주)" autocomplete="off" />
+          <div><label class="label">이름</label><input class="input py-1.5 text-sm" name="worker_name" value="${esc(w.name || "")}" placeholder="이름" autocomplete="off" required /></div>
+          <div><label class="label">이메일</label><input class="input py-1.5 text-sm" name="email" value="${esc(w.email || "")}" placeholder="이메일" /></div>
+          <div><label class="label">전화</label><input class="input py-1.5 text-sm" name="phone" autocomplete="off" value="${esc(w.phone || "")}" placeholder="전화" /></div>
+          <div class="sm:col-span-3"><label class="label">주민등록번호 / 사업자등록번호</label><input class="input py-1.5 text-sm" name="id_number" value="${esc(decrypt(w.id_number) || "")}" placeholder="어느 쪽이든 한 칸에" autocomplete="off" /></div>
+          <div><label class="label">은행</label><input class="input py-1.5 text-sm" name="bank_name" value="${esc(w.bank_name || "")}" placeholder="은행" autocomplete="off" /></div>
+          <div><label class="label">계좌번호</label><input class="input py-1.5 text-sm" name="account_number" value="${esc(decrypt(w.account_number) || "")}" placeholder="계좌번호" autocomplete="off" /></div>
+          <div><label class="label">입금자명(예금주)</label><input class="input py-1.5 text-sm" name="account_holder" value="${esc(w.account_holder || "")}" placeholder="입금자명(예금주)" autocomplete="off" /></div>
           ${explain(`주민등록번호·계좌번호는 암호화해 저장됩니다. 정산(지급) 시 참고용 — 세금신고·이체에 사용하세요.`)}
           <div class="sm:col-span-3">${dirtyActionRow({ saveLabel: "저장" })}</div>
         </form>
-      </details>`
-    : "";
+      </section>`
+    : `<section class="card mb-3 space-y-1 text-sm">
+        <h2 class="text-sm font-semibold">기본 정보</h2>
+        ${w.email ? `<div><span class="text-muted">이메일</span> ${esc(w.email)}</div>` : ""}
+        ${w.phone ? `<div><span class="text-muted">전화</span> ${esc(w.phone)}</div>` : ""}
+        <p class="text-xs text-muted">정보 수정·첨부 서류 관리는 치프 전용입니다.</p>
+      </section>`;
 
   // 첨부 서류(주민등록증 사본·통장사본) — 치프만(민감정보, 2026-07-06 사용자 요청).
   let filesBlock = "";
@@ -387,12 +398,13 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
     filesBlock = workerFileSection(w, fileMap, fileErr, fileOk);
   }
 
+  // 기본 정보 탭 = 정보 수정(펼침) + 첨부 서류(2026-07-09 사용자 요청 — 탭으로 분리, 이전엔 탭 위에 상시 노출).
+  if (tab === "info") content = editForm + filesBlock;
+
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?${unpaidForDelete > 0 ? esc(` ⚠️ 미지급 ${formatKRW(unpaidForDelete)} 기록이 함께 사라집니다.`) : ""}"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
     ${w.party_id ? `<div class="-mt-3 mb-3 text-sm"><span class="text-muted">연락처로 보기</span> <a href="/contacts/${w.party_id}" class="text-primary hover:underline">${esc(w.name)} ↗</a></div>` : ""}
-    ${editForm}
-    ${filesBlock}
     ${tabBarHtml}
     ${content}`;
   res.send(layout({ title: w.name, user: req.user, current: "/workers", body }));

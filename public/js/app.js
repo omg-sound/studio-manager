@@ -1854,6 +1854,14 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var label = zone.querySelector("[data-dropzone-label]");
     var display = zone.querySelector("[data-dropzone-display]");
 
+    // 붙여넣기 단축키 OS 구분(2026-07-09 사용자 요청): 맥=⌘V, 그 외=Ctrl+V. 서버는 Ctrl+V로 렌더하고 맥에서만 치환.
+    var isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
+    if (isMac && label && label.textContent.indexOf("Ctrl+V") !== -1) label.textContent = label.textContent.replace(/Ctrl\+V/g, "⌘V");
+    if (isMac && display) {
+      var aria = display.getAttribute("aria-label");
+      if (aria && aria.indexOf("Ctrl+V") !== -1) display.setAttribute("aria-label", aria.replace(/Ctrl\+V/g, "⌘V"));
+    }
+
     // 클릭 = 필드 포커스만(붙여넣기 Ctrl+V 준비) — 파일 선택 대화상자는 [파일 찾기] 버튼 전용
     // (2026-07-09 사용자 요청: 필드 클릭마다 대화상자가 떠서 붙여넣기 흐름을 방해하던 것. 대화상자는 버튼으로 충분).
     zone.addEventListener("click", function (e) {
