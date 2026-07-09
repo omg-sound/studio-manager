@@ -76,7 +76,25 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
   else if (tab === "system") tabContent = systemTab(isChief(req.user));
-  else tabContent = (await studioCalendarSection()) + driveStorageSection() + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + googleContactsSection(isChief(req.user)) + alertWebhookSection(isChief(req.user)); // 환경설정 — 캘린더 + 자료저장(Drive) + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 구글연락처 + 알림
+  else {
+    // 환경설정 = 성격별 4그룹(2026-07-09 관리 개선 — 8개 섹션 한 줄 스크롤이라 찾기 어렵던 것):
+    // 스튜디오 운영 / Google 연동 / 문서·청구 / 알림. 상단 앵커 네비로 점프.
+    const groups = [
+      { id: "ops", label: "스튜디오 운영", html: roomsSection() + studioHoursSection() + defaultBookerSection() },
+      { id: "google", label: "Google 연동", html: (await studioCalendarSection()) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
+      { id: "docs", label: "문서 · 청구", html: studioInfoSection() },
+      { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) },
+    ];
+    const anchorNav = `<nav class="mb-1 flex flex-wrap gap-1.5" aria-label="환경설정 바로가기">
+        ${groups.map((g) => `<a href="#set-${g.id}" class="badge badge-neutral hover:text-fg">${esc(g.label)}</a>`).join("")}
+      </nav>`;
+    tabContent = anchorNav + groups
+      .map((g) => `<div id="set-${g.id}" class="scroll-mt-4">
+          <h2 class="mb-2 mt-5 border-b border-border pb-1.5 font-display text-base font-semibold">${esc(g.label)}</h2>
+          <div class="space-y-3">${g.html}</div>
+        </div>`)
+      .join("");
+  }
 
   const body = `
     ${flashBanner(req.query)}
