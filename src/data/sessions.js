@@ -292,9 +292,10 @@ function busySessionSlots(date, slots, { excludeId = null, room } = {}) {
 }
 
 /** 녹음 세션의 진행시간 → 단가표 자동 산정. 시간제 대상(녹음+단가+시간)이 아니면 null. */
-function sessionRateAmount(session) {
+function sessionRateAmount(session, itemOverride) {
   if (!session || !RENTAL_SESSION_TYPES.includes(session.session_type) || !session.rate_item_id) return null;
-  const item = db().prepare("SELECT * FROM rate_items WHERE id = ?").get(session.rate_item_id);
+  // itemOverride: 목록 조회가 rate_items를 한 번만 로드해 넘기는 배치 경로(2026-07-09 감사 — 행당 단건 조회 N+1 제거).
+  const item = itemOverride || db().prepare("SELECT * FROM rate_items WHERE id = ?").get(session.rate_item_id);
   if (!item) return null;
   // 종일 세션은 시간이 없어 시간제 산정 불가 → 1 기준 블록으로 취급(정액 항목=base_price, 시간제 항목=1Pro). 금액은 청구 시 조정.
   if (session.all_day) {
@@ -469,6 +470,19 @@ function deleteSession(user, sessionId) {
   return { project_id: s.project_id };
 }
 
+/** rate_items를 1회 로드해 행별 billing을 계산하는 mapper — 목록 .map(sessionRateAmount) N+1 제거(2026-07-09 감사). */
+function withBilling() {
+  const items = rateItemsById();
+  return (row) => ({ ...row, billing: sessionRateAmount(row, items.get(row.rate_item_id)) });
+}
+
+/** rate_items 전체를 id Map으로 1회 로드(소형 테이블). */
+function rateItemsById() {
+  const m = new Map();
+  for (const r of db().prepare("SELECT * FROM rate_items").all()) m.set(r.id, r);
+  return m;
+}
+
 /** 다가오는 세션(오늘 이후, 취소 제외) — 전역 일정/대시보드. */
 function upcomingSessions(_user, { limit = 50 } = {}) {
   return db()
@@ -479,7 +493,7 @@ function upcomingSessions(_user, { limit = 50 } = {}) {
        ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC LIMIT ?`
     )
     .all(todayYmd(), limit)
-    .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
+    .map(withBilling());
 }
 
 /** 지난 세션(오늘 이전) — 전역 일정. */
@@ -492,7 +506,7 @@ function pastSessions(_user, { limit = 30 } = {}) {
        ORDER BY s.session_date DESC, s.start_time DESC, s.id DESC LIMIT ?`
     )
     .all(todayYmd(), limit)
-    .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
+    .map(withBilling());
 }
 
 /** 특정 월(YYYY-MM)의 세션(취소 제외) + 프로젝트명 — 캘린더 뷰용. */
@@ -506,7 +520,7 @@ function sessionsForMonth(_user, ym) {
        ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
     )
     .all(String(ym) + "-%")
-    .map((row) => ({ ...row, billing: sessionRateAmount(row) }));
+    .map(withBilling());
 }
 
 module.exports = {

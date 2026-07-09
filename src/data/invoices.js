@@ -495,18 +495,23 @@ function getInvoiceForUser(_user, id) {
 }
 
 /** 인보이스 요약 통계(미수금·이번 달 발행·연체). */
-function invoiceStats(user) {
-  const rows = listInvoices(user, {});
-  const receivable = rows
-    .filter((i) => i.status === "발행")
-    .reduce((s, i) => s + balanceOf(i), 0);
+function invoiceStats(_user) {
+  // 권한은 호출부(dashboard showInvoices)가 게이트 — listInvoices와 동일하게 user 미사용.
+  // 합계는 SQL 집계로(2026-07-09 감사 — 이전엔 전건 로드 후 JS reduce, 청구 누적 시 대시보드 렌더마다 전 행 순회).
   const month = todayYmd().slice(0, 7); // 'YYYY-MM'
-  const thisMonthIssued = rows
-    .filter((i) => i.status !== "미발행" && (i.issued_date || "").slice(0, 7) === month)
-    .reduce((s, i) => s + (i.amount || 0), 0);
-  const overdue = rows.filter(isOverdue);
+  const agg = db()
+    .prepare(
+      `SELECT
+         COUNT(*) AS total,
+         COALESCE(SUM(CASE WHEN status = '발행' THEN MAX(amount - paid_amount, 0) END), 0) AS receivable,
+         COALESCE(SUM(CASE WHEN status <> '미발행' AND substr(COALESCE(issued_date, ''), 1, 7) = ? THEN amount END), 0) AS thisMonthIssued
+       FROM invoices`
+    )
+    .get(month);
+  // 연체는 due_date 파생(isOverdue) — 마감일 개념 삭제(2026-07-05 백필)로 사실상 0건, 파생 로직이라 코드 필터 유지.
+  const overdue = db().prepare("SELECT amount, paid_amount, status, due_date FROM invoices WHERE due_date IS NOT NULL AND status = '발행'").all().filter(isOverdue);
   const overdueAmount = overdue.reduce((s, i) => s + balanceOf(i), 0);
-  return { receivable, thisMonthIssued, overdueCount: overdue.length, overdueAmount, total: rows.length };
+  return { receivable: agg.receivable, thisMonthIssued: agg.thisMonthIssued, overdueCount: overdue.length, overdueAmount, total: agg.total };
 }
 
 /** 프로젝트의 인보이스 목록(권한 검사). 권한 없으면 null. */
