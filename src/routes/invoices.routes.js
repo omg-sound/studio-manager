@@ -25,6 +25,7 @@ const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, 
 const { invoiceRow, payerInfoCard, taxToggleButtons } = require("../views.invoices");
 const { formatYmdShort, todayYmd } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { asyncHandler } = require("../lib/async");
+const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // open-redirect 차단(공용, test/nav.test.js)
 const { renderInvoicePdf } = require("../invoice-pdf");
 
@@ -307,12 +308,15 @@ router.post("/:id/tax-status", requireInvoice, (req, res) => {
     try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
     throw e;
   }
+  logAudit(req.user, "invoice.tax", `#${inv.id} ${inv.title || ""} → ${tax}`);
   res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
 });
 
 // ── 삭제(관리자) ── 연결 작업의 청구 잠금을 먼저 해제(좀비 작업 방지). data.js deleteInvoice 트랜잭션.
 router.post("/:id/delete", requireBilling, (req, res) => {
+  const invDel = db().prepare("SELECT title, invoice_number FROM invoices WHERE id = ?").get(Number(req.params.id));
   deleteInvoice(req.user, Number(req.params.id));
+  if (invDel) logAudit(req.user, "invoice.delete", `#${req.params.id} ${invDel.invoice_number || ""} ${invDel.title || ""}`.trim());
   // 삭제 후엔 인보이스가 없으니 청구 탭 복귀 시 open=ID는 무시됨(그 행 미생성). 기본은 청구 목록.
   res.redirect(returnTo(req, "/invoices", "deleted"));
 });

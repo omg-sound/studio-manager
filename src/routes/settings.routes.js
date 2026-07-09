@@ -43,6 +43,7 @@ const {
   isBootstrapChief,
 } = require("../views.settings");
 const { asyncHandler } = require("../lib/async");
+const { logAudit, listAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록·열람(fail-safe)
 const multer = require("multer");
 const drive = require("../drive");
 const { migrateLocalFilesToDrive, driveFileCount } = require("../lib/storage-migrate");
@@ -269,6 +270,7 @@ router.post("/users/:id/role", requireChief, (req, res) => {
     if (others === 0) return res.redirect("/settings?tab=people&flash=last_chief");
   }
   db().prepare("UPDATE users SET role = ? WHERE id = ?").run(role, id);
+  if (target.role !== role) logAudit(req.user, "user.role", `${target.email} ${target.role} → ${role}`);
   syncUserToManager(findUserById(id)); // 역할 변경(owner↔치프/스태프) 시 작업 담당자 활성/이름 즉시 동기화
   ensureContactForHouseUser(id); // owner↔하우스 전환 시 연락처 연결 유지(담당자 없어도 owner 연락처 보존)
   res.redirect("/settings?tab=people&flash=saved");
@@ -281,6 +283,7 @@ router.post("/users/:id/delete", requireChief, (req, res) => {
   if (target && !isBootstrapChief(target) && target.id !== req.user.id) {
     db().prepare("DELETE FROM project_managers WHERE user_id = ?").run(id); // 하우스 엔지니어 링크 제거(projects.manager_id → SET NULL)
     db().prepare("DELETE FROM users WHERE id = ?").run(id);
+    logAudit(req.user, "user.delete", `${target.email} (${target.role})`);
   }
   res.redirect("/settings?flash=deleted");
 });

@@ -13,6 +13,7 @@ const {
 const { config } = require("../config");
 const { renderInvoicePdf } = require("../invoice-pdf");
 const { asyncHandler } = require("../lib/async");
+const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const {
   listProjects,
   listProjectSummaries,
@@ -289,6 +290,7 @@ router.post("/:id/delete", requireEditor, (req, res) => {
     }
     throw e;
   }
+  logAudit(req.user, "project.delete", `#${req.params.id}`);
   res.redirect("/projects?flash=deleted");
 });
 
@@ -571,6 +573,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
     if (!inv) return res.status(404).send(errorPage({ code: 404, title: "프로젝트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
     // createInvoiceFromTasks는 즉시 '발행' 상태로 생성 → 발행 알림 발송(notify는 fail-safe·비차단, 청구 흐름 비차단).
     notifyInvoiceIssued(inv);
+    logAudit(req.user, "invoice.create", `#${inv.id} ${inv.title || ""} ${formatKRW(inv.amount || 0)}`);
     // 청구 메뉴로 이탈하지 않고 프로젝트 청구 탭으로 복귀 + 방금 만든 인보이스를 펼친 채(open) 노출.
     res.redirect(`/projects/${req.params.id}?tab=invoice&open=${inv.id}&flash=created`);
   } catch (e) {

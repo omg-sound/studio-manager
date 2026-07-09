@@ -306,6 +306,16 @@ function init() {
       UNIQUE(worker_id, kind)
     );
 
+    -- 감사 로그(2026-07-09 관리 개선) — 파괴적·재무 액션만 가볍게 기록(삭제 중심 정책 보완: 누가 언제 뭘 지웠나).
+    -- append-only·표시용. 본 흐름을 절대 막지 않음(lib/audit.js logAudit이 fail-safe).
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      at         TEXT NOT NULL DEFAULT (datetime('now')),
+      user_email TEXT,                                    -- 실행 계정(표시용 스냅샷)
+      action     TEXT NOT NULL,                           -- 예: invoice.delete / user.role / worker.payout
+      target     TEXT                                     -- 대상 요약(id·제목 등 짧은 텍스트)
+    );
+
     -- 세션 담당 디렉터(다대다) — 한 세션에 고객측 디렉터 여러 명. 단일 sessions.director_contact_id는 레거시 보존.
     CREATE TABLE IF NOT EXISTS session_directors (
       session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -338,6 +348,7 @@ function init() {
     CREATE INDEX IF NOT EXISTS idx_project_tracks_project ON project_tracks(project_id);
     CREATE INDEX IF NOT EXISTS idx_track_tasks_track ON track_tasks(track_id);
     CREATE INDEX IF NOT EXISTS idx_track_tasks_invoice ON track_tasks(invoice_id, is_invoiced);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_at ON audit_log(at DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(session_date);
     CREATE INDEX IF NOT EXISTS idx_rooms_active ON rooms(active, sort_order, name);

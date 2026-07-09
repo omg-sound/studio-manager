@@ -11,6 +11,7 @@ const {
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
+const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage, copyable, dirtyActionRow } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
@@ -167,7 +168,9 @@ router.post("/", requireChief, (req, res) => {
 });
 
 router.post("/:id/delete", requireChief, (req, res) => {
+  const wDel = getWorker(Number(req.params.id));
   db().prepare("DELETE FROM project_managers WHERE id = ? AND user_id IS NULL").run(Number(req.params.id));
+  if (wDel) logAudit(req.user, "worker.delete", `#${wDel.id} ${wDel.name || ""}`);
   res.redirect("/workers?flash=deleted");
 });
 
@@ -419,7 +422,7 @@ router.post("/:id/payout/:taskId", requireInvoice, (req, res) => {
   const task = db()
     .prepare("SELECT id, worker_paid FROM track_tasks WHERE id = ? AND (engineer_id = ? OR (engineer_id IS NULL AND engineer_name = ?))")
     .get(Number(req.params.taskId), w.id, w.name);
-  if (task) setTaskPayout(task.id, !task.worker_paid);
+  if (task) { setTaskPayout(task.id, !task.worker_paid); logAudit(req.user, "worker.payout", `${w.name} 작업#${task.id} ${task.worker_paid ? "지급 취소" : "지급"}`); }
   res.redirect(`/workers/${w.id}?tab=payout`);
 });
 
@@ -429,7 +432,7 @@ router.post("/:id/session-payout/:sessionId", requireInvoice, (req, res) => {
   if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
   const sessionId = Number(req.params.sessionId);
   const eng = db().prepare("SELECT worker_paid FROM session_engineers WHERE session_id = ? AND manager_id = ?").get(sessionId, w.id);
-  if (eng) setSessionEngineerPayout(sessionId, w.id, !eng.worker_paid);
+  if (eng) { setSessionEngineerPayout(sessionId, w.id, !eng.worker_paid); logAudit(req.user, "worker.payout", `${w.name} 세션#${sessionId} ${eng.worker_paid ? "지급 취소" : "지급"}`); }
   res.redirect(`/workers/${w.id}?tab=payout`);
 });
 
@@ -444,6 +447,7 @@ router.post("/:id/payout-all", requireInvoice, (req, res) => {
   tasks.forEach((t) => setTaskPayout(t.id, true, paidOn));
   const sessionPayouts = listSessionPayoutsForWorker(w).filter((s) => !s.worker_paid);
   sessionPayouts.forEach((s) => setSessionEngineerPayout(s.session_id, w.id, true, paidOn));
+  logAudit(req.user, "worker.payout", `${w.name} 일괄 지급 ${tasks.length + sessionPayouts.length}건${paidOn ? ` (지급일 ${paidOn})` : ""}`);
   // 상세 정산 탭에서 눌렀으면 그 자리로 복귀(목록 카드의 버튼은 기존대로 목록).
   if (req.body.return === "detail") return res.redirect(`/workers/${w.id}?tab=payout&flash=saved`);
   res.redirect("/workers?flash=saved");

@@ -29,6 +29,7 @@ const {
 } = require("../data");
 const people = require("../people");
 const { asyncHandler } = require("../lib/async");
+const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
 
@@ -220,6 +221,7 @@ router.post("/:id/delete", asyncHandler(async (req, res) => {
   // DB 삭제 전 resourceName 확보 — 삭제 후에는 조회 불가.
   const contact = getParty(id);
   const resourceName = contact && contact.google_resource_name;
+  logAudit(req.user, "party.delete", `#${id} ${(getParty(id) || {}).name || ""}`.trim());
   deleteParty(id);
   // DB 삭제 후 People 삭제 — fail-safe: 실패해도 앱 정상.
   if (resourceName) {

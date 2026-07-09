@@ -17,6 +17,7 @@ const {
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
+const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
@@ -327,6 +328,7 @@ router.post("/:id/delete", (req, res) => {
   const id = Number(req.params.id);
   const active = db().prepare("SELECT 1 FROM invoices WHERE payer_id=? AND (status='발행' OR tax_status IN ('계산서 발행','입금완료')) LIMIT 1").get(id); // 청구서 발행 또는 계산서·입금 진행분이면 청구처 보존
   if (active) return res.status(409).send(errorPage({ code: 409, title: "청구처로 발행된 청구가 있어 삭제할 수 없습니다", message: "발행·입금완료된 청구의 청구처입니다. 관련 청구를 먼저 정리하세요(매출 추적 보존).", user: req.user }));
+  logAudit(req.user, "party.delete", `#${id} ${(getParty(id) || {}).name || ""}`.trim());
   deleteParty(id); // 하드 삭제(파티) — 역할 참조 정리·첨부 CASCADE
   res.redirect("/clients?flash=deleted");
 });
