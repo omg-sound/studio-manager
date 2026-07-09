@@ -103,6 +103,17 @@ const parseWon = parseMoney; // 내부 호출명 parseWon 유지
 
 // ── 인보이스 금액/상태 파생(플레이북2 §4 payStatus/balanceOf) ──
 
+/**
+ * 청구 목록 3탭 분류(계산서·입금 축) — todo(발행 필요)/done(발행 완료·입금 전)/paid(입금완료).
+ * 상호 배타(라우트 필터와 탭 카운트가 같은 함수를 쓰게 순수함수로 추출, 2026-07-09 감사 후속 테스트 보강).
+ */
+function invoiceTaxTab(inv) {
+  if (!inv) return "todo";
+  if (inv.tax_status === "입금완료") return "paid";
+  if (inv.tax_status === "계산서 발행") return "done";
+  return "todo";
+}
+
 /** 잔금(미수금) = 총액 - 입금액(음수 없음). */
 function balanceOf(inv) {
   return Math.max((inv.amount || 0) - (inv.paid_amount || 0), 0);
@@ -514,6 +525,7 @@ function listInvoicesForProject(user, projectId) {
 
 module.exports = {
   balanceOf,
+  invoiceTaxTab,
   payStatusOf,
   isOverdue,
   listUnbilledTasksForProject,

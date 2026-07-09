@@ -9,6 +9,7 @@ const {
   getInvoiceForUser,
   listInvoiceItemsForInvoice,
   balanceOf,
+  invoiceTaxTab,
   deleteInvoice,
   getStudioInfo,
   getStudioLogo,
@@ -24,14 +25,10 @@ const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, 
 const { invoiceRow, payerInfoCard, taxToggleButtons } = require("../views.invoices");
 const { formatYmdShort, todayYmd } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { asyncHandler } = require("../lib/async");
+const { safePath } = require("../lib/nav"); // open-redirect 차단(공용, test/nav.test.js)
 const { renderInvoicePdf } = require("../invoice-pdf");
 
 const router = express.Router();
-
-/** 내부 절대경로면 그대로, 아니면 null (open-redirect 차단: `//`·`/\` 거부, safeNext와 동일 규칙). */
-function safePath(v) {
-  return typeof v === "string" && /^\/(?![/\\])/.test(v) ? v : null;
-}
 
 /**
  * 변경 후 복귀 경로: 폼이 보낸 return(프로젝트 청구 탭)이 안전하면 그쪽, 아니면 fallback(청구 상세).
@@ -59,9 +56,9 @@ router.get("/", requireBilling, (req, res) => {
   // (2026-07-06 사용자 요청 — 이전엔 발행완료 탭이 입금완료까지 함께 묶여 있어 입금만 따로 볼 수 없었음).
   const tab = ["done", "paid"].includes(req.query.tab) ? req.query.tab : "todo";
   const allRows = listInvoices(user, {});
-  const todoRows = allRows.filter((i) => i.tax_status !== "계산서 발행" && i.tax_status !== "입금완료");
-  const doneRows = allRows.filter((i) => i.tax_status === "계산서 발행");
-  const paidRows = allRows.filter((i) => i.tax_status === "입금완료");
+  const todoRows = allRows.filter((i) => invoiceTaxTab(i) === "todo");
+  const doneRows = allRows.filter((i) => invoiceTaxTab(i) === "done");
+  const paidRows = allRows.filter((i) => invoiceTaxTab(i) === "paid");
   let rows = tab === "done" ? doneRows : tab === "paid" ? paidRows : todoRows;
 
   // 라우트 레벨 q 필터(제목·채번·클라이언트명 부분일치, 소문자 비교). data.js 수정 없음.

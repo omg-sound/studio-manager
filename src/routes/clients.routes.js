@@ -22,6 +22,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
+const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, formatKRW, errorPage, tabBar, projectTypeBadge, listGroup, listRow, listRowLinked, explain, dirtyActionRow, personCombo, copyable, searchBox, companyCombo, groupCombo, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 
@@ -498,7 +499,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
     const retQ = String(req.query.return || "");
     const qs = [
       from && /^[\w=&%.\-]*$/.test(from) ? `from=${from}` : "",
-      /^\/(?![/\\])/.test(retQ) ? `return=${encodeURIComponent(retQ)}` : "", // 청구·프로젝트 복귀 경로 보존(2026-07-08)
+      safePath(retQ) ? `return=${encodeURIComponent(retQ)}` : "", // 청구·프로젝트 복귀 경로 보존(2026-07-08)
     ].filter(Boolean).join("&");
     return res.redirect(`/contacts/${c.id}${qs ? `?${qs}` : ""}`);
   }
@@ -518,7 +519,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
   const from = String(req.query.from || "");
   const fromOk = from && /^[\w=&%.\-]*$/.test(from);
   const retQ = String(req.query.return || "");
-  const ret = /^\/(?![/\\])/.test(retQ) ? retQ : null;
+  const ret = safePath(retQ);
   const clientsBackHref = ret || (fromOk ? `/clients?${from}` : "/clients");
   const backLabel = ret ? (ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : "돌아가기") : "클라이언트";
   const keepQ = [fromOk ? `from=${from}` : "", ret ? `return=${encodeURIComponent(ret)}` : ""].filter(Boolean).join("&"); // 탭 전환 시 복귀 경로 유실 방지

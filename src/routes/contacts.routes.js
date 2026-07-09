@@ -28,7 +28,8 @@ const {
   setPartyGroup,
 } = require("../data");
 const people = require("../people");
-const { asyncHandler } = require("../lib/async"); // async 라우트 예외를 전역 핸들러로 전달(People API throw 시 요청 행 방지)
+const { asyncHandler } = require("../lib/async");
+const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
 
 const router = express.Router();
@@ -384,7 +385,7 @@ router.get("/:id", (req, res) => {
   // 청구·프로젝트 청구처 카드 → (관계자 리다이렉트) → 여기로 온 경우 ?return=(내부 절대경로만)으로 그 화면 복귀(2026-07-08).
   const from = String(req.query.from || "");
   const retQ = String(req.query.return || "");
-  const ret = /^\/(?![/\\])/.test(retQ) ? retQ : null;
+  const ret = safePath(retQ);
   const backHref = ret || (from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/contacts");
   const backLabel = ret ? (ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : "돌아가기") : from ? "클라이언트" : "연락처";
   const body = `
