@@ -25,6 +25,8 @@ const {
   ensurePartyForManager,
   ensurePartyForUser,
   formatPhone,
+  getParty,
+  setPartyGoogleRef,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner } = require("../views");
 const {
@@ -37,6 +39,7 @@ const {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
+  googleContactsSection,
   isBootstrapChief,
 } = require("../views.settings");
 const { asyncHandler } = require("../lib/async");
@@ -67,7 +70,7 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
-  else tabContent = (await studioCalendarSection()) + driveStorageSection() + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + alertWebhookSection(isChief(req.user)); // 환경설정 — 캘린더 + 자료저장(Drive) + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 알림
+  else tabContent = (await studioCalendarSection()) + driveStorageSection() + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + googleContactsSection(isChief(req.user)) + alertWebhookSection(isChief(req.user)); // 환경설정 — 캘린더 + 자료저장(Drive) + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 구글연락처 + 알림
 
   const body = `
     ${flashBanner(req.query)}
@@ -395,5 +398,23 @@ router.post("/task-types/:id/delete", requireStaff, (req, res) => {
   deleteTaskType(Number(req.params.id));
   res.redirect("/settings?tab=content&flash=deleted");
 });
+
+// ── Google 연락처 일괄 내보내기(치프) ── 미연동(google_resource_name NULL) 연락처를 구글 주소록에 push(1회성, 2026-07-09 사용자 요청).
+// 실패해도 계속(건별 fail-safe — people.createPerson이 null 반환·[people] 로그), 성공분만 resourceName/etag 기록. 재실행 멱등(연동분은 대상 제외).
+router.post("/push-contacts", requireChief, asyncHandler(async (req, res) => {
+  const people = require("../people");
+  if (!people.peopleClient()) {
+    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("Google 연락처 미연동 — 치프 계정으로 재로그인(연락처 권한 동의) 후 다시 시도하세요.") + "&notice_warn=1");
+  }
+  const rows = db().prepare("SELECT id FROM parties WHERE kind='person' AND google_resource_name IS NULL ORDER BY id").all();
+  let ok = 0, fail = 0;
+  for (const r of rows) {
+    const ref = await people.createPerson(getParty(r.id));
+    if (ref) { setPartyGoogleRef(r.id, ref.resourceName, ref.etag); ok++; }
+    else fail++;
+  }
+  const msg = `구글 내보내기 완료 — 성공 ${ok}명${fail ? ` · 실패 ${fail}명(서버 로그 확인)` : ""}`;
+  res.redirect(`/settings?tab=settings&notice=${encodeURIComponent(msg)}${fail ? "&notice_warn=1" : ""}`);
+}));
 
 module.exports = router;

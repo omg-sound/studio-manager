@@ -574,6 +574,34 @@ function taskTypeRow(t) {
     </div>`;
 }
 
+/**
+ * Google 연락처 동기화 섹션(환경설정, 2026-07-09 사용자 요청) — 미연동 연락처 일괄 내보내기.
+ * People 푸시가 죽어 있던 기간(party 리네임 회귀, 2026-07-09 수정) + 연동 이전 생성분은 구글 주소록에 없음.
+ * 개별 수정 시 자동 생성되지만(contacts.routes 폴백), 한 번에 올리는 버튼을 제공. 버튼=치프 전용(연락처 권한 재로그인 필요할 수 있음).
+ */
+function googleContactsSection(chief) {
+  const total = db().prepare("SELECT COUNT(*) c FROM parties WHERE kind='person'").get().c;
+  const linked = db().prepare("SELECT COUNT(*) c FROM parties WHERE kind='person' AND google_resource_name IS NOT NULL").get().c;
+  const unlinked = total - linked;
+  const status = unlinked
+    ? `<p class="text-sm">연락처 <b>${total}</b>명 중 <b class="text-warning">${unlinked}명</b>이 아직 구글 주소록에 없습니다. <span class="text-muted">(연동됨 ${linked}명 — 앱에서 연락처를 수정하면 개별 자동 생성)</span></p>`
+    : `<p class="text-sm"><span class="badge badge-success">완료</span> 연락처 ${total}명 전원이 구글 주소록에 연동돼 있습니다.</p>`;
+  const action = chief && unlinked
+    ? `<form method="post" action="/settings/push-contacts" data-confirm="미연동 연락처 ${unlinked}명을 구글 주소록으로 내보낼까요? (구글에 새 연락처가 생성됩니다)">
+         <button class="btn-ghost btn-sm" type="submit">구글로 일괄 내보내기 (${unlinked}명)</button>
+       </form>`
+    : "";
+  return `
+  <section class="card space-y-3">
+    <div>
+      <h2 class="font-display text-lg font-semibold">Google 연락처</h2>
+      ${explain(`앱에서 연락처를 만들거나 수정하면 구글 주소록에 자동 반영(push)됩니다. 아래 버튼은 아직 구글에 없는 기존 연락처를 한 번에 내보내는 1회성 작업입니다. 실패분은 서버 로그([people])에 남습니다.`)}
+    </div>
+    ${status}
+    ${action}
+  </section>`;
+}
+
 module.exports = {
   peopleTab,
   contentTab,
@@ -584,5 +612,6 @@ module.exports = {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
+  googleContactsSection,
   isBootstrapChief,
 }; // 내부 전용: rateCategoryOptions·listUsers·ratesGroupedByCategory·rateCategoryManageRow·rateCategoriesSection·roomRow·userRow·hourLabel·rateItemRow·taskTypeRow(위 export 함수들이 클로저로 사용)
