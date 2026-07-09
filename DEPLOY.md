@@ -192,3 +192,25 @@ curl -fsS -X POST \
 | `/internal/cron/daily` 404 | `BACKUP_TOKEN` 미설정 → 라우트 비활성. web env에 토큰 입력 |
 | OAuth `redirect_uri_mismatch` | Google 콘솔 redirect URI가 실제 onrender.com 도메인과 불일치. 4-2단계 재확인 |
 | 자료가 local에 저장됨(Drive 아님) | Drive 미연동. OAuth + Drive API 활성화 후 admin이 최초 로그인하면 자동 전환 |
+
+---
+
+## 9. DB 복구 런북 (2026-07-09 리허설 검증 완료)
+
+> Render 디스크 유실·데이터 사고 시 Drive 오프사이트 백업으로 복원하는 절차.
+> **리허설 결과**: 실백업(app-2026-07-09.db)으로 전 절차 통과 — 무결성 ok·FK 위반 0·서버 기동 ~1초·
+> 마이그레이션 멱등 통과·전 화면 200·쓰기 정상. 첨부는 전량 Drive 저장이라 DB만 복원하면 됨.
+
+1. **백업 확보**: studio@omgworks.kr Drive → `omg-studios-manager/backups/` → 최신 `app-YYYY-MM-DD.db` 다운로드
+   (매일 03:00 KST 생성, 14일 보존. Render 디스크가 살아 있으면 `/var/data/backups/`에서도 가능).
+2. **무결성 확인**(로컬): `sqlite3 app-*.db "PRAGMA integrity_check; PRAGMA foreign_key_check;"` → `ok` + 위반 0 확인.
+3. **배치**: Render Shell에서 서비스 중지 없이 안전하게 하려면 —
+   ```
+   # 기존 DB 옆으로 치우고(즉시 롤백 대비) 백업을 제자리에
+   mv /var/data/app.db /var/data/app.db.broken
+   rm -f /var/data/app.db-wal /var/data/app.db-shm   # WAL 잔재 제거(필수 — 옛 WAL이 새 DB에 적용되면 안 됨)
+   # 백업 파일을 /var/data/app.db 로 업로드/복사
+   ```
+4. **재시작**: Render 대시보드에서 서비스 Restart → 기동 로그에서 마이그레이션 에러 없음 확인(백업은 VACUUM INTO 산출물이라 멱등 마이그레이션이 그대로 통과).
+5. **검증**: `/healthz` → 로그인 → 청구·프로젝트 건수 눈으로 대조 → 아무 프로젝트 1개 생성·삭제(쓰기 확인).
+6. **주의**: 백업 시점(전일 03:00) 이후 입력분은 유실 — 당일 작업분은 수기로 재입력. 첨부 파일은 Drive `drive.file` 앱 폴더에 그대로 있어 DB의 file_id 참조가 자동 복구된다(로컬 저장분이 있었다면 그것만 유실 — 관리›환경설정 '자료 저장'에서 로컬 잔존 여부 확인).
