@@ -30,7 +30,7 @@ const dashboard = require("./data/dashboard"); // 대시보드 통계
 const sessions = require("./data/sessions"); // 세션(스튜디오 일정)
 
 // 작업 종류 카탈로그: 공개 API는 아래 7함수만 재export(normalizeTaskTypeDb는 내부전용이므로 spread하지 않고 명시 나열).
-const { listTaskTypes, activeTaskTypes, taskTypeLabel, taskTypeUnitPrice, createTaskType, updateTaskType, deleteTaskType } = taskTypes;
+const { listTaskTypes, activeTaskTypes, taskTypeLabel, taskTypeUnitPrice, createTaskType, updateTaskType, moveTaskType, deleteTaskType } = taskTypes;
 
 module.exports = {
   ...parties, // src/data/parties.js — 당사자 통합(사람/조직/아티스트/담당자연동)
@@ -43,6 +43,7 @@ module.exports = {
   taskTypeUnitPrice,
   createTaskType,
   updateTaskType,
+  moveTaskType,
   deleteTaskType,
   ...projects, // src/data/projects.js (distinctProjectFields·listProjects·getProjectForUser·deleteProject)
   ...tracks, // src/data/tracks.js

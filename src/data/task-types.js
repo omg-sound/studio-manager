@@ -93,6 +93,21 @@ function deleteTaskType(id) {
   invalidateTaskTypeCache();
 }
 
+/**
+ * 작업 종류 순서 이동(위/아래 한 칸, 2026-07-09 관리 개선). 표시 순서(active DESC→sort_order→label)를
+ * 물질화해 이웃과 교환 후 sort_order 10 간격 재부여(중복 값에도 결정적). 캐시 무효화 포함.
+ */
+function moveTaskType(id, dir) {
+  const rows = db().prepare("SELECT id FROM task_types ORDER BY active DESC, sort_order, label COLLATE NOCASE").all();
+  const i = rows.findIndex((r) => r.id === Number(id));
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= rows.length) return;
+  [rows[i], rows[j]] = [rows[j], rows[i]];
+  const upd = db().prepare("UPDATE task_types SET sort_order = ? WHERE id = ?");
+  rows.forEach((r, idx) => upd.run((idx + 1) * 10, r.id));
+  invalidateTaskTypeCache();
+}
+
 module.exports = {
   listTaskTypes,
   activeTaskTypes,
@@ -101,5 +116,6 @@ module.exports = {
   normalizeTaskTypeDb, // 내부 정규화용(data.js 로컬 바인딩) — 공개 API 미노출
   createTaskType,
   updateTaskType,
+  moveTaskType,
   deleteTaskType,
 };

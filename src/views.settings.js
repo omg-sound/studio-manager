@@ -121,7 +121,10 @@ function rateCategoryManageRow(c) {
   if (c.locked) {
     return `<div class="flex items-center justify-between gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-sm">
       <span>${esc(c.name)} <span class="badge bg-bg text-muted">${esc(RATE_KIND_LABELS[c.kind] || c.kind)}</span></span>
-      <span class="text-xs text-muted">기본 분류 · 수정·삭제 불가</span>
+      <span class="flex items-center gap-2"><span class="text-xs text-muted">기본 분류 · 수정·삭제 불가</span><span class="flex shrink-0 gap-1">
+      <form method="post" action="/settings/rate-categories/${c.id}/move"><input type="hidden" name="dir" value="up" /><button class="btn-ghost btn-xs px-2" type="submit" aria-label="위로 이동">↑</button></form>
+      <form method="post" action="/settings/rate-categories/${c.id}/move"><input type="hidden" name="dir" value="down" /><button class="btn-ghost btn-xs px-2" type="submit" aria-label="아래로 이동">↓</button></form>
+    </span></span>
     </div>`;
   }
   const kindOpts = Object.entries(RATE_KIND_LABELS).map(([k, l]) => `<option value="${k}" ${k === c.kind ? "selected" : ""}>${esc(l)}</option>`).join("");
@@ -134,6 +137,10 @@ function rateCategoryManageRow(c) {
     <form method="post" action="/settings/rate-categories/${c.id}/delete" data-confirm="'${esc(c.name)}' 분류를 삭제할까요? 이 분류를 쓰는 단가 항목이 있으면 삭제할 수 없습니다.">
       <button class="btn-ghost btn-xs text-danger" type="submit">삭제</button>
     </form>
+    <span class="flex shrink-0 gap-1">
+      <form method="post" action="/settings/rate-categories/${c.id}/move"><input type="hidden" name="dir" value="up" /><button class="btn-ghost btn-xs px-2" type="submit" aria-label="위로 이동">↑</button></form>
+      <form method="post" action="/settings/rate-categories/${c.id}/move"><input type="hidden" name="dir" value="down" /><button class="btn-ghost btn-xs px-2" type="submit" aria-label="아래로 이동">↓</button></form>
+    </span>
   </div>`;
 }
 
@@ -565,6 +572,10 @@ function taskTypeRow(t) {
           </div>
           <div class="mt-0.5 text-xs text-muted">${esc(billLabel)} · ${priceLabel}</div>
         </div>
+        <span class="flex shrink-0 gap-1">
+      <form method="post" action="/settings/task-types/${t.id}/move"><input type="hidden" name="dir" value="up" /><button class="btn-ghost btn-xs px-2" type="submit" aria-label="위로 이동">↑</button></form>
+      <form method="post" action="/settings/task-types/${t.id}/move"><input type="hidden" name="dir" value="down" /><button class="btn-ghost btn-xs px-2" type="submit" aria-label="아래로 이동">↓</button></form>
+    </span>
       </div>
       <details class="group mt-2 border-t border-border pt-2">
         <summary class="flex cursor-pointer list-none items-center justify-end text-xs text-muted hover:text-fg">${detailsChevron()}</summary>

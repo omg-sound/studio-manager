@@ -58,11 +58,29 @@ function deleteRateCategory(id) {
   return { id: cat.id };
 }
 
+/**
+ * 분류 순서 이동(같은 kind 안에서 위/아래 한 칸, 2026-07-09 관리 개선 — 정렬 UI).
+ * 현재 표시 순서(kind→sort_order→이름)를 물질화해 이웃과 자리를 바꾸고 sort_order를 10 간격으로 재부여
+ * (999 기본값 중복 상태에서도 결정적으로 동작). 잠긴 기본 분류도 순서 이동은 허용(잠금=이름·삭제 보호).
+ */
+function moveRateCategory(id, dir) {
+  const cur = db().prepare("SELECT * FROM rate_categories WHERE id = ?").get(Number(id));
+  if (!cur) return;
+  const rows = db().prepare("SELECT id FROM rate_categories WHERE kind = ? ORDER BY sort_order, name COLLATE NOCASE").all(cur.kind);
+  const i = rows.findIndex((r) => r.id === cur.id);
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= rows.length) return;
+  [rows[i], rows[j]] = [rows[j], rows[i]];
+  const upd = db().prepare("UPDATE rate_categories SET sort_order = ? WHERE id = ?");
+  rows.forEach((r, idx) => upd.run((idx + 1) * 10, r.id));
+}
+
 module.exports = {
   listRateCategories,
   getRateCategory,
   rateCategoryKind,
   createRateCategory,
   updateRateCategory,
+  moveRateCategory,
   deleteRateCategory,
 };

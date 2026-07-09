@@ -12,9 +12,11 @@ const {
   deleteRateItem,
   createRateCategory,
   updateRateCategory,
+  moveRateCategory,
   deleteRateCategory,
   createTaskType,
   updateTaskType,
+  moveTaskType,
   deleteTaskType,
   setStudioInfo,
   setStudioLogo,
@@ -372,6 +374,12 @@ router.post("/rate-categories/:id", requireStaff, (req, res) => {
   res.redirect("/settings?tab=content&flash=saved");
 });
 
+// 분류 순서 이동(위/아래) — 정렬 UI(2026-07-09 관리 개선). 잠긴 기본 분류도 순서는 이동 가능.
+router.post("/rate-categories/:id/move", requireStaff, (req, res) => {
+  moveRateCategory(Number(req.params.id), req.body.dir === "up" ? "up" : "down");
+  res.redirect("/settings?tab=content");
+});
+
 router.post("/rate-categories/:id/delete", requireStaff, (req, res) => {
   try {
     deleteRateCategory(Number(req.params.id));
@@ -418,6 +426,12 @@ router.post("/task-types/:id", requireStaff, (req, res) => {
   }
   if (isFetch) return res.json({ ok: true });
   res.redirect("/settings?tab=content&flash=saved");
+});
+
+// 작업 종류 순서 이동(위/아래) — 곡·콘텐츠 빠른추가·드롭다운 순서에 반영.
+router.post("/task-types/:id/move", requireStaff, (req, res) => {
+  moveTaskType(Number(req.params.id), req.body.dir === "up" ? "up" : "down");
+  res.redirect("/settings?tab=content");
 });
 
 router.post("/task-types/:id/delete", requireStaff, (req, res) => {
