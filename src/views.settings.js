@@ -52,7 +52,7 @@ function listUsers() {
        ORDER BY u.active DESC, u.role, u.email`).all();
 }
 
-/** 담당자 탭: 하우스 엔지니어 목록 + 외주 작업자 메뉴 안내. */
+/** 담당자 탭: 하우스 엔지니어(로그인 계정) 관리. */
 function peopleTab(currentUser) {
   const chief = isChief(currentUser); // 로그인 계정 관리(추가·역할변경·삭제)는 치프 전용 — 스태프는 열람만(권한 상승 방지)
   const users = listUsers();
@@ -79,17 +79,9 @@ function peopleTab(currentUser) {
         </div>
         ${addForm}
         <div class="space-y-2">${userRows}</div>
-      </section>
-
-      <section class="card space-y-4">
-        <div>
-          <h2 class="font-display text-lg font-semibold">외주 작업자</h2>
-          <p class="mt-1 text-xs text-muted">
-            로그인 없이 작업 담당자로만 쓰는 외부 인력은
-            <a href="/workers" class="font-medium text-primary hover:underline">외주 작업자 메뉴</a>에서 추가·삭제·정산을 관리합니다.
-          </p>
-        </div>
       </section>`;
+      // (외주 작업자 안내 카드는 2026-07-09 제거 — /workers 일원화(07-01) 직후의 과도기 안내였고,
+      //  사이드바에 외주 작업자 메뉴가 상시 노출돼 중복. 담당자 탭 = 로그인 계정 관리로 정체성 정리.)
 }
 
 /** 단가표 항목을 분류별로 묶어 접이식(<details>, 기본 접힘)으로 — 2026-07-05 사용자 요청. DB 분류 순서(kind→sort_order→이름) 따름. */
