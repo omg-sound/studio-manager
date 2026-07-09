@@ -17,11 +17,16 @@ const {
   getProMinutes,
   getDefaultBooker,
 } = require("./data");
-const { esc, formatKRW, emptyState, detailsChevron, explain } = require("./views");
+const { esc, formatKRW, formatBytes, emptyState, detailsChevron, explain } = require("./views");
 const drive = require("./drive");
 const calendar = require("./calendar");
 const alerts = require("./notify");
 const { localFileCount, driveFileCount } = require("./lib/storage-migrate");
+const fs = require("fs");
+const path = require("path");
+const { backupDir } = require("./lib/maintenance");
+const { listAudit } = require("./lib/audit");
+const { getState } = require("./db");
 
 const RATE_KIND_LABELS = { recording: "녹음", filming: "촬영", performance: "공연" };
 
@@ -612,6 +617,125 @@ function googleContactsSection(chief) {
   </section>`;
 }
 
+
+// ── 시스템 탭(2026-07-09 관리 개선) — 연동·백업·데이터 상태를 한눈에 + 감사 로그 열람 ──
+
+/** 최신 DB 백업 정보(backups/app-*.db 최대 mtime). 없으면 null. */
+function lastBackupInfo() {
+  try {
+    const dir = backupDir();
+    const files = fs.readdirSync(dir).filter((f) => /^app-\d{4}-\d{2}-\d{2}\.db$/.test(f));
+    if (!files.length) return { count: 0, latest: null };
+    let latest = null;
+    for (const f of files) {
+      const st = fs.statSync(path.join(dir, f));
+      if (!latest || st.mtimeMs > latest.mtimeMs) latest = { name: f, mtimeMs: st.mtimeMs, size: st.size };
+    }
+    return { count: files.length, latest };
+  } catch (_e) { return { count: 0, latest: null }; }
+}
+
+/**
+ * 시스템 경고 목록(탭 배지·상태 카드 공용). 조용히 죽는 것들의 가시화가 목적:
+ * 백업이 26시간 넘게 없으면(cron 침묵 실패) / Drive 미연동 / 캘린더 자동 연동 꺼짐.
+ */
+function systemWarnings() {
+  const warns = [];
+  const b = lastBackupInfo();
+  if (!b.latest) warns.push("DB 백업 파일이 없습니다 — 일일 백업(cron)이 아직 안 돌았거나 실패 중입니다.");
+  else if (Date.now() - b.latest.mtimeMs > 26 * 3600 * 1000) warns.push(`마지막 DB 백업이 ${Math.floor((Date.now() - b.latest.mtimeMs) / 3600000)}시간 전입니다 — 일일 cron 실패 여부를 확인하세요.`);
+  if (config.googleConfigured && !drive.isLinked()) warns.push("Google Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
+  if (!getState("studio_calendar_id")) warns.push("스튜디오 캘린더 미설정 — 세션의 구글 캘린더 자동 연동이 꺼져 있습니다.");
+  return warns;
+}
+
+/** 시스템 탭 — 연동 상태 / 백업 / 데이터 / 앱 정보 / 감사 로그(최근 50). chief=수동 백업 버튼 노출. */
+function systemTab(chief) {
+  const warns = systemWarnings();
+  const warnCard = warns.length
+    ? `<section class="card border-warning/40"><h2 class="mb-2 text-sm font-semibold text-warning">⚠️ 확인 필요 ${warns.length}건</h2><ul class="list-disc space-y-1 pl-5 text-sm">${warns.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></section>`
+    : `<section class="card"><p class="text-sm"><span class="badge badge-success mr-2">정상</span>연동·백업에 확인이 필요한 항목이 없습니다.</p></section>`;
+
+  // 연동 상태 — 각 설정 섹션(환경설정 탭)에 흩어져 있던 것을 배지로 요약.
+  const linked = drive.isLinked();
+  const calSet = !!getState("studio_calendar_id");
+  let peopleOn = false;
+  try { peopleOn = !!require("./people").peopleClient(); } catch (_e) { peopleOn = false; }
+  const badge = (ok, onLabel, offLabel) => ok ? `<span class="badge badge-success">${esc(onLabel)}</span>` : `<span class="badge badge-warning">${esc(offLabel)}</span>`;
+  const integrations = `<section class="card">
+      <h2 class="mb-2 text-sm font-semibold">연동 상태</h2>
+      <div class="flex flex-wrap gap-x-6 gap-y-1.5 text-sm">
+        <span>구글 캘린더 ${badge(calSet, "자동 연동", "꺼짐")}</span>
+        <span>구글 Drive ${badge(linked, "연동됨", "미연동")}</span>
+        <span>구글 연락처 ${badge(peopleOn, "푸시 가능", "미연동")}</span>
+        <span>알림 웹훅 ${badge(alerts.isConfigured(), "설정됨", "미설정")}</span>
+      </div>
+      <p class="mt-2 text-xs text-muted">세부 설정·연결은 환경설정 탭에서.</p>
+    </section>`;
+
+  // 백업 — 마지막 백업 시각·크기·보관 개수 + 수동 백업(치프).
+  const b = lastBackupInfo();
+  const backupLine = b.latest
+    ? `마지막 백업 <b class="text-fg">${esc(new Date(b.latest.mtimeMs).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }))}</b> · ${esc(b.latest.name)} (${formatBytes(b.latest.size)}) · 보관 ${b.count}개`
+    : `<span class="text-warning">백업 파일 없음</span>`;
+  const backupCard = `<section class="card">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold">DB 백업</h2>
+        ${chief ? `<form method="post" action="/settings/backup-now"><button class="btn-ghost btn-sm" type="submit">지금 백업</button></form>` : ""}
+      </div>
+      <p class="mt-1 text-sm text-muted">${backupLine}</p>
+      ${explain(`매일 03:00 KST cron이 VACUUM INTO 스냅샷을 만들고(14일 보존) Drive 연동 시 오프사이트 사본을 올립니다. 복구 절차는 DEPLOY.md §9.`)}
+    </section>`;
+
+  // 데이터 현황 — DB 크기·주요 테이블 카운트·로컬 잔존 파일.
+  let dbSize = 0, walSize = 0;
+  try { dbSize = fs.statSync(config.dbPath).size; } catch (_e) { /* 없음 */ }
+  try { walSize = fs.statSync(config.dbPath + "-wal").size; } catch (_e) { /* 없음 */ }
+  const cnt = (t) => { try { return db().prepare(`SELECT COUNT(*) c FROM ${t}`).get().c; } catch (_e) { return 0; } };
+  const dataCard = `<section class="card">
+      <h2 class="mb-2 text-sm font-semibold">데이터 현황</h2>
+      <div class="flex flex-wrap gap-x-6 gap-y-1.5 text-sm text-muted">
+        <span>DB <b class="text-fg">${formatBytes(dbSize)}</b>${walSize ? ` <span class="text-xs">(+WAL ${formatBytes(walSize)})</span>` : ""}</span>
+        <span>프로젝트 <b class="text-fg">${cnt("projects")}</b></span>
+        <span>청구 <b class="text-fg">${cnt("invoices")}</b></span>
+        <span>클라이언트·연락처 <b class="text-fg">${cnt("parties")}</b></span>
+        <span>세션 <b class="text-fg">${cnt("sessions")}</b></span>
+        <span>로컬 저장 첨부 <b class="${localFileCount() ? "text-warning" : "text-fg"}">${localFileCount()}</b>개</span>
+      </div>
+    </section>`;
+
+  // 앱 정보
+  let version = "";
+  try { version = require("../package.json").version || ""; } catch (_e) { /* 무시 */ }
+  const upMin = Math.floor(process.uptime() / 60);
+  const appCard = `<section class="card">
+      <h2 class="mb-2 text-sm font-semibold">앱 정보</h2>
+      <div class="flex flex-wrap gap-x-6 gap-y-1.5 text-sm text-muted">
+        <span>버전 <b class="text-fg">${esc(version)}</b></span>
+        <span>Node <b class="text-fg">${esc(process.version)}</b></span>
+        <span>가동 <b class="text-fg">${upMin >= 60 ? `${Math.floor(upMin / 60)}시간 ${upMin % 60}분` : `${upMin}분`}</b></span>
+        <span>환경 <b class="text-fg">${config.isProd ? "프로덕션" : "개발"}</b></span>
+      </div>
+    </section>`;
+
+  // 감사 로그(최근 50) — 파괴적·재무 액션 추적(삭제 중심 정책 보완).
+  const audits = listAudit(50);
+  const auditRows = audits.length
+    ? audits.map((a) => `<div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border py-1.5 text-sm last:border-0">
+        <span class="shrink-0 tabular text-xs text-muted">${esc(String(a.at || "").replace("T", " ").slice(0, 16))} UTC</span>
+        <span class="shrink-0 badge badge-neutral">${esc(a.action)}</span>
+        <span class="min-w-0 flex-1 truncate">${esc(a.target || "")}</span>
+        <span class="shrink-0 text-xs text-muted">${esc(a.user_email || "")}</span>
+      </div>`).join("")
+    : `<p class="text-sm text-muted">기록이 없습니다 — 삭제·역할 변경·지급·청구 상태 변경 같은 액션이 여기 남습니다.</p>`;
+  const auditCard = `<section class="card">
+      <h2 class="mb-2 text-sm font-semibold">감사 로그 <span class="text-xs font-normal text-muted">최근 ${audits.length}건 — 삭제·역할·지급·청구 상태</span></h2>
+      ${auditRows}
+    </section>`;
+
+  return warnCard + integrations + backupCard + dataCard + appCard + auditCard;
+}
+
 module.exports = {
   peopleTab,
   contentTab,
@@ -623,5 +747,7 @@ module.exports = {
   studioInfoSection,
   alertWebhookSection,
   googleContactsSection,
+  systemTab,
+  systemWarnings,
   isBootstrapChief,
 }; // 내부 전용: rateCategoryOptions·listUsers·ratesGroupedByCategory·rateCategoryManageRow·rateCategoriesSection·roomRow·userRow·hourLabel·rateItemRow·taskTypeRow(위 export 함수들이 클로저로 사용)

@@ -40,6 +40,8 @@ const {
   studioInfoSection,
   alertWebhookSection,
   googleContactsSection,
+  systemTab,
+  systemWarnings,
   isBootstrapChief,
 } = require("../views.settings");
 const { asyncHandler } = require("../lib/async");
@@ -60,17 +62,20 @@ const SETTINGS_TABS = [
   { key: "people", label: "담당자" },
   { key: "content", label: "컨텐츠" },
   { key: "settings", label: "환경설정" },
+  { key: "system", label: "시스템" }, // 연동·백업·데이터 상태 + 감사 로그(2026-07-09 관리 개선) — 경고 있으면 라벨에 ⚠️
 ];
 
 router.get("/", requireStaff, asyncHandler(async (req, res) => {
   const tab = SETTINGS_TABS.some((t) => t.key === req.query.tab) ? req.query.tab : "people";
+  const warnCount = systemWarnings().length; // 시스템 탭 경고 배지(백업 침묵·연동 꺼짐 등 — 조용한 장애 가시화)
   const tabBar = `<div class="mb-4 flex gap-1 overflow-x-auto border-b border-border">
-      ${SETTINGS_TABS.map((t) => `<a href="/settings?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
+      ${SETTINGS_TABS.map((t) => `<a href="/settings?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}${t.key === "system" && warnCount ? ` <span class="text-warning">⚠️${warnCount}</span>` : ""}</a>`).join("")}
     </div>`;
 
   let tabContent;
   if (tab === "people") tabContent = peopleTab(req.user);
   else if (tab === "content") tabContent = contentTab();
+  else if (tab === "system") tabContent = systemTab(isChief(req.user));
   else tabContent = (await studioCalendarSection()) + driveStorageSection() + roomsSection() + studioHoursSection() + defaultBookerSection() + studioInfoSection() + googleContactsSection(isChief(req.user)) + alertWebhookSection(isChief(req.user)); // 환경설정 — 캘린더 + 자료저장(Drive) + 룸 + 운영시간 + 기본 예약담당자 + 공급자 + 구글연락처 + 알림
 
   const body = `
@@ -418,6 +423,26 @@ router.post("/push-contacts", requireChief, asyncHandler(async (req, res) => {
   }
   const msg = `구글 내보내기 완료 — 성공 ${ok}명${fail ? ` · 실패 ${fail}명(서버 로그 확인)` : ""}`;
   res.redirect(`/settings?tab=settings&notice=${encodeURIComponent(msg)}${fail ? "&notice_warn=1" : ""}`);
+}));
+
+// ── 수동 DB 백업(치프, 2026-07-09 관리 개선) — cron과 동일 산출물(VACUUM INTO + uploads 스냅샷 + Drive 오프사이트 fail-safe).
+router.post("/backup-now", requireChief, asyncHandler(async (req, res) => {
+  const { backupDatabase, backupUploads } = require("../lib/maintenance");
+  const drive = require("../drive");
+  let notice, warn = false;
+  try {
+    const b = backupDatabase();
+    try { backupUploads(); } catch (_e) { /* 첨부 스냅샷 실패는 비차단 */ }
+    let off = "";
+    if (drive.isLinked() && b && b.file) {
+      try { await drive.backupToDrive(b.file); off = " · Drive 오프사이트 완료"; } catch (_e) { off = " · Drive 업로드 실패(로그 확인)"; warn = true; }
+    }
+    logAudit(req.user, "system.backup", (b && b.file ? require("path").basename(b.file) : "") + off.trim());
+    notice = `백업 완료 — ${b && b.file ? require("path").basename(b.file) : "생성됨"}${off}`;
+  } catch (e) {
+    notice = `백업 실패: ${e.message}`; warn = true;
+  }
+  res.redirect(`/settings?tab=system&notice=${encodeURIComponent(notice)}${warn ? "&notice_warn=1" : ""}`);
 }));
 
 module.exports = router;
