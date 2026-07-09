@@ -240,7 +240,7 @@ function sessionInputError(e, res, user) {
     return res.status(400).send(errorPage({ code: 400, title: "세션 날짜가 필요합니다", message: "세션 날짜를 입력하세요.", user }));
   if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict, user));
   if (e.message === "SESSION_INVOICED")
-    return res.status(400).send(errorPage({ code: 400, title: "이미 청구된 세션", message: "이미 청구된 세션은 수정·삭제할 수 없습니다. 인보이스를 삭제한 뒤 시도하세요.", user }));
+    return res.status(400).send(errorPage({ code: 400, title: "이미 청구된 세션", message: "이미 청구된 세션은 수정·삭제할 수 없습니다. 청구서를 삭제한 뒤 시도하세요.", user }));
   throw e;
 }
 

@@ -23,7 +23,7 @@ router.get("/login", (req, res) => {
   const next = typeof req.query.next === "string" ? req.query.next : "/";
   const err = req.query.err ? `<p class="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(String(req.query.err))}</p>` : "";
   const googleBtn = config.googleConfigured
-    ? `<a href="/auth/google?next=${encodeURIComponent(next)}" class="btn-primary w-full">Google 계정으로 로그인</a>`
+    ? `<a href="/auth/google?next=${encodeURIComponent(next)}" class="btn-primary w-full">구글 계정으로 로그인</a>`
     : `<p class="rounded-lg border border-border bg-bg px-3 py-2 text-center text-xs text-muted">Google OAuth 미설정 — <code>.env</code>에 자격증명 설정 후 사용</p>`;
   const devBtn = config.devLogin
     ? `<form method="post" action="/dev-login" class="mt-3 space-y-2 rounded-lg border border-warning/40 bg-warning/5 p-3">
@@ -43,7 +43,7 @@ router.get("/login", (req, res) => {
     <div class="card">
       ${err}
       ${googleBtn}
-      <p class="mt-3 text-center text-xs text-muted">치프 엔지니어가 허용한 Google 계정만 로그인할 수 있습니다.</p>
+      <p class="mt-3 text-center text-xs text-muted">치프 엔지니어가 허용한 구글 계정만 로그인할 수 있습니다.</p>
       ${devBtn}
     </div>`;
   res.send(layout({ title: "로그인", body }));
@@ -134,9 +134,9 @@ router.get("/auth/google/callback", async (req, res) => {
     const oauth2 = google.oauth2({ version: "v2", auth: client });
     const { data: profile } = await oauth2.userinfo.get();
     const email = String(profile.email || "").trim().toLowerCase();
-    // 이메일 미인증 Google 계정 거부(화이트리스트 신뢰 경계 하드닝). verified_email 누락(undefined)은 호환 위해 통과.
+    // 이메일 미인증 구글 계정 거부(화이트리스트 신뢰 경계 하드닝). verified_email 누락(undefined)은 호환 위해 통과.
     if (profile.verified_email === false) {
-      return res.redirect("/login?err=" + encodeURIComponent("이메일이 인증되지 않은 Google 계정입니다."));
+      return res.redirect("/login?err=" + encodeURIComponent("이메일이 인증되지 않은 구글 계정입니다."));
     }
 
     // 화이트리스트: 치프(ADMIN_EMAIL) 또는 관리자가 등록한 활성 사용자만 허용.

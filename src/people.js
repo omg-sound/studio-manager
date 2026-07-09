@@ -4,7 +4,7 @@
  * Google People API 연동 모듈 — 앱↔Google 양방향.
  *
  * 목적:
- *   - 앱→Google push: contacts 생성/수정/삭제 시 Google 연락처에 반영.
+ *   - 앱→Google push: contacts 생성/수정/삭제 시 구글 연락처에 반영.
  *   - Google→앱 pull(syncFromGoogle): syncToken 증분 폴링으로 변경 수신.
  *
  * 설계(calendar.js와 동일 패턴):

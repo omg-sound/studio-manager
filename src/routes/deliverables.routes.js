@@ -77,7 +77,7 @@ router.get("/deliverables", requireStaff, (req, res) => {
     : emptyState("전달된 자료가 없습니다.");
 
   const backendNote = admin
-    ? `<p class="mb-3 text-xs text-muted">스토리지: ${activeBackend() === "drive" ? "Google Drive(연동됨)" : "로컬 디스크(Drive 미연동 — 관리자 Google 로그인 시 Drive 사용)"}</p>`
+    ? `<p class="mb-3 text-xs text-muted">스토리지: ${activeBackend() === "drive" ? "구글 Drive(연동됨)" : "로컬 디스크(Drive 미연동 — 관리자 Google 로그인 시 Drive 사용)"}</p>`
     : "";
 
   const body = `
@@ -141,7 +141,7 @@ router.post("/projects/:pid/deliverables", requireStaff, upload.single("file"), 
   } catch (e) {
     console.error("[deliverable upload]", e);
     const msg = e && e.code === "DRIVE_NOT_LINKED" ? "Drive 미연동(관리자 Google 로그인 필요)"
-      : e && e.code === "DRIVE_UPLOAD_FAILED" ? "Google Drive 업로드 실패 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하거나 Drive 연동을 확인하세요."
+      : e && e.code === "DRIVE_UPLOAD_FAILED" ? "구글 Drive 업로드 실패 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하거나 Drive 연동을 확인하세요."
       : "업로드 실패: " + (e.message || "");
     res.send(layout({ title: "자료 업로드", user: req.user, current: "/deliverables", body: uploadForm(project, { ...b, _err: msg }) }));
   } finally {

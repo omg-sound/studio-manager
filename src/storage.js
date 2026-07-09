@@ -2,7 +2,7 @@
 
 /**
  * 파일 스토리지 추상화.
- * - Drive 연동 시(관리자 OAuth refresh token 존재) → Google Drive(비공개, 프록시 스트리밍).
+ * - Drive 연동 시(관리자 OAuth refresh token 존재) → 구글 Drive(비공개, 프록시 스트리밍).
  * - 미연동 시 → 로컬 디스크 폴백(config.uploadsDir). 자격증명 없이 전체 흐름 검증 가능.
  *
  * 어느 백엔드든 파일은 공개되지 않으며, 다운로드는 항상 백엔드 라우트가 프록시한다.

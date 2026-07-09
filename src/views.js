@@ -2,7 +2,7 @@
 
 /**
  * 서버 렌더 HTML 템플릿 헬퍼. Claude 스타일(크림 + 클레이 + 세리프 제목 + 라인아이콘).
- * 공통 레이아웃 + 사이드바(데스크탑 고정) + 모바일 상단바/드로어.
+ * 공통 레이아웃 + 사이드바(데스크톱 고정) + 모바일 상단바/드로어.
  */
 
 const fs = require("fs");
@@ -242,7 +242,7 @@ function layout({ title, user, current = "", body, full = false }) {
   </header>
 
   <div class="mx-auto flex w-full max-w-content gap-8 px-4 py-6 sm:px-6">
-    <!-- 사이드바(데스크탑) / 드로어(모바일) -->
+    <!-- 사이드바(데스크톱) / 드로어(모바일) -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-64 transform border-r border-border bg-elevated p-4 transition sm:static sm:z-0 sm:block sm:w-56 sm:translate-x-0 sm:border-0 sm:bg-transparent sm:p-0">
       <!-- 모바일 드로어 헤더: 로고 + 닫기(X) 버튼 -->
       <div class="mb-4 flex items-center justify-between sm:hidden">
@@ -299,7 +299,7 @@ const FLASH_MESSAGES = {
   paid: "입금이 반영되었습니다.",
   tested: "테스트 알림을 보냈습니다 — 채널을 확인하세요.",
   last_chief: "치프 엔지니어는 최소 1명 있어야 합니다 — 마지막 치프는 스태프·대표로 바꿀 수 없습니다.",
-  drive_done: "로컬 파일을 Google Drive로 이관했습니다.",
+  drive_done: "로컬 파일을 구글 Drive로 이관했습니다.",
   drive_partial: "일부 파일을 Drive로 이관했습니다 — 실패분은 로컬에 남아 있습니다(로그 확인).",
   drive_unlinked: "구글 Drive 연동이 필요합니다 — 구글 계정 연동 후 다시 시도하세요.",
   added_cal_off: "추가됨 · 구글 캘린더 자동 연동 안 됨 (관리 › 환경설정 › 스튜디오 캘린더 확인)",

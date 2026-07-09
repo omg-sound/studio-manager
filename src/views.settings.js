@@ -30,7 +30,7 @@ const { getState } = require("./db");
 
 const RATE_KIND_LABELS = { recording: "녹음", filming: "촬영", performance: "공연" };
 
-// 환경설정 그룹 카드 안의 섹션 블록(2026-07-09 사용자 요청 '스튜디오 운영·Google 연동이 자리를 너무 차지' —
+// 환경설정 그룹 카드 안의 섹션 블록(2026-07-09 사용자 요청 '스튜디오 운영·구글 연동이 자리를 너무 차지' —
 // 섹션마다 .card 하나씩(p-5 × N)이던 것을 그룹당 카드 1개 + border-t 구분으로 압축, 제목도 text-lg→text-sm).
 const SETTING_BLOCK = "space-y-3 border-t border-border pt-4 mt-4 first:mt-0 first:border-t-0 first:pt-0";
 
@@ -65,7 +65,7 @@ function peopleTab(currentUser) {
     ? `<form method="post" action="/settings/users" class="space-y-2">
           <div class="grid gap-2 sm:grid-cols-2">
             <input class="input" name="user_name" placeholder="이름 (작업 담당자 표시명)" autocomplete="off" />
-            <input class="input" type="email" name="email" placeholder="Google 이메일" required />
+            <input class="input" type="email" name="email" placeholder="구글 이메일" required />
           </div>
           <div class="flex gap-2">
             <select class="input" name="role">
@@ -79,7 +79,7 @@ function peopleTab(currentUser) {
       <section class="card space-y-4">
         <div>
           <h2 class="font-display text-lg font-semibold">하우스 엔지니어 <span class="text-sm font-normal text-muted">(로그인 계정)</span></h2>
-          ${explain(`등록한 Google 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.`)}
+          ${explain(`등록한 구글 계정만 로그인할 수 있고, <span class="text-fg">작업 담당자에 자동으로 포함</span>됩니다. 치프는 전체, 스태프는 프로젝트·작업·자료까지.`)}
         </div>
         ${addForm}
         <div class="space-y-2">${userRows}</div>
@@ -230,7 +230,7 @@ function driveStorageSection() {
   } else if (linked) {
     const acct = drive.getDriveAccountEmail();
     const mismatch = acct && acct !== studioAcct;
-    status = `<p class="text-sm"><span class="badge badge-success">연동됨</span> 첨부 서류·자료 전달 파일이 <span class="font-medium">Google Drive</span> 앱 전용 폴더에 저장됩니다.${acct ? ` <span class="text-muted">· 계정 <span class="font-medium text-fg">${esc(acct)}</span></span>` : ""}</p>
+    status = `<p class="text-sm"><span class="badge badge-success">연동됨</span> 첨부 서류·자료 전달 파일이 <span class="font-medium">구글 Drive</span> 앱 전용 폴더에 저장됩니다.${acct ? ` <span class="text-muted">· 계정 <span class="font-medium text-fg">${esc(acct)}</span></span>` : ""}</p>
       ${mismatch
         ? `<p class="text-xs text-danger">⚠️ 현재 <span class="font-medium">${esc(acct)}</span>에 연결돼 있습니다. 자료 저장 계정은 <span class="font-medium">${esc(studioAcct)}</span>로 고정입니다 — 그 계정으로 로그인해 Drive를 다시 연결하세요.</p>`
         : `<p class="text-xs text-muted">자료 저장 계정은 <span class="text-fg">${esc(studioAcct)}</span> <span class="text-fg">한 곳</span>으로 고정입니다. 치프가 바뀌어도 이 계정 Drive에만 저장됩니다.</p>`}`;
@@ -239,7 +239,7 @@ function driveStorageSection() {
   }
   const driveN = linked ? driveFileCount() : 0;
   const migrate = linked && localN > 0
-    ? `<form method="post" action="/settings/migrate-drive" data-confirm="로컬에 저장된 파일 ${localN}개를 Google Drive로 이관할까요? 업로드 성공 시 로컬 원본은 삭제됩니다."><button class="btn-primary btn-sm" type="submit">로컬 파일 ${localN}개 → Drive 이관</button></form>`
+    ? `<form method="post" action="/settings/migrate-drive" data-confirm="로컬에 저장된 파일 ${localN}개를 구글 Drive로 이관할까요? 업로드 성공 시 로컬 원본은 삭제됩니다."><button class="btn-primary btn-sm" type="submit">로컬 파일 ${localN}개 → Drive 이관</button></form>`
     : linked
       ? `<p class="text-xs text-muted">로컬에 남은 파일이 없습니다 · Drive 저장 ${driveN}개.</p>`
       : "";
@@ -597,7 +597,7 @@ function taskTypeRow(t) {
 }
 
 /**
- * Google 연락처 동기화 섹션(환경설정, 2026-07-09 사용자 요청) — 미연동 연락처 일괄 내보내기.
+ * 구글 연락처 동기화 섹션(환경설정, 2026-07-09 사용자 요청) — 미연동 연락처 일괄 내보내기.
  * People 푸시가 죽어 있던 기간(party 리네임 회귀, 2026-07-09 수정) + 연동 이전 생성분은 구글 주소록에 없음.
  * 개별 수정 시 자동 생성되지만(contacts.routes 폴백), 한 번에 올리는 버튼을 제공. 버튼=치프 전용(연락처 권한 재로그인 필요할 수 있음).
  */
@@ -616,7 +616,7 @@ function googleContactsSection(chief) {
   return `
   <div class="${SETTING_BLOCK}">
     <div>
-      <h2 class="text-sm font-semibold">Google 연락처</h2>
+      <h2 class="text-sm font-semibold">구글 연락처</h2>
       ${explain(`앱에서 연락처를 만들거나 수정하면 구글 주소록에 자동 반영(push)됩니다. 아래 버튼은 아직 구글에 없는 기존 연락처를 한 번에 내보내는 1회성 작업입니다. 실패분은 서버 로그([people])에 남습니다.`)}
     </div>
     ${status}
@@ -651,7 +651,7 @@ function systemWarnings() {
   const b = lastBackupInfo();
   if (!b.latest) warns.push("DB 백업 파일이 없습니다 — 일일 백업(cron)이 아직 안 돌았거나 실패 중입니다.");
   else if (Date.now() - b.latest.mtimeMs > 26 * 3600 * 1000) warns.push(`마지막 DB 백업이 ${Math.floor((Date.now() - b.latest.mtimeMs) / 3600000)}시간 전입니다 — 일일 cron 실패 여부를 확인하세요.`);
-  if (config.googleConfigured && !drive.isLinked()) warns.push("Google Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
+  if (config.googleConfigured && !drive.isLinked()) warns.push("구글 Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
   if (!getState("studio_calendar_id")) warns.push("스튜디오 캘린더 미설정 — 세션의 구글 캘린더 자동 연동이 꺼져 있습니다.");
   return warns;
 }

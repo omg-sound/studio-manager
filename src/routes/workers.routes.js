@@ -115,7 +115,7 @@ router.get("/", requireInvoice, (req, res) => {
                 <div class="flex items-center justify-between gap-2">
                   <span class="text-muted">미지급 <b class="text-danger">${formatKRW(unpaidAmt)}</b> (${unpaidCount}건)</span>
                   <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaidCount}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요? (원천세 3.3% ${esc(formatKRW(wh.total))} 제외 시 실지급 ${esc(formatKRW(wh.net))})">
-                    <button class="btn-ghost btn-xs text-primary" type="submit">지급처리</button>
+                    <button class="btn-ghost btn-xs text-primary" type="submit">지급 처리</button>
                   </form>
                 </div>
                 ${wh.total ? `<div class="mt-0.5 text-xs text-muted">원천세 3.3% −${formatKRW(wh.total)} → 실지급 <b class="text-fg">${formatKRW(wh.net)}</b></div>` : ""}
@@ -294,7 +294,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
                 <input type="hidden" name="return" value="detail" />
                 <label class="text-xs text-muted" for="payall-date">지급일</label>
                 <input id="payall-date" class="input w-36 py-1 text-xs" type="date" name="paid_on" value="${todayYmd()}" />
-                <button class="btn-ghost btn-xs text-primary" type="submit">전부 지급처리</button>
+                <button class="btn-ghost btn-xs text-primary" type="submit">전부 지급 처리</button>
               </form>
             </div>
             <div class="space-y-2">${unpaidItems.map(payRow).join("")}</div>
@@ -484,7 +484,7 @@ router.post("/:id/files/:kind", requireChief, upload.single("file"), asyncHandle
   } catch (e) {
     console.error("[worker file upload]", e);
     const msg = e && e.code === "DRIVE_UPLOAD_FAILED"
-      ? "Google Drive 업로드에 실패했습니다 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하세요."
+      ? "구글 Drive 업로드에 실패했습니다 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하세요."
       : "업로드에 실패했습니다.";
     res.redirect(`/workers/${id}?ferr=${encodeURIComponent(msg)}`);
   } finally {

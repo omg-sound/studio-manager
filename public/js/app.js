@@ -455,7 +455,7 @@
   form.addEventListener("submit", function (e) {
     if (!overrideField) return;
     if (overlapDetected()) {
-      if (!window.confirm("이미 스케쥴이 있습니다. 그래도 등록하시겠습니까?")) {
+      if (!window.confirm("이미 예약된 일정이 있습니다. 그래도 등록할까요?")) {
         e.preventDefault();
         return;
       }

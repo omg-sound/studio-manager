@@ -81,10 +81,10 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
   else if (tab === "system") tabContent = systemTab(isChief(req.user));
   else {
     // 환경설정 = 성격별 4그룹(2026-07-09 관리 개선 — 8개 섹션 한 줄 스크롤이라 찾기 어렵던 것):
-    // 스튜디오 운영 / Google 연동 / 문서·청구 / 알림. 상단 앵커 네비로 점프.
+    // 스튜디오 운영 / 구글 연동 / 문서·청구 / 알림. 상단 앵커 네비로 점프.
     const groups = [
       { id: "ops", label: "스튜디오 운영", html: roomsSection() + studioHoursSection() + defaultBookerSection() },
-      { id: "google", label: "Google 연동", html: (await studioCalendarSection()) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
+      { id: "google", label: "구글 연동", html: (await studioCalendarSection()) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
       { id: "docs", label: "문서 · 청구", html: studioInfoSection() },
       { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) },
     ];
@@ -170,12 +170,12 @@ router.get("/drive-check", requireStaff, asyncHandler(async (req, res) => {
       <p class="text-xs text-muted">Drive 권한이 만료됐을 수 있습니다 — <a class="text-primary hover:underline" href="/auth/google">구글 계정 재연동</a> 후 다시 시도하세요.</p></div>`;
   }
   const body = `
-    ${pageHeader({ title: "Drive 폴더 점검", desc: "첨부·자료 파일이 저장되는 실제 Google Drive 폴더", back: { href: "/settings?tab=settings", label: "관리" } })}
+    ${pageHeader({ title: "Drive 폴더 점검", desc: "첨부·자료 파일이 저장되는 실제 구글 Drive 폴더", back: { href: "/settings?tab=settings", label: "관리" } })}
     ${card}`;
   res.send(layout({ title: "Drive 폴더 점검", user: req.user, current: "/settings", body }));
 }));
 
-// 로컬 저장 파일(client_files·deliverables)을 Google Drive로 이관. Drive 연동 필요.
+// 로컬 저장 파일(client_files·deliverables)을 구글 Drive로 이관. Drive 연동 필요.
 router.post("/migrate-drive", requireStaff, asyncHandler(async (req, res) => {
   const r = await migrateLocalFilesToDrive();
   if (!r.ok) return res.redirect("/settings?tab=settings&flash=drive_unlinked");
@@ -441,12 +441,12 @@ router.post("/task-types/:id/delete", requireStaff, (req, res) => {
   res.redirect("/settings?tab=content&flash=deleted");
 });
 
-// ── Google 연락처 일괄 내보내기(치프) ── 미연동(google_resource_name NULL) 연락처를 구글 주소록에 push(1회성, 2026-07-09 사용자 요청).
+// ── 구글 연락처 일괄 내보내기(치프) ── 미연동(google_resource_name NULL) 연락처를 구글 주소록에 push(1회성, 2026-07-09 사용자 요청).
 // 실패해도 계속(건별 fail-safe — people.createPerson이 null 반환·[people] 로그), 성공분만 resourceName/etag 기록. 재실행 멱등(연동분은 대상 제외).
 router.post("/push-contacts", requireChief, asyncHandler(async (req, res) => {
   const people = require("../people");
   if (!people.peopleClient()) {
-    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("Google 연락처 미연동 — 치프 계정으로 재로그인(연락처 권한 동의) 후 다시 시도하세요.") + "&notice_warn=1");
+    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("구글 연락처 미연동 — 치프 계정으로 재로그인(연락처 권한 동의) 후 다시 시도하세요.") + "&notice_warn=1");
   }
   const rows = db().prepare("SELECT id FROM parties WHERE kind='person' AND google_resource_name IS NULL ORDER BY id").all();
   let ok = 0, fail = 0;

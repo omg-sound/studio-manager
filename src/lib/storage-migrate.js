@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * 로컬 디스크에 저장된 첨부(client_files)·자료(deliverables) 파일을 Google Drive로 이관.
+ * 로컬 디스크에 저장된 첨부(client_files)·자료(deliverables) 파일을 구글 Drive로 이관.
  * - Drive 미연동이면 아무것도 안 함(에러 반환). 연동 상태(drive.file scope + refresh token) 필요.
  * - 파일별 격리: 한 건 실패해도 나머지는 계속(실패 목록 반환). 성공 시 로컬 파일 삭제.
  * - storage_backend='local' 행만 대상. Drive 업로드 성공 후에만 DB를 drive로 갱신(부분 실패 안전).

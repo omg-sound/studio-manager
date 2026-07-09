@@ -390,7 +390,7 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
   } catch (e) {
     console.error("[client file upload]", e);
     const msg = e && e.code === "DRIVE_UPLOAD_FAILED"
-      ? "Google Drive 업로드에 실패했습니다 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하거나 관리 › 환경설정 › 자료 저장에서 Drive 연동을 확인하세요."
+      ? "구글 Drive 업로드에 실패했습니다 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하거나 관리 › 환경설정 › 자료 저장에서 Drive 연동을 확인하세요."
       : "업로드에 실패했습니다.";
     res.redirect(`/clients/${id}?ferr=${encodeURIComponent(msg)}`);
   } finally {

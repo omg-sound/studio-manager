@@ -38,12 +38,12 @@ const router = express.Router();
 // 연락처(클라이언트 측 담당자) 라우트는 편집자(치프·스태프) 전용 — 대표 차단
 router.use(requireEditor);
 
-// ── Google 연락처 역방향 동기화(수동 트리거) ──
+// ── 구글 연락처 역방향 동기화(수동 트리거) ──
 router.post("/sync", asyncHandler(async (req, res) => {
   const r = await people.syncFromGoogle();
   let notice, warn = false;
   if (r.skipped) {
-    notice = "미연동(Google 계정 연결 후 재시도)"; warn = true;
+    notice = "미연동(구글 계정 연결 후 재시도)"; warn = true;
   } else if (r.error) {
     notice = `동기화 오류: ${r.error}`; warn = true;
   } else {
@@ -452,7 +452,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div><label class="label">휴대전화</label><input class="input" name="phone" autocomplete="off" value="${esc(c.phone || "")}" placeholder="010-0000-0000" /></div>
+        <div><label class="label">전화</label><input class="input" name="phone" autocomplete="off" value="${esc(c.phone || "")}" placeholder="010-0000-0000" /></div>
         <div>
           <label class="label">이메일${isHouseEngineer ? ` <span class="font-normal text-muted">(로그인 계정)</span>` : ""}</label>
           <input class="input${isHouseEngineer ? " opacity-60 cursor-not-allowed" : ""}" type="email" name="email" value="${esc(c.email || "")}"${isHouseEngineer ? ' readonly aria-readonly="true"' : ""} />
