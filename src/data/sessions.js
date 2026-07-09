@@ -224,9 +224,9 @@ function listSessionPayoutsForWorker(worker) {
 }
 
 /** 외주 세션 지급 처리/해제(정산) — track_tasks의 setTaskPayout과 동일 규칙. */
-function setSessionEngineerPayout(sessionId, managerId, paid) {
+function setSessionEngineerPayout(sessionId, managerId, paid, paidOn) {
   const p = paid ? 1 : 0;
-  db().prepare("UPDATE session_engineers SET worker_paid = ?, worker_paid_date = ? WHERE session_id = ? AND manager_id = ?").run(p, p ? todayYmd() : null, Number(sessionId), Number(managerId));
+  db().prepare("UPDATE session_engineers SET worker_paid = ?, worker_paid_date = ? WHERE session_id = ? AND manager_id = ?").run(p, p ? (paidOn || todayYmd()) : null, Number(sessionId), Number(managerId));
 }
 
 /** 세션 캘린더 참석자 이메일 — 프로젝트 매니저(project.manager_id)·예약담당자(booker_name)·담당엔지니어(전원, 다대다)의 이메일(중복·빈값 제거). */

@@ -591,22 +591,27 @@ function listTasksForWorker(worker) {
  */
 function listSessionsForWorker(worker) {
   if (!worker) return [];
+  // my_assigned·my_rate(2026-07-09 점검): 본인 배정 여부와 지급단가 — 외주가 배정됐는데 단가 0이면
+  // 정산 목록(listSessionPayoutsForWorker는 배정분 전체를 반환하나 단가 0이면 지급할 금액이 없음)에서
+  // 조용히 누락되므로 참여 내역에서 '지급단가 미입력' 경고를 띄우기 위한 필드.
   return db()
     .prepare(
-      `SELECT DISTINCT s.*, p.id AS project_id, p.title AS project_title
+      `SELECT DISTINCT s.*, p.id AS project_id, p.title AS project_title,
+              (se.manager_id IS NOT NULL) AS my_assigned, COALESCE(se.worker_rate, 0) AS my_rate
        FROM sessions s
        JOIN projects p ON p.id = s.project_id
-       WHERE s.id IN (SELECT session_id FROM session_engineers WHERE manager_id = @id)
+       LEFT JOIN session_engineers se ON se.session_id = s.id AND se.manager_id = @id
+       WHERE se.manager_id IS NOT NULL
           OR s.engineer_name = @name
        ORDER BY s.session_date DESC, s.id DESC`
     )
     .all({ id: worker.id, name: worker.name });
 }
 
-/** 외주 작업 지급 처리/해제(정산). */
-function setTaskPayout(taskId, paid) {
+/** 외주 작업 지급 처리/해제(정산). paidOn(YYYY-MM-DD)을 주면 그 날짜로 소급 기록(일괄 지급의 실제 이체일, 2026-07-09). */
+function setTaskPayout(taskId, paid, paidOn) {
   const p = paid ? 1 : 0;
-  db().prepare("UPDATE track_tasks SET worker_paid = ?, worker_paid_date = ? WHERE id = ?").run(p, p ? todayYmd() : null, Number(taskId));
+  db().prepare("UPDATE track_tasks SET worker_paid = ?, worker_paid_date = ? WHERE id = ?").run(p, p ? (paidOn || todayYmd()) : null, Number(taskId));
 }
 
 // ── UI 편의 조회(연락처=사람 뷰, 클라이언트=업체·아티스트 뷰) ──

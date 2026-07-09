@@ -12,9 +12,9 @@ const {
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
-const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage, copyable, dirtyActionRow } = require("../views");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
-const { formatYmdShort } = require("../lib/date");
+const { formatYmdShort, todayYmd, isValidYmd } = require("../lib/date");
 const { withholding33 } = require("../lib/tax"); // 외주 원천징수 3.3% 표시(2026-07-09 사용자 요청)
 
 const router = express.Router();
@@ -222,64 +222,105 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
     if (!tasks.length && !sessionPayouts.length) {
       content = emptyState("담당한 작업·세션 정산 대상이 없습니다.", { card: true });
     } else {
-      // 정산 합계 = 작업(worker_rate) + 세션(worker_rate) 통합. 고객청구(total_price)는 작업만 마진 가시화용 참고 표기.
-      const taskPayTotal = tasks.reduce((s, t) => s + (t.worker_rate || 0), 0);
-      const taskPaid = tasks.filter((t) => t.worker_paid).reduce((s, t) => s + (t.worker_rate || 0), 0);
-      const sessPayTotal = sessionPayouts.reduce((s, x) => s + (x.worker_rate || 0), 0);
-      const sessPaid = sessionPayouts.filter((x) => x.worker_paid).reduce((s, x) => s + (x.worker_rate || 0), 0);
-      const payTotal = taskPayTotal + sessPayTotal;
-      const paid = taskPaid + sessPaid;
-      const unpaid = payTotal - paid;
-      const clientTotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0);
+      // 정산 재구성(2026-07-09 점검): ①이체 정보 ②합계 ③미지급(위·일괄 지급+지급일 소급) ④지급완료(지급월별 그룹 — 원천세 신고는 지급월 기준).
+      // 작업·세션을 공통 아이템으로 통합해 한 목록에서 다룬다(worker_rate 기준, 고객청구는 작업만 참고 표기).
+      const payItems = [
+        ...tasks.map((t) => ({ kind: "task", id: t.id, label: taskTypeLabel(t.task_type), metaHtml: taskMeta(t), rate: t.worker_rate || 0, paid: !!t.worker_paid, paidDate: t.worker_paid_date || "", clientPrice: t.total_price || 0, sortDate: String(t.created_at || "").slice(0, 10) })),
+        ...sessionPayouts.map((x) => ({ kind: "session", id: x.session_id, label: `${x.session_type || "녹음"} 세션`, metaHtml: `<span class="text-xs text-muted"> · ${esc(x.project_title)} / ${esc(formatYmdShort(x.session_date))}</span>`, rate: x.worker_rate || 0, paid: !!x.worker_paid, paidDate: x.worker_paid_date || "", clientPrice: 0, sortDate: x.session_date || "" })),
+      ];
+      const payTotal = payItems.reduce((s2, x) => s2 + x.rate, 0);
+      const paidTotal = payItems.filter((x) => x.paid).reduce((s2, x) => s2 + x.rate, 0);
+      const unpaid = payTotal - paidTotal;
+      const clientTotal = tasks.reduce((s2, t) => s2 + (t.total_price || 0), 0);
       // 원천징수 3.3%(개인 사업소득 기준·표시 참고용 — 소액부징수·사업자 외주 예외 미반영, lib/tax)
       const whUnpaid = withholding33(unpaid);
+
+      // ① 이체 정보 — 지급 실행 순간에 계좌를 바로 복사(2026-07-09 점검: '정보 수정' 폼 안에만 있어 이체 시 안 보이던 것).
+      const acctNo = decrypt(w.account_number) || "";
+      const transferCard = (w.bank_name || acctNo || w.account_holder)
+        ? `<div class="card mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span class="text-xs font-medium text-muted">이체 정보</span>
+            ${w.bank_name ? `<span>${esc(w.bank_name)}</span>` : ""}
+            ${acctNo ? `<span>${copyable(acctNo, { cls: "tabular font-medium" })}</span>` : ""}
+            ${w.account_holder ? `<span class="text-muted">예금주 ${copyable(w.account_holder)}</span>` : ""}
+          </div>`
+        : `<div class="card mb-3 text-sm text-muted"><span class="badge badge-warning mr-2">정산 정보 미입력</span>은행·계좌번호가 없습니다${isChief(req.user) ? ` — 위 '정보 수정'에서 입력하세요` : ""}.</div>`;
+
       const whLine = unpaid > 0
         ? `<div class="mt-1 w-full border-t border-border pt-1.5 text-xs text-muted">미지급 기준 원천징수 3.3%(소득세 ${formatKRW(whUnpaid.incomeTax)} + 지방소득세 ${formatKRW(whUnpaid.localTax)}) = <b class="text-fg">−${formatKRW(whUnpaid.total)}</b> → 실지급 <b class="text-fg">${formatKRW(whUnpaid.net)}</b> <span class="opacity-80">· 개인(사업소득) 기준, 사업자 외주(세금계산서)는 원천징수 없음</span></div>`
         : "";
       const summary = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
           <span>지급 합계 <b class="text-fg">${formatKRW(payTotal)}</b></span>
-          <span>지급완료 <b class="text-success">${formatKRW(paid)}</b></span>
+          <span>지급완료 <b class="text-success">${formatKRW(paidTotal)}</b></span>
           <span>미지급 <b class="${unpaid > 0 ? "text-danger" : "text-fg"}">${formatKRW(unpaid)}</b></span>
           <span class="text-muted">고객청구 ${formatKRW(clientTotal)} (참고)</span>
           ${whLine}
         </div>`;
-      const taskRows = tasks
-        .map(
-          (t) => `
+
+      // 단가 0 미지급 = '단가 미입력'(지급할 금액이 없어 일괄 지급에서도 제외됨) — 배지로 구분하고 지급 버튼 대신 입력 안내(2026-07-09).
+      const payRow = (x) => `
           <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5">
             <div class="min-w-0 text-sm">
-              <span class="font-medium">${esc(taskTypeLabel(t.task_type))}</span>${taskMeta(t)}
-              ${t.worker_paid ? `<span class="badge ml-1 bg-success/10 text-success">지급완료 ${esc(t.worker_paid_date || "")}</span>` : `<span class="badge ml-1 bg-warning/10 text-warning">미지급</span>`}
+              <span class="font-medium">${esc(x.label)}</span>${x.metaHtml}
+              ${x.paid ? `<span class="badge ml-1 bg-success/10 text-success">지급완료 ${esc(x.paidDate)}</span>` : x.rate > 0 ? `<span class="badge ml-1 bg-warning/10 text-warning">미지급</span>` : `<span class="badge ml-1 bg-warning/10 text-warning" title="${x.kind === "task" ? "작업 편집에서 외주 지급단가를 입력해야 지급할 수 있습니다" : "세션 편집에서 이 작업자의 지급단가를 입력해야 지급할 수 있습니다"}">단가 미입력</span>`}
             </div>
             <div class="flex shrink-0 items-center gap-2">
-              <span class="text-sm font-semibold">${formatKRW(t.worker_rate || 0)}</span>
-              ${t.total_price ? `<span class="text-xs text-muted">/ 고객 ${formatKRW(t.total_price)}</span>` : ""}
-              <form method="post" action="/workers/${w.id}/payout/${t.id}">
-                <button class="btn-ghost btn-xs ${t.worker_paid ? "text-muted" : "text-primary"}" type="submit">${t.worker_paid ? "지급 취소" : "지급 처리"}</button>
+              <span class="text-sm font-semibold">${formatKRW(x.rate)}</span>
+              ${x.clientPrice ? `<span class="text-xs text-muted">/ 고객 ${formatKRW(x.clientPrice)}</span>` : ""}
+              ${x.paid || x.rate > 0 ? `<form method="post" action="${x.kind === "task" ? `/workers/${w.id}/payout/${x.id}` : `/workers/${w.id}/session-payout/${x.id}`}">
+                <button class="btn-ghost btn-xs ${x.paid ? "text-muted" : "text-primary"}" type="submit">${x.paid ? "지급 취소" : "지급 처리"}</button>
+              </form>` : ""}
+            </div>
+          </div>`;
+
+      // ③ 미지급(위) — 최근 일자순. [전부 지급처리]에 지급일 입력(실제 이체일 소급 기록 가능).
+      const unpaidItems = payItems.filter((x) => !x.paid).sort((a, b) => (b.sortDate || "").localeCompare(a.sortDate || ""));
+      const payableCnt = unpaidItems.filter((x) => x.rate > 0).length;
+      const noRateCnt = unpaidItems.length - payableCnt;
+      const unpaidSection = unpaidItems.length
+        ? `<div class="mb-4">
+            <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <div class="text-xs font-medium text-muted">미지급 ${payableCnt}건 · ${formatKRW(unpaid)} <span class="font-normal">(실지급 ${formatKRW(whUnpaid.net)})</span>${noRateCnt ? ` <span class="font-normal text-warning">· 단가 미입력 ${noRateCnt}건</span>` : ""}</div>
+              <form method="post" action="/workers/${w.id}/payout-all" class="flex flex-wrap items-center gap-1.5" data-confirm="미지급 ${payableCnt}건 · ${esc(formatKRW(unpaid))}을 전부 지급 처리할까요? (원천세 3.3% 제외 실지급 ${esc(formatKRW(whUnpaid.net))})">
+                <input type="hidden" name="return" value="detail" />
+                <label class="text-xs text-muted" for="payall-date">지급일</label>
+                <input id="payall-date" class="input w-36 py-1 text-xs" type="date" name="paid_on" value="${todayYmd()}" />
+                <button class="btn-ghost btn-xs text-primary" type="submit">전부 지급처리</button>
               </form>
             </div>
+            <div class="space-y-2">${unpaidItems.map(payRow).join("")}</div>
           </div>`
-        )
+        : `<div class="mb-4 rounded-lg border border-border bg-surface p-3 text-sm text-muted">미지급 항목이 없습니다 — 전부 정산 완료.</div>`;
+
+      // ④ 지급완료 — 지급월별 그룹(최근 달만 펼침). 월 합계에 원천세·실지급(신고 시 그대로 옮겨 적는 용도).
+      const paidItems = payItems.filter((x) => x.paid);
+      const byMonth = new Map();
+      for (const x of paidItems) {
+        const key = (x.paidDate || "").slice(0, 7) || "날짜 미상";
+        if (!byMonth.has(key)) byMonth.set(key, []);
+        byMonth.get(key).push(x);
+      }
+      const months = [...byMonth.keys()].sort().reverse();
+      const paidSection = months
+        .map((m, i) => {
+          const items = byMonth.get(m).sort((a, b) => (b.paidDate || "").localeCompare(a.paidDate || ""));
+          const sum = items.reduce((s2, x) => s2 + x.rate, 0);
+          const whM = withholding33(sum);
+          const label = m === "날짜 미상" ? m : `${m.slice(0, 4)}년 ${Number(m.slice(5, 7))}월`;
+          return `<details class="group rounded-lg border border-border"${i === 0 ? " open" : ""}>
+            <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span class="font-medium">${esc(label)} 지급 <span class="text-xs font-normal text-muted">${items.length}건</span></span>
+              <span class="text-xs text-muted">지급 <b class="text-fg">${formatKRW(sum)}</b> · 원천세 −${formatKRW(whM.total)} · 실지급 <b class="text-fg">${formatKRW(whM.net)}</b></span>
+            </summary>
+            <div class="space-y-2 border-t border-border p-2">${items.map(payRow).join("")}</div>
+          </details>`;
+        })
         .join("");
-      // 세션 정산 행(2026-07-06 신설) — 작업 행과 동일 톤, 라벨만 세션 종류+날짜.
-      const sessionRows = sessionPayouts
-        .map(
-          (s) => `
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5">
-            <div class="min-w-0 text-sm">
-              <span class="font-medium">${esc(s.session_type || "녹음")} 세션</span><span class="text-xs text-muted"> · ${esc(s.project_title)} / ${esc(formatYmdShort(s.session_date))}</span>
-              ${s.worker_paid ? `<span class="badge ml-1 bg-success/10 text-success">지급완료 ${esc(s.worker_paid_date || "")}</span>` : `<span class="badge ml-1 bg-warning/10 text-warning">미지급</span>`}
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <span class="text-sm font-semibold">${formatKRW(s.worker_rate || 0)}</span>
-              <form method="post" action="/workers/${w.id}/session-payout/${s.session_id}">
-                <button class="btn-ghost btn-xs ${s.worker_paid ? "text-muted" : "text-primary"}" type="submit">${s.worker_paid ? "지급 취소" : "지급 처리"}</button>
-              </form>
-            </div>
-          </div>`
-        )
-        .join("");
-      content = summary + `<div class="space-y-2">${taskRows}${sessionRows}</div>`;
+      const paidBlock = paidItems.length
+        ? `<div><div class="mb-1.5 text-xs font-medium text-muted">지급완료 — 지급월별 <span class="font-normal">(원천세 신고는 지급한 달 기준)</span></div><div class="space-y-2">${paidSection}</div></div>`
+        : "";
+
+      content = transferCard + summary + unpaidSection + paidBlock;
     }
   } else if (!tasks.length && !sessions.length) {
     content = emptyState("담당한 작업·세션이 없습니다.", { card: true });
@@ -302,7 +343,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
         (s) => `
         <a href="/projects/${s.project_id}?tab=sessions" class="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5 hover:opacity-80">
           <div class="min-w-0 text-sm"><span class="font-medium">${esc(s.session_type || "녹음")} 세션</span> <span class="text-xs text-muted">· ${esc(s.project_title)} · ${esc(formatYmdShort(s.session_date))}</span></div>
-          <span class="badge shrink-0 ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>
+          <span class="flex shrink-0 items-center gap-1">${s.my_assigned && !(s.my_rate > 0) ? `<span class="badge bg-warning/10 text-warning" title="세션 편집에서 이 작업자의 지급단가를 입력해야 정산 대상이 됩니다">지급단가 미입력</span>` : ""}<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span></span>
         </a>`
       )
       .join("");
@@ -311,10 +352,14 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
     content = taskSection + sessionSection;
   }
 
+  // 삭제 경고용 미지급 합계(작업+세션) — 하드 삭제 정책은 유지하되 실수 방지 문구(2026-07-09 점검).
+  const unpaidForDelete = tasks.filter((t) => !t.worker_paid && t.worker_rate > 0).reduce((s2, t) => s2 + t.worker_rate, 0)
+    + sessionPayouts.filter((x) => !x.worker_paid && x.worker_rate > 0).reduce((s2, x) => s2 + x.worker_rate, 0);
+
   const editForm = isChief(req.user)
     ? `<details class="card mb-3">
         <summary class="cursor-pointer text-sm font-medium text-muted hover:text-fg">정보 수정 (이름 · 전화 · 이메일 · 정산 정보)</summary>
-        <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3">
+        <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3" data-dirty-form>
           <input class="input py-1.5 text-sm" name="worker_name" value="${esc(w.name || "")}" placeholder="이름" autocomplete="off" required />
           <input class="input py-1.5 text-sm" name="email" value="${esc(w.email || "")}" placeholder="이메일" />
           <input class="input py-1.5 text-sm" name="phone" autocomplete="off" value="${esc(w.phone || "")}" placeholder="전화" />
@@ -323,7 +368,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
           <input class="input py-1.5 text-sm" name="account_number" value="${esc(decrypt(w.account_number) || "")}" placeholder="계좌번호" autocomplete="off" />
           <input class="input py-1.5 text-sm" name="account_holder" value="${esc(w.account_holder || "")}" placeholder="입금자명(예금주)" autocomplete="off" />
           ${explain(`주민등록번호·계좌번호는 암호화해 저장됩니다. 정산(지급) 시 참고용 — 세금신고·이체에 사용하세요.`)}
-          <button class="btn-primary btn-sm sm:col-span-3" type="submit">저장</button>
+          <div class="sm:col-span-3">${dirtyActionRow({ saveLabel: "저장" })}</div>
         </form>
       </details>`
     : "";
@@ -344,7 +389,8 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
+    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?${unpaidForDelete > 0 ? esc(` ⚠️ 미지급 ${formatKRW(unpaidForDelete)} 기록이 함께 사라집니다.`) : ""}"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
+    ${w.party_id ? `<div class="-mt-3 mb-3 text-sm"><span class="text-muted">연락처로 보기</span> <a href="/contacts/${w.party_id}" class="text-primary hover:underline">${esc(w.name)} ↗</a></div>` : ""}
     ${editForm}
     ${filesBlock}
     ${tabBarHtml}
@@ -378,10 +424,14 @@ router.post("/:id/session-payout/:sessionId", requireInvoice, (req, res) => {
 router.post("/:id/payout-all", requireInvoice, (req, res) => {
   const w = getWorker(Number(req.params.id));
   if (!w) return res.status(404).send("외주 작업자를 찾을 수 없습니다.");
+  // 지급일 소급(2026-07-09): 상세 정산 탭의 일괄 지급 폼이 paid_on(기본 오늘)을 보냄 — 실제 이체일 기록.
+  const paidOn = isValidYmd(String(req.body.paid_on || "")) ? String(req.body.paid_on) : null;
   const tasks = listTasksForWorker(w).filter((t) => !t.worker_paid && t.worker_rate > 0);
-  tasks.forEach((t) => setTaskPayout(t.id, true));
+  tasks.forEach((t) => setTaskPayout(t.id, true, paidOn));
   const sessionPayouts = listSessionPayoutsForWorker(w).filter((s) => !s.worker_paid && s.worker_rate > 0);
-  sessionPayouts.forEach((s) => setSessionEngineerPayout(s.session_id, w.id, true));
+  sessionPayouts.forEach((s) => setSessionEngineerPayout(s.session_id, w.id, true, paidOn));
+  // 상세 정산 탭에서 눌렀으면 그 자리로 복귀(목록 카드의 버튼은 기존대로 목록).
+  if (req.body.return === "detail") return res.redirect(`/workers/${w.id}?tab=payout&flash=saved`);
   res.redirect("/workers?flash=saved");
 });
 
