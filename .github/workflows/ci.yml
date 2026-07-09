@@ -26,6 +26,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 클라이언트 JS 구문 검사(2026-07-09): app.js는 jsdom 테스트가 eval하지만 viewer.js 등
+      # 그 외 파일은 번들러·트랜스파일 없이 그대로 배포되므로 구문 오류가 CI green인 채 나갈 수 있음.
+      - name: Syntax-check client JS
+        run: for f in public/js/*.js; do node --check "$f"; done
+
       # 테스트: 금전 핵심(채번·VAT·Pro단가·세션겹침·권한) 격리 임시 DB. 의존성 0의 node:test.
       - name: Run tests
         run: npm test

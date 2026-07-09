@@ -15,12 +15,10 @@ function db() {
   fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
   const { driver, handle } = openDatabase(config.dbPath);
   _db = handle;
-  try {
-    _db.exec("PRAGMA journal_mode = WAL;");
-    _db.exec("PRAGMA foreign_keys = ON;");
-  } catch (e) {
-    console.warn("[db] PRAGMA 설정 경고:", e.message);
-  }
+  // PRAGMA를 개별 try로 분리(2026-07-09 감사) — WAL 실패가 foreign_keys 설정까지 건너뛰어
+  // FK CASCADE/SET NULL이 조용히 꺼진 채 돌아가는 잠복을 차단.
+  try { _db.exec("PRAGMA journal_mode = WAL;"); } catch (e) { console.warn("[db] WAL 설정 경고:", e.message); }
+  try { _db.exec("PRAGMA foreign_keys = ON;"); } catch (e) { console.warn("[db] foreign_keys 설정 경고:", e.message); }
   if (!db._logged) {
     console.log(`[db] driver=${driver} path=${config.dbPath}`);
     db._logged = true;
@@ -456,6 +454,8 @@ function init() {
   d.exec("CREATE INDEX IF NOT EXISTS idx_affiliations_person ON affiliations(person_id, ended_on);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_affiliations_org ON affiliations(org_id, ended_on);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_invoices_payer ON invoices(payer_id);");
+  d.exec("CREATE INDEX IF NOT EXISTS idx_track_tasks_engineer ON track_tasks(engineer_id, is_invoiced);"); // 외주 정산·매출 집계(2026-07-09 감사) — engineer_id는 addColumn 후행이라 여기서
+  d.exec("CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id);"); // 입금 합계·이력 조회(2026-07-09 감사)
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.

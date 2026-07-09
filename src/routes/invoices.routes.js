@@ -18,13 +18,11 @@ const {
   snapshotPayer,
   payerSnapshotChanged,
   ensureInvoiceNumber,
-  listPayments,
-  addPayment,
-  deletePayment,
+  recomputePaid,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, tabBar, copyable } = require("../views");
 const { invoiceRow, payerInfoCard, taxToggleButtons } = require("../views.invoices");
-const { formatYmdShort } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
+const { formatYmdShort, todayYmd } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { asyncHandler } = require("../lib/async");
 const { renderInvoicePdf } = require("../invoice-pdf");
 
@@ -286,18 +284,27 @@ router.post("/:id/tax-status", requireInvoice, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tax = normalizeTaxStatus(req.body.tax_status);
-  // 입금완료 선택 → 완납. 잔금이 있으면 그만큼 입금 이력 1건 추가(paid_amount는 SUM(payments)로 자동 반영).
-  if (tax === "입금완료") { const bal = balanceOf(inv); if (bal > 0) addPayment(inv.id, { amount: bal, memo: "입금완료 처리" }); }
-  // 입금완료를 되돌리면(잘못 눌렀을 때) 자동 완납으로 넣었던 입금('입금완료 처리')만 제거해 잔금을 복원한다.
-  // 사용자가 직접 기록한 실제 입금 이력은 보존(memo가 다름).
-  else if (inv.tax_status === "입금완료") {
-    listPayments(inv.id).filter((p) => p.memo === "입금완료 처리").forEach((p) => deletePayment(p.id));
-  }
+  // 입금 이력 변경 + tax_status UPDATE + 채번을 **한 트랜잭션**으로(2026-07-09 감사 — 이전엔 addPayment/deletePayment가
+  // 각자 커밋된 뒤 상태 UPDATE가 별도 트랜잭션이라, UPDATE 실패 시 자동 완납 입금만 남는 불일치 틈이 있었음).
+  // addPayment/deletePayment 헬퍼는 자체 BEGIN IMMEDIATE라 중첩 불가 → 같은 로직(INSERT/DELETE + recomputePaid)을 인라인.
   const d = db();
   d.exec("BEGIN IMMEDIATE");
   try {
+    // 입금완료 선택 → 완납. 잔금이 있으면 그만큼 자동 입금 1건(paid_amount는 SUM(payments) 재계산).
+    if (tax === "입금완료") {
+      const bal = balanceOf(inv);
+      if (bal > 0) {
+        d.prepare("INSERT INTO payments (invoice_id, amount, paid_on, memo) VALUES (?, ?, ?, ?)").run(inv.id, bal, todayYmd(), "입금완료 처리");
+        recomputePaid(inv.id);
+      }
+    }
+    // 입금완료 되돌리기 — 자동 완납 입금('입금완료 처리')만 제거해 잔금 복원(사용자 직접 입금 이력은 memo가 달라 보존).
+    else if (inv.tax_status === "입금완료") {
+      d.prepare("DELETE FROM payments WHERE invoice_id = ? AND memo = '입금완료 처리'").run(inv.id);
+      recomputePaid(inv.id);
+    }
     d.prepare("UPDATE invoices SET tax_status=? WHERE id=?").run(tax, inv.id);
-    ensureInvoiceNumber({ ...inv, tax_status: tax }); // 계산서 발행/입금완료면 채번 보장
+    ensureInvoiceNumber({ ...inv, tax_status: tax }); // 계산서 발행/입금완료면 채번 보장(내부 트랜잭션 없음 — 여기 참여)
     d.exec("COMMIT");
   } catch (e) {
     try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }

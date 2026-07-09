@@ -72,9 +72,13 @@ async function createPerson(contact) {
   if (!people) return null;
   try {
     const requestBody = personBodyFromContact(contact);
-    const { data } = await people.people.createPerson({ requestBody });
+    // ⚠️ Google People API 메서드는 createContact(우리 데이터 레이어의 createPerson과 다름) —
+    // 2026-07-09 감사에서 party 모델 리네임 스윕이 이 호출까지 createPerson으로 바꿔 TypeError가
+    // fail-safe catch에 무음 흡수되던 회귀(푸시 전체 무동작) 발견·수정. guardrails.test.js가 메서드 실존을 검사.
+    const { data } = await people.people.createContact({ requestBody });
     return { resourceName: data.resourceName, etag: data.etag };
-  } catch (_e) {
+  } catch (e) {
+    console.warn("[people] createContact 실패:", e && e.message); // fail-safe(연락처 저장은 정상) — 단 무음 금지
     return null;
   }
 }
@@ -90,7 +94,7 @@ async function updatePerson(resourceName, etag, contact) {
 
   async function attempt(currentEtag) {
     const requestBody = { etag: currentEtag, ...personBodyFromContact(contact) };
-    const { data } = await people.people.updateParty({
+    const { data } = await people.people.updateContact({
       resourceName,
       updatePersonFields: "names,nicknames,organizations,phoneNumbers,emailAddresses",
       requestBody,
@@ -107,10 +111,12 @@ async function updatePerson(resourceName, etag, contact) {
       try {
         const { data: meta } = await people.people.get({ resourceName, personFields: "metadata" });
         return await attempt(meta.etag);
-      } catch (_e2) {
+      } catch (e2) {
+        console.warn("[people] updateContact 재시도 실패:", e2 && e2.message);
         return null;
       }
     }
+    console.warn("[people] updateContact 실패:", e && e.message);
     return null;
   }
 }
@@ -120,9 +126,9 @@ async function deletePerson(resourceName) {
   const people = peopleClient();
   if (!people || !resourceName) return;
   try {
-    await people.people.deleteParty({ resourceName });
-  } catch (_e) {
-    // fail-safe
+    await people.people.deleteContact({ resourceName });
+  } catch (e) {
+    console.warn("[people] deleteContact 실패:", e && e.message); // fail-safe — 단 무음 금지
   }
 }
 

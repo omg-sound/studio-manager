@@ -122,35 +122,8 @@
     if (field && field.form) { if (field.form.requestSubmit) field.form.requestSubmit(); else field.form.submit(); }
   });
 
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest && e.target.closest("[data-copy]");
-    if (!btn) return;
-    var text = btn.getAttribute("data-copy");
-    var orig = btn.textContent;
-    function flash() {
-      btn.textContent = "복사됨";
-      setTimeout(function () { btn.textContent = orig; }, 1200);
-    }
-    function legacyCopy() {
-      var t = document.createElement("textarea");
-      t.value = text;
-      t.style.position = "fixed";
-      t.style.opacity = "0";
-      document.body.appendChild(t);
-      t.select();
-      var ok = false;
-      try { ok = document.execCommand("copy"); } catch (err) {}
-      document.body.removeChild(t);
-      if (ok) flash();
-      else { btn.textContent = "복사 실패"; setTimeout(function () { btn.textContent = orig; }, 1500); }
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      // async clipboard 실패(권한·비보안 컨텍스트) 시 조용히 넘어가지 않고 레거시 복사로 폴백.
-      navigator.clipboard.writeText(text).then(flash, legacyCopy);
-    } else {
-      legacyCopy();
-    }
-  });
+  // ([data-copy] 클릭 복사는 상단 토스트 IIFE가 단일 담당 — 2026-07-09 감사: 여기 있던 두 번째 핸들러가
+  //  복사 2회 실행 + 토스트/'복사됨' 이중 피드백을 내던 중복 등록이라 제거.)
 
   document.addEventListener("submit", function (e) {
     var msg = e.target.getAttribute && e.target.getAttribute("data-confirm");

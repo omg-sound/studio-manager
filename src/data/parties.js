@@ -304,9 +304,12 @@ function listProjectsForParty(partyId) {
 
 /** 당사자가 청구처(payer)인 인보이스 전체. */
 function listInvoicesForParty(partyId) {
+  // payer_kind 조인(2026-07-09 감사): 미제공 시 taxDocOf가 항상 '계산서'로 판정해 개인(아티스트) 청구처
+  // 배지가 '현금영수증' 대신 '계산서'로 잘못 표시되던 것 — listInvoices와 동일하게 청구처 kind 반환.
   return db().prepare(
-    `SELECT i.*, p.title AS project_title FROM invoices i
+    `SELECT i.*, p.title AS project_title, c.kind AS payer_kind FROM invoices i
        LEFT JOIN projects p ON p.id = i.project_id
+       LEFT JOIN parties c ON c.id = i.payer_id
       WHERE i.payer_id = ?
       ORDER BY i.created_at DESC, i.id DESC`
   ).all(Number(partyId));

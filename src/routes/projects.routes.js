@@ -443,7 +443,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     // 각 인보이스에 청구 항목을 붙여 청구 탭에서 펼쳐본다(입금·상태·삭제·PDF). 수정은 없음(발행=확정, 변경은 삭제 후 재발행). 프로젝트당 인보이스 소수라 N+1 무해.
     const invoiceRows = inv
       ? inv.rows.map((r) => {
-          const pc = r.client_id ? getParty(r.client_id) : null;
+          const pc = r.payer_id ? getParty(r.payer_id) : null; // 청구처=payer_id(2026-07-09 감사 — 드롭된 레거시 client_id 참조로 카드가 항상 빈 값이던 회귀 수정)
           return {
             ...r,
             items: (listInvoiceItemsForInvoice(req.user, r.id) || {}).rows || [],
