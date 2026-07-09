@@ -73,7 +73,7 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
         <div class="flex-1" data-dropzone>
           <input type="file" name="file" accept="image/png,image/jpeg,application/pdf" class="sr-only" />
           <div class="input flex cursor-pointer select-none items-center py-2 text-sm text-muted" data-dropzone-display tabindex="0" role="button" aria-label="파일 찾기 또는 붙여넣기(Ctrl+V)">
-            <span data-dropzone-label>${existing && ok ? "다른 파일로 교체 — 클릭 또는 붙여넣기(Ctrl+V)" : "클릭해서 파일 찾기 · 또는 붙여넣기(Ctrl+V)"}</span>
+            <span data-dropzone-label>${existing && ok ? "다른 파일로 교체 — 클릭 후 붙여넣기(Ctrl+V) 또는 [파일 찾기]" : "클릭 후 붙여넣기(Ctrl+V) · 파일 선택은 [파일 찾기]"}</span>
           </div>
         </div>
         <button class="btn-ghost shrink-0" type="button" data-dropzone-pick>파일 찾기</button>

@@ -1854,10 +1854,11 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var label = zone.querySelector("[data-dropzone-label]");
     var display = zone.querySelector("[data-dropzone-display]");
 
-    // 클릭 시 파일 선택 대화상자 열기(input 자체 클릭은 무시)
+    // 클릭 = 필드 포커스만(붙여넣기 Ctrl+V 준비) — 파일 선택 대화상자는 [파일 찾기] 버튼 전용
+    // (2026-07-09 사용자 요청: 필드 클릭마다 대화상자가 떠서 붙여넣기 흐름을 방해하던 것. 대화상자는 버튼으로 충분).
     zone.addEventListener("click", function (e) {
       if (e.target === input) return;
-      input.click();
+      if (display && display.focus) display.focus();
     });
 
     // '파일 찾기' 버튼(폼 내부, 드롭존 형제) → 파일 선택 대화상자(윈도우 크롬 등 드래그 안 되는 환경 대안)
