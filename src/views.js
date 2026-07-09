@@ -257,6 +257,17 @@ function layout({ title, user, current = "", body, full = false }) {
       </nav>
       <div class="mt-8 hidden border-t border-border pt-4 text-xs text-muted sm:block">
         <div class="mb-2 px-2">${who}</div>
+        ${user && (user.role === "chief" || user.real_role === "chief")
+          ? `${user.view_as ? `<div class="mb-2 px-2"><span class="badge badge-warning">보기 모드 — 실제 권한은 치프</span></div>` : ""}
+        <form method="post" action="/viewas" class="mb-2 px-2">
+          <label class="mb-1 block text-[11px] text-muted" for="viewas-select">보기 모드 <span class="opacity-70">· 화면만 전환(권한 불변)</span></label>
+          <select id="viewas-select" name="role" class="input py-1 text-xs" data-autosubmit>
+            <option value="chief" ${!user.view_as ? "selected" : ""}>치프 엔지니어</option>
+            <option value="owner" ${user.view_as === "owner" ? "selected" : ""}>대표</option>
+            <option value="staff" ${user.view_as === "staff" ? "selected" : ""}>스태프</option>
+          </select>
+        </form>`
+          : ""}
         <!-- 테마 토글: 마크업만(아이콘+라벨). 토글 로직=app.js([data-theme-toggle]), 다크 분기=src.css. CSP-safe(인라인 onclick 없음). -->
         <button type="button" data-theme-toggle aria-label="테마 전환" class="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 font-medium text-muted transition-colors hover:bg-surface hover:text-fg active:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
           <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/></svg>

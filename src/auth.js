@@ -116,7 +116,13 @@ function syncUserToManager(user) {
 
 // ── 미들웨어 ──
 
-/** 쿠키 검증 → req.user 채움(없으면 null). 비활성 계정은 차단. 라우트를 막지는 않음. */
+// 보기 모드(2026-07-09 사용자 요청) — 치프가 실제 권한 변경 없이 대표/스태프 화면을 미리보는 모드 전환.
+// 쿠키는 평문이어도 안전: attachUser가 **실제 role=chief일 때만** 적용하므로 권한 '축소'만 가능(상승 불가).
+const VIEWAS_COOKIE = "omg_viewas";
+
+/** 쿠키 검증 → req.user 채움(없으면 null). 비활성 계정은 차단. 라우트를 막지는 않음.
+ *  치프 + 보기 모드 쿠키(owner|staff)면 req.user.role을 그 역할로 바꿔 전 화면·게이트가 그 역할로 동작
+ *  (req.user.real_role="chief"·view_as에 원 역할 보존 — DB users.role은 불변). */
 function attachUser(req, _res, next) {
   req.user = null;
   const token = req.cookies && req.cookies[config.cookieName];
@@ -125,7 +131,12 @@ function attachUser(req, _res, next) {
       const payload = jwt.verify(token, config.sessionSecret);
       const user = findUserById(payload.uid);
       // 활성 + 유효 역할(owner/chief/staff)만 세션 인정. 비활성화/역할 박탈 시 즉시 로그아웃 효과.
-      if (user && user.active && isLoggedInRole(user)) req.user = user;
+      if (user && user.active && isLoggedInRole(user)) {
+        const v = req.cookies && req.cookies[VIEWAS_COOKIE];
+        req.user = user.role === "chief" && (v === "owner" || v === "staff")
+          ? { ...user, role: v, real_role: "chief", view_as: v }
+          : user;
+      }
     } catch {
       /* 만료/위조 토큰은 무시 */
     }
@@ -218,6 +229,7 @@ module.exports = {
   syncUserToManager,
   attachUser,
   touchLastLogin,
+  VIEWAS_COOKIE,
   isOwner,
   isChief,
   isStaffRole,

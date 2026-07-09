@@ -10,6 +10,7 @@ const {
   upsertUserFromGoogle,
   oauthClient,
   touchLastLogin,
+  VIEWAS_COOKIE,
 } = require("../auth");
 const { saveRefreshToken, setDriveAccountEmail } = require("../drive");
 const { layout, esc } = require("../views");
@@ -50,7 +51,23 @@ router.get("/login", (req, res) => {
 
 router.get("/logout", (req, res) => {
   clearSessionCookie(res);
+  res.clearCookie(VIEWAS_COOKIE, { path: "/" }); // 보기 모드도 해제(다음 로그인에 잔류 방지)
   res.redirect("/login");
+});
+
+// ── 보기 모드 전환(2026-07-09 사용자 요청) — 치프가 권한 변경 없이 대표/스태프 화면을 미리보는 모드.
+// 실제 role=chief만 사용 가능(attachUser가 chief일 때만 쿠키를 적용하므로 상승 불가·축소 전용).
+// 전환 후 대시보드로(현재 페이지가 새 모드에서 403일 수 있어 전 역할 공통 경로로 복귀).
+router.post("/viewas", (req, res) => {
+  const isRealChief = req.user && (req.user.role === "chief" || req.user.real_role === "chief");
+  if (!isRealChief) return res.status(403).send("권한이 없습니다(치프 전용).");
+  const role = String(req.body.role || "chief");
+  if (role === "owner" || role === "staff") {
+    res.cookie(VIEWAS_COOKIE, role, { httpOnly: true, sameSite: "lax", secure: config.isProd, maxAge: 12 * 3600 * 1000, path: "/" });
+  } else {
+    res.clearCookie(VIEWAS_COOKIE, { path: "/" }); // chief = 원래대로
+  }
+  res.redirect("/");
 });
 
 // ── Google OAuth(관리자) ──

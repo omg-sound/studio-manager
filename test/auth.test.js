@@ -10,7 +10,7 @@ process.env.DB_PATH = tempDbPath();
 const test = require("node:test");
 const assert = require("node:assert");
 
-const { canEdit, isStaffOrChief, canInvoice, requireEditor, requireStaff, requireInvoice } = require("../src/auth");
+const { canEdit, isStaffOrChief, canInvoice, requireEditor, requireStaff, requireInvoice, attachUser, VIEWAS_COOKIE } = require("../src/auth");
 
 const OWNER = { role: "owner" };
 const CHIEF = { role: "chief" };
@@ -96,6 +96,31 @@ test("requireEditor: 비로그인은 401(API 경로)", () => {
   const r = runGate(requireEditor, null, { path: "/api/projects", accepts: () => false });
   assert.strictEqual(r.next, false);
   assert.strictEqual(r.status, 401);
+});
+
+// ── 보기 모드(2026-07-09): 치프만 축소 적용, 비치프 쿠키 조작은 무시(권한 상승 차단) ──
+test("attachUser 보기 모드: 치프+쿠키(staff) → 역할 축소·real_role 보존 / 스태프+쿠키(owner) → 무시", () => {
+  const jwt = require("jsonwebtoken");
+  const { config } = require("../src/config");
+  const { db, init } = require("../src/db");
+  init();
+  const chiefId = Number(db().prepare("INSERT INTO users (email, role, name, active) VALUES ('va-chief@t.t','chief','치프',1)").run().lastInsertRowid);
+  const staffId = Number(db().prepare("INSERT INTO users (email, role, name, active) VALUES ('va-staff@t.t','staff','스태프',1)").run().lastInsertRowid);
+  const tokenFor = (uid) => jwt.sign({ uid }, config.sessionSecret);
+  const run = (uid, viewas) => {
+    const req = { cookies: { [config.cookieName]: tokenFor(uid), ...(viewas ? { [VIEWAS_COOKIE]: viewas } : {}) } };
+    attachUser(req, {}, () => {});
+    return req.user;
+  };
+  const asStaff = run(chiefId, "staff");
+  assert.equal(asStaff.role, "staff", "치프의 보기 모드=스태프");
+  assert.equal(asStaff.real_role, "chief", "실제 역할 보존");
+  const asOwner = run(chiefId, "owner");
+  assert.equal(asOwner.role, "owner");
+  assert.equal(run(chiefId, "chief").real_role, undefined, "무효 값은 원 역할 그대로");
+  const hacked = run(staffId, "owner");
+  assert.equal(hacked.role, "staff", "스태프가 쿠키를 조작해도 상승 불가");
+  assert.equal(hacked.real_role, undefined);
 });
 
 test("requireInvoice: 대표 통과 / 스태프 403 차단", () => {
