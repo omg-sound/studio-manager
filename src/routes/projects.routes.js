@@ -136,15 +136,17 @@ function resolveProjectParties(b) {
   const prodPartyId = b.production_party_id ? Number(b.production_party_id) : null;
   const prodText = String(b.production_company || "").trim();
   const productionId = prodPartyId || (prodText ? resolvePartyByDisplay(prodText) || ensureCompanyParty(prodText, "제작사") : null);
-  // 제작/운영에 회사가 지정되면 그 회사 클라이언트 역할에도 '제작사'를 반영(사람이면 no-op·이미 있으면 멱등, 2026-07-10 사용자 요청).
-  // 콤보 선택(production_party_id)·기존 회사 재사용 경로 모두 roles를 안 건드리던 것 — 소속사가 제작/운영으로도 표시되게.
+  const agencyId = ensureCompanyParty(b.artist_company, "소속사/레이블");
+  // 소속/레이블·제작/운영에 회사가 지정되면 그 회사 클라이언트 역할에도 해당 역할을 반영(사람이면 no-op·이미 있으면 멱등, 2026-07-10 사용자 요청).
+  // 콤보 선택·기존 회사 재사용 경로 모두 roles를 안 건드리던 것 — 한 회사가 소속/레이블·제작/운영을 겸하면 두 배지가 함께 뜨게.
+  if (agencyId) addCompanyRole(agencyId, "소속사/레이블");
   if (productionId) addCompanyRole(productionId, "제작사");
   return {
     contactId,
     artistId,
     artistIds,
     artistText,
-    agencyId: ensureCompanyParty(b.artist_company, "소속사/레이블"),
+    agencyId,
     productionId,
   };
 }
