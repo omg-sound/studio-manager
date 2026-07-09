@@ -14,7 +14,7 @@
   --color-primary: 200 121 91; /* #C8795B 클레이(테라코타) */
   --color-primary-fg: 255 255 255;
   --color-success: 92 122 92; /* muted sage */
-  --color-warning: 181 121 60; /* warm amber */
+  --color-warning: 143 92 42; /* #8F5C2A warm amber — WCAG AA: bg 5.34:1·surface 5.63:1·badge tint 4.80:1 (구 #B5793C는 3.46:1 미달, 2026-07-09 접근성 점검) */
   --color-danger: 188 75 60; /* #BC4B3C warm red */
   --color-info: 96 115 140; /* #60738C 쿨 블루그레이 — 정보/중립 강조 */
 }
