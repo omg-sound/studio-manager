@@ -365,7 +365,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
   // 정보 수정 = 펼침 카드(2026-07-09 사용자 요청 — 접어 놓지 않음, 기본 정보 탭의 본문).
   const editForm = isChief(req.user)
     ? `<section class="card mb-3">
-        <h2 class="text-sm font-semibold">정보 수정 <span class="font-normal text-muted">이름 · 전화 · 이메일 · 정산 정보</span></h2>
+        <h2 class="text-sm font-semibold">정보 수정</h2>
         <form method="post" action="/workers/${w.id}/edit" class="mt-3 grid gap-2 sm:grid-cols-3" data-dirty-form>
           <div><label class="label">이름</label><input class="input py-1.5 text-sm" name="worker_name" value="${esc(w.name || "")}" placeholder="이름" autocomplete="off" required /></div>
           <div><label class="label">이메일</label><input class="input py-1.5 text-sm" name="email" value="${esc(w.email || "")}" placeholder="이메일" /></div>

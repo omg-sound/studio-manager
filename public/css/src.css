@@ -101,13 +101,15 @@
   .copyable::after {
     content: "⧉";
     @apply ml-1 text-[0.8em] text-muted;
-    display: none;
+    /* 자리 상시 확보(2026-07-09 사용자 요청 — hover에 아이콘이 나타나며 텍스트가 옆으로 밀리던 것):
+       display는 항상 유지하고 opacity로만 표시 → 가로 폭이 고정돼 텍스트 불변. */
+    opacity: 0;
     /* 아이콘이 줄 높이에 개입하지 않게(2026-07-08 사용자 리포트 'hover 하니까 줄간격이 바뀜') —
        line-height:0이면 인라인 박스가 라인박스 계산에 0으로 기여해 글리프만 그려지고 행 높이는 불변. align-middle 금지(라인박스 확장). */
     line-height: 0;
   }
   .copyable:hover::after {
-    display: inline;
+    opacity: 1;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50;
