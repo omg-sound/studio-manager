@@ -443,6 +443,16 @@ function alertWebhookSection(chief = true) {
     </section>`;
 }
 
+/** last_login(ISO UTC) → '오늘/어제/N일 전/미로그인' 상대 표시(계정 위생, 2026-07-09 관리 개선). */
+function lastLoginLabel(iso) {
+  if (!iso) return "";
+  const then = new Date(String(iso).replace(" ", "T") + "Z").getTime();
+  if (!isFinite(then)) return "";
+  const days = Math.floor((Date.now() - then) / 86400000);
+  const label = days <= 0 ? "오늘" : days === 1 ? "어제" : `${days}일 전`;
+  return `<span class="whitespace-nowrap">로그인 ${label}</span>`;
+}
+
 function userRow(u, currentUser, chief = true) {
   const isSelf = u.id === currentUser.id;
   const delLocked = isBootstrapChief(u) || isSelf; // 삭제·비활성: 기본 치프·본인 보호(락아웃 방지). 역할 변경은 본인만 잠금.
@@ -469,7 +479,7 @@ function userRow(u, currentUser, chief = true) {
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(u.name || u.email)}</div>
           <div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-            <span class="truncate">${esc(u.email)}</span>${status}${isSelf ? `<span class="text-muted">${esc(ROLE_LABELS[u.role] || u.role)} · 본인</span>` : isBootstrapChief(u) ? `<span class="text-muted">· 기본 계정(삭제 불가)</span>` : ""}
+            <span class="truncate">${esc(u.email)}</span>${status}${lastLoginLabel(u.last_login)}${isSelf ? `<span class="text-muted">${esc(ROLE_LABELS[u.role] || u.role)} · 본인</span>` : isBootstrapChief(u) ? `<span class="text-muted">· 기본 계정(삭제 불가)</span>` : ""}
           </div>
         </div>
         <div class="flex shrink-0 items-center gap-2">

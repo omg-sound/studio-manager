@@ -49,6 +49,11 @@ function findUserByEmail(email) {
  * - 화이트리스트에 없거나 비활성이면 null(로그인 거부).
  * @returns {object|null} 로그인 허용 시 user, 아니면 null
  */
+/** 로그인 성공 시각 기록(계정 위생 표시용 — fail-safe, 로그인 흐름을 절대 막지 않음). */
+function touchLastLogin(userId) {
+  try { db().prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?").run(Number(userId)); } catch (_e) { /* 표시용 — 무시 */ }
+}
+
 function upsertUserFromGoogle(profile) {
   const email = String(profile.email || "").trim().toLowerCase();
   if (!email) return null;
@@ -212,6 +217,7 @@ module.exports = {
   upsertUserFromGoogle,
   syncUserToManager,
   attachUser,
+  touchLastLogin,
   isOwner,
   isChief,
   isStaffRole,

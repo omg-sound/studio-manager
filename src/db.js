@@ -352,6 +352,7 @@ function init() {
   `);
 
   addColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
+  addColumn("users", "last_login", "TEXT"); // 마지막 로그인 시각(ISO) — 계정 위생(안 쓰는 계정 식별, 2026-07-09 관리 개선)
   // 청구처(공급받는 자) 세금계산서 정보
   addColumn("clients", "biz_no", "TEXT");      // 사업자등록번호
   addColumn("clients", "owner_name", "TEXT");  // 대표자명

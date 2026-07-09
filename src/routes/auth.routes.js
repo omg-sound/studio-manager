@@ -9,6 +9,7 @@ const {
   clearSessionCookie,
   upsertUserFromGoogle,
   oauthClient,
+  touchLastLogin,
 } = require("../auth");
 const { saveRefreshToken, setDriveAccountEmail } = require("../drive");
 const { layout, esc } = require("../views");
@@ -137,6 +138,7 @@ router.get("/auth/google/callback", async (req, res) => {
     }
 
     setSessionCookie(res, user);
+    touchLastLogin(user.id); // 마지막 로그인 기록(계정 위생 표시, fail-safe)
     res.redirect(stateNext);
   } catch (e) {
     console.error("[oauth callback]", e);
@@ -153,6 +155,7 @@ router.post("/dev-login", (req, res) => {
     return res.redirect("/login?err=" + encodeURIComponent(`dev ${as} 계정이 없습니다. npm run seed 먼저 실행하세요.`));
   }
   setSessionCookie(res, user);
+    touchLastLogin(user.id); // 마지막 로그인 기록(계정 위생 표시, fail-safe)
   res.redirect(safeNext(req.body.next));
 });
 
