@@ -1709,7 +1709,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       else {
         view = comboRankSort(opts.filter(function (o) { return !isChosen(o); }), q, pcFields).slice(0, 12); // 이미 담은 사람 제외 + 매칭 강도순
         html = view.map(function (o, i) {
-          var nm = esc(o.name) + (o.honorific ? ' <span class="font-normal text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="font-normal text-muted">(' + esc(o.alt) + ')</span>' : "");
+          // 활동명이 본명과 같으면 괄호 병기 생략('윤종신 (윤종신)' 방지) — labelOf·서버 personName과 동일 규칙.
+          var nm = esc(o.name) + (o.honorific ? ' <span class="font-normal text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt && o.alt !== o.name ? ' <span class="font-normal text-muted">(' + esc(o.alt) + ')</span>' : "");
           var sub = subOf(o);
           return '<button type="button" class="' + personRowCls + '" data-idx="' + i + '"><span class="max-w-full truncate text-sm font-medium text-fg">' + nm + '</span>' + (sub ? '<span class="max-w-full truncate text-xs text-muted">' + esc(sub) + '</span>' : "") + '</button>';
         }).join("");

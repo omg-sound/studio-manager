@@ -654,7 +654,7 @@ test("personCombo: 이름 일치가 회사명 일치보다 먼저 추천됨", ()
   const { win, input, pop } = mountChips(); // 옵션 순서: 엄유미(회사=(주)월간윤종신) → 윤종신
   input.value = "윤종신"; fire(win, input, "input");
   const names = rowNames(pop);
-  assert.equal(names[0], "윤종신 (윤종신)", `첫 후보=이름 일치 — 실제: ${JSON.stringify(names)}`);
+  assert.equal(names[0], "윤종신", `첫 후보=이름 일치 — 실제: ${JSON.stringify(names)}`); // 활동명=본명이라 괄호 병기 없음
   assert.ok(names.some((n) => n.startsWith("엄유미")), "회사명 매칭도 후보엔 남음(뒤로)");
 });
 
@@ -721,4 +721,24 @@ test("아티스트 콤보: 이름 정확 일치가 부분 일치보다 먼저", 
   input.value = "루나"; fire(win, input, "input");
   const rows = firstRows(pop, "button[data-idx]");
   assert.equal(rows[0], "루나", `정확 일치가 첫 후보 — 실제: ${JSON.stringify(rows)}`);
+});
+
+// ── 활동명이 본명과 같으면 괄호 병기 생략(2026-07-10) ──
+// labelOf·서버 personName/personLabel엔 `a !== n` 조건이 있는데 드롭다운 행 렌더에만 없어서
+// 활동명=본명인 사람이 '윤종신 (윤종신)'으로 겹쳐 보였다(선택된 값·칩은 정상).
+test("personCombo 드롭다운: 활동명이 본명과 같으면 괄호를 붙이지 않음", () => {
+  const OPTS = [
+    { id: 51, name: "윤종신", alt: "윤종신" },          // 활동명 = 본명
+    { id: 52, name: "박수한", alt: "워터멜론" },        // 활동명 ≠ 본명
+  ];
+  const html = `<form>${personCombo({ options: OPTS, companyOptions: [], multi: true })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-pc-input]");
+  const pop = doc.querySelector("[data-pc-pop]");
+  input.value = "윤종신"; fire(win, input, "input");
+  const row = pop.querySelector("button[data-idx] span").textContent.replace(/\s+/g, " ").trim();
+  assert.equal(row, "윤종신", `중복 병기 금지 — 실제: "${row}"`);
+  input.value = "박수한"; fire(win, input, "input");
+  const row2 = pop.querySelector("button[data-idx] span").textContent.replace(/\s+/g, " ").trim();
+  assert.equal(row2, "박수한 (워터멜론)", "다른 활동명은 병기 유지");
 });
