@@ -1509,7 +1509,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function openModal() {
       if (!modal) { hide(); return; }
       var n = modal.querySelector("[data-cc-name]"); n.value = input.value.trim();
-      ["[data-cc-biz]", "[data-cc-owner]", "[data-cc-owner-id]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      ["[data-cc-biz]", "[data-cc-owner]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
+      var ownBox0 = modal.querySelector("[data-cc-owner-chips]"); // 대표자 칩 초기화(공동대표)
+      if (ownBox0) {
+        Array.prototype.forEach.call(ownBox0.querySelectorAll("[data-cc-owner-chip]"), function (c) { c.remove(); });
+        var ownIn0 = ownBox0.querySelector("[data-cc-owner]");
+        if (ownIn0) ownIn0.placeholder = "이름 검색 또는 새로 등록"; // 칩 없으면 안내문 복구
+      }
       var ownPop0 = modal.querySelector("[data-cc-owner-pop]"); if (ownPop0) ownPop0.classList.add("hidden");
       modal.querySelector("[data-cc-err]").classList.add("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
@@ -1534,8 +1540,12 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (modal.querySelector("[data-cc-agency]").checked) body.append("roles", "소속사/레이블");
         if (modal.querySelector("[data-cc-prod]").checked) body.append("roles", "제작사");
         var biz = modal.querySelector("[data-cc-biz]").value.trim(); if (biz) body.append("biz_no", biz);
-        var owner = modal.querySelector("[data-cc-owner]").value.trim(); if (owner) body.append("owner_name", owner);
-        var ownerIdEl = modal.querySelector("[data-cc-owner-id]"); if (ownerIdEl && ownerIdEl.value) body.append("owner_id", ownerIdEl.value); // 대표자 콤보에서 선택/등록한 사람 id(정확 연결·중복 방지)
+        // 대표자 칩(공동대표) — 서버 resolveOwnerIds가 owner_id/owner_name 인덱스 페어링으로 해석.
+        var ownBox1 = modal.querySelector("[data-cc-owner-chips]");
+        if (ownBox1) Array.prototype.forEach.call(ownBox1.querySelectorAll("[data-cc-owner-chip]"), function (c) {
+          body.append("owner_name", c.getAttribute("data-cc-owner-chip-name") || "");
+          body.append("owner_id", c.getAttribute("data-cc-owner-chip-id") || "");
+        }); // 대표자 콤보에서 선택/등록한 사람 id(정확 연결·중복 방지)
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
@@ -1543,14 +1553,43 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
-      // 대표자 미니콤보(모달 내부): 타이핑 검색(사람) + '＋ 새 연락처 등록'(fetch /contacts → data-cc-owner-id 채움).
-      var ownInput = modal.querySelector("[data-cc-owner]"), ownHid = modal.querySelector("[data-cc-owner-id]"),
+      // 대표자 미니콤보(모달 내부): 타이핑 검색(사람) + '＋ 새 연락처 등록'. 선택은 칩으로 담긴다(공동대표, 2026-07-10).
+      var ownInput = modal.querySelector("[data-cc-owner]"), ownBox = modal.querySelector("[data-cc-owner-chips]"),
           ownPop = modal.querySelector("[data-cc-owner-pop]"), ownOptsEl = modal.querySelector("[data-cc-owner-options]");
       var ownOpts = []; try { ownOpts = JSON.parse((ownOptsEl && ownOptsEl.textContent) || "[]"); } catch (e) { ownOpts = []; }
       document.addEventListener("party-created", function (e) { var p = e.detail; if (!p || p.kind !== "person") return; if (!ownOpts.some(function (o) { return String(o.id) === String(p.id); })) ownOpts.push({ id: p.id, name: p.name }); }); // 새 사람 → 대표자 미니콤보 옵션에 추가
-      if (ownInput && ownHid && ownPop) {
+      if (ownInput && ownBox && ownPop) {
         var ownRowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
         var ownView = [];
+        function ownChips() { return Array.prototype.slice.call(ownBox.querySelectorAll("[data-cc-owner-chip]")); }
+        function ownSyncPh() { ownInput.placeholder = ownChips().length ? "" : "이름 검색 또는 새로 등록"; } // 칩 있으면 안내문 숨김
+        function ownAdd(name, id) {
+          if (!name) return;
+          if (ownChips().some(function (c) { return (c.getAttribute("data-cc-owner-chip-name") || "").toLowerCase() === name.toLowerCase(); })) { ownInput.value = ""; return; }
+          var span = document.createElement("span");
+          span.className = "inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-elevated py-0.5 pl-2.5 pr-1 text-sm";
+          span.setAttribute("data-cc-owner-chip", "");
+          span.setAttribute("data-cc-owner-chip-name", name);
+          span.setAttribute("data-cc-owner-chip-id", id ? String(id) : "");
+          var t = document.createElement("span"); t.className = "truncate"; t.textContent = name; span.appendChild(t);
+          var x = document.createElement("button"); x.type = "button";
+          x.className = "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted hover:bg-border hover:text-fg";
+          x.setAttribute("data-cc-owner-chip-remove", ""); x.setAttribute("aria-label", name + " 제거"); x.textContent = "✕";
+          span.appendChild(x);
+          ownBox.insertBefore(span, ownInput);
+          ownInput.value = "";
+          ownSyncPh();
+        }
+        ownBox.addEventListener("click", function (e) {
+          var x = e.target.closest("[data-cc-owner-chip-remove]");
+          if (x) { e.preventDefault(); x.closest("[data-cc-owner-chip]").remove(); ownSyncPh(); ownInput.focus(); }
+        });
+        ownInput.addEventListener("keydown", function (e) {
+          if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중(함정 #18)
+          if (e.key !== "Backspace" || ownInput.value !== "") return;
+          var list = ownChips();
+          if (list.length) { e.preventDefault(); list[list.length - 1].remove(); ownSyncPh(); }
+        });
         function ownHide() { ownPop.classList.add("hidden"); }
         function ownRender() {
           var q = ownInput.value.trim().toLowerCase();
@@ -1561,19 +1600,19 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         }
         ownInput.addEventListener("focus", ownRender);
         ownInput.addEventListener("click", ownRender);
-        ownInput.addEventListener("input", function () { ownHid.value = ""; ownRender(); }); // 타이핑 중 id 해제(선택·등록으로만 확정)
+        ownInput.addEventListener("input", ownRender); // 입력칸은 검색 전용(값은 칩이 보유)
         ownInput.addEventListener("blur", function () { setTimeout(ownHide, 150); });
         ownPop.addEventListener("mousedown", function (e) { e.preventDefault(); });
         ownPop.addEventListener("click", function (e) {
           var b = e.target.closest("button"); if (!b) return;
-          if (b.hasAttribute("data-owneridx")) { var o = ownView[Number(b.getAttribute("data-owneridx"))]; ownInput.value = o.name; ownHid.value = o.id; ownHide(); }
+          if (b.hasAttribute("data-owneridx")) { var o = ownView[Number(b.getAttribute("data-owneridx"))]; ownAdd(o.name, o.id); ownHide(); }
           else if (b.hasAttribute("data-ownernew")) {
             var nm = ownInput.value.trim(); if (!nm) return;
             b.disabled = true;
             var body2 = new URLSearchParams(); body2.append("name", nm);
             fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body2.toString() })
               .then(function (r) { return r.ok ? r.json() : null; })
-              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); ownHid.value = d.id; ownInput.value = d.name; announceParty({ kind: "person", id: d.id, name: d.name }); ownHide(); })
+              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); ownAdd(d.name, d.id); announceParty({ kind: "person", id: d.id, name: d.name }); ownHide(); })
               .catch(function () { b.disabled = false; });
           }
         });
