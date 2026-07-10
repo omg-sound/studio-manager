@@ -339,15 +339,31 @@ function artistCombo(p = {}) {
   }));
   const json = JSON.stringify(opts).replace(/</g, "\\u003c"); // </script> 브레이크아웃 방지
   const companies = partyOptions({ role: "company" }); // 모달 소속사 select용
+  // Gmail식 칩(2026-07-10 — 콤마 텍스트 방식에서 전환, 담당자·디렉터·대표자와 통일).
+  // **서버 계약 불변**: hidden `artist`=활동명 콤마 목록, `artist_contact_id`=단일 선택일 때만 명시 id.
+  // 칩 라벨은 '활동명 (본명)' 병기(본명은 단일 프리필 또는 옵션에서 옴). app.js chipEl과 마크업 형식 동일.
+  const names = artistName.split(",").map((x) => x.trim()).filter(Boolean);
+  const chipHtml = names.map((nm, i) => {
+    const rn = names.length === 1 ? meta.realName : ""; // 다중 프리필은 본명을 알 수 없음(표시 TEXT만 저장)
+    const label = rn && rn !== nm ? `${nm} (${rn})` : nm;
+    const cid = names.length === 1 ? meta.contactId || "" : "";
+    return `<span class="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-elevated py-0.5 pl-2.5 pr-1 text-sm" data-artist-chip data-artist-chip-name="${esc(nm)}" data-artist-chip-cid="${esc(String(cid))}">
+      <span class="truncate">${esc(label)}</span>
+      <button type="button" class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted hover:bg-border hover:text-fg" data-artist-chip-remove aria-label="${esc(nm)} 제거">✕</button>
+    </span>`;
+  }).join("");
   return `
     <div data-artist-combo>
       <input type="hidden" name="artist_contact_id" value="${meta.contactId || ""}" data-artist-cid />
+      <input type="hidden" name="artist" value="${esc(names.join(", "))}" data-artist-hidden />
       <div class="relative">
-        <input class="input pr-9" type="text" name="artist" value="${esc(artistName)}" data-artist-input autocomplete="off"
-          role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="아티스트명 — 검색 또는 새로 등록" />
-        <span class="pointer-events-none absolute right-9 top-1/2 max-w-[45%] -translate-y-1/2 truncate text-sm text-muted${meta.realName ? "" : " hidden"}" data-artist-realname title="본명">(<span data-artist-realname-val>${esc(meta.realName || "")}</span>)</span>
-        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-artist-pop role="listbox"></div>
+        <!-- 보이는 검색칸은 name 없음(제출은 위 hidden) — 칩이 값의 진실원천 -->
+        <div class="input flex flex-wrap items-center gap-1.5 py-1.5" data-artist-chips>
+          ${chipHtml}
+          <input class="min-w-[3rem] flex-1 border-0 bg-transparent p-0 text-inherit outline-none focus:ring-0" type="text" size="1" data-artist-input autocomplete="off"
+            role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${names.length ? "" : "아티스트명 — 검색 또는 새로 등록"}" />
+        </div>
+        <div class="absolute left-0 z-30 mt-1 hidden max-h-64 w-max min-w-[14rem] max-w-full overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-artist-pop role="listbox"></div>
       </div>
       <script type="application/json" data-artist-options>${json}</script>
       <!-- 간이 등록 모달(프로젝트 폼 이탈 없이 새 아티스트/그룹 등록). name 없음(프로젝트 폼과 분리), app.js가 fetch로 생성. -->

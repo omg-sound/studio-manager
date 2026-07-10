@@ -1187,7 +1187,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var pop = root.querySelector("[data-artist-pop]");
     var dataEl = root.querySelector("[data-artist-options]");
     if (!input || !pop || !dataEl) return;
-    var realDisp = root.querySelector("[data-artist-realname]"), realVal = root.querySelector("[data-artist-realname-val]"); // 선택 아티스트 본명 표시(입력 아님)
+    var chipBox = root.querySelector("[data-artist-chips]");   // Gmail식 칩 컨테이너(2026-07-10)
+    var hidArtist = root.querySelector("[data-artist-hidden]"); // 제출값: 활동명 콤마 목록(서버 계약 불변)
     var opts = [];
     try { opts = JSON.parse(dataEl.textContent || "[]"); } catch (e) { opts = []; }
     // 어디서든 새 party 생성되면 아티스트·그룹은 이 콤보 옵션에 추가(재검색 인식)
@@ -1197,13 +1198,40 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       opts.push({ name: p.name, contactId: p.id, realName: p.realName || "", sub: p.kind === "group" ? "그룹" : "아티스트", agency: p.agency || "" });
     });
     var view = []; // 현재 렌더된 후보(클릭 인덱스 매핑)
-    function showReal(rn) { if (!realDisp) return; if (rn) { if (realVal) realVal.textContent = rn; realDisp.classList.remove("hidden"); } else realDisp.classList.add("hidden"); }
-    // 콤마 다중 아티스트(2026-07-05): 마지막 콤마 뒤 조각(tail)로 검색·선택하고, 선택은 앞부분(head)에 이어붙인다.
-    function seg() {
-      var v = input.value;
-      var i = v.lastIndexOf(",");
-      return i === -1 ? { head: "", tail: v } : { head: v.slice(0, i + 1).replace(/\s*$/, "") + " ", tail: v.slice(i + 1) };
+
+    // ── 칩(선택된 아티스트 한 덩어리) — 서버 렌더 마크업과 형식 동일 ──
+    function chipList() { return chipBox ? Array.prototype.slice.call(chipBox.querySelectorAll("[data-artist-chip]")) : []; }
+    function chipNames() { return chipList().map(function (c) { return c.getAttribute("data-artist-chip-name") || ""; }).filter(Boolean); }
+    /** hidden 동기화: artist=활동명 콤마 목록, artist_contact_id=단일 선택일 때만 명시 id(다중은 서버가 이름별 해석). */
+    function syncHidden() {
+      var list = chipList();
+      if (hidArtist) hidArtist.value = chipNames().join(", ");
+      if (cid) cid.value = list.length === 1 ? (list[0].getAttribute("data-artist-chip-cid") || "") : "";
+      if (input) input.placeholder = list.length ? "" : "아티스트명 — 검색 또는 새로 등록";
+      fireInput(); // dirty 감지(칩 조작은 클릭이라 input/change가 안 뜬다 — 함정 #23)
     }
+    function chipEl(name, realName, contactId) {
+      var label = realName && realName !== name ? name + " (" + realName + ")" : name;
+      var span = document.createElement("span");
+      span.className = "inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-elevated py-0.5 pl-2.5 pr-1 text-sm";
+      span.setAttribute("data-artist-chip", "");
+      span.setAttribute("data-artist-chip-name", name);
+      span.setAttribute("data-artist-chip-cid", contactId ? String(contactId) : "");
+      var t = document.createElement("span"); t.className = "truncate"; t.textContent = label; span.appendChild(t);
+      var x = document.createElement("button"); x.type = "button";
+      x.className = "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted hover:bg-border hover:text-fg";
+      x.setAttribute("data-artist-chip-remove", ""); x.setAttribute("aria-label", name + " 제거"); x.textContent = "✕";
+      span.appendChild(x);
+      return span;
+    }
+    function chipHas(name) { return chipNames().some(function (n) { return n.toLowerCase() === String(name).toLowerCase(); }); }
+    function addChip(name, realName, contactId) {
+      if (!chipBox || !name) return;
+      if (!chipHas(name)) chipBox.insertBefore(chipEl(name, realName, contactId), input);
+      input.value = "";
+      syncHidden();
+    }
+    function removeChip(chip) { if (chip && chip.parentNode) { chip.parentNode.removeChild(chip); syncHidden(); } }
 
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
@@ -1245,8 +1273,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         '<span class="truncate">＋ ' + esc(label) + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
     }
     function render() {
-      var s = seg(); // 콤마 다중: 마지막 조각으로만 검색("아이유, 태" → "태")
-      var q = s.tail.trim().toLowerCase();
+      var q = input.value.trim().toLowerCase(); // 칩 모드: 입력칸은 검색어 전용
       var html = "";
       if (!q) {
         view = [];
@@ -1255,21 +1282,17 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         view = comboRankSort(opts, q, function (o) { return [o.name, o.realName]; }).slice(0, 12); // 활동명 > 본명(공용 랭킹 — 정확 일치 우선)
         html = view.map(pickRow).join("");
         var exact = view.some(function (o) { return String(o.name).toLowerCase() === q || (o.realName && String(o.realName).toLowerCase() === q); });
-        if (!exact) html += newRow("'" + s.tail.trim() + "'(으)로 새 아티스트");
+        if (!exact) html += newRow("'" + input.value.trim() + "'(으)로 새 아티스트");
       }
       pop.innerHTML = html;
       show();
       setHi(0); // 첫 후보 하이라이트(방향키·엔터 대비)
     }
     function pick(o) {
-      var s = seg();
-      var multi = !!s.head; // 콤마 다중 — 선택을 이어붙임("아이유, " + 선택명)
-      input.value = multi ? s.head + o.name : o.name;
-      cid.value = multi ? "" : (o.contactId || ""); // 다중이면 명시 id 무의미(서버가 이름별 해석) — 비움
-      showReal(multi ? "" : o.realName); // 본명 표시는 단일 전용
-      if (!multi || !currentAgencyValue()) fillAgency(o.agency); // 다중일 땐 이미 채워진 소속사 유지(첫 아티스트 우선)
-      fireInput();
-      hide(); // fireInput 뒤에 닫아야 재렌더로 다시 열리지 않음(선택됨이 보이게)
+      var first = chipList().length === 0;
+      addChip(o.name, o.realName, o.contactId); // 칩 한 덩어리(제출은 hidden artist/cid — syncHidden)
+      if (first || !currentAgencyValue()) fillAgency(o.agency); // 소속사 자동 채움은 첫 아티스트 우선(이미 채워졌으면 유지)
+      hide();
     }
     // 현재 소속사/레이블 값(다중 아티스트 시 덮어쓰기 방지 판단용)
     function currentAgencyValue() {
@@ -1288,7 +1311,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
           mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
           mAgencyInput = modal.querySelector("[data-am-agency-input]"), mEmail = modal.querySelector("[data-am-email]"),
           mErr = modal.querySelector("[data-am-err]");
-      mName.value = seg().tail.trim(); mGroup.checked = false; // 콤마 다중이면 마지막 조각만 프리필
+      mName.value = input.value.trim(); mGroup.checked = false; // 타이핑한 검색어 프리필
       if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = ""; if (mEmail) mEmail.value = "";
       mErr.classList.add("hidden"); mRealWrap.classList.remove("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex");
@@ -1328,12 +1351,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
             if (!d || !d.ok) throw new Error("fail");
             var rn = !mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : "";
             announceParty({ kind: mGroup.checked ? "group" : "person", id: d.id, name: d.name, isArtist: true, realName: rn, agency: agName || "" }); // 전역 브로드캐스트 → 이 콤보 포함 모든 콤보 옵션에 반영
-            var s2 = seg(); var multi2 = !!s2.head; // 콤마 다중이면 등록한 이름을 이어붙임
-            input.value = multi2 ? s2.head + d.name : d.name;
-            cid.value = multi2 ? "" : d.id;
-            showReal(multi2 ? "" : rn); // 모달 입력 본명(개인) 표시 — 단일 전용
-            if (!multi2 || !currentAgencyValue()) fillAgency(agName); // 다중일 땐 기존 소속사 유지
-            closeModal(); fireInput(); hide(); // 등록 후 콤보 드롭다운 닫기(fireInput 재렌더로 다시 열리는 것 방지)
+            var first2 = chipList().length === 0;
+            addChip(d.name, rn, d.id); // 등록한 아티스트를 칩으로
+            if (first2 || !currentAgencyValue()) fillAgency(agName); // 소속사는 첫 아티스트 기준(이미 있으면 유지)
+            closeModal(); hide(); // 등록 후 콤보 드롭다운 닫기
             if (window.__toast) window.__toast(d.name + " 등록됨");
           })
           .catch(function () { mErr.textContent = "등록 실패 — 다시 시도하세요."; mErr.classList.remove("hidden"); })
@@ -1386,10 +1407,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
-    input.addEventListener("input", function () {
-      if (input.value.indexOf(",") !== -1) { cid.value = ""; showReal(""); } // 콤마 다중 = 명시 id·본명 표시는 단일 전용(서버가 이름별 해석)
-      render();
-    });
+    input.addEventListener("input", render); // 칩 모드: 입력칸은 검색 전용(제출값은 칩 hidden)
     // 방향키 이동 + 엔터 선택(ESC 닫기). 드롭다운 열려 있을 때만 가로챔 — 아니면 폼 기본 동작.
     input.addEventListener("keydown", function (e) {
       if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 키(엔터=조합 확정 등)는 무시
@@ -1414,13 +1432,20 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       else if (b.hasAttribute("data-new")) openModal(); // 새 아티스트 등록 → 간이 모달
       else if (b.hasAttribute("data-search")) input.focus();
     });
-    // 직접 타이핑으로 이름을 바꾸면(선택 안 함) 연결 해제 — 저장 시 이름 매칭으로만 dedup.
-    input.addEventListener("input", function () {
-      var v = input.value.trim().toLowerCase();
-      var match = opts.filter(function (o) { return String(o.name).toLowerCase() === v || (o.realName && String(o.realName).toLowerCase() === v); })[0]; // 활동명·본명 정확 일치
-      if (match) { cid.value = match.contactId || ""; showReal(match.realName); }
-      else { cid.value = ""; showReal(""); }
-    });
+    // 칩 ✕ 클릭(위임) + 빈 입력 백스페이스 = 마지막 칩 삭제(Gmail 동작).
+    if (chipBox) {
+      chipBox.addEventListener("click", function (e) {
+        var x = e.target.closest("[data-artist-chip-remove]");
+        if (x) { e.preventDefault(); removeChip(x.closest("[data-artist-chip]")); input.focus(); }
+      });
+      chipBox.addEventListener("mousedown", function (e) { if (e.target === chipBox) { e.preventDefault(); input.focus(); } });
+      input.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중(함정 #18)
+        if (e.key !== "Backspace" || input.value !== "") return;
+        var list = chipList();
+        if (list.length) { e.preventDefault(); removeChip(list[list.length - 1]); }
+      });
+    }
   });
 })();
 
