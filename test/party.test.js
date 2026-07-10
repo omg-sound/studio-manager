@@ -471,3 +471,32 @@ test("setOrgContacts: 빈 목록이면 담당자 전원 해제(재직은 전원 
   assert.deepEqual(D.listOrgContacts(org), [], "담당자 없음");
   assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.name), ["해제직원"], "재직 유지");
 });
+
+// ── 직책 → 호칭 자동 파생(2026-07-10 사용자 결정: '대표 직책 → 대표님 호칭' 흐름을 전 직책으로) ──
+const { honorificFromTitle } = require("../src/lib/korean-name");
+test("honorificFromTitle: 직책에 '님'을 붙이되 이미 있으면 그대로, 빈값은 null", () => {
+  assert.equal(honorificFromTitle("대표"), "대표님");
+  assert.equal(honorificFromTitle("실장"), "실장님");
+  assert.equal(honorificFromTitle("실장님"), "실장님", "이미 님으로 끝나면 중복 안 붙임");
+  assert.equal(honorificFromTitle(" 팀장 "), "팀장님", "공백 정리");
+  assert.equal(honorificFromTitle(""), null);
+  assert.equal(honorificFromTitle(null), null);
+});
+
+test("createPerson: 직책만 넣으면 호칭 자동 파생, 명시 호칭은 존중", () => {
+  const a = D.getParty(D.createPerson({ name: "엄유미", job_title: "실장" }));
+  assert.equal(a.honorific, "실장님", "직책 → 호칭 파생");
+  assert.equal(a.job_title, "실장", "직책 원본 보존");
+  const b = D.getParty(D.createPerson({ name: "김직함", job_title: "부장", honorific: "선생님" }));
+  assert.equal(b.honorific, "선생님", "명시 호칭 우선");
+  const c = D.getParty(D.createPerson({ name: "무직책" }));
+  assert.equal(c.honorific, null, "직책 없으면 호칭도 없음");
+});
+
+test("updateParty: 나중에 직책을 넣으면 호칭 파생, 기존 호칭은 안 덮음", () => {
+  const id = D.createPerson({ name: "나중직책" });
+  D.updateParty(id, { job_title: "과장" });
+  assert.equal(D.getParty(id).honorific, "과장님", "직책 추가 → 호칭 파생");
+  D.updateParty(id, { job_title: "차장" }); // 이미 호칭 있음 — 존중(사용자가 호칭을 따로 관리할 수 있게)
+  assert.equal(D.getParty(id).honorific, "과장님", "기존 호칭 유지");
+});

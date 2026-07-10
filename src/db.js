@@ -5,7 +5,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { config, TASK_TYPES, RECORDING_CATEGORIES, FILMING_CATEGORIES, PERFORMANCE_CATEGORIES } = require("./config");
 const { openDatabase } = require("./sqlite");
-const { splitKoreanName } = require("./lib/korean-name");
+const { splitKoreanName, honorificFromTitle } = require("./lib/korean-name");
 
 let _db = null;
 
@@ -535,6 +535,14 @@ function init() {
       }
     }
     setState("person_name_honorific_split_v1", "done");
+  }
+  // 직책 → 호칭 1회 파생(2026-07-10): 호칭이 비어 있고 직책이 있는 사람에게 '실장'→'실장님' 호칭 부여.
+  // 대표자만 '대표님'이 붙던 흐름을 전 직책으로 일반화 — 이후 저장분은 createPerson/updateParty가 처리.
+  if (!getState("person_honorific_from_title_v1")) {
+    const rows = d.prepare("SELECT id, job_title FROM parties WHERE kind='person' AND (honorific IS NULL OR honorific='') AND job_title IS NOT NULL AND job_title <> ''").all();
+    const up = d.prepare("UPDATE parties SET honorific = ? WHERE id = ?");
+    for (const r of rows) { const h = honorificFromTitle(r.job_title); if (h) up.run(h, r.id); }
+    setState("person_honorific_from_title_v1", "done");
   }
   // 담당자 역할 분리(2026-07-10 사용자 결정): affiliations.is_contact — 재직(ended_on)과 별개로 '이 조직의 담당자'를 표시.
   // 이전에는 담당자 칸이 재직자 전원을 보여줘 담당자 해제가 곧 퇴사 처리였다. 기존 재직자는 전원 담당자로 승계(화면·청구서 표시 불변).

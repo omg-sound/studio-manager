@@ -546,13 +546,26 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {boolean} [o.compact] 인라인(디렉터 다중 행)용 — 작게
  * @param {string} [o.placeholder]
  */
-function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, companyOptionsRef = "", entityLabel = "담당자", initialName = "", simpleModal = false, multi = false } = {}) {
+/** 칩(선택된 사람 한 덩어리) 마크업 — 라벨 + ✕ + 제출용 hidden(id·순수 본명 쌍). app.js chipHtml과 형식 동일. */
+function personChip(p, idField, nameField) {
+  const label = personName(p);
+  return `<span class="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-elevated py-0.5 pl-2.5 pr-1 text-sm" data-pc-chip>
+    <span class="truncate">${esc(label)}</span>
+    <input type="hidden" name="${esc(idField)}" value="${p.id ? esc(String(p.id)) : ""}" data-pc-chip-id />
+    <input type="hidden" name="${esc(nameField)}" value="${esc(p.name || "")}" data-pc-chip-name />
+    <button type="button" class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted hover:bg-border hover:text-fg" data-pc-chip-remove aria-label="${esc(label)} 제거">✕</button>
+  </span>`;
+}
+
+function personCombo({ idField = "contact_id", nameField = "contact_name", selectedId = null, options = [], compact = false, placeholder = "담당자 — 검색 또는 새로 등록", optionsRef = "", companyOptions = null, companyOptionsRef = "", entityLabel = "담당자", initialName = "", simpleModal = false, multi = false, selected = [] } = {}) {
   // companyOptions 미전달 시 업체 목록을 스스로 조회 — '새 담당자 등록' 모달 회사칸이 조용히 평문이 되던 반복 실수 차단
   // (세션 디렉터·업체 대표자에서 각각 재발한 이력, 2026-07-04 기본값화. 명시 전달 시 그대로 사용.)
   if (companyOptions == null) companyOptions = require("./data").partyOptions({ role: "company" });
-  // multi(콤마 여러 명 — 세션 디렉터 등, 2026-07-05): 보이는 입력 = 라벨 콤마 목록("A 대표님, B (비트)"),
-  // 제출 숨김 이름 = 전체 텍스트 그대로(서버가 콤마 split 후 resolvePersonByName 라벨 안전망으로 이름별 해석),
-  // hidden id는 미사용("") — 명시 id는 단일 전용. 선택 정보줄(selInfo)도 생략(여러 명이라 모호).
+  // multi(여러 명 — 담당자 연락처·세션 디렉터): **Gmail식 칩**(2026-07-10 사용자 요청, 이전 콤마 텍스트 방식에서 전환).
+  // 선택된 사람은 한 덩어리 배지(칩)로 보이고 ✕(또는 빈 입력에서 백스페이스)로 통째 삭제 — 텍스트 단위 편집 아님.
+  // 제출 = 칩마다 hidden `idField`(당사자 id·신규는 빈값) + `nameField`(순수 본명) 쌍 → 서버가 인덱스 페어링으로 해석
+  // (resolveDirectorIds·linkClientContact). 라벨 텍스트를 제출하던 옛 방식과 달리 **id로 정확히 연결**되어
+  // '엄유미 실장님' 같은 표시 라벨이 새 사람으로 등록될 여지가 없다.
   const sel = !multi && selectedId ? options.find((o) => Number(o.id) === Number(selectedId)) : null;
   // initialName: 선택 id 없이 이름 텍스트만 있는 레거시 값(예: 업체 대표자 owner_name) 표시·보존용 — sel 없을 때 초기값.
   // 표시 라벨 = 본명 + 호칭 + (활동명) — 담당자가 아티스트면 식별 + 선택 후 필드에 호칭도 표기(2026-07-05 사용자 요청, 청구서 제외).
@@ -580,16 +593,26 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   const inlineJson = optionsRef ? "" : `<script type="application/json" data-pc-options>${JSON.stringify(options.map((o) => ({ id: o.id, name: o.name, alt: o.activity_name || o.alt || "", honorific: o.honorific || "", phone: o.phone || "", email: o.email || "", company: o.current_client || o.company || "", job_title: o.current_title || o.job_title || "", group: o.group_name || o.group || "" }))).replace(/</g, "\\u003c")}</script>`;
   const inputCls = compact ? "input py-1.5 pr-9 text-sm" : "input pr-9";
   const rootCls = compact ? " class=\"min-w-0 flex-1\"" : "";
-  return `
-    <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""}${multi ? ` data-pc-multi="1"` : ""} data-pc-entity="${esc(entityLabel)}">
-      <input type="hidden" name="${idField}" value="${multi ? "" : (sel ? sel.id : (selectedId || ""))}" data-pc-id />
-      <input type="hidden" name="${nameField}" value="${esc(pureName)}" data-pc-name-hidden />
-      <div class="relative">
-        <!-- 보이는 검색칸은 name 없음(Chrome 자동완성 팝업이 앱 드롭다운을 덮는 것 방지) — 값은 위 숨김 필드로 제출, app.js가 동기화 -->
-        <input class="${inputCls}" type="text" value="${esc(shown)}" data-pc-input autocomplete="off"
+  // multi = 칩 컨테이너가 입력칸 모양(.input)을 하고, 그 안에 칩들 + 테두리 없는 인라인 검색 입력이 흐른다.
+  const chips = multi ? (selected || []).map((p) => personChip(p, idField, nameField)).join("") : "";
+  const field = multi
+    ? `<div class="input flex flex-wrap items-center gap-1.5 ${compact ? "py-1 text-sm" : "py-1.5"}" data-pc-chips>
+        ${chips}
+        <input class="min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-inherit outline-none focus:ring-0" type="text" data-pc-input autocomplete="off"
           role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(placeholder)}" />
-        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-        <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>
+      </div>`
+    : `<input class="${inputCls}" type="text" value="${esc(shown)}" data-pc-input autocomplete="off"
+          role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(placeholder)}" />
+        <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>`;
+  return `
+    <div data-person-combo${rootCls}${optionsRef ? ` data-pc-options-ref="${esc(optionsRef)}"` : ""}${multi ? ` data-pc-multi="1" data-pc-id-field="${esc(idField)}" data-pc-name-field="${esc(nameField)}"` : ""} data-pc-entity="${esc(entityLabel)}">
+      ${multi ? "" : `<input type="hidden" name="${idField}" value="${sel ? sel.id : (selectedId || "")}" data-pc-id />
+      <input type="hidden" name="${nameField}" value="${esc(pureName)}" data-pc-name-hidden />`}
+      <div class="relative">
+        <!-- 보이는 검색칸은 name 없음(Chrome 자동완성 팝업이 앱 드롭다운을 덮는 것 방지) — 값은 숨김 필드(단일) / 칩 hidden(multi)로 제출 -->
+        ${field}
+        <!-- Gmail식 제안 드롭다운: 내용 폭에 맞춘 좁은 팝업 + 2줄(이름·호칭 / 이메일·소속) 컴팩트 행 -->
+        <div class="absolute left-0 z-30 mt-1 hidden max-h-64 w-max min-w-[14rem] max-w-full overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pc-pop role="listbox"></div>
       </div>
       <div class="mt-1.5 ${selInfo ? "" : "hidden"} ${compact ? "text-xs" : "text-sm"} text-muted" data-pc-info>${selInfo}</div>
       ${inlineJson}

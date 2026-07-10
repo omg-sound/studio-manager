@@ -45,4 +45,17 @@ function stripTrailingTitle(full) {
   return s;
 }
 
-module.exports = { splitKoreanName, stripTrailingTitle };
+/**
+ * 직책 → 호칭 파생("대표"→"대표님", "실장"→"실장님"). 이미 '님'으로 끝나면 그대로.
+ * 대표자 등록이 '대표님'을 자동으로 붙이던 흐름(resolveOwnerParty)을 전 직책으로 일반화(2026-07-10 사용자 결정) —
+ * 호칭 컬럼 하나만 보면 전 화면(연락처 목록·콤보·청구처 카드)이 일관되게 '엄유미 실장님'으로 표시된다.
+ * @param {string} title 직책(job_title)
+ * @returns {string|null} 호칭 또는 null(직책 없음)
+ */
+function honorificFromTitle(title) {
+  const t = String(title == null ? "" : title).trim();
+  if (!t) return null;
+  return t.endsWith("님") ? t : t + "님";
+}
+
+module.exports = { splitKoreanName, stripTrailingTitle, honorificFromTitle };

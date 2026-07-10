@@ -12,7 +12,7 @@
  */
 
 const { db } = require("../db");
-const { splitKoreanName } = require("../lib/korean-name");
+const { splitKoreanName, honorificFromTitle } = require("../lib/korean-name");
 const { todayYmd } = require("../lib/date");
 const { formatPhone, formatBizNo } = require("../lib/format"); // 전화·사업자번호 하이픈 정규화(전 저장 경로 공통, lib으로 승격 — studio·db 백필과 공유)
 
@@ -93,7 +93,8 @@ function createPerson(b = {}) {
     activity_name: blankToNull(b.activity_name),
     is_artist: b.is_artist || blankToNull(b.activity_name) ? 1 : 0,
     phone: formatPhone(b.phone), email: blankToNull(b.email), memo: blankToNull(b.memo),
-    family_name: fam, given_name: giv, honorific: blankToNull(b.honorific),
+    // 호칭 미지정이면 직책에서 파생('실장'→'실장님') — 대표자 자동 '대표님'과 같은 흐름(2026-07-10).
+    family_name: fam, given_name: giv, honorific: blankToNull(b.honorific) || honorificFromTitle(b.job_title),
     department: blankToNull(b.department), job_title: blankToNull(b.job_title),
     cash_receipt_no: formatPhone(b.cash_receipt_no), // 전화형이면 하이픈 정규화(카드번호 등 형식 불명은 원본 보존)
   });
@@ -172,14 +173,17 @@ function updateParty(id, b = {}) {
   const name = resolveDisplayName({ ...b, activity_name: activityName, name: b.name || cur.name });
   const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (activityName ? 1 : cur.is_artist);
   const contactPartyId = b.contact_party_id !== undefined ? (b.contact_party_id ? Number(b.contact_party_id) : null) : (cur.contact_party_id || null);
+  const jobTitle = pick("job_title");
+  // 호칭이 비어 있을 때만 직책에서 파생(기존 호칭 존중 — 대표자 '대표님' 자동 부여와 같은 규칙, 2026-07-10).
+  const honorific = pick("honorific") || honorificFromTitle(jobTitle);
   db().prepare(
     `UPDATE parties SET name=?, activity_name=?, is_artist=?, phone=?, email=?, memo=?,
        family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=?, contact_party_id=? WHERE id=?`
   ).run(
     name, activityName, isArtist,
     pick("phone", formatPhone), pick("email"), pick("memo"),
-    pick("family_name"), pick("given_name"), pick("honorific"),
-    pick("department"), pick("job_title"), pick("cash_receipt_no", formatPhone), contactPartyId, Number(id)
+    pick("family_name"), pick("given_name"), honorific,
+    pick("department"), jobTitle, pick("cash_receipt_no", formatPhone), contactPartyId, Number(id)
   );
 }
 

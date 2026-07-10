@@ -582,17 +582,22 @@ router.get("/:id", asyncHandler(async (req, res) => {
 
 /**
  * 클라이언트 담당자(연락처) 연동 — 콤보에 남은 사람만 이 클라이언트 담당자로 통째 교체(2026-07-10 사용자 결정).
- * contact_name = 콤마로 여러 명(personCombo multi). 각 조각을 resolvePersonByName으로 해석 —
- * 라벨 안전망이 '박수한 대표님 (워터멜론)' 같은 표시 라벨도 그 사람으로 매칭(유일)하고 새 이름만 생성(세션 디렉터와 동일).
- * 빠진 사람의 소속 종료·대표자 예외는 setOrgContacts가 처리.
+ * 제출 = 칩마다 `contact_id`(당사자 id·신규는 빈값) + `contact_name`(순수 본명) 쌍(personCombo multi, 인덱스 페어링).
+ * id가 있으면 그대로 쓰고(표시 라벨 파싱 없음 — '엄유미 실장님'이 새 사람으로 등록될 여지 없음),
+ * 신규 칩은 이름으로 재사용/생성(resolvePersonByName). 담당자 해제(재직 유지)는 setOrgContacts가 처리.
  */
 function linkClientContact(clientId, body) {
+  const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
+  const rawIds = asArr(body.contact_id);
+  const rawNames = asArr(body.contact_name);
   const ids = [];
   const push = (pid) => { if (pid && !ids.includes(pid)) ids.push(pid); };
-  const name = String(body.contact_name || "").trim();
-  // 명시 id + 콤마 없는 단일 이름(레거시 단일 콤보 제출) = id 우선. 콤마가 있으면 이름 목록이 명시적 → 이름별 해석.
-  if (body.contact_id && !name.includes(",")) push(Number(body.contact_id));
-  else for (const part of name.split(",")) { const one = part.trim(); if (one) push(resolvePersonByName(one)); }
+  for (let i = 0; i < Math.max(rawIds.length, rawNames.length); i++) {
+    const pid = Number(rawIds[i]) || null;
+    if (pid) { push(pid); continue; }
+    const nm = String(rawNames[i] || "").trim();
+    if (nm) push(resolvePersonByName(nm)); // 목록에 없는 이름 → 기존 재사용 또는 새 연락처 생성
+  }
   setOrgContacts(Number(clientId), ids);
 }
 

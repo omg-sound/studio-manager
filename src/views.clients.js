@@ -3,7 +3,7 @@
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
 const { COMPANY_ROLES } = require("./config");
-const { esc, pageHeader, explain, dirtyActionRow, personCombo, personName, companyCombo, groupCombo, projectTypeBadge } = require("./views");
+const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, groupCombo, projectTypeBadge } = require("./views");
 const { contactOptions, listOrgContacts, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
@@ -100,9 +100,9 @@ function clientContactCombo(c, isEdit) {
   const cur = isEdit && c.id ? listOrgContacts(c.id) : [];
   return `
     <div>
-      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 콤마로 여러 명)</span></label>
-      ${personCombo({ idField: "contact_id", nameField: "contact_name", initialName: cur.map((p) => personName(p)).join(", "), options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: "담당자 — 검색 또는 새로 등록, 콤마로 여러 명" })}
-      ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다. 칸에서 지운 사람은 담당자 지정만 풀립니다 — 이 회사 재직(소속)과 연락처는 그대로 남습니다. 담당자가 아닌 직원은 연락처의 회사·소속 이력에서 관리합니다.`)}
+      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 여러 명 가능)</span></label>
+      ${personCombo({ idField: "contact_id", nameField: "contact_name", selected: cur, options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: cur.length ? "담당자 추가" : "담당자 — 검색 또는 새로 등록" })}
+      ${explain(`이름을 검색해 고르면 배지로 담깁니다(여러 명 가능). 배지의 ✕ 또는 빈 칸에서 백스페이스로 한 명씩 뺍니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다. 뺀 사람은 담당자 지정만 풀립니다 — 이 회사 재직(소속)과 연락처는 그대로 남습니다. 담당자가 아닌 직원은 연락처의 회사·소속 이력에서 관리합니다.`)}
     </div>`;
 }
 

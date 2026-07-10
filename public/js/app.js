@@ -1578,17 +1578,17 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var hidName = root.querySelector("[data-pc-name-hidden]"); // 제출용 이름(보이는 칸은 name 없음 — Chrome 자동완성 회피)
     var pop = root.querySelector("[data-pc-pop]");
     var info = root.querySelector("[data-pc-info]");
-    var multi = root.hasAttribute("data-pc-multi"); // 콤마 여러 명 모드(세션 디렉터 등, 2026-07-05) — 마지막 조각 검색·선택 이어붙임·id 미사용
-    function seg() {
-      var v = input.value;
-      var i = v.lastIndexOf(",");
-      return i === -1 ? { head: "", tail: v } : { head: v.slice(0, i + 1).replace(/\s*$/, "") + " ", tail: v.slice(i + 1) };
-    }
+    // multi = Gmail식 칩 모드(2026-07-10, 옛 콤마 텍스트 방식 대체) — 선택된 사람은 한 덩어리 배지, ✕/백스페이스로 통째 삭제.
+    // 제출은 칩마다 hidden(idField=당사자 id·신규는 빈값 / nameField=순수 본명) 쌍 → 서버가 인덱스 페어링으로 해석.
+    var multi = root.hasAttribute("data-pc-multi");
+    var chipBox = root.querySelector("[data-pc-chips]");
+    var idField = root.getAttribute("data-pc-id-field") || "contact_id";
+    var nameField = root.getAttribute("data-pc-name-field") || "contact_name";
     // 옵션: 인라인(data-pc-options) 또는 페이지 공유 스크립트(data-pc-options-ref로 참조, 중복 임베드 제거)
     var refId = root.getAttribute("data-pc-options-ref");
     var dataEl = refId ? document.getElementById(refId) : root.querySelector("[data-pc-options]");
     var modal = root.querySelector("[data-pc-modal]");
-    if (!input || !hid || !pop) return; // dataEl 없어도 진행(옵션 빈 배열 — '새 등록'은 가능)
+    if (!input || !pop || (!multi && !hid)) return; // dataEl 없어도 진행(옵션 빈 배열 — '새 등록'은 가능). multi는 hidden id 대신 칩이 값을 갖는다
     var opts = [];
     try { opts = JSON.parse((dataEl && dataEl.textContent) || "[]"); } catch (e) { opts = []; }
     document.addEventListener("party-created", function (e) { // 어디서든 새 사람 생성/갱신되면 이 담당자 콤보 옵션에 반영
@@ -1605,7 +1605,45 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
     function fireInput() { input.dispatchEvent(new Event("input", { bubbles: true })); }
-    function subOf(o) { return [o.group, o.company, o.phone].filter(Boolean).join(" · "); } // 소속 그룹·회사·전화로 식별
+    function subOf(o) { return [o.email || o.phone, o.group || o.company].filter(Boolean).join(" · "); } // Gmail식 2줄 부제: 이메일(없으면 전화) · 소속
+
+    // ── 칩(선택된 사람 한 덩어리) — 서버 personChip(views.js)과 마크업 형식 동일 ──
+    function chipEl(o) {
+      var label = labelOf(o);
+      var span = document.createElement("span");
+      span.className = "inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-elevated py-0.5 pl-2.5 pr-1 text-sm";
+      span.setAttribute("data-pc-chip", "");
+      var t = document.createElement("span"); t.className = "truncate"; t.textContent = label; span.appendChild(t);
+      var hi = document.createElement("input"); hi.type = "hidden"; hi.name = idField; hi.value = o.id ? String(o.id) : ""; hi.setAttribute("data-pc-chip-id", ""); span.appendChild(hi);
+      var hn = document.createElement("input"); hn.type = "hidden"; hn.name = nameField; hn.value = o.name || ""; hn.setAttribute("data-pc-chip-name", ""); span.appendChild(hn);
+      var x = document.createElement("button"); x.type = "button";
+      x.className = "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted hover:bg-border hover:text-fg";
+      x.setAttribute("data-pc-chip-remove", ""); x.setAttribute("aria-label", label + " 제거"); x.textContent = "✕";
+      span.appendChild(x);
+      return span;
+    }
+    function chipList() { return chipBox ? Array.prototype.slice.call(chipBox.querySelectorAll("[data-pc-chip]")) : []; }
+    // 칩 변경은 클릭으로 폼 데이터를 바꾸므로 dirty 감시(input/change만 봄)에 수동 통지 — 함정 #23.
+    function chipsChanged() { if (input.form) input.form.dispatchEvent(new Event("change", { bubbles: true })); }
+    function addChip(o) {
+      if (!chipBox || !o) return;
+      if (chipHas(o)) { input.value = ""; return; } // 이미 담긴 사람은 중복 추가 안 함
+      chipBox.insertBefore(chipEl(o), input);
+      input.value = ""; chipsChanged();
+    }
+    function removeChip(chip) { if (chip && chip.parentNode) { chip.parentNode.removeChild(chip); chipsChanged(); } }
+    function chipKeys(chip) {
+      var id = chip.querySelector("[data-pc-chip-id]"), nm = chip.querySelector("[data-pc-chip-name]");
+      return { id: id ? String(id.value || "") : "", name: nm ? String(nm.value || "").trim().toLowerCase() : "" };
+    }
+    /** 이 사람이 이미 칩으로 담겨 있나 — id 우선(정확), 신규(빈 id) 칩은 본명으로 비교. */
+    function chipHas(o) {
+      return chipList().some(function (c) {
+        var k = chipKeys(c);
+        if (k.id && o.id) return String(k.id) === String(o.id);
+        return k.name && k.name === String(o.name || "").trim().toLowerCase();
+      });
+    }
     // 표시 라벨 = 본명 + 호칭 + (활동명) — 아티스트 병기 + 선택 후 필드에 호칭 표기(2026-07-05, 청구서 제외). 제출용 숨김 이름은 순수 본명(input 핸들러가 분리 동기화). 서버 shown과 형식 동일.
     // name 필드가 이미 호칭으로 끝나면(resolveDisplayName이 성+이름+호칭으로 조립한 경우) 중복 안 붙임.
     function labelOf(o) { if (!o) return ""; var n = String(o.name || ""); var h = o.honorific ? String(o.honorific).trim() : ""; var a = o.alt ? String(o.alt).trim() : ""; var s = (h && n.slice(-h.length) !== h) ? n + " " + h : n; return a && a !== n ? s + " (" + a + ")" : s; }
@@ -1627,29 +1665,25 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var label = nm ? "'" + esc(nm) + "'(으)로 새 " + esc(entity) + " 등록" : "새 " + esc(entity) + " 등록";
       return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
     }
-    // multi: 마지막 조각 앞에 이미 적은 사람들(라벨·본명·활동명 중 하나로 일치). 후보에서 제외해
-    // 이미 담긴 사람을 다시 고를 수 없게 한다 — 고르면 pick()이 마지막 조각을 그 사람으로 교체해 버린다.
-    // (회사명도 검색 대상이라 '윤종신'을 치면 회사가 '(주)월간윤종신'인 엄유미까지 후보로 뜨던 것, 2026-07-10)
-    function isChosen(o) {
-      if (!multi) return false;
-      var head = seg().head;
-      if (!head) return false;
-      var keys = [labelOf(o), o.name, o.alt].filter(Boolean).map(function (s) { return String(s).trim().toLowerCase(); });
-      return head.split(",").some(function (part) {
-        var p = part.trim().toLowerCase();
-        return p && keys.indexOf(p) !== -1;
-      });
-    }
+    // 이미 칩으로 담긴 사람은 후보에서 제외(회사명도 검색 대상이라 '윤종신'을 치면 회사가 '(주)월간윤종신'인
+    // 엄유미까지 후보로 뜨던 것 — 2026-07-10 사용자 리포트).
+    function isChosen(o) { return multi && chipHas(o); }
+    // Gmail식 제안 행: 이름(+호칭·활동명) 굵게 / 이메일·소속 작게 2줄.
+    var personRowCls = "flex w-full cursor-pointer flex-col items-start gap-0 px-3 py-1.5 text-left hover:bg-elevated active:bg-elevated";
     function render() {
-      var raw = multi ? seg().tail.trim() : input.value.trim(); // multi=마지막 콤마 뒤 조각으로만 검색
+      var raw = input.value.trim();
       var q = raw.toLowerCase();
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return !isChosen(o) && (String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1) || labelOf(o).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명·소속 회사·표시 라벨(선택 후 재열람) 검색 — 이미 적은 사람 제외
-        html = view.map(function (o, i) { var nm = esc(o.name) + (o.honorific ? ' <span class="text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="text-muted">(' + esc(o.alt) + ')</span>' : ""); return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + nm + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
+        view = opts.filter(function (o) { return !isChosen(o) && (String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1) || labelOf(o).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명·소속 회사·표시 라벨 검색 — 이미 담은 사람 제외
+        html = view.map(function (o, i) {
+          var nm = esc(o.name) + (o.honorific ? ' <span class="font-normal text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="font-normal text-muted">(' + esc(o.alt) + ')</span>' : "");
+          var sub = subOf(o);
+          return '<button type="button" class="' + personRowCls + '" data-idx="' + i + '"><span class="max-w-full truncate text-sm font-medium text-fg">' + nm + '</span>' + (sub ? '<span class="max-w-full truncate text-xs text-muted">' + esc(sub) + '</span>' : "") + '</button>';
+        }).join("");
         var exact = function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q) || labelOf(o).toLowerCase() === q; };
-        // 이미 적은 사람을 그대로 다시 타이핑한 경우 '새 등록'을 권하지 않는다(중복 생성 유도 방지) — 후보도 없으면 드롭다운을 닫는다.
+        // 이미 담은 사람을 그대로 다시 타이핑한 경우 '새 등록'을 권하지 않는다(중복 생성 유도 방지) — 후보도 없으면 드롭다운을 닫는다.
         var dupe = multi && opts.some(function (o) { return isChosen(o) && exact(o); });
         if (!dupe && !view.some(exact)) html += newRow(raw);
       }
@@ -1657,12 +1691,12 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       pop.innerHTML = html; show();
     }
     function pick(o) {
-      if (multi) { input.value = seg().head + labelOf(o); hid.value = ""; fireInput(); hide(); return; } // 이어붙임 — 제출은 전체 텍스트(서버가 콤마 해석)
+      if (multi) { addChip(o); fireInput(); hide(); return; } // 칩 한 덩어리로 담김(제출은 칩 hidden id·본명 쌍)
       input.value = labelOf(o); hid.value = o.id; setInfo(o, false); fireInput(); hide();
     }
     function openModal() {
       if (!modal) { hide(); return; }
-      var n = modal.querySelector("[data-pc-name]"); n.value = multi ? seg().tail.trim() : input.value.trim(); // 콤마 다중이면 마지막 조각만 프리필
+      var n = modal.querySelector("[data-pc-name]"); n.value = input.value.trim(); // 타이핑한 이름 프리필(multi도 입력칸엔 검색어만 있음)
       ["[data-pc-activity]", "[data-pc-phone]", "[data-pc-email]", "[data-pc-company]", "[data-pc-job]"].forEach(function (s) { var el = modal.querySelector(s); if (el) el.value = ""; });
       modal.querySelector("[data-pc-err]").classList.add("hidden");
       modal.classList.remove("hidden"); modal.classList.add("flex"); hide(); n.focus();
@@ -1698,7 +1732,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         if (job) body.append("job_title", job);
         fetch("/contacts", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "person", id: d.id, name: d.name, activity: activity, phone: phone, email: email, company: company, isArtist: !!activity }); var lbl = labelOf({ name: d.name, alt: activity }); if (multi) { input.value = seg().head + lbl; hid.value = ""; } else { input.value = lbl; hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); } closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기(표시=본명 (활동명); multi=이어붙임, 제출 숨김 이름은 input 핸들러가 동기화)
+          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); var hon = job ? (/님$/.test(job) ? job : job + "님") : ""; announceParty({ kind: "person", id: d.id, name: d.name, activity: activity, phone: phone, email: email, company: company, job_title: job, honorific: hon, isArtist: !!activity }); if (multi) { addChip({ id: d.id, name: d.name, alt: activity, honorific: hon }); } else { input.value = labelOf({ name: d.name, alt: activity, honorific: hon }); hid.value = d.id; setInfo({ phone: phone, email: email, company: company }, true); } closeModal(); fireInput(); hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 전역 브로드캐스트 + 드롭다운 닫기. 호칭은 서버가 직책에서 파생(honorificFromTitle)하므로 표시도 같은 규칙으로 즉시 반영
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { pSave.disabled = false; });
       });
@@ -1747,11 +1781,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     input.addEventListener("click", render);
     input.addEventListener("input", function () {
       render();
-      if (multi) { // 콤마 여러 명: 제출 = 전체 텍스트(라벨 포함 — 서버 resolvePersonByName 라벨 안전망이 이름별 해석), id·정보줄 미사용
-        if (hidName) hidName.value = input.value;
-        hid.value = "";
-        return;
-      }
+      if (multi) return; // 칩 모드: 입력칸은 검색어 전용(제출값은 칩 hidden), 숨김 id·정보줄 미사용
       var v = input.value.trim().toLowerCase();
       // 순수 본명 또는 표시 라벨('본명 (활동명)')과 정확 일치하면 선택 유지 — pick이 라벨을 넣어도 id가 안 풀리게.
       var m = opts.filter(function (o) { return String(o.name).toLowerCase() === v || labelOf(o).toLowerCase() === v; })[0];
@@ -1766,14 +1796,31 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       else if (b.hasAttribute("data-new")) openModal();
     });
     comboKbdNav(input, pop); // 방향키 이동·엔터 선택
-    if (hid.value) { var init = opts.filter(function (o) { return String(o.id) === String(hid.value); })[0]; if (init) setInfo(init, false); } // 편집 초기값 정보
+    if (multi && chipBox) {
+      // 칩 ✕ 클릭(위임) — 칩 안 hidden까지 통째로 제거.
+      chipBox.addEventListener("click", function (e) {
+        var x = e.target.closest("[data-pc-chip-remove]");
+        if (x) { e.preventDefault(); removeChip(x.closest("[data-pc-chip]")); input.focus(); }
+      });
+      // 빈 입력에서 백스페이스 → 마지막 칩 삭제(Gmail 동작). 텍스트가 있으면 평범한 글자 지우기.
+      input.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중(함정 #18)
+        if (e.key !== "Backspace" || input.value !== "") return;
+        var list = chipList();
+        if (list.length) { e.preventDefault(); removeChip(list[list.length - 1]); }
+      });
+      // 칩 영역 아무 데나 클릭하면 입력칸으로 포커스(입력칸이 칩 뒤에 밀려 있어도).
+      chipBox.addEventListener("mousedown", function (e) { if (e.target === chipBox) { e.preventDefault(); input.focus(); } });
+    }
+    if (!multi && hid.value) { var init = opts.filter(function (o) { return String(o.id) === String(hid.value); })[0]; if (init) setInfo(init, false); } // 편집 초기값 정보
     // 프로그래매틱 세팅(다른 콤보 연동용) — 제작/운영에 개인 선택 시 고객측 담당자 자동 채움(2026-07-05).
     root.__pcSetById = function (id) {
       var m = opts.filter(function (o) { return String(o.id) === String(id); })[0];
+      if (multi) { if (m) addChip(m); return; }
       if (m) { input.value = labelOf(m); hid.value = m.id; if (hidName) hidName.value = m.name; setInfo(m, false); }
       else { hid.value = id; } // 옵션에 없으면 id만(정보 표시는 생략)
     };
-    root.__pcHasValue = function () { return !!(hid.value && String(hid.value).trim()); };
+    root.__pcHasValue = function () { return multi ? chipList().length > 0 : !!(hid.value && String(hid.value).trim()); };
   }
   // 정적 + 동적(디렉터 '+추가' clone 등) 행 모두 초기화. container 지정 시 그 안(또는 자신)의 콤보만.
   window.__initPersonCombos = function (container) {

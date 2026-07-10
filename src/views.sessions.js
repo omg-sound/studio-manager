@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, SESSION_TYPE_RATE_KIND } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personComboCompanyScript, personLabel, personName } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personComboCompanyScript, personLabel } = require("./views");
 const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers, listRateCategories, rateCategoryKind } = require("./data");
 
@@ -178,13 +178,12 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const allContacts = contactOptions();
   // 회사 옵션도 optionsRef가 있으면(세션 목록 — 폼이 여럿) 페이지 공유 스크립트를 참조해 행마다 중복 임베드 안 함(2026-07-10 스케일 점검).
   const companyOpts = optionsRef ? [] : partyOptions({ role: "company" }); // '새 담당자 등록' 모달 회사칸 검색 콤보 — 기존 회사 타이핑 검색·오타/중복 방지
-  const currentDirectors = s && s.id ? listSessionDirectors(s.id) : [];
-  const directorInitial = currentDirectors.map((d) => personName(d)).join(", "); // 편집 프리필 = 라벨 콤마 목록
+  const currentDirectors = s && s.id ? listSessionDirectors(s.id) : []; // 편집 프리필 = 칩 목록(제출은 칩 hidden id·본명 쌍)
   const directorField = `
     <div class="mt-2">
-      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자 — 콤마로 여러 명)</span></label>
-      ${personCombo({ idField: "director_contact_id", nameField: "director_name", initialName: directorInitial, options: allContacts, companyOptions: companyOpts, companyOptionsRef: optionsRef ? "pc-company-shared" : "", optionsRef, compact: true, multi: true, placeholder: "담당 디렉터 — 검색 또는 새로 등록, 콤마로 여러 명" })}
-      ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다.`)}
+      <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자 — 여러 명 가능)</span></label>
+      ${personCombo({ idField: "director_contact_id", nameField: "director_name", selected: currentDirectors, options: allContacts, companyOptions: companyOpts, companyOptionsRef: optionsRef ? "pc-company-shared" : "", optionsRef, compact: true, multi: true, placeholder: currentDirectors.length ? "디렉터 추가" : "담당 디렉터 — 검색 또는 새로 등록" })}
+      ${explain(`이름을 검색해 고르면 배지로 담깁니다(여러 명 가능). 배지의 ✕ 또는 빈 칸에서 백스페이스로 한 명씩 뺍니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다.`)}
     </div>`;
   // 시간 입력 = 구글 캘린더식(2026-07-04 그리드 폐지): [날짜][시작]–[종료][종료날짜(자동)] 타이핑 + 종일 + 소요 슬라이더.
   // 시작/종료는 콜론 자동 삽입(1400→14:00, app.js). 종료·슬라이더는 양방향 동기(종료 입력→소요 재계산, 소요 변경→종료 갱신).
