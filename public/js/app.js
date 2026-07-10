@@ -824,7 +824,7 @@
     }
     function render() {
       var q = input.value.trim().toLowerCase();
-      view = (q ? opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : opts).slice(0, 12);
+      view = (q ? comboRankSort(opts, q, function (o) { return [o.name]; }) : opts).slice(0, 12); // 정확 일치 우선(공용 랭킹)
       var html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span></button>'; }).join("");
       if (q && !view.some(function (o) { return String(o.name).toLowerCase() === q; })) html += newRow(input.value.trim());
       else if (!q) html += newRow("");
@@ -1119,6 +1119,34 @@
 
 // 콤보 공용 키보드 내비게이션(방향키 이동·엔터 선택·ESC 닫기). 하이라이트 항목을 click 시뮬레이션 →
 // 각 콤보의 기존 click 핸들러가 선택 처리(콤보별 pick 로직 몰라도 동작). pop 재렌더(MutationObserver)마다 첫 항목 하이라이트.
+/**
+ * 콤보 후보 랭킹(공용) — 검색어 매칭 강도. 작을수록 먼저, 99=미매칭.
+ * fields는 우선순위 순서(앞 필드가 더 중요): 각 필드 안에서 정확 일치 > 앞부분 일치 > 중간 포함.
+ * 필터만 하고 정렬을 안 하면 옵션 배열 순서(대개 가나다순)가 그대로 노출돼, 이름이 정확히 일치하는
+ * 항목이 부분 일치 항목에 밀린다. 첫 항목이 하이라이트되므로 엔터로 엉뚱한 대상이 선택된다
+ * (2026-07-10: 담당자·청구처·제작/운영·아티스트 콤보에서 같은 클래스로 재발 → 공용화 + 가드레일).
+ */
+function comboRank(q, fields) {
+  var best = 99;
+  for (var i = 0; i < fields.length; i++) {
+    var v = fields[i];
+    if (!v) continue;
+    var t = String(v).toLowerCase();
+    var r = t === q ? 0 : t.indexOf(q) === 0 ? 1 : t.indexOf(q) !== -1 ? 2 : 99;
+    if (r < 99) best = Math.min(best, i * 10 + r);
+  }
+  return best;
+}
+
+/** 매칭 항목만 남기고 랭킹순 정렬(동점이면 원래 순서 유지 — 안정 정렬). fieldsOf(o)=우선순위 필드 배열. */
+function comboRankSort(list, q, fieldsOf) {
+  return list
+    .map(function (o, i) { return { o: o, r: comboRank(q, fieldsOf(o)), i: i }; })
+    .filter(function (x) { return x.r < 99; })
+    .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
+    .map(function (x) { return x.o; });
+}
+
 function comboKbdNav(input, pop) {
   if (!input || !pop) return;
   var hi = -1;
@@ -1224,7 +1252,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         view = [];
         html = newRow("새 아티스트 등록"); // 검색 안내 줄 폐기(타이핑하면 자동 검색)
       } else {
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.realName && String(o.realName).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 활동명·본명 둘 다 검색
+        view = comboRankSort(opts, q, function (o) { return [o.name, o.realName]; }).slice(0, 12); // 활동명 > 본명(공용 랭킹 — 정확 일치 우선)
         html = view.map(pickRow).join("");
         var exact = view.some(function (o) { return String(o.name).toLowerCase() === q || (o.realName && String(o.realName).toLowerCase() === q); });
         if (!exact) html += newRow("'" + s.tail.trim() + "'(으)로 새 아티스트");
@@ -1323,7 +1351,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         function agHide() { agPop.classList.add("hidden"); }
         function agRender() {
           var q = agInput.value.trim().toLowerCase();
-          agView = (q ? agOpts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : agOpts).slice(0, 10);
+          agView = (q ? comboRankSort(agOpts, q, function (o) { return [o.name]; }) : agOpts).slice(0, 10); // 정확 일치 우선(공용 랭킹)
           var html = agView.map(function (o, i) { return '<button type="button" class="' + agRowCls + '" data-agidx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span></button>'; }).join("");
           if (q && !agView.some(function (o) { return String(o.name).toLowerCase() === q; })) html += '<button type="button" class="' + agRowCls + ' text-primary" data-agnew="1"><span class="truncate">＋ \'' + esc(agInput.value.trim()) + '\'(으)로 새 소속사 등록</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
           agPop.innerHTML = html || '<div class="px-3 py-2 text-sm text-muted">이름을 입력해 새 소속사로 등록</div>'; agPop.classList.remove("hidden");
@@ -1447,7 +1475,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       if (!q) { view = []; html = newRow(""); }
       else {
         // 이름 또는 표시 라벨(활동명 포함)로 검색 — 아티스트를 활동명으로도 찾게.
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || dispOf(o).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1); }).slice(0, 12);
+        view = comboRankSort(opts, q, function (o) { return [o.name, dispOf(o), o.alt]; }).slice(0, 12); // 이름 > 표시 라벨 > 활동명(공용 랭킹)
         html = view.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(dispOf(o)) + '</span><span class="shrink-0 text-xs text-muted">' + esc(o.sub || "") + '</span></button>'; }).join("");
         if (!view.some(function (o) { return String(o.name).toLowerCase() === q || dispOf(o).toLowerCase() === q; })) html += newRow(input.value.trim());
       }
@@ -1501,7 +1529,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         function ownHide() { ownPop.classList.add("hidden"); }
         function ownRender() {
           var q = ownInput.value.trim().toLowerCase();
-          ownView = (q ? ownOpts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : ownOpts).slice(0, 10);
+          ownView = (q ? comboRankSort(ownOpts, q, function (o) { return [o.name]; }) : ownOpts).slice(0, 10); // 정확 일치 우선(공용 랭킹)
           var html = ownView.map(function (o, i) { return '<button type="button" class="' + ownRowCls + '" data-owneridx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span></button>'; }).join("");
           if (q && !ownView.some(function (o) { return String(o.name).toLowerCase() === q; })) html += '<button type="button" class="' + ownRowCls + ' text-primary" data-ownernew="1"><span class="truncate">＋ \'' + esc(ownInput.value.trim()) + '\'(으)로 새 연락처 등록</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
           ownPop.innerHTML = html || '<div class="px-3 py-2 text-sm text-muted">이름을 입력해 새 연락처로 등록</div>'; ownPop.classList.remove("hidden");
@@ -1668,22 +1696,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     // 이미 칩으로 담긴 사람은 후보에서 제외(회사명도 검색 대상이라 '윤종신'을 치면 회사가 '(주)월간윤종신'인
     // 엄유미까지 후보로 뜨던 것 — 2026-07-10 사용자 리포트).
     function isChosen(o) { return multi && chipHas(o); }
-    /**
-     * 검색어 매칭 강도(작을수록 먼저). 99=미매칭.
-     * 이름 > 활동명 > 표시 라벨 > 소속 회사 순, 각 단계에서 정확 일치 > 앞부분 일치 > 중간 포함.
-     * (2026-07-10 사용자 리포트: '윤종신'을 치면 회사명이 '(주)월간윤종신'인 엄유미가 먼저 떴다 — 필터만 하고
-     *  정렬이 없어 옵션의 가나다순이 그대로 노출됐다. 엔터로 첫 항목을 고르면 엉뚱한 사람이 담긴다.)
-     */
-    function matchRank(o, q) {
-      function score(v, base) {
-        if (!v) return 99;
-        var s = String(v).toLowerCase();
-        if (s === q) return base;
-        if (s.indexOf(q) === 0) return base + 1;
-        return s.indexOf(q) !== -1 ? base + 2 : 99;
-      }
-      return Math.min(score(o.name, 0), score(o.alt, 10), score(labelOf(o), 20), score(o.company, 30));
-    }
+    // 후보 랭킹 필드(우선순위): 본명 > 활동명 > 표시 라벨 > 소속 회사. 공용 comboRank 사용.
+    function pcFields(o) { return [o.name, o.alt, labelOf(o), o.company]; }
 
     // Gmail식 제안 행: 이름(+호칭·활동명) 굵게 / 이메일·소속 작게 2줄.
     var personRowCls = "flex w-full cursor-pointer flex-col items-start gap-0 px-3 py-1.5 text-left hover:bg-elevated active:bg-elevated";
@@ -1693,11 +1707,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return !isChosen(o) && matchRank(o, q) < 99; })
-          .map(function (o, i) { return { o: o, r: matchRank(o, q), i: i }; }) // i=원래 순서(이름 가나다) → 동점이면 유지(안정 정렬)
-          .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
-          .map(function (x) { return x.o; })
-          .slice(0, 12); // 본명·활동명·소속 회사·표시 라벨 검색 — 이미 담은 사람 제외, 매칭 강도순
+        view = comboRankSort(opts.filter(function (o) { return !isChosen(o); }), q, pcFields).slice(0, 12); // 이미 담은 사람 제외 + 매칭 강도순
         html = view.map(function (o, i) {
           var nm = esc(o.name) + (o.honorific ? ' <span class="font-normal text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="font-normal text-muted">(' + esc(o.alt) + ')</span>' : "");
           var sub = subOf(o);
@@ -1780,7 +1790,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         };
         var coRender = function () {
           var q = coInput.value.trim().toLowerCase();
-          coView = (q ? coOpts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1; }) : coOpts).slice(0, 10);
+          coView = (q ? comboRankSort(coOpts, q, function (o) { return [o.name]; }) : coOpts).slice(0, 10); // 정확 일치 우선(공용 랭킹)
           var html = coView.map(function (o, i) { return '<button type="button" class="' + rowCls + '" data-co-idx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span><span class="shrink-0 text-xs text-muted">조직</span></button>'; }).join("");
           if (!coView.some(function (o) { return String(o.name).toLowerCase() === q; })) html += coNewRow(coInput.value.trim());
           coPop.innerHTML = html; coShow();
@@ -1925,7 +1935,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function labelFull(it) { return it.sub ? it.label + " · " + it.sub : it.label; }
     function render() {
       var q = input.value.trim().toLowerCase();
-      view = (q ? items.filter(function (it) { return String(it.label).toLowerCase().indexOf(q) !== -1 || String(it.sub || "").toLowerCase().indexOf(q) !== -1; }) : items).slice(0, 15);
+      // 이름(label) 우선, 소속·분류(sub)는 후순위 — 정확 일치가 부분 일치보다 먼저(공용 랭킹).
+      view = (q ? comboRankSort(items, q, function (it) { return [it.label, it.sub]; }) : items).slice(0, 15);
       pop.innerHTML = view.length
         ? view.map(function (it, i) { return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + esc(it.label) + '</span><span class="shrink-0 text-xs text-muted">' + esc(it.sub || "") + '</span></button>'; }).join("")
         : '<div class="px-3 py-2 text-sm text-muted">검색 결과 없음 · 비워 두면 자동 연결</div>';

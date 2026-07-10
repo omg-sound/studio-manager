@@ -758,7 +758,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
     </form>`;
 }
 
-module.exports = {
+module.exports = { artistCombo,
   newProjectMenu,
   projectListRow,
   projectForm,

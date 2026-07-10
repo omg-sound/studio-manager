@@ -682,3 +682,43 @@ test("personCombo: 이름 정확 일치가 앞부분 일치보다 먼저", () =>
   input.value = "종신"; fire(win, input, "input");
   assert.equal(rowNames(pop)[0], "종신", "정확 일치 최우선");
 });
+
+// ── 콤보 후보 정렬 공통화(2026-07-10) ─────────────────────────────────────────
+// personCombo에서 고친 '필터만 하고 정렬 없음'이 청구처·제작/운영·아티스트 콤보에도 남아 있었다.
+// 옵션 배열 순서가 그대로 노출돼, 이름이 정확히 일치하는 항목이 부분 일치 항목에 밀린다.
+// 첫 항목이 하이라이트되므로 엔터를 치면 엉뚱한 대상이 선택된다(청구처는 금전 직결).
+const { payerCombo } = require("../src/views");
+const { artistCombo } = require("../src/views.projects");
+const firstRows = (pop, sel = "button") => [...pop.querySelectorAll(sel)].map((b) => (b.querySelector("span") || b).textContent.trim());
+
+test("청구처 콤보: 이름 정확 일치가 부분 일치 회사보다 먼저", () => {
+  const clientOptions = [{ id: 1, name: "엄유미기획", kind: "company" }];      // 부분 일치(앞 순서)
+  const contactOptions = [{ id: 2, name: "엄유미", current_client: "다른회사" }]; // 정확 일치
+  const { win, doc } = mountDom(`<form>${payerCombo({ clientOptions, contactOptions })}</form>`);
+  const input = doc.querySelector("[data-pk-input]");
+  const pop = doc.querySelector("[data-pk-pop]");
+  input.value = "엄유미"; fire(win, input, "input");
+  assert.equal(firstRows(pop)[0], "엄유미", `정확 일치가 첫 후보 — 실제: ${JSON.stringify(firstRows(pop))}`);
+});
+
+test("companyCombo(제작/운영): 이름 정확 일치가 부분 일치보다 먼저", () => {
+  createCompany({ name: "ㄱ달빛" });  // 부분 일치인데 가나다순 앞 → 정렬 없으면 먼저
+  createCompany({ name: "달빛" });    // 정확 일치
+  const { win, doc } = mountDom(`<form>${companyCombo("production_company", "", "제작사", "제작/운영")}</form>`);
+  const input = doc.querySelector("[data-cc-input]");
+  const pop = doc.querySelector("[data-cc-pop]");
+  input.value = "달빛"; fire(win, input, "input");
+  assert.equal(firstRows(pop)[0], "달빛", `정확 일치가 첫 후보 — 실제: ${JSON.stringify(firstRows(pop))}`);
+});
+
+test("아티스트 콤보: 이름 정확 일치가 부분 일치보다 먼저", () => {
+  const { createPerson } = require("../src/data");
+  createPerson({ name: "가루나", nickname: "가루나" }); // 부분 일치인데 가나다순으로 앞 → 정렬 없으면 먼저 노출
+  createPerson({ name: "루나", nickname: "루나" });     // 정확 일치
+  const { win, doc } = mountDom(`<form>${artistCombo({})}</form>`);
+  const input = doc.querySelector("[data-artist-input]");
+  const pop = doc.querySelector("[data-artist-pop]");
+  input.value = "루나"; fire(win, input, "input");
+  const rows = firstRows(pop, "button[data-idx]");
+  assert.equal(rows[0], "루나", `정확 일치가 첫 후보 — 실제: ${JSON.stringify(rows)}`);
+});

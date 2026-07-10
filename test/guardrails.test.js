@@ -175,3 +175,29 @@ test("guardrail: people.js의 people.people.<메서드> 호출은 googleapis에 
 });
 
 test.after(() => cleanupDb(process.env.DB_PATH, db()));
+
+// ── ⑩ 콤보 드롭다운 후보는 반드시 매칭 강도순 정렬(공용 comboRankSort) ──
+// 사고 이력(2026-07-10, 4개 콤보에서 동시 재발): 후보를 filter만 하고 정렬하지 않으면 옵션 배열 순서
+// (대개 이름 가나다순)가 그대로 노출돼, 이름이 정확히 일치하는 항목이 부분 일치 항목에 밀린다.
+// 첫 항목이 하이라이트되므로 엔터를 치면 엉뚱한 대상이 선택된다 — 청구처 콤보에서는 잘못된 청구서 발행.
+// (담당자·청구처·제작/운영·아티스트·그룹·업체 미니콤보 전부 comboRankSort로 통일)
+test("guardrail: app.js 콤보 후보 목록(view=...filter)은 comboRankSort로 정렬할 것", () => {
+  const s = read(path.join("public", "js", "app.js"));
+  const offenders = s
+    .split("\n")
+    .map((line, i) => ({ line: line.trim(), no: i + 1 }))
+    .filter(({ line }) => /\bview\s*=\s*/i.test(line) && /\.filter\(/.test(line) && !/comboRankSort/.test(line));
+  assert.deepEqual(
+    offenders.map((o) => `${o.no}: ${o.line.slice(0, 80)}`),
+    [],
+    "콤보 후보는 comboRankSort(list, q, fieldsOf)로 정렬해야 합니다(정확 일치 > 앞부분 > 부분 포함)"
+  );
+});
+
+test("guardrail: comboRank는 정확 일치 > 앞부분 일치 > 중간 포함 순으로 매긴다", () => {
+  const s = read(path.join("public", "js", "app.js"));
+  assert.ok(/function comboRank\(q, fields\)/.test(s), "공용 comboRank 존재");
+  assert.ok(/function comboRankSort\(list, q, fieldsOf\)/.test(s), "공용 comboRankSort 존재");
+  // 랭킹 규칙이 뒤집히지 않았는지(=== q 가 indexOf===0 보다 낮은 점수)
+  assert.ok(/t === q \? 0 : t\.indexOf\(q\) === 0 \? 1 : t\.indexOf\(q\) !== -1 \? 2 : 99/.test(s), "정확>앞부분>포함 순서 유지");
+});
