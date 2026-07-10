@@ -9,7 +9,7 @@ const {
   listClients, getParty, listProjectsForParty,
   listInvoicesForParty,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  setOrgContacts, listContacts, listAssociates, resolvePersonByName, resolveOwnerParty, ensureOwnerAffiliation,
+  setOrgContacts, setCompanyOwners, listCompanyOwners, listContacts, listAssociates, resolvePersonByName,
   listArtistsForAgency, currentAffiliation, classifyParty,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
@@ -239,6 +239,23 @@ router.get("/new", (req, res) => {
   res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
 });
 
+/**
+ * 대표자 칩(공동대표 가능) 해석 — `owner_id`(당사자 id·신규는 빈값) + `owner_name`(순수 본명) 쌍의 인덱스 페어링.
+ * id가 있으면 그대로, 없으면 이름으로 재사용/생성. 호칭 '대표님'·소속 연결은 setCompanyOwners가 처리.
+ */
+function resolveOwnerIds(b) {
+  const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
+  const ids = asArr(b.owner_id);
+  const names = asArr(b.owner_name);
+  const out = [];
+  for (let i = 0; i < Math.max(ids.length, names.length); i++) {
+    const pid = Number(ids[i]) || null;
+    const resolved = pid || (String(names[i] || "").trim() ? resolvePersonByName(names[i]) : null);
+    if (resolved && !out.includes(resolved)) out.push(resolved);
+  }
+  return out;
+}
+
 // 그룹 담당자(personCombo) 해석 — hidden contact_party_id 우선, 없으면 타이핑 이름으로 재사용/생성(resolvePersonByName), 비면 null.
 function resolveContactPartyId(b) {
   if (b.contact_party_id) return Number(b.contact_party_id);
@@ -259,14 +276,13 @@ router.post("/", (req, res) => {
     // 그룹 아티스트(밴드·아이돌 그룹) → group party(is_artist, 사람 아님). 담당자(멤버/관계자) 연결.
     id = createGroup({ name, phone: b.phone, email: b.email, memo: b.memo, cash_receipt_no: b.cash_receipt_no, contact_party_id: resolveContactPartyId(b) });
   } else if (type === "company") {
-    const ownerId = (b.owner_id || String(b.owner_name || "").trim()) ? resolveOwnerParty(b.owner_name, b.owner_id) : null; // 대표자 → 사람 party(선택 id 우선·호칭 '대표님')
+    const ownerIds = resolveOwnerIds(b); // 대표자 칩(공동대표) → 사람 party 목록
     id = createCompany({
       name, phone: b.phone, email: b.email, memo: b.memo,
-      biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
-      owner_party_id: ownerId,
+      biz_no: formatBizNo(b.biz_no),
       address: b.biz_address != null ? b.biz_address : b.address, roles: companyRolesFrom(b),
     });
-    ensureOwnerAffiliation(ownerId, id); // 대표자의 직장(소속) = 이 회사
+    setCompanyOwners(id, ownerIds); // 호칭 '대표님'·소속(직함 '대표')·레거시 owner_party_id/owner_name 동기화
   } else {
     // 아티스트(개인·솔로) → 사람 party. 본명(real_name) 있으면 name=본명·활동명=입력, 없으면 name=활동명=입력.
     const realName = String(b.real_name || b.artist_real_name || "").trim();
@@ -309,8 +325,7 @@ router.post("/:id", (req, res) => {
   updateParty(id, {
     name, phone: b.phone, email: b.email, memo: b.memo,
     // company 필드
-    biz_no: formatBizNo(b.biz_no), owner_name: b.owner_name,
-    owner_party_id: (b.owner_id || String(b.owner_name || "").trim()) ? resolveOwnerParty(b.owner_name, b.owner_id) : (c.owner_party_id || null),
+    biz_no: formatBizNo(b.biz_no), // owner_name/owner_party_id는 미전송(보존) — 아래 setCompanyOwners가 조인 테이블 기준으로 동기화
     address: b.biz_address != null ? b.biz_address : b.address, roles: c.kind === "company" ? companyRolesFrom(b) : null,
     // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신)
     activity_name: c.activity_name, is_artist: c.is_artist,
@@ -321,7 +336,7 @@ router.post("/:id", (req, res) => {
   if (b.group_id !== undefined) setPartyGroup(id, b.group_id); // 개인 아티스트의 소속 그룹 연결
   if (c.kind !== "company" && b.agency_company !== undefined) setPartyAgency(id, String(b.agency_company).trim() ? ensureCompanyParty(b.agency_company, "소속사/레이블") : null); // 아티스트·그룹 소속사 콤보(이름→party, 비우면 해제)
   if (c.kind === "company") linkClientContact(id, b); // 업체만 담당자 연락처 연동
-  if (c.kind === "company" && (b.owner_id || String(b.owner_name || "").trim())) ensureOwnerAffiliation(resolveOwnerParty(b.owner_name, b.owner_id), id); // 대표자의 직장(소속) = 이 회사
+  if (c.kind === "company") setCompanyOwners(id, resolveOwnerIds(b)); // 대표자 칩(공동대표) — 호칭·소속·레거시 컬럼 동기화. 빈 목록이면 대표 전원 해제
   if (isFetch) return res.json({ ok: true }); // 자동저장 — 페이지 유지
   res.redirect(`/clients/${id}?flash=saved`); // 수동 저장(noscript): 상세로 복귀
 });
@@ -554,7 +569,13 @@ router.get("/:id", asyncHandler(async (req, res) => {
     // 아티스트(사람) party는 연락처와 동일 레코드 — '연락처로 보기' 링크(같은 party를 연락처 화면에서).
     c.kind === "person" ? `<div><span class="text-muted">연락처로 보기</span> <a href="/contacts/${c.id}" class="text-primary hover:underline">${esc(c.name)} ↗</a></div>` : "",
     (() => { const g = c.kind === "person" && c.is_artist ? groupOfParty(c.id) : null; return g ? `<div><span class="text-muted">소속 그룹</span> <a href="/clients/${g.id}" class="text-primary hover:underline">${esc(g.activity_name || g.name)} ↗</a></div>` : ""; })(),
-    (() => { const oc = c.owner_party_id ? getParty(c.owner_party_id) : null; return oc ? `<div><span class="text-muted">대표자 연락처</span> <a href="/contacts/${oc.id}" class="text-primary hover:underline">${esc(c.owner_name || oc.name)} ↗</a></div>` : ""; })(),
+    // 대표자 연락처 — 공동대표 전원 링크(첫 대표만 나오던 것, 2026-07-10)
+    (() => {
+      const owners = c.kind === "company" ? listCompanyOwners(c.id) : [];
+      if (!owners.length) return "";
+      const links = owners.map((o) => `<a href="/contacts/${o.id}" class="text-primary hover:underline">${esc(personName(o))} ↗</a>`).join(" · ");
+      return `<div><span class="text-muted">대표자 연락처</span> ${links}</div>`;
+    })(),
   ].filter(Boolean).join("");
   const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
   const filesBlock = clientFilesBlock(c, files, fileErr, fileOk); // 자체 '첨부 서류' 헤딩 포함 · 깨진 링크는 경고

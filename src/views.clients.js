@@ -4,7 +4,7 @@
 
 const { COMPANY_ROLES } = require("./config");
 const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, groupCombo, projectTypeBadge } = require("./views");
-const { contactOptions, listOrgContacts, listClients } = require("./data");
+const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
 const FILE_KINDS = [
@@ -101,7 +101,7 @@ function clientContactCombo(c, isEdit) {
   return `
     <div>
       <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 여러 명 가능)</span></label>
-      ${personCombo({ idField: "contact_id", nameField: "contact_name", selected: cur, options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: cur.length ? "담당자 추가" : "담당자 — 검색 또는 새로 등록" })}
+      ${personCombo({ idField: "contact_id", nameField: "contact_name", selected: cur, options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: cur.length ? "" : "담당자 — 검색 또는 새로 등록" })}
       ${explain(`이름을 검색해 고르면 배지로 담깁니다(여러 명 가능). 배지의 ✕ 또는 빈 칸에서 백스페이스로 한 명씩 뺍니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다. 뺀 사람은 담당자 지정만 풀립니다 — 이 회사 재직(소속)과 연락처는 그대로 남습니다. 담당자가 아닌 직원은 연락처의 회사·소속 이력에서 관리합니다.`)}
     </div>`;
 }
@@ -135,8 +135,8 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <div><label class="label">사업자등록번호</label><input class="input" name="biz_no" value="${esc(c.biz_no || "")}" placeholder="000-00-00000" /></div>
-          <div><label class="label">대표자 <span class="font-normal text-muted text-xs">(연락처 연동)</span></label>
-            ${personCombo({ idField: "owner_id", nameField: "owner_name", selectedId: c.owner_party_id || null, initialName: c.owner_name || "", options: contactOptions(), entityLabel: "대표자", placeholder: "대표자 — 검색 또는 새로 등록", simpleModal: true })}
+          <div><label class="label">대표자 <span class="font-normal text-muted text-xs">(연락처 연동 · 공동대표 가능)</span></label>
+            ${(() => { const owners = isEdit && c.id ? listCompanyOwners(c.id) : []; return personCombo({ idField: "owner_id", nameField: "owner_name", selected: owners, options: contactOptions(), entityLabel: "대표자", placeholder: owners.length ? "" : "대표자 — 검색 또는 새로 등록", simpleModal: true, multi: true }); })()}
           </div>
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="biz_address" value="${esc(c.address || "")}" autocomplete="off" /></div>

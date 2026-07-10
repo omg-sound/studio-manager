@@ -182,7 +182,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   const directorField = `
     <div class="mt-2">
       <label class="label-sm">담당 디렉터 <span class="font-normal text-muted">(고객측 담당자 — 여러 명 가능)</span></label>
-      ${personCombo({ idField: "director_contact_id", nameField: "director_name", selected: currentDirectors, options: allContacts, companyOptions: companyOpts, companyOptionsRef: optionsRef ? "pc-company-shared" : "", optionsRef, compact: true, multi: true, placeholder: currentDirectors.length ? "디렉터 추가" : "담당 디렉터 — 검색 또는 새로 등록" })}
+      ${personCombo({ idField: "director_contact_id", nameField: "director_name", selected: currentDirectors, options: allContacts, companyOptions: companyOpts, companyOptionsRef: optionsRef ? "pc-company-shared" : "", optionsRef, compact: true, multi: true, placeholder: currentDirectors.length ? "" : "담당 디렉터 — 검색 또는 새로 등록" })}
       ${explain(`이름을 검색해 고르면 배지로 담깁니다(여러 명 가능). 배지의 ✕ 또는 빈 칸에서 백스페이스로 한 명씩 뺍니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다.`)}
     </div>`;
   // 시간 입력 = 구글 캘린더식(2026-07-04 그리드 폐지): [날짜][시작]–[종료][종료날짜(자동)] 타이핑 + 종일 + 소요 슬라이더.

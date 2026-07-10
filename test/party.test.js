@@ -500,3 +500,72 @@ test("updateParty: 나중에 직책을 넣으면 호칭 파생, 기존 호칭은
   D.updateParty(id, { job_title: "차장" }); // 이미 호칭 있음 — 존중(사용자가 호칭을 따로 관리할 수 있게)
   assert.equal(D.getParty(id).honorific, "과장님", "기존 호칭 유지");
 });
+
+// ── 회사 대표자 다대다(공동대표, 2026-07-10 사용자 요청 '대표자가 2명인 경우도 있다') ──
+// company_owners 조인 테이블이 진실원천. parties.owner_party_id=첫 대표(레거시 참조)·owner_name=콤마 목록
+// (청구처 카드 '성명(대표자)'·거래명세서 스냅샷이 쓰는 표시 텍스트) 동기화.
+test("setCompanyOwners: 공동대표 2명 — 조인 저장 + 레거시 첫 대표·콤마 이름 동기화", () => {
+  const co = D.createCompany({ name: "공동대표㈜" });
+  const a = D.createPerson({ name: "김대표" });
+  const b = D.createPerson({ name: "박대표" });
+  D.setCompanyOwners(co, [a, b]);
+  assert.deepEqual(D.listCompanyOwners(co).map((p) => p.id), [a, b], "조인 순서 보존");
+  const row = D.getParty(co);
+  assert.equal(row.owner_party_id, a, "레거시 owner_party_id = 첫 대표");
+  assert.equal(row.owner_name, "김대표, 박대표", "owner_name = 콤마 목록(청구처 카드·PDF 표시)");
+});
+
+test("setCompanyOwners: 대표에게 '대표님' 호칭 + 이 회사 소속 자동 연결", () => {
+  const co = D.createCompany({ name: "호칭㈜" });
+  const a = D.createPerson({ name: "무호칭" });
+  D.setCompanyOwners(co, [a]);
+  assert.equal(D.getParty(a).honorific, "대표님", "대표 호칭 자동");
+  assert.equal(D.currentAffiliation(a).org_id, co, "대표 소속 = 이 회사");
+});
+
+test("setCompanyOwners: 통째 교체 — 빠진 대표는 대표에서만 빠지고 연락처·소속은 유지", () => {
+  const co = D.createCompany({ name: "교체대표㈜" });
+  const a = D.createPerson({ name: "유임대표" });
+  const b = D.createPerson({ name: "사임대표" });
+  D.setCompanyOwners(co, [a, b]);
+  D.setCompanyOwners(co, [a]);
+  assert.deepEqual(D.listCompanyOwners(co).map((p) => p.id), [a], "대표=유임대표만");
+  assert.ok(D.getParty(b), "사임대표 연락처 보존");
+  assert.equal(D.getParty(co).owner_name, "유임대표");
+  assert.equal(D.currentAffiliation(b).org_id, co, "재직은 유지(대표 해제≠퇴사)");
+});
+
+test("setCompanyOwners: 빈 목록이면 대표 전원 해제(레거시 컬럼도 비움)", () => {
+  const co = D.createCompany({ name: "무대표㈜" });
+  const a = D.createPerson({ name: "전대표" });
+  D.setCompanyOwners(co, [a]);
+  D.setCompanyOwners(co, []);
+  assert.deepEqual(D.listCompanyOwners(co), []);
+  const row = D.getParty(co);
+  assert.equal(row.owner_party_id, null);
+  assert.equal(row.owner_name, null);
+});
+
+test("공동대표 전원이 역참조·관계자 탭에 노출(첫 대표만이 아니라)", () => {
+  const co = D.createCompany({ name: "배지㈜" });
+  const a = D.createPerson({ name: "일대표" });
+  const b = D.createPerson({ name: "이대표" });
+  D.setCompanyOwners(co, [a, b]);
+  for (const pid of [a, b]) {
+    assert.ok(D.orgsWithOwnerParty(pid).map((o) => o.id).includes(co), `${pid}: 대표인 회사 역참조(연락처 상세 크로스링크)`);
+  }
+  const assoc = D.listAssociates({}).map((p) => p.id);
+  assert.ok(assoc.includes(a) && assoc.includes(b), "둘 다 관계자 탭(둘째 대표 누락 금지)");
+});
+
+test("deleteParty: 대표를 삭제하면 남은 대표가 승계되고 레거시 컬럼도 재동기화", () => {
+  const co = D.createCompany({ name: "삭제대표㈜" });
+  const a = D.createPerson({ name: "떠날대표" });
+  const b = D.createPerson({ name: "남을대표" });
+  D.setCompanyOwners(co, [a, b]);
+  D.deleteParty(a);
+  assert.deepEqual(D.listCompanyOwners(co).map((p) => p.id), [b], "남은 대표만");
+  const row = D.getParty(co);
+  assert.equal(row.owner_party_id, b, "둘째 대표가 첫 대표로 승계");
+  assert.equal(row.owner_name, "남을대표", "owner_name 재동기화(삭제된 이름 잔존 금지)");
+});

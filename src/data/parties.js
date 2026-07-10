@@ -207,9 +207,13 @@ function deleteParty(id) {
   d.prepare("UPDATE sessions SET director_party_id = NULL WHERE director_party_id = ?").run(pid);
   d.prepare("DELETE FROM session_directors WHERE party_id = ?").run(pid);
   d.prepare("DELETE FROM project_artists WHERE party_id = ?").run(pid); // 다대다 아티스트 연결 해제(FK CASCADE 대비 명시)
+  // 이 사람이 대표인 회사들 — 삭제 후 남은 대표로 레거시 컬럼(첫 대표 id·콤마 이름)을 재동기화(공동대표 승계).
+  const ownedCompanies = d.prepare("SELECT company_id FROM company_owners WHERE party_id = ?").all(pid).map((r) => r.company_id);
+  d.prepare("DELETE FROM company_owners WHERE party_id = ? OR company_id = ?").run(pid, pid);
   d.prepare("UPDATE parties SET owner_party_id = NULL WHERE owner_party_id = ?").run(pid);
   d.prepare("UPDATE parties SET group_id = NULL WHERE group_id = ?").run(pid); // 그룹 삭제 시 멤버 소속 해제
   d.prepare("DELETE FROM parties WHERE id = ?").run(pid);
+  for (const cid of ownedCompanies) syncCompanyOwnerColumns(cid);
 }
 
 // ── Google People 동기화 참조 ──
@@ -300,7 +304,13 @@ function listPersonsForOrg(orgId) {
 
 /** 이 사람을 대표자로 둔 조직들(양방향 표시). */
 function orgsWithOwnerParty(personId) {
-  return db().prepare("SELECT id, name, kind FROM parties WHERE owner_party_id = ? ORDER BY name").all(Number(personId));
+  // 공동대표(company_owners) 기준 — 레거시 owner_party_id(첫 대표)만 보면 둘째 대표가 누락된다(2026-07-10).
+  return db().prepare(
+    `SELECT p.id, p.name, p.kind FROM parties p
+      WHERE p.id IN (SELECT company_id FROM company_owners WHERE party_id = @pid)
+         OR p.owner_party_id = @pid
+      ORDER BY p.name`
+  ).all({ pid: Number(personId) });
 }
 
 /** 당사자가 관여한 프로젝트(아티스트/소속사/제작사/담당자). */
@@ -564,6 +574,44 @@ function ensureOwnerAffiliation(ownerId, companyId) {
   if (!cur || Number(cur.org_id) !== Number(companyId)) addAffiliation(ownerId, { org_id: companyId, title: "대표", closeCurrent: true });
 }
 
+/** 이 회사의 대표자(공동대표 포함, 등록 순서). company_owners가 진실원천. */
+function listCompanyOwners(companyId) {
+  return db().prepare(
+    `SELECT p.* FROM company_owners co JOIN parties p ON p.id = co.party_id
+      WHERE co.company_id = ? ORDER BY co.sort_order, co.rowid`
+  ).all(Number(companyId)).map(withLegacy);
+}
+
+/**
+ * 이 회사의 대표자 목록을 통째로 교체(공동대표 여러 명 — 2026-07-10 사용자 요청 '대표자가 2명인 경우도 있다').
+ * 각 대표에게 '대표님' 호칭(비어 있을 때만)·이 회사 소속(직함 '대표')을 부여하고,
+ * 레거시 `parties.owner_party_id`(첫 대표)·`owner_name`(콤마 목록 — 청구처 카드 '성명(대표자)'·거래명세서 스냅샷)을 동기화.
+ * 대표에서 빠진 사람은 대표 역할만 해제 — 연락처·재직(소속)은 그대로(담당자 해제와 같은 규칙).
+ */
+function setCompanyOwners(companyId, personIds) {
+  const cid = Number(companyId);
+  if (!cid) return;
+  const ids = [];
+  for (const raw of personIds || []) { const pid = Number(raw); if (pid && !ids.includes(pid)) ids.push(pid); }
+  const d = db();
+  d.prepare("DELETE FROM company_owners WHERE company_id = ?").run(cid);
+  const ins = d.prepare("INSERT OR IGNORE INTO company_owners (company_id, party_id, sort_order) VALUES (?, ?, ?)");
+  ids.forEach((pid, i) => {
+    ins.run(cid, pid, i);
+    const p = d.prepare("SELECT honorific FROM parties WHERE id = ? AND kind = 'person'").get(pid);
+    if (p && !String(p.honorific || "").trim()) d.prepare("UPDATE parties SET honorific = '대표님' WHERE id = ?").run(pid);
+    ensureOwnerAffiliation(pid, cid);
+  });
+  syncCompanyOwnerColumns(cid);
+}
+
+/** 레거시 컬럼(첫 대표 id·콤마 이름) 재동기화 — company_owners 변경 후 항상 호출. */
+function syncCompanyOwnerColumns(companyId) {
+  const owners = listCompanyOwners(companyId);
+  db().prepare("UPDATE parties SET owner_party_id = ?, owner_name = ? WHERE id = ?")
+    .run(owners[0] ? owners[0].id : null, owners.length ? owners.map((o) => o.name).join(", ") : null, Number(companyId));
+}
+
 /** 이 조직의 담당자(is_contact=1인 현재 소속). 재직 전원(listPersonsForOrg)과 구별 — 담당자는 그중 지정된 사람만. */
 function listOrgContacts(orgId) {
   return db().prepare(
@@ -692,6 +740,7 @@ const ASSOCIATE_ROLE_SUBQUERY = `SELECT contact_party_id AS pid FROM projects WH
         UNION SELECT production_id FROM projects WHERE production_id IS NOT NULL
         UNION SELECT party_id FROM session_directors WHERE party_id IS NOT NULL
         UNION SELECT owner_party_id FROM parties WHERE owner_party_id IS NOT NULL
+        UNION SELECT party_id FROM company_owners
         UNION SELECT contact_party_id FROM parties WHERE contact_party_id IS NOT NULL`;
 function listAssociates({ q } = {}) {
   const where = [
@@ -941,6 +990,8 @@ module.exports = {
   ensureOwnerAffiliation,
   setOrgContacts,
   listOrgContacts,
+  setCompanyOwners,
+  listCompanyOwners,
   listProjectManagers,
   getWorker,
   listTasksForWorker,

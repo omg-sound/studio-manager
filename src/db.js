@@ -325,6 +325,16 @@ function init() {
       PRIMARY KEY (session_id, contact_id)
     );
 
+    -- 회사 대표자(다대다, 2026-07-10) — 공동대표 여러 명. parties.owner_party_id(첫 대표)·owner_name(콤마 목록)은
+    -- 레거시 참조·표시(청구처 카드 '성명(대표자)'·거래명세서 스냅샷)용으로 계속 동기화된다.
+    CREATE TABLE IF NOT EXISTS company_owners (
+      company_id INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+      party_id   INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+      sort_order INTEGER NOT NULL DEFAULT 0, -- 첫 대표(=owner_party_id) 결정
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (company_id, party_id)
+    );
+
     -- 세션 담당 엔지니어(다대다, 2026-07-05) — 한 세션에 스튜디오측 엔지니어 여러 명(담당자 마스터 참조).
     -- 단일 sessions.engineer_name(첫 엔지니어 이름)은 매출·검색·캘린더 등 레거시 소비처 호환용으로 계속 동기화된다.
     CREATE TABLE IF NOT EXISTS session_engineers (
@@ -535,6 +545,11 @@ function init() {
       }
     }
     setState("person_name_honorific_split_v1", "done");
+  }
+  // 회사 대표자 다대다 백필(2026-07-10): 기존 단일 owner_party_id를 company_owners로 1회 복사(멱등·중복 무시).
+  if (!getState("company_owners_backfill_v1")) {
+    d.exec("INSERT OR IGNORE INTO company_owners (company_id, party_id, sort_order) SELECT id, owner_party_id, 0 FROM parties WHERE kind='company' AND owner_party_id IS NOT NULL");
+    setState("company_owners_backfill_v1", "done");
   }
   // 직책 → 호칭 1회 파생(2026-07-10): 호칭이 비어 있고 직책이 있는 사람에게 '실장'→'실장님' 호칭 부여.
   // 대표자만 '대표님'이 붙던 흐름을 전 직책으로 일반화 — 이후 저장분은 createPerson/updateParty가 처리.
