@@ -1627,16 +1627,33 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var label = nm ? "'" + esc(nm) + "'(으)로 새 " + esc(entity) + " 등록" : "새 " + esc(entity) + " 등록";
       return '<button type="button" class="' + rowCls + ' text-primary" data-new="1"><span class="truncate">＋ ' + label + '</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
     }
+    // multi: 마지막 조각 앞에 이미 적은 사람들(라벨·본명·활동명 중 하나로 일치). 후보에서 제외해
+    // 이미 담긴 사람을 다시 고를 수 없게 한다 — 고르면 pick()이 마지막 조각을 그 사람으로 교체해 버린다.
+    // (회사명도 검색 대상이라 '윤종신'을 치면 회사가 '(주)월간윤종신'인 엄유미까지 후보로 뜨던 것, 2026-07-10)
+    function isChosen(o) {
+      if (!multi) return false;
+      var head = seg().head;
+      if (!head) return false;
+      var keys = [labelOf(o), o.name, o.alt].filter(Boolean).map(function (s) { return String(s).trim().toLowerCase(); });
+      return head.split(",").some(function (part) {
+        var p = part.trim().toLowerCase();
+        return p && keys.indexOf(p) !== -1;
+      });
+    }
     function render() {
       var raw = multi ? seg().tail.trim() : input.value.trim(); // multi=마지막 콤마 뒤 조각으로만 검색
       var q = raw.toLowerCase();
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1) || labelOf(o).toLowerCase().indexOf(q) !== -1; }).slice(0, 12); // 본명·활동명·소속 회사·표시 라벨(선택 후 재열람) 검색
+        view = opts.filter(function (o) { return !isChosen(o) && (String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1) || labelOf(o).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명·소속 회사·표시 라벨(선택 후 재열람) 검색 — 이미 적은 사람 제외
         html = view.map(function (o, i) { var nm = esc(o.name) + (o.honorific ? ' <span class="text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="text-muted">(' + esc(o.alt) + ')</span>' : ""); return '<button type="button" class="' + rowCls + '" data-idx="' + i + '"><span class="truncate text-fg">' + nm + '</span><span class="shrink-0 text-xs text-muted">' + esc(subOf(o)) + '</span></button>'; }).join("");
-        if (!view.some(function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q) || labelOf(o).toLowerCase() === q; })) html += newRow(raw);
+        var exact = function (o) { return String(o.name).toLowerCase() === q || (o.alt && String(o.alt).toLowerCase() === q) || labelOf(o).toLowerCase() === q; };
+        // 이미 적은 사람을 그대로 다시 타이핑한 경우 '새 등록'을 권하지 않는다(중복 생성 유도 방지) — 후보도 없으면 드롭다운을 닫는다.
+        var dupe = multi && opts.some(function (o) { return isChosen(o) && exact(o); });
+        if (!dupe && !view.some(exact)) html += newRow(raw);
       }
+      if (!html) { hide(); return; }
       pop.innerHTML = html; show();
     }
     function pick(o) {

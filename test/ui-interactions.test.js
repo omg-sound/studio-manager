@@ -587,3 +587,39 @@ test("artistCombo: 콤마 뒤 조각으로 검색·선택 이어붙임 + cid 비
   const nw = pop.querySelector("button[data-new]");
   assert.ok(nw && nw.textContent.includes("'신인'"), "새 아티스트 라벨 = 마지막 조각");
 });
+
+// ── personCombo(multi): 이미 적힌 사람은 후보에서 제외(2026-07-10 사용자 리포트) ──
+// 재현: 담당자 "엄유미, 윤종신" 상태에서 마지막 조각 '윤종신'이 엄유미의 회사명 '(주)월간윤종신'에도
+// 매칭돼 엄유미가 후보로 뜨고, 그걸 고르면 pick()이 마지막 조각(윤종신)을 엄유미로 교체해 버렸다.
+const PC_DUP_OPTS = [
+  { id: 21, name: "엄유미", company: "(주)월간윤종신" },
+  { id: 22, name: "윤종신", alt: "윤종신", company: "(주)월간윤종신" },
+];
+test("personCombo(multi): 이미 선택된 사람은 드롭다운 후보에서 제외(회사명 매칭으로 재등장 금지)", () => {
+  const html = `<form>${personCombo({ options: PC_DUP_OPTS, companyOptions: [], multi: true })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-pc-input]");
+  const pop = doc.querySelector("[data-pc-pop]");
+  input.value = "엄유미, 윤종신"; fire(win, input, "input");
+  const labels = [...pop.querySelectorAll("button[data-idx]")].map((b) => b.textContent.replace(/\s+/g, " ").trim());
+  assert.ok(!labels.some((l) => l.includes("엄유미")), `이미 적힌 엄유미는 후보에 없어야 함 — 실제: ${JSON.stringify(labels)}`);
+  assert.ok(labels.some((l) => l.includes("윤종신")), "검색 대상 윤종신은 후보에 있어야 함");
+});
+test("personCombo(multi): 후보를 골라도 앞서 적은 사람은 그대로(마지막 조각만 교체)", () => {
+  const html = `<form>${personCombo({ options: PC_DUP_OPTS, companyOptions: [], multi: true })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-pc-input]");
+  const pop = doc.querySelector("[data-pc-pop]");
+  input.value = "엄유미, 윤종"; fire(win, input, "input");
+  fire(win, pop.querySelector("button[data-idx]"), "click");
+  assert.equal(input.value, "엄유미, 윤종신", "엄유미 유지 + 마지막 조각만 채워짐(labelOf: 활동명=본명이면 괄호 없음)");
+});
+test("personCombo(multi): 이미 적은 이름을 그대로 다시 치면 '새 등록' 권유 없이 드롭다운을 닫음", () => {
+  const html = `<form>${personCombo({ options: PC_DUP_OPTS, companyOptions: [], multi: true })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-pc-input]");
+  const pop = doc.querySelector("[data-pc-pop]");
+  input.value = "엄유미, 윤종신, 엄유미"; fire(win, input, "input"); // 이미 적은 엄유미를 또 침
+  assert.ok(pop.classList.contains("hidden"), "중복 이름 → 드롭다운 닫힘(새 등록 유도 없음)");
+  assert.equal(pop.querySelector("[data-new]"), null, "'새 담당자 등록' 행 없음");
+});
