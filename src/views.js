@@ -598,7 +598,7 @@ function personCombo({ idField = "contact_id", nameField = "contact_name", selec
   const field = multi
     ? `<div class="input flex flex-wrap items-center gap-1.5 ${compact ? "py-1 text-sm" : "py-1.5"}" data-pc-chips>
         ${chips}
-        <input class="min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-inherit outline-none focus:ring-0" type="text" data-pc-input autocomplete="off"
+        <input class="min-w-[3rem] flex-1 border-0 bg-transparent p-0 text-inherit outline-none focus:ring-0" type="text" size="1" data-pc-input autocomplete="off"
           role="combobox" aria-expanded="false" aria-autocomplete="list" placeholder="${esc(placeholder)}" />
       </div>`
     : `<input class="${inputCls}" type="text" value="${esc(shown)}" data-pc-input autocomplete="off"
