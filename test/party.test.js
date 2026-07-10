@@ -322,11 +322,14 @@ test("payerSnapshotChanged: 변경 없으면 false, 주소·이메일 보강 시
   // 새로고침(스냅샷 재저장) → 다시 false
   db().prepare("UPDATE invoices SET payer_snapshot=? WHERE id=?").run(D.snapshotPayer(co), invId);
   assert.equal(D.payerSnapshotChanged(inv()), false, "새로고침 후 = 변경 없음");
-  // 담당자 이메일 변경도 감지(스냅샷 contacts[0] 비교)
+  // 담당자 이메일 변경도 감지(스냅샷 contacts[0] 비교). 담당자=is_contact 지정된 사람(2026-07-10) —
+  // 소속만 추가한 직원은 담당자가 아니라 스냅샷에 안 들어간다.
   const person = D.createPerson({ name: "담당자김" });
   db().prepare("UPDATE parties SET email='dd@snap.kr' WHERE id=?").run(person);
-  D.addAffiliation(person, { client_id: co, title: "과장" });
-  assert.equal(D.payerSnapshotChanged(inv()), true, "담당자(이메일) 추가 = 변경 감지");
+  D.addAffiliation(person, { client_id: co, title: "과장" }); // 재직만 — 담당자 아님
+  assert.equal(D.payerSnapshotChanged(inv()), false, "재직 직원 추가만으론 청구처 담당자 변경 아님");
+  D.setOrgContacts(co, [person]); // 담당자로 지정
+  assert.equal(D.payerSnapshotChanged(inv()), true, "담당자(이메일) 지정 = 변경 감지");
   // 레거시(스냅샷 없음)=실시간 표시라 대상 아님
   db().prepare("UPDATE invoices SET payer_snapshot=NULL WHERE id=?").run(invId);
   assert.equal(D.payerSnapshotChanged(inv()), false, "스냅샷 없는 레거시 = false");
@@ -414,48 +417,57 @@ test("addCompanyRole: 회사 roles에 역할 추가(멱등)·사람은 no-op —
   assert.ok(!D.getParty(person).roles, "사람은 roles 안 건드림");
 });
 
-// ── 업체 담당자 연락처 다대다(콤마 여러 명, 2026-07-10 사용자 요청) ──
-// 클라이언트 폼의 '담당자 연락처'는 콤마로 여러 명을 받고, 콤보에 남은 사람만 현재 담당자(통째 교체).
-// 빠진 사람은 소속 종료(ended_on) — 단 대표자(owner_party_id)는 ensureOwnerAffiliation이 자동 부여하므로 예외.
-test("setOrgContacts: 여러 담당자를 이 업체 소속으로 연결", () => {
+// ── 업체 담당자 = 재직(소속)과 분리된 역할(2026-07-10 사용자 결정) ──
+// 담당자 칸은 '재직 직원 전원'이 아니라 '담당자로 지정된 사람'만. 칸에서 빼면 담당자 지정만 풀리고
+// 재직(affiliations.ended_on)은 그대로 — 담당자 해제가 퇴사 처리가 되면 안 된다.
+test("setOrgContacts: 여러 담당자 지정 — listOrgContacts에 전원, 재직도 함께 생김", () => {
   const org = D.createCompany({ name: "다담당㈜" });
   const a = D.createPerson({ name: "담당가" });
   const b = D.createPerson({ name: "담당나" });
   D.setOrgContacts(org, [a, b]);
-  const names = D.listPersonsForOrg(org).map((p) => p.name).sort();
-  assert.deepEqual(names, ["담당가", "담당나"]);
+  assert.deepEqual(D.listOrgContacts(org).map((p) => p.name).sort(), ["담당가", "담당나"]);
+  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.name).sort(), ["담당가", "담당나"], "재직 소속도 연결");
 });
 
-test("setOrgContacts: 통째 교체 — 빠진 사람은 소속 종료, 남은 사람은 행 중복 없이 유지", () => {
+test("setOrgContacts: 담당자에서 빼도 재직은 유지(퇴사 처리 아님)", () => {
   const org = D.createCompany({ name: "교체㈜" });
   const keep = D.createPerson({ name: "유지자" });
   const drop = D.createPerson({ name: "제외자" });
   D.setOrgContacts(org, [keep, drop]);
-  D.setOrgContacts(org, [keep]); // 제외자를 콤보에서 지움
-  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.id), [keep], "현재 담당자=유지자만");
-  const dropped = D.listAffiliations(drop).find((x) => x.org_id === org);
-  assert.ok(dropped && dropped.ended_on, "제외자 소속 종료(이력 보존)");
+  D.setOrgContacts(org, [keep]); // 제외자를 담당자 칸에서 지움
+  assert.deepEqual(D.listOrgContacts(org).map((p) => p.id), [keep], "담당자=유지자만");
+  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.name).sort(), ["유지자", "제외자"], "제외자 재직 유지");
+  const aff = D.listAffiliations(drop).find((x) => x.org_id === org);
+  assert.equal(aff.ended_on, null, "소속 종료되지 않음");
   const keepRows = D.listAffiliations(keep).filter((x) => x.org_id === org);
   assert.equal(keepRows.length, 1, "유지자 소속 행 중복 없음");
 });
 
-test("setOrgContacts: 대표자는 담당자 목록에 없어도 소속 유지", () => {
-  const owner = D.createPerson({ name: "대표자" });
-  const org = D.createCompany({ name: "대표㈜", owner_party_id: owner });
-  D.ensureOwnerAffiliation(owner, org); // 업체 저장 시 자동으로 붙는 대표자 소속
-  const staff = D.createPerson({ name: "직원" });
-  D.setOrgContacts(org, [staff]); // 담당자만 지정 — 대표자는 콤보에 없음
-  const ids = D.listPersonsForOrg(org).map((p) => p.id).sort();
-  assert.ok(ids.includes(owner), "대표자 소속 유지");
-  assert.ok(ids.includes(staff), "담당자 연결");
+test("setOrgContacts: 연락처 '회사'로만 등록된 직원은 담당자가 아니다", () => {
+  const org = D.createCompany({ name: "직원㈜" });
+  const staff = D.createPerson({ name: "그냥직원" });
+  D.addAffiliation(staff, { org_id: org, closeCurrent: false }); // 연락처 폼 '회사' 입력 경로(syncCompanyAffiliation)
+  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.name), ["그냥직원"], "재직");
+  assert.deepEqual(D.listOrgContacts(org), [], "담당자 아님 — 담당자 칸에 안 뜸");
 });
 
-test("setOrgContacts: 빈 목록이면 담당자 전원 해제(대표자 제외)", () => {
-  const owner = D.createPerson({ name: "해제대표" });
-  const org = D.createCompany({ name: "해제㈜", owner_party_id: owner });
+test("setOrgContacts: 대표자를 담당자에서 빼도 소속 유지(담당자 지정만 해제)", () => {
+  const owner = D.createPerson({ name: "대표자" });
+  const org = D.createCompany({ name: "대표㈜", owner_party_id: owner });
   D.ensureOwnerAffiliation(owner, org);
+  const staff = D.createPerson({ name: "직원" });
+  D.setOrgContacts(org, [owner, staff]); // 대표도 담당자로 지정 가능
+  assert.equal(D.listOrgContacts(org).length, 2);
+  D.setOrgContacts(org, [staff]); // 대표를 담당자에서 뺌
+  assert.deepEqual(D.listOrgContacts(org).map((p) => p.id), [staff], "담당자=직원만");
+  assert.ok(D.listPersonsForOrg(org).map((p) => p.id).includes(owner), "대표 재직 유지");
+});
+
+test("setOrgContacts: 빈 목록이면 담당자 전원 해제(재직은 전원 유지)", () => {
+  const org = D.createCompany({ name: "해제㈜" });
   const staff = D.createPerson({ name: "해제직원" });
   D.setOrgContacts(org, [staff]);
   D.setOrgContacts(org, []);
-  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.id), [owner], "대표자만 남음");
+  assert.deepEqual(D.listOrgContacts(org), [], "담당자 없음");
+  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.name), ["해제직원"], "재직 유지");
 });

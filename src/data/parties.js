@@ -239,8 +239,9 @@ function listAffiliations(personId) {
   ).all(Number(personId)).map(affShape);
 }
 
-/** 소속 추가. org_id(=client_id 별칭). closeCurrent(기본 true)면 기존 현재 소속을 종료 후 새 소속 INSERT(이직). */
-function addAffiliation(personId, { org_id, client_id, title, started_on, memo, closeCurrent = true } = {}) {
+/** 소속 추가. org_id(=client_id 별칭). closeCurrent(기본 true)면 기존 현재 소속을 종료 후 새 소속 INSERT(이직).
+ *  is_contact=1이면 이 조직의 담당자로도 지정(기본 0 — 단순 재직. 담당자 지정은 setOrgContacts 경로에서만). */
+function addAffiliation(personId, { org_id, client_id, title, started_on, memo, closeCurrent = true, is_contact = 0 } = {}) {
   if (org_id == null) org_id = client_id; // client_id 별칭(레거시 호출 호환)
   const pid = Number(personId);
   const start = blankToNull(started_on);
@@ -248,8 +249,8 @@ function addAffiliation(personId, { org_id, client_id, title, started_on, memo, 
     db().prepare("UPDATE affiliations SET ended_on = ? WHERE person_id = ? AND ended_on IS NULL").run(start || todayYmd(), pid);
   }
   return db().prepare(
-    "INSERT INTO affiliations (person_id, org_id, title, started_on, memo) VALUES (?, ?, ?, ?, ?)"
-  ).run(pid, org_id ? Number(org_id) : null, blankToNull(title), start, blankToNull(memo)).lastInsertRowid;
+    "INSERT INTO affiliations (person_id, org_id, title, started_on, memo, is_contact) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(pid, org_id ? Number(org_id) : null, blankToNull(title), start, blankToNull(memo), is_contact ? 1 : 0).lastInsertRowid;
 }
 
 function endAffiliation(affId, endedOn) {
@@ -559,21 +560,31 @@ function ensureOwnerAffiliation(ownerId, companyId) {
   if (!cur || Number(cur.org_id) !== Number(companyId)) addAffiliation(ownerId, { org_id: companyId, title: "대표", closeCurrent: true });
 }
 
+/** 이 조직의 담당자(is_contact=1인 현재 소속). 재직 전원(listPersonsForOrg)과 구별 — 담당자는 그중 지정된 사람만. */
+function listOrgContacts(orgId) {
+  return db().prepare(
+    `SELECT p.*, a.title AS aff_title FROM affiliations a
+       JOIN parties p ON p.id = a.person_id
+      WHERE a.org_id = ? AND a.ended_on IS NULL AND a.is_contact = 1
+      ORDER BY p.name COLLATE NOCASE`
+  ).all(Number(orgId));
+}
+
 /**
- * 이 업체의 담당자 목록을 통째로 교체(클라이언트 폼 '담당자 연락처' 콤마 다중 — 세션 디렉터와 같은 UX).
- * 남은 사람은 소속 유지(행 중복 없음), 빠진 사람은 소속 종료(ended_on — 이력 보존, 다른 소속은 안 건드림).
- * 대표자(owner_party_id)는 예외: ensureOwnerAffiliation이 자동 부여하므로 담당자 목록에 없어도 종료하지 않는다.
+ * 이 조직의 담당자 목록을 통째로 교체(클라이언트 폼 '담당자 연락처' 콤마 다중 — 세션 디렉터와 같은 UX).
+ * **담당자는 재직과 별개 역할**(2026-07-10 사용자 결정): 칸에서 빼면 `is_contact=0`으로 담당자 지정만 풀리고
+ * 재직(ended_on)은 그대로 둔다 — 담당자 해제가 퇴사 처리가 되면 안 되기 때문(연락처의 소속 이력은 그 화면에서 관리).
+ * 담당자로 새로 지정한 사람은 이 조직 소속이 없으면 재직도 함께 등록(다른 소속은 끊지 않음).
  */
 function setOrgContacts(orgId, personIds) {
   const org = Number(orgId);
   if (!org) return;
   const keep = new Set((personIds || []).map(Number).filter(Boolean));
-  const owner = db().prepare("SELECT owner_party_id FROM parties WHERE id = ?").get(org);
-  const ownerId = owner && owner.owner_party_id ? Number(owner.owner_party_id) : null;
-  const current = new Set(listPersonsForOrg(org).map((p) => Number(p.id)));
-  for (const pid of keep) if (!current.has(pid)) addAffiliation(pid, { org_id: org, closeCurrent: false }); // 다른 소속을 끊지 않고 이 업체 담당으로 추가
-  const end = db().prepare("UPDATE affiliations SET ended_on = ? WHERE person_id = ? AND org_id = ? AND ended_on IS NULL");
-  for (const pid of current) if (!keep.has(pid) && pid !== ownerId) end.run(todayYmd(), pid, org);
+  const current = new Set(listPersonsForOrg(org).map((p) => Number(p.id))); // 재직 전원(담당자 여부 무관)
+  for (const pid of keep) if (!current.has(pid)) addAffiliation(pid, { org_id: org, closeCurrent: false, is_contact: 1 });
+  const mark = db().prepare("UPDATE affiliations SET is_contact = ? WHERE person_id = ? AND org_id = ? AND ended_on IS NULL");
+  for (const pid of keep) if (current.has(pid)) mark.run(1, pid, org);
+  for (const pid of current) if (!keep.has(pid)) mark.run(0, pid, org); // 담당자 해제 — 재직은 유지
 }
 
 /** 프로젝트 저장 시 아티스트/소속사/제작사를 party로 보장(이름 기반). 반환 없음(프로젝트가 party_id로 저장). */
@@ -925,6 +936,7 @@ module.exports = {
   resolveOwnerParty,
   ensureOwnerAffiliation,
   setOrgContacts,
+  listOrgContacts,
   listProjectManagers,
   getWorker,
   listTasksForWorker,

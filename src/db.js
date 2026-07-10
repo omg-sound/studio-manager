@@ -276,6 +276,7 @@ function init() {
       started_on TEXT,
       ended_on   TEXT,
       memo       TEXT,
+      is_contact INTEGER NOT NULL DEFAULT 0, -- 이 조직의 '담당자'로 지정됨(재직과 별개 역할 — 담당자 해제≠퇴사, 2026-07-10)
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -534,6 +535,13 @@ function init() {
       }
     }
     setState("person_name_honorific_split_v1", "done");
+  }
+  // 담당자 역할 분리(2026-07-10 사용자 결정): affiliations.is_contact — 재직(ended_on)과 별개로 '이 조직의 담당자'를 표시.
+  // 이전에는 담당자 칸이 재직자 전원을 보여줘 담당자 해제가 곧 퇴사 처리였다. 기존 재직자는 전원 담당자로 승계(화면·청구서 표시 불변).
+  addColumn("affiliations", "is_contact", "INTEGER NOT NULL DEFAULT 0");
+  if (!getState("affiliation_is_contact_v1")) {
+    d.exec("UPDATE affiliations SET is_contact = 1 WHERE ended_on IS NULL");
+    setState("affiliation_is_contact_v1", "done");
   }
   // 프로젝트 아티스트 다대다 백필(2026-07-05): 기존 단일 artist_id를 project_artists로 1회 복사(멱등·중복 무시).
   if (!getState("project_artists_backfill_v1")) {

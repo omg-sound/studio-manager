@@ -4,7 +4,7 @@
 
 const { COMPANY_ROLES } = require("./config");
 const { esc, pageHeader, explain, dirtyActionRow, personCombo, personName, companyCombo, groupCombo, projectTypeBadge } = require("./views");
-const { contactOptions, listPersonsForOrg, listClients } = require("./data");
+const { contactOptions, listOrgContacts, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
 const FILE_KINDS = [
@@ -94,16 +94,15 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
 }
 
 /** 클라이언트 담당자 연락처 콤보 — 공용 personCombo(multi, 콤마로 여러 명. 세션 디렉터와 동일 UX).
- *  프리필=현재 담당자 전원의 라벨 콤마 목록, 저장 시 콤보에 남은 사람만 이 클라이언트 담당자(linkClientContact, clients.routes.js). */
+ *  담당자(affiliations.is_contact)는 재직과 별개 역할 — 프리필=담당자로 지정된 사람만, 저장 시 콤보에 남은 사람만 담당자(linkClientContact). */
 function clientContactCombo(c, isEdit) {
-  // 대표자는 제외 — 소속이 자동 부여(ensureOwnerAffiliation)돼 콤보에서 지워도 유지되므로, 보이면 '지웠는데 다시 뜨는' 것처럼 보인다.
-  // 콤보에 있는 것 = 저장되는 것(setOrgContacts의 대표자 예외와 짝).
-  const cur = isEdit && c.id ? listPersonsForOrg(c.id).filter((p) => Number(p.id) !== Number(c.owner_party_id || 0)) : [];
+  // 담당자로 지정된 사람만(재직 직원 전원이 아님 — is_contact). 대표자도 담당자로 지정했을 때만 뜨고, 빼면 담당자만 해제된다.
+  const cur = isEdit && c.id ? listOrgContacts(c.id) : [];
   return `
     <div>
       <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 콤마로 여러 명)</span></label>
       ${personCombo({ idField: "contact_id", nameField: "contact_name", initialName: cur.map((p) => personName(p)).join(", "), options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: "담당자 — 검색 또는 새로 등록, 콤마로 여러 명" })}
-      ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다. 칸에서 지운 사람은 이 클라이언트 담당자에서 빠집니다(연락처와 소속 이력은 남습니다).`)}
+      ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다. 칸에서 지운 사람은 담당자 지정만 풀립니다 — 이 회사 재직(소속)과 연락처는 그대로 남습니다. 담당자가 아닌 직원은 연락처의 회사·소속 이력에서 관리합니다.`)}
     </div>`;
 }
 

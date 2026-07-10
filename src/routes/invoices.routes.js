@@ -15,7 +15,7 @@ const {
   getStudioLogo,
   getParty,
   getClientFile,
-  listPersonsForOrg,
+  listOrgContacts,
   snapshotPayer,
   payerSnapshotChanged,
   ensureInvoiceNumber,
@@ -133,7 +133,7 @@ function payerView(inv) {
     catch (_e) { /* 파싱 실패 시 실시간 폴백 */ }
   }
   const client = inv && inv.payer_id ? getParty(inv.payer_id) : null;
-  return { client, contacts: client ? listPersonsForOrg(client.id) : [] };
+  return { client, contacts: client ? listOrgContacts(client.id) : [] }; // 담당자로 지정된 사람만
 }
 
 router.get("/:id", requireBilling, (req, res) => {

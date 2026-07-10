@@ -17,7 +17,7 @@ const { RENTAL_SESSION_TYPES } = require("../config");
 const RENTAL_IN = RENTAL_SESSION_TYPES.map((t) => `'${t}'`).join(", "); // SQL IN절(정적 config 값 — 인젝션 무관)
 const { canBill, canInvoice } = require("../auth");
 const { getProjectForUser } = require("./projects"); // 무순환
-const { getParty, listPersonsForOrg } = require("./parties"); // 무순환 — 청구처(payer)=parties.id
+const { getParty, listOrgContacts } = require("./parties"); // 무순환 — 청구처(payer)=parties.id
 
 // 청구처 화면 표시명 = **본명 (활동명)** — 아티스트(개인)가 현금영수증 명의(본명)와 직결돼 활동명만 보면 오해(2026-07-05 사용자 요청).
 // c = payer party alias. 회사·그룹은 활동명 없어 name 그대로. (거래명세서 PDF 상호는 별도로 본명(snapshot.name) 유지.)
@@ -39,7 +39,7 @@ function snapshotPayer(payerId) {
   if (!payerId) return null;
   const p = getParty(payerId);
   if (!p) return null;
-  const contacts = (listPersonsForOrg(payerId) || []).slice(0, 1);
+  const contacts = (listOrgContacts(payerId) || []).slice(0, 1); // 담당자로 지정된 사람(재직 직원 전원이 아님)
   const c0 = contacts[0];
   return JSON.stringify({
     id: p.id,
