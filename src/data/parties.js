@@ -559,6 +559,23 @@ function ensureOwnerAffiliation(ownerId, companyId) {
   if (!cur || Number(cur.org_id) !== Number(companyId)) addAffiliation(ownerId, { org_id: companyId, title: "대표", closeCurrent: true });
 }
 
+/**
+ * 이 업체의 담당자 목록을 통째로 교체(클라이언트 폼 '담당자 연락처' 콤마 다중 — 세션 디렉터와 같은 UX).
+ * 남은 사람은 소속 유지(행 중복 없음), 빠진 사람은 소속 종료(ended_on — 이력 보존, 다른 소속은 안 건드림).
+ * 대표자(owner_party_id)는 예외: ensureOwnerAffiliation이 자동 부여하므로 담당자 목록에 없어도 종료하지 않는다.
+ */
+function setOrgContacts(orgId, personIds) {
+  const org = Number(orgId);
+  if (!org) return;
+  const keep = new Set((personIds || []).map(Number).filter(Boolean));
+  const owner = db().prepare("SELECT owner_party_id FROM parties WHERE id = ?").get(org);
+  const ownerId = owner && owner.owner_party_id ? Number(owner.owner_party_id) : null;
+  const current = new Set(listPersonsForOrg(org).map((p) => Number(p.id)));
+  for (const pid of keep) if (!current.has(pid)) addAffiliation(pid, { org_id: org, closeCurrent: false }); // 다른 소속을 끊지 않고 이 업체 담당으로 추가
+  const end = db().prepare("UPDATE affiliations SET ended_on = ? WHERE person_id = ? AND org_id = ? AND ended_on IS NULL");
+  for (const pid of current) if (!keep.has(pid) && pid !== ownerId) end.run(todayYmd(), pid, org);
+}
+
 /** 프로젝트 저장 시 아티스트/소속사/제작사를 party로 보장(이름 기반). 반환 없음(프로젝트가 party_id로 저장). */
 function listProjectManagers({ includeInactive = false, externalOnly = false } = {}) {
   const where = [];
@@ -907,6 +924,7 @@ module.exports = {
   resolvePartyByDisplay,
   resolveOwnerParty,
   ensureOwnerAffiliation,
+  setOrgContacts,
   listProjectManagers,
   getWorker,
   listTasksForWorker,

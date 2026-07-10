@@ -413,3 +413,49 @@ test("addCompanyRole: 회사 roles에 역할 추가(멱등)·사람은 no-op —
   D.addCompanyRole(person, "제작사");
   assert.ok(!D.getParty(person).roles, "사람은 roles 안 건드림");
 });
+
+// ── 업체 담당자 연락처 다대다(콤마 여러 명, 2026-07-10 사용자 요청) ──
+// 클라이언트 폼의 '담당자 연락처'는 콤마로 여러 명을 받고, 콤보에 남은 사람만 현재 담당자(통째 교체).
+// 빠진 사람은 소속 종료(ended_on) — 단 대표자(owner_party_id)는 ensureOwnerAffiliation이 자동 부여하므로 예외.
+test("setOrgContacts: 여러 담당자를 이 업체 소속으로 연결", () => {
+  const org = D.createCompany({ name: "다담당㈜" });
+  const a = D.createPerson({ name: "담당가" });
+  const b = D.createPerson({ name: "담당나" });
+  D.setOrgContacts(org, [a, b]);
+  const names = D.listPersonsForOrg(org).map((p) => p.name).sort();
+  assert.deepEqual(names, ["담당가", "담당나"]);
+});
+
+test("setOrgContacts: 통째 교체 — 빠진 사람은 소속 종료, 남은 사람은 행 중복 없이 유지", () => {
+  const org = D.createCompany({ name: "교체㈜" });
+  const keep = D.createPerson({ name: "유지자" });
+  const drop = D.createPerson({ name: "제외자" });
+  D.setOrgContacts(org, [keep, drop]);
+  D.setOrgContacts(org, [keep]); // 제외자를 콤보에서 지움
+  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.id), [keep], "현재 담당자=유지자만");
+  const dropped = D.listAffiliations(drop).find((x) => x.org_id === org);
+  assert.ok(dropped && dropped.ended_on, "제외자 소속 종료(이력 보존)");
+  const keepRows = D.listAffiliations(keep).filter((x) => x.org_id === org);
+  assert.equal(keepRows.length, 1, "유지자 소속 행 중복 없음");
+});
+
+test("setOrgContacts: 대표자는 담당자 목록에 없어도 소속 유지", () => {
+  const owner = D.createPerson({ name: "대표자" });
+  const org = D.createCompany({ name: "대표㈜", owner_party_id: owner });
+  D.ensureOwnerAffiliation(owner, org); // 업체 저장 시 자동으로 붙는 대표자 소속
+  const staff = D.createPerson({ name: "직원" });
+  D.setOrgContacts(org, [staff]); // 담당자만 지정 — 대표자는 콤보에 없음
+  const ids = D.listPersonsForOrg(org).map((p) => p.id).sort();
+  assert.ok(ids.includes(owner), "대표자 소속 유지");
+  assert.ok(ids.includes(staff), "담당자 연결");
+});
+
+test("setOrgContacts: 빈 목록이면 담당자 전원 해제(대표자 제외)", () => {
+  const owner = D.createPerson({ name: "해제대표" });
+  const org = D.createCompany({ name: "해제㈜", owner_party_id: owner });
+  D.ensureOwnerAffiliation(owner, org);
+  const staff = D.createPerson({ name: "해제직원" });
+  D.setOrgContacts(org, [staff]);
+  D.setOrgContacts(org, []);
+  assert.deepEqual(D.listPersonsForOrg(org).map((p) => p.id), [owner], "대표자만 남음");
+});

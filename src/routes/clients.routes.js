@@ -9,7 +9,7 @@ const {
   listClients, getParty, listProjectsForParty,
   listInvoicesForParty,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  addAffiliation, listContacts, listAssociates, resolvePersonByName, resolveOwnerParty, ensureOwnerAffiliation,
+  setOrgContacts, listContacts, listAssociates, resolvePersonByName, resolveOwnerParty, ensureOwnerAffiliation,
   listArtistsForAgency, currentAffiliation, classifyParty,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
@@ -580,20 +580,20 @@ router.get("/:id", asyncHandler(async (req, res) => {
 // 렌더 함수(clientProjectCard·clientFileSection·clientContactCombo·clientForm·clientFilesBlock)는
 // src/views.clients.js로 이동(2026-07-09) — 여기 남은 건 req/db가 얽힌 쓰기 로직만.
 
-/** 클라이언트 담당자(연락처) 연동: 선택/입력된 담당자를 이 클라이언트 소속으로 연결(이미 현 소속이면 생략). */
+/**
+ * 클라이언트 담당자(연락처) 연동 — 콤보에 남은 사람만 이 클라이언트 담당자로 통째 교체(2026-07-10 사용자 결정).
+ * contact_name = 콤마로 여러 명(personCombo multi). 각 조각을 resolvePersonByName으로 해석 —
+ * 라벨 안전망이 '박수한 대표님 (워터멜론)' 같은 표시 라벨도 그 사람으로 매칭(유일)하고 새 이름만 생성(세션 디렉터와 동일).
+ * 빠진 사람의 소속 종료·대표자 예외는 setOrgContacts가 처리.
+ */
 function linkClientContact(clientId, body) {
-  let contactId = body.contact_id ? Number(body.contact_id) : null;
-  if (!contactId) {
-    const name = String(body.contact_name || "").trim();
-    if (!name) return;
-    contactId = resolvePersonByName(name); // 이름으로 기존 연락처 재사용 후 없으면 생성 — 자동저장 blur마다 중복 생성되던 것 방지
-  }
-  if (!contactId) return;
-  // 당사자 모델: 소속 이력은 affiliations(person_id, org_id). 중복(현재 소속 동일 조직)만 건너뛴다.
-  const already = db()
-    .prepare("SELECT 1 FROM affiliations WHERE person_id = ? AND org_id = ? AND ended_on IS NULL LIMIT 1")
-    .get(contactId, Number(clientId));
-  if (!already) addAffiliation(contactId, { client_id: Number(clientId), closeCurrent: false }); // 다른 소속을 끊지 않고 이 클라이언트 담당으로 추가(compat: client_id→org_id)
+  const ids = [];
+  const push = (pid) => { if (pid && !ids.includes(pid)) ids.push(pid); };
+  const name = String(body.contact_name || "").trim();
+  // 명시 id + 콤마 없는 단일 이름(레거시 단일 콤보 제출) = id 우선. 콤마가 있으면 이름 목록이 명시적 → 이름별 해석.
+  if (body.contact_id && !name.includes(",")) push(Number(body.contact_id));
+  else for (const part of name.split(",")) { const one = part.trim(); if (one) push(resolvePersonByName(one)); }
+  setOrgContacts(Number(clientId), ids);
 }
 
 module.exports = router;

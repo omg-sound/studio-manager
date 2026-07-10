@@ -3,7 +3,7 @@
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
 const { COMPANY_ROLES } = require("./config");
-const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, groupCombo, projectTypeBadge } = require("./views");
+const { esc, pageHeader, explain, dirtyActionRow, personCombo, personName, companyCombo, groupCombo, projectTypeBadge } = require("./views");
 const { contactOptions, listPersonsForOrg, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
@@ -93,14 +93,17 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
   </section>`;
 }
 
-/** 클라이언트 담당자 연락처 콤보 — 공용 personCombo(검색+새 등록 모달+선택 시 닫힘). 저장 시 이 클라이언트 소속으로 연동(linkClientContact, clients.routes.js). */
+/** 클라이언트 담당자 연락처 콤보 — 공용 personCombo(multi, 콤마로 여러 명. 세션 디렉터와 동일 UX).
+ *  프리필=현재 담당자 전원의 라벨 콤마 목록, 저장 시 콤보에 남은 사람만 이 클라이언트 담당자(linkClientContact, clients.routes.js). */
 function clientContactCombo(c, isEdit) {
-  const cur = isEdit && c.id ? (listPersonsForOrg(c.id)[0] || null) : null;
+  // 대표자는 제외 — 소속이 자동 부여(ensureOwnerAffiliation)돼 콤보에서 지워도 유지되므로, 보이면 '지웠는데 다시 뜨는' 것처럼 보인다.
+  // 콤보에 있는 것 = 저장되는 것(setOrgContacts의 대표자 예외와 짝).
+  const cur = isEdit && c.id ? listPersonsForOrg(c.id).filter((p) => Number(p.id) !== Number(c.owner_party_id || 0)) : [];
   return `
     <div>
-      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 연락처에 연동)</span></label>
-      ${personCombo({ idField: "contact_id", nameField: "contact_name", selectedId: cur ? cur.id : null, options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company") })}
-      ${explain(`목록에 없는 이름을 입력하면 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다.`)}
+      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 콤마로 여러 명)</span></label>
+      ${personCombo({ idField: "contact_id", nameField: "contact_name", initialName: cur.map((p) => personName(p)).join(", "), options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: "담당자 — 검색 또는 새로 등록, 콤마로 여러 명" })}
+      ${explain(`콤마(,)로 여러 명을 이어서 입력합니다. 목록에 없는 이름은 저장 시 새 연락처로 등록되고 이 클라이언트 담당자로 연결됩니다. 칸에서 지운 사람은 이 클라이언트 담당자에서 빠집니다(연락처와 소속 이력은 남습니다).`)}
     </div>`;
 }
 
