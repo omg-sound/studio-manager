@@ -643,3 +643,42 @@ test("personCombo(multi): 드롭다운 행은 Gmail식 2줄(이름·호칭 / 이
   assert.ok(row.textContent.includes("실장님"), "호칭 표시");
   assert.ok(lines.some((l) => l.includes("yumi@wyjs.kr") && l.includes("(주)월간윤종신")), `2번째 줄=이메일·소속 — ${JSON.stringify(lines)}`);
 });
+
+// ── 검색 후보 랭킹(2026-07-10 사용자 리포트 '윤종신을 검색했는데 다른 이름이 더 우선 추천된다') ──
+// 필터만 하고 정렬이 없어, 옵션이 이름 가나다순이라 회사명('(주)월간윤종신')으로 매칭된 엄유미가
+// 정작 이름이 일치하는 윤종신보다 앞에 떴다. 엔터(첫 항목 선택)로 엉뚱한 사람이 담기는 문제.
+// 행의 '이름 줄'(첫 span)만 본다 — 부제(이메일·소속)에 검색어가 섞여 오탐하지 않게.
+const rowNames = (pop) => [...pop.querySelectorAll("button[data-idx]")].map((b) => b.querySelector("span").textContent.trim());
+
+test("personCombo: 이름 일치가 회사명 일치보다 먼저 추천됨", () => {
+  const { win, input, pop } = mountChips(); // 옵션 순서: 엄유미(회사=(주)월간윤종신) → 윤종신
+  input.value = "윤종신"; fire(win, input, "input");
+  const names = rowNames(pop);
+  assert.equal(names[0], "윤종신 (윤종신)", `첫 후보=이름 일치 — 실제: ${JSON.stringify(names)}`);
+  assert.ok(names.some((n) => n.startsWith("엄유미")), "회사명 매칭도 후보엔 남음(뒤로)");
+});
+
+test("personCombo: 이름 앞부분 일치가 중간 포함보다 먼저", () => {
+  // 서버 contactOptions는 name 가나다순 → 김종신이 종신철보다 앞에 온다(정렬 없으면 그대로 노출).
+  const OPTS = [
+    { id: 31, name: "김종신" },   // 중간 포함
+    { id: 32, name: "종신철" },   // 앞부분 일치
+  ];
+  const html = `<form>${personCombo({ options: OPTS, companyOptions: [], multi: true })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-pc-input]");
+  const pop = doc.querySelector("[data-pc-pop]");
+  input.value = "종신"; fire(win, input, "input");
+  const names = rowNames(pop);
+  assert.equal(names[0], "종신철", `앞부분 일치 우선 — 실제: ${JSON.stringify(names)}`);
+});
+
+test("personCombo: 이름 정확 일치가 앞부분 일치보다 먼저", () => {
+  const OPTS = [{ id: 41, name: "종신철" }, { id: 42, name: "종신" }];
+  const html = `<form>${personCombo({ options: OPTS, companyOptions: [], multi: true })}</form>`;
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-pc-input]");
+  const pop = doc.querySelector("[data-pc-pop]");
+  input.value = "종신"; fire(win, input, "input");
+  assert.equal(rowNames(pop)[0], "종신", "정확 일치 최우선");
+});

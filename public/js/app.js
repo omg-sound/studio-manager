@@ -1668,6 +1668,23 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     // 이미 칩으로 담긴 사람은 후보에서 제외(회사명도 검색 대상이라 '윤종신'을 치면 회사가 '(주)월간윤종신'인
     // 엄유미까지 후보로 뜨던 것 — 2026-07-10 사용자 리포트).
     function isChosen(o) { return multi && chipHas(o); }
+    /**
+     * 검색어 매칭 강도(작을수록 먼저). 99=미매칭.
+     * 이름 > 활동명 > 표시 라벨 > 소속 회사 순, 각 단계에서 정확 일치 > 앞부분 일치 > 중간 포함.
+     * (2026-07-10 사용자 리포트: '윤종신'을 치면 회사명이 '(주)월간윤종신'인 엄유미가 먼저 떴다 — 필터만 하고
+     *  정렬이 없어 옵션의 가나다순이 그대로 노출됐다. 엔터로 첫 항목을 고르면 엉뚱한 사람이 담긴다.)
+     */
+    function matchRank(o, q) {
+      function score(v, base) {
+        if (!v) return 99;
+        var s = String(v).toLowerCase();
+        if (s === q) return base;
+        if (s.indexOf(q) === 0) return base + 1;
+        return s.indexOf(q) !== -1 ? base + 2 : 99;
+      }
+      return Math.min(score(o.name, 0), score(o.alt, 10), score(labelOf(o), 20), score(o.company, 30));
+    }
+
     // Gmail식 제안 행: 이름(+호칭·활동명) 굵게 / 이메일·소속 작게 2줄.
     var personRowCls = "flex w-full cursor-pointer flex-col items-start gap-0 px-3 py-1.5 text-left hover:bg-elevated active:bg-elevated";
     function render() {
@@ -1676,7 +1693,11 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var html = "";
       if (!q) { view = []; html = newRow(""); }
       else {
-        view = opts.filter(function (o) { return !isChosen(o) && (String(o.name).toLowerCase().indexOf(q) !== -1 || (o.alt && String(o.alt).toLowerCase().indexOf(q) !== -1) || (o.company && String(o.company).toLowerCase().indexOf(q) !== -1) || labelOf(o).toLowerCase().indexOf(q) !== -1); }).slice(0, 12); // 본명·활동명·소속 회사·표시 라벨 검색 — 이미 담은 사람 제외
+        view = opts.filter(function (o) { return !isChosen(o) && matchRank(o, q) < 99; })
+          .map(function (o, i) { return { o: o, r: matchRank(o, q), i: i }; }) // i=원래 순서(이름 가나다) → 동점이면 유지(안정 정렬)
+          .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
+          .map(function (x) { return x.o; })
+          .slice(0, 12); // 본명·활동명·소속 회사·표시 라벨 검색 — 이미 담은 사람 제외, 매칭 강도순
         html = view.map(function (o, i) {
           var nm = esc(o.name) + (o.honorific ? ' <span class="font-normal text-muted">' + esc(o.honorific) + '</span>' : "") + (o.alt ? ' <span class="font-normal text-muted">(' + esc(o.alt) + ')</span>' : "");
           var sub = subOf(o);
