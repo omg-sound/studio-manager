@@ -536,6 +536,37 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
 }
 
 /**
+ * 사람(연락처/관계자) 목록 행 — 이름(→연락처)·현재 소속 회사(→회사 상세)를 각각 링크(밑줄 분리)로,
+ * 직함 텍스트 + 역할 배지, 우측에 전화·이메일(비링크·클릭 복사). 연락처 목록과 클라이언트 '관계자' 탭이 공용
+ * (이전엔 두 라우트에 near-identical 복붙 — 한쪽 수정 시 드리프트). 현재 소속을 한 번 조회해 classifyParty에
+ * 넘겨 행당 재조회를 없앤다(감사 M4·M6).
+ * @param {object} c    party 행(listContacts/listAssociates 반환 — id·phone·email·activity_name 등 포함)
+ * @param {object} [opt]
+ * @param {string} [opt.fromParam=""] 상세 링크에 붙일 복귀 쿼리(`?from=...`) — 클라이언트 관계자 탭만 사용.
+ */
+function personListRow(c, { fromParam = "" } = {}) {
+  const { currentAffiliation, classifyParty } = require("./data"); // 지연 require(data는 views를 require하지 않음)
+  const cur = currentAffiliation(c.id);
+  const badges = classifyParty(c, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
+  const nameLink = `<a href="/contacts/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personName(c))}</a>`;
+  let orgPart = "";
+  if (cur && cur.client_id) {
+    const orgA = `<a href="/clients/${cur.client_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
+    orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
+  }
+  const right = (c.phone || c.email)
+    ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}${c.email ? `<div>${copyable(c.email)}</div>` : ""}</div>`
+    : "";
+  return `<div class="flex items-start justify-between gap-4 px-4 py-3">
+      <div class="min-w-0">
+        <div class="truncate">${nameLink}${orgPart}</div>
+        ${badges ? `<div class="mt-1 flex flex-wrap gap-1">${badges}</div>` : ""}
+      </div>
+      ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
+    </div>`;
+}
+
+/**
  * 사람(연락처) 검색 콤보 — 통일 UX(검색 + 선택 시 닫힘 + 새로 등록 모달 + 선택 정보 표시).
  * 프로젝트 고객측 담당자·세션 디렉터(동적 다중 행)·클라이언트 담당자 공용. CSP-safe(app.js [data-person-combo]).
  * @param {object} o
@@ -845,4 +876,4 @@ function groupCombo(fieldName, selectedId, currentName, groups = []) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personListRow, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };

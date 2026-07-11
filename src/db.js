@@ -489,6 +489,9 @@ function init() {
   d.exec("CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id);"); // 입금 합계·이력 조회(2026-07-09 감사)
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);");
   d.exec("CREATE INDEX IF NOT EXISTS idx_projects_manager ON projects(manager_id);");
+  // classifyParty가 사람 party마다 조회(연락처/관계자 목록 행) — director/production 참조. director_party_id·production_id는 addColumn 후행이라 여기서(2026-07-11 감사 M5).
+  d.exec("CREATE INDEX IF NOT EXISTS idx_sessions_director_party ON sessions(director_party_id);");
+  d.exec("CREATE INDEX IF NOT EXISTS idx_projects_production ON projects(production_id);");
   // 세션당 청구 작업 1건만(부분 유니크: NULL은 다중 허용). 중복 청구 방어 심층.
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_track_tasks_session ON track_tasks(session_id) WHERE session_id IS NOT NULL;");
   d.exec("CREATE INDEX IF NOT EXISTS idx_invoice_items_session ON invoice_items(session_id);");
