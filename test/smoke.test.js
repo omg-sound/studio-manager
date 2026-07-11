@@ -37,7 +37,7 @@ test("스모크: 치프 로그인 후 주요 화면 전부 200", async () => {
 
     // 주요 화면(각 메뉴 + 대표 탭). 리다이렉트 없이 200이어야 한다(403/500/302=회귀).
     const pages = [
-      "/", "/projects", "/projects?tab=done", "/projects/new",
+      "/", "/projects", "/projects?tab=billing", "/projects?tab=done", "/projects/new",
       "/sessions", "/sessions?view=calendar", "/sessions?view=list&stab=past",
       "/invoices", "/invoices?tab=done", "/invoices?tab=paid",
       "/clients", "/clients?group=artist", "/contacts", "/contacts/new",
