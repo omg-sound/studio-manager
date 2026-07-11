@@ -265,30 +265,41 @@ router.post("/", requireEditor, (req, res) => {
   const type = normalizeProjectType(b.project_type);
   if (!title) return res.send(layout({ title: "새 프로젝트", user: req.user, current: "/projects", body: projectForm({ ...b, project_type: type, _err: "프로젝트 명을 입력하세요." }) }));
   const parties = resolveProjectParties(b); // 아티스트/소속사/제작사/담당자 → party 참조(+ 아티스트 표시·중복 방지)
-  const info = db()
-    .prepare(
-      `INSERT INTO projects (title, project_type, artist, artist_company, production_company,
-         artist_id, agency_id, production_id, contact_party_id, manager_id, memo)
-       VALUES (@title, @project_type, @artist, @artist_company, @production_company,
-         @artist_id, @agency_id, @production_id, @contact_party_id, @manager_id, @memo)`
-    )
-    .run({
-      title,
-      project_type: type,
-      // 표시용 denormalized TEXT 유지(목록·요약 렌더). 정체성/청구는 party 참조가 진실원천.
-      artist: parties.artistText, // 콤마 다중 정규화("아이유, 태연")
-      artist_company: parties.agencyName, // 첫 아티스트 소속에서 파생(폼 입력 필드 폐기)
-      production_company: String(b.production_company || "").trim() || null,
-      artist_id: parties.artistId,
-      agency_id: parties.agencyId,
-      production_id: parties.productionId,
-      contact_party_id: parties.contactId,
-      manager_id: b.manager_id ? Number(b.manager_id) : null,
-      memo: String(b.memo || "").trim() || null,
-    });
-  setProjectArtists(info.lastInsertRowid, parties.artistIds); // 다대다 전체 기록(각 아티스트 상세 '연결 프로젝트' 매칭)
-  setProjectContacts(info.lastInsertRowid, parties.contactIds); // 고객측 담당자 다대다(첫=contact_party_id)
-  res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
+  // projects 행(denormalized 컬럼) + 다대다 아티스트·담당자를 한 트랜잭션으로 — 중간 실패 시 컬럼↔조인 불일치·빈 담당자 방지(세션 경로와 동일).
+  const d = db();
+  let newId;
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    const info = d
+      .prepare(
+        `INSERT INTO projects (title, project_type, artist, artist_company, production_company,
+           artist_id, agency_id, production_id, contact_party_id, manager_id, memo)
+         VALUES (@title, @project_type, @artist, @artist_company, @production_company,
+           @artist_id, @agency_id, @production_id, @contact_party_id, @manager_id, @memo)`
+      )
+      .run({
+        title,
+        project_type: type,
+        // 표시용 denormalized TEXT 유지(목록·요약 렌더). 정체성/청구는 party 참조가 진실원천.
+        artist: parties.artistText, // 콤마 다중 정규화("아이유, 태연")
+        artist_company: parties.agencyName, // 첫 아티스트 소속에서 파생(폼 입력 필드 폐기)
+        production_company: String(b.production_company || "").trim() || null,
+        artist_id: parties.artistId,
+        agency_id: parties.agencyId,
+        production_id: parties.productionId,
+        contact_party_id: parties.contactId,
+        manager_id: b.manager_id ? Number(b.manager_id) : null,
+        memo: String(b.memo || "").trim() || null,
+      });
+    newId = info.lastInsertRowid;
+    setProjectArtists(newId, parties.artistIds); // 다대다 전체 기록(각 아티스트 상세 '연결 프로젝트' 매칭)
+    setProjectContacts(newId, parties.contactIds); // 고객측 담당자 다대다(첫=contact_party_id)
+    d.exec("COMMIT;");
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
+  res.redirect(`/projects/${newId}?flash=created`);
 });
 
 // ── 작성일(생성일) 수정 (치프 전용) — 상세 메타 카드 date 입력, 시각(HH:MM:SS)은 보존 ──
@@ -432,28 +443,37 @@ router.post("/:id", requireEditor, (req, res) => {
   }
   // project_type은 UPDATE에서 제외 → 기존 DB 값 보존(유형 구분은 UI에서 제거, 레거시 컬럼은 건드리지 않음).
   const parties = resolveProjectParties(b); // 아티스트/소속사/제작사/담당자 → party 참조
-  db()
-    .prepare(
-      `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
-       production_company=@production_company, artist_id=@artist_id, agency_id=@agency_id,
-       production_id=@production_id, contact_party_id=@contact_party_id, manager_id=@manager_id,
-       memo=@memo WHERE id=@id`
-    )
-    .run({
-      id,
-      title,
-      artist: parties.artistText, // 콤마 다중 정규화
-      artist_company: parties.agencyName, // 첫 아티스트 소속에서 파생(폼 입력 필드 폐기)
-      production_company: String(b.production_company || "").trim() || null,
-      artist_id: parties.artistId,
-      agency_id: parties.agencyId,
-      production_id: parties.productionId,
-      contact_party_id: parties.contactId,
-      manager_id: b.manager_id ? Number(b.manager_id) : null,
-      memo: String(b.memo || "").trim() || null,
-    });
-  setProjectArtists(id, parties.artistIds); // 다대다 목록 통째 교체
-  setProjectContacts(id, parties.contactIds); // 고객측 담당자 다대다 통째 교체(첫=contact_party_id)
+  // UPDATE + 다대다 통째 교체를 한 트랜잭션으로 — 담당자만 지워지고 컬럼은 옛값으로 남는 반쪽 갱신 방지(세션 경로와 동일).
+  const d = db();
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    d
+      .prepare(
+        `UPDATE projects SET title=@title, artist=@artist, artist_company=@artist_company,
+         production_company=@production_company, artist_id=@artist_id, agency_id=@agency_id,
+         production_id=@production_id, contact_party_id=@contact_party_id, manager_id=@manager_id,
+         memo=@memo WHERE id=@id`
+      )
+      .run({
+        id,
+        title,
+        artist: parties.artistText, // 콤마 다중 정규화
+        artist_company: parties.agencyName, // 첫 아티스트 소속에서 파생(폼 입력 필드 폐기)
+        production_company: String(b.production_company || "").trim() || null,
+        artist_id: parties.artistId,
+        agency_id: parties.agencyId,
+        production_id: parties.productionId,
+        contact_party_id: parties.contactId,
+        manager_id: b.manager_id ? Number(b.manager_id) : null,
+        memo: String(b.memo || "").trim() || null,
+      });
+    setProjectArtists(id, parties.artistIds); // 다대다 목록 통째 교체
+    setProjectContacts(id, parties.contactIds); // 고객측 담당자 다대다 통째 교체(첫=contact_party_id)
+    d.exec("COMMIT;");
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
   if (isFetch) return res.json({ ok: true });
   res.redirect(`/projects/${id}?flash=saved`);
 });

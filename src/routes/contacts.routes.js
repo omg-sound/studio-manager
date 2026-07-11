@@ -167,7 +167,8 @@ router.post("/", asyncHandler(async (req, res) => {
       return res.json({ ok: true, id, name: pp.name });
     }
     res.redirect(`/contacts/${id}?flash=created`);
-  } catch (_e) {
+  } catch (e) {
+    if (e.message !== "PARTY_NAME_REQUIRED") throw e; // 이름 누락만 폼 재렌더, 그 외(DB 오류 등)는 전역 핸들러(500+로깅)로
     if (req.get("X-Requested-With") === "fetch") return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({}), null, false, listGroupsForPicker()) }));
   }
@@ -212,7 +213,8 @@ router.post("/:id", asyncHandler(async (req, res) => {
       }
     } catch (_e) {}
     res.redirect(`/contacts/${id}?flash=saved`);
-  } catch (_e) {
+  } catch (e) {
+    if (e.message !== "PARTY_NAME_REQUIRED") throw e; // 이름 누락만 폼 재렌더, 그 외(DB 오류 등)는 전역 핸들러(500+로깅)로
     res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker()) }));
   }
 }));
