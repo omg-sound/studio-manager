@@ -190,7 +190,7 @@ function listProjectSummaries(projectIds) {
   for (const id of ids) out[id] = { sessions: [], tracks: [], taskTypes: [] };
   const sessions = db()
     .prepare(
-      `SELECT project_id, session_date, start_time, end_time, session_type, status
+      `SELECT id, project_id, session_date, start_time, end_time, session_type, status
        FROM sessions WHERE project_id IN (${ph}) AND status <> '취소'
        ORDER BY session_date ASC, start_time ASC, id ASC`
     )

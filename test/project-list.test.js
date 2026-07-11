@@ -145,3 +145,13 @@ test("project_contacts: set/list + 연결 프로젝트 + 관계자", () => {
   D.setProjectContacts(pid, [p2]); // 통째 교체
   assert.deepStrictEqual(D.listProjectContacts(pid).map((x) => x.id), [p2], "교체 반영");
 });
+
+test("projectSummaryHtml: 편집자면 목록 펼침 세션에 완료 토글(?open= 복귀)", () => {
+  const y = Number(todayYmd().slice(0, 4));
+  const summary = { sessions: [{ id: 42, session_date: `${y + 1}-07-15`, start_time: "14:00", end_time: "17:30", session_type: "녹음", status: "예정" }], tracks: [], taskTypes: [] };
+  const admin = views.projectSummaryHtml(summary, { isAdmin: true, projectId: 7, tab: "active" });
+  assert.match(admin, /\/sessions\/42\/status/, "완료 폼 액션");
+  assert.match(admin, /name="return" value="\/projects\?tab=active&open=7"/, "완료 후 그 카드 재펼침 복귀");
+  const plain = views.projectSummaryHtml(summary, { isAdmin: false, projectId: 7 });
+  assert.doesNotMatch(plain, /\/sessions\/42\/status/, "비편집자는 완료 토글 없음");
+});

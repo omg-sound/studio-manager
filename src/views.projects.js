@@ -85,7 +85,7 @@ function projectIdentity(p) {
  *     우측=PM + 그 밑에 다음 세션(진행 중, 디데이만 임박도 색 강조). 금액은 청구 필요 탭(tab==="billing")에서만.
  *  ② 하단 접기 토글 바(<details>) → 카운트 요약, 펼치면 세션 일정(다가오는 세션 우선)·곡별 작업자 인라인 미리보기.
  */
-function projectListRow(p, summary, { tab = "active" } = {}) {
+function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null } = {}) {
   const isBilling = tab === "billing";
   // 정체성(주) / 부제(프로젝트명). 정체성 없으면 제목을 주 줄로 승격(부제 생략).
   const identity = projectIdentity(p);
@@ -132,22 +132,34 @@ function projectListRow(p, summary, { tab = "active" } = {}) {
         </div>
         ${rightCol}
       </a>
-      <details class="group/proj">
+      <details class="group/proj"${openId != null && Number(p.id) === Number(openId) ? " open" : ""} id="proj-${p.id}">
         <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
           <span>${esc(counts)}</span>
           <svg class="h-3.5 w-3.5 shrink-0 transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         </summary>
-        <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary)}</div>
+        <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab })}</div>
       </details>
     </div>`;
 }
 
 
 /** 인라인 요약 본문 — 세션 일정(날짜·시간) + 곡·콘텐츠(아티스트·제목·작업자). data.listProjectSummaries 결과 1건. */
-function projectSummaryHtml(s) {
+function projectSummaryHtml(s, { isAdmin = false, projectId = null, tab = "active" } = {}) {
   if (!s || (!s.sessions.length && !s.tracks.length)) {
     return `<span class="text-muted">등록된 세션·곡·콘텐츠가 없습니다.</span>`;
   }
+  // 완료 후 목록으로 복귀하며 이 카드를 다시 펼친다(?open=). 스크롤은 app.js가 보존(경로 동일).
+  const ret = `/projects?tab=${esc(tab)}${projectId ? `&open=${projectId}` : ""}`;
+  // 프로젝트 목록 펼침에서 바로 완료(2026-07-11 사용자 요청 — 프로젝트 안 안 들어가고 완료). 편집 권한자·예정/완료 세션만.
+  const sessToggle = (se) => {
+    if (!isAdmin || (se.status !== "예정" && se.status !== "완료")) return "";
+    const done = se.status === "완료";
+    return `<form method="post" action="/sessions/${se.id}/status" class="shrink-0">
+        <input type="hidden" name="status" value="${done ? "예정" : "완료"}" />
+        <input type="hidden" name="return" value="${ret}" />
+        <button class="btn-ghost btn-xs ${done ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${done}"><span aria-hidden="true" class="inline-block w-3 text-center ${done ? "" : "opacity-60"}">${done ? "✓" : "−"}</span>완료</button>
+      </form>`;
+  };
   const blocks = [];
   if (s.sessions.length) {
     // 다가오는 세션(오늘 이후) 먼저, 지난 세션은 그 뒤(최근 순)로 재정렬 — 지난 세션이 앞을 먹어 다가오는 게 잘리는 것 방지.
@@ -159,7 +171,9 @@ function projectSummaryHtml(s) {
       const time = se.start_time ? ` ${esc(se.start_time)}${se.end_time ? "–" + esc(se.end_time) : ""}` : "";
       const st = se.status && se.status !== "예정" ? ` <span class="text-muted">· ${esc(se.status)}</span>` : "";
       const dateCls = se.session_date < today ? "text-muted" : "text-fg/80";
-      return `<li><span class="tabular ${dateCls}">${esc(formatYmdShort(se.session_date))}${time}</span> <span class="text-muted">· ${esc(se.session_type)}</span>${st}</li>`;
+      const toggle = sessToggle(se);
+      const info = `<span class="min-w-0 truncate"><span class="tabular ${dateCls}">${esc(formatYmdShort(se.session_date))}${time}</span> <span class="text-muted">· ${esc(se.session_type)}</span>${st}</span>`;
+      return `<li class="flex items-center justify-between gap-2">${info}${toggle}</li>`;
     }).join("");
     const more = s.sessions.length > 8 ? `<li class="text-muted">외 ${s.sessions.length - 8}건</li>` : "";
     blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">세션 ${s.sessions.length}</div><ul class="space-y-0.5">${items}${more}</ul></div>`);

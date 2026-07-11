@@ -217,7 +217,9 @@ router.get("/", requireAuth, (req, res) => {
     // 목록 상한(2026-07-09 스케일 점검) — 완료 탭이 해가 갈수록 누적되므로 기본 100건 + 더 보기. 요약도 표시분만 배치 조회.
     const cap = capList(activeRows, req.query, (n) => `/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
     const summaries = listProjectSummaries(cap.shown.map((r) => r.id)); // 인라인 요약(배치 2쿼리)
-    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab })).join("")}</div>${cap.more}`;
+    const isAdmin = canEdit(user); // 펼침 세션 완료 토글 노출(편집 권한자). 완료 후 ?open=로 그 카드 재펼침.
+    const openId = Number(req.query.open) || null;
+    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
