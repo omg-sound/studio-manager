@@ -510,7 +510,7 @@ function sessionCardModal(s, { canEdit = false } = {}) {
     ? `<form method="post" action="/sessions/${s.id}/status">
          <input type="hidden" name="status" value="${isDone ? "예정" : "완료"}" />
          <input type="hidden" name="return" value="${ret}" />
-         <button class="btn-sm ${isDone ? "border-success/40 bg-success/10 text-success" : "btn-primary"}" type="submit" aria-pressed="${isDone}">${isDone ? "✓ 완료됨 · 되돌리기" : "완료 처리"}</button>
+         <button class="btn-ghost btn-sm ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "−"}</span>완료</button>
        </form>`
     : "";
   // 모달 위치 = 전체 화면 가운데가 아니라 콘텐츠(캘린더) 영역 가운데(2026-07-11 사용자 요청):
