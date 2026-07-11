@@ -303,3 +303,4 @@ function uploadForm(project, b = {}) {
 }
 
 module.exports = router;
+module.exports.tokenGate = tokenGate; // 공개 다운로드 링크 게이트(존재/철회/만료) — 테스트 노출(비인증 방어선 회귀 잠금)

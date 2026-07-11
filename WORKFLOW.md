@@ -155,7 +155,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 200개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 210개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -163,7 +163,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 | 층 | 파일 | 개수 | 검증 대상 |
 |---|---|---|---|
-| **① 단위** | `invoice-number`·`vat`·`rate-price`·`session-conflict`·`auth`·`party`·`payments`·`rental-session`·`task-status`·`rate-categories`·`waive`·`worker-detail`·`project-list`·`nav`·`tax` | 135 | 금전 로직(채번·VAT·Pro블록 단가·할인·**프로젝트 금액 할인 차감**[invoice_discount_total — from-tasks만, 수동 제외]·**0원 항목 confirmZero 청구**·**청구 항목 날짜순**[item_date])·세션 겹침(야간교차·취소예외)·권한·당사자 모델·입금 이력·대관 세션(녹음/촬영/공연 kind 매핑·금액 미정 정액)·**세션 담당 엔지니어 다대다**(session_engineers 저장·교체·유효id 필터·dedup)·**세션 외주 정산**(worker_rate 저장·재저장 시 worker_paid 보존·새 엔지니어는 미지급 시작·payout 조회)·**작업 완료 토글**(setTaskStatus·updateTask 상태보존 회귀)·**단가표 분류**(locked 가드·이름변경 cascade·사용중 삭제거부)·**청구 안 함(waive) 토글**(예산·미청구 집계 제외·되돌리기 시 원 금액 복원·이미 청구된 항목 잠금)·**외주 작업자**(listSessionsForWorker 다대다+레거시 폴백·중복없음, worker_files CRUD+CASCADE, id_number/account_number 암호화 저장·복원) |
+| **① 단위** | `invoice-number`·`vat`·`rate-price`·`session-conflict`·`auth`·`party`·`payments`·`rental-session`·`task-status`·`rate-categories`·`waive`·`worker-detail`·`project-list`·`nav`·`tax`·`ssrf`·`token-gate` | 145 | 금전 로직(채번·VAT·Pro블록 단가·할인·**프로젝트 금액 할인 차감**[invoice_discount_total — from-tasks만, 수동 제외]·**0원 항목 confirmZero 청구**·**청구 항목 날짜순**[item_date])·세션 겹침(야간교차·취소예외)·권한·당사자 모델·입금 이력·대관 세션(녹음/촬영/공연 kind 매핑·금액 미정 정액)·**세션 담당 엔지니어 다대다**(session_engineers 저장·교체·유효id 필터·dedup)·**세션 외주 정산**(worker_rate 저장·재저장 시 worker_paid 보존·새 엔지니어는 미지급 시작·payout 조회)·**작업 완료 토글**(setTaskStatus·updateTask 상태보존 회귀)·**단가표 분류**(locked 가드·이름변경 cascade·사용중 삭제거부)·**청구 안 함(waive) 토글**(예산·미청구 집계 제외·되돌리기 시 원 금액 복원·이미 청구된 항목 잠금)·**외주 작업자**(listSessionsForWorker 다대다+레거시 폴백·중복없음, worker_files CRUD+CASCADE, id_number/account_number 암호화 저장·복원) |
 | **② 정적 계약 가드** | `guardrails.test.js`(백엔드) + `guardrails-ui.test.js`(UI — companyCombo 옵션 키 ⑭ 포함) | 19 | 소스 양쪽을 스캔해 **반복 실수 클래스가 코드에 존재할 수 없게** — 아래 목록 |
 | **③ 상호작용(jsdom)** | `ui-interactions.test.js` + `helpers-dom.js` | 45 | 실제 views 렌더 위에서 **실제 app.js를 실행**해 동작 검증 — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)·선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·종일 토글·구글식 시간 콤보·디렉터 프리필·simpleModal·외부 장소 토글·**이름 병기**(라벨 pick·라벨 재열람 유지·서버 렌더 주석)·dirty 폼·**네비게이션 가드**(일반 링크 가로채기·`data-no-guard` 통과)·**모달 배경클릭 드래그 구분**(mousedown 안쪽+click 배경=안 닫힘, 둘 다 배경=닫힘) |
 
@@ -185,7 +185,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 200개(단위+가드+상호작용+스모크)
+npm test                                   # 전체 210개(단위+가드+상호작용+스모크)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 node --test test/smoke.test.js             # 실서버 기동 스모크(주요 화면 22개 200 + owner/staff 권한 매트릭스 — '조용히 죽는' 회귀·권한 배선 드리프트 검출)
@@ -227,7 +227,8 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 7. ✅ (완료) **data.js 모듈 분리** — 2049→58줄 순수 재export 허브 + 14개 도메인 모듈(`src/data/*.js`). 공개 export 124개 분리 전후 동일(매 커밋 대조). 상호의존(invoices↔sessions)만 지연 require, 나머지는 형제 모듈 직접 require. CLAUDE.md TODO 9 참조.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션·2026-07-11l 최신)**: **감사 M4~M6 통합 리팩터**(뿌리 하나 — 연락처/관계자 사람 행 렌더) — ①**M6 `personListRow` 공용 헬퍼**(views.js): `/contacts`·`/clients?group=associate`의 복붙 두 블록을 한 줄 호출로(fromParam만 차이) ②**M4 `classifyParty(party, preAff)`**: 객체+미리 계산한 소속을 받아 행당 재조회 제거(`arguments.length`로 null 소속 구분) ③**M5 인덱스 2개**(`idx_sessions_director_party`·`idx_projects_production` — classifyParty director/production 참조 풀스캔 → COVERING INDEX). 고아 import 정리. `src/views.js`·`src/data/parties.js`·`src/routes/{contacts,clients}.routes.js`·`src/db.js`. 200 테스트·EXPLAIN QUERY PLAN·E2E(동일 렌더) 검증.
+> **완료(이번 세션·2026-07-11m 최신)**: **감사 L5·L6 보안 테스트 + SSRF 결함 수정** — ①**L5 `ssrf.test.js`**(isPrivateIp/isSsrfSafe 대역·매핑우회·경계) → 테스트가 **실 SSRF 갭 검출**: fc00::/7 ULA 패턴 `f[ce]`가 fd 대역(fd00::/8 — 흔한 ULA)을 놓침 → `f[cde]` 교정(재현→근본원인, 함정 #11 🔒 승격) ②**L6 `token-gate.test.js`**(공개링크 tokenGate 존재/철회/만료/유효). 순수 함수 노출(notify export·deliverables module.exports). `src/notify.js`·`src/routes/deliverables.routes.js` + 신규 테스트 2. 210 테스트(+10).
+> **완료(2026-07-11l)**: **감사 M4~M6 통합 리팩터**(뿌리 하나 — 연락처/관계자 사람 행 렌더) — ①**M6 `personListRow` 공용 헬퍼**(views.js): `/contacts`·`/clients?group=associate`의 복붙 두 블록을 한 줄 호출로(fromParam만 차이) ②**M4 `classifyParty(party, preAff)`**: 객체+미리 계산한 소속을 받아 행당 재조회 제거(`arguments.length`로 null 소속 구분) ③**M5 인덱스 2개**(`idx_sessions_director_party`·`idx_projects_production` — classifyParty director/production 참조 풀스캔 → COVERING INDEX). 고아 import 정리. `src/views.js`·`src/data/parties.js`·`src/routes/{contacts,clients}.routes.js`·`src/db.js`. 200 테스트·EXPLAIN QUERY PLAN·E2E(동일 렌더) 검증.
 > **완료(2026-07-11k)**: **종합 진단(/audit) Top 3 + 문서 정렬 수정**(4축 병렬 감사 후 조치) — ①**M1 은폐형 catch 수정**(`contacts.routes.js` POST `/`·`/:id` — 모든 예외를 "이름을 입력하세요"로 오보+무로깅하던 것을 `PARTY_NAME_REQUIRED`만 폼 재렌더·나머지는 전역 핸들러(500+로깅)로 위임, 함정 #21⑨ 은폐 클래스) ②**M2 프로젝트 생성/수정 트랜잭션 래핑**(`projects.routes.js` — INSERT/UPDATE + setProjectArtists/setProjectContacts를 세션 경로와 동일 `BEGIN IMMEDIATE`로, 컬럼↔다대다 조인 반쪽 갱신 방지) ③**M3 스모크에 역할별 권한 배선 매트릭스**(owner/staff 로그인 후 requireInvoice·requireStaff 차단·허용 기계 검증 — 라우트↔미들웨어 드리프트 잠금) ④**L10 문서 테스트 개수 154/142→200 정렬**(층별 분해도 실측 일치). 감사 결과 보안 Critical/High 0. 200 테스트·build green·DEV_LOGIN E2E(연락처 저장·프로젝트 저장 정상) 검증.
 > **완료(2026-07-11j)**: **대시보드 '청구 필요' 카드 링크를 새 청구 필요 탭으로 정렬**(개선점 찾기에서 선택) — 카드 '전체 보기' 링크가 옛 `/projects?tab=done`을 가리켰으나, 카드 항목(`is_completed && unbilled_cnt>0`)은 이제 프로젝트 목록의 새 **청구 필요 탭**(`splitProjectTabs.billing`, 정의 동일)에 모임 → 링크 `?tab=billing`·라벨 '청구 필요 탭에서 전체 보기'로 정렬. `src/routes/dashboard.routes.js` 2줄(+주석). 200 테스트·build green.
 > **완료(2026-07-11i)**: **목록 펼침에서 곡·콘텐츠(작업)도 완료**(사용자 요청 — 세션에 이어) — `projectSummaryHtml`가 곡별 각 작업(믹싱·마스터링)을 개별 행+`− 완료`/`✓ 완료` 토글(`POST /projects/tasks/:id/status`+return=목록·open, status route return 추가). `listProjectSummaries` 작업 id·status 추가, 작업종류 aggregate 제거(orphan 정리). `src/data/projects.js`·`src/views.projects.js`·`src/routes/projects.routes.js`. 200 테스트·E2E·실브라우저 검증.

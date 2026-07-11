@@ -25,8 +25,8 @@ const PRIVATE_IP_PATTERNS = [
   /^169\.254\./,                    // 169.254.0.0/16 링크로컬(IMDS 등)
   /^0\.0\.0\.0$/,                   // 0.0.0.0
   /^::1$/,                          // IPv6 루프백
-  /^f[ce][0-9a-f]{2}:/i,            // fc00::/7 ULA
-  /^fe[89ab][0-9a-f]:/i,            // fe80::/10 링크로컬
+  /^f[cde][0-9a-f]{2}:/i,           // fc00::/7 ULA(fc·fd — 첫 바이트 0xFC/0xFD) + fe00::/8(링크로컬·사이트로컬). 이전 [ce]는 fd 대역(흔한 ULA)을 통째로 놓쳤음(2026-07-11 감사 테스트로 검출)
+  /^fe[89ab][0-9a-f]:/i,            // fe80::/10 링크로컬(위 fe 커버와 중복이나 명시 보존)
 ];
 
 function isPrivateIp(ip) {
@@ -158,4 +158,6 @@ module.exports = {
   setWebhookUrl,
   envWebhookActive,
   isConfigured,
+  isPrivateIp, // SSRF 대역 판정(순수 함수) — 테스트 노출(함정 #11 회귀 잠금)
+  isSsrfSafe,
 };
