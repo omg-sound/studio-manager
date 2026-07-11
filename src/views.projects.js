@@ -278,27 +278,27 @@ function projectForm(p = {}, err = "") {
           <input class="input" name="title" value="${esc(p.title || "")}" placeholder="예: OOO 세션 (가제)" required />
         </div>
         <div>
-          <label class="label">아티스트</label>
-          ${artistCombo(p)}
+          <label class="label">프로젝트 매니저</label>
+          ${managerSelect(p.manager_id)}
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="label">소속/레이블</label>
-          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
+          <label class="label">아티스트</label>
+          ${artistCombo(p)}
         </div>
         <div>
-          <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
-          ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
+          <label class="label">소속/레이블 <span class="font-normal text-muted text-xs">(아티스트 소속)</span></label>
+          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
         </div>
+      </div>
+      <div>
+        <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
+        ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
       </div>
       <div>
         <label class="label">고객측 담당자</label>
         ${personCombo({ selectedId: p.contact_party_id, options: contactOptions(), companyOptions: partyOptions({ role: "company" }) })}
-      </div>
-      <div>
-        <label class="label">프로젝트 매니저</label>
-        ${managerSelect(p.manager_id)}
       </div>
       <div>
         <label class="label">메모</label>
@@ -323,27 +323,27 @@ function projectEditForm(p = {}, err = "") {
           <input class="input" name="title" value="${esc(p.title || "")}" required />
         </div>
         <div>
-          <label class="label">아티스트</label>
-          ${artistCombo(p)}
+          <label class="label">프로젝트 매니저</label>
+          ${managerSelect(p.manager_id)}
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="label">소속/레이블</label>
-          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
+          <label class="label">아티스트</label>
+          ${artistCombo(p)}
         </div>
         <div>
-          <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
-          ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
+          <label class="label">소속/레이블 <span class="font-normal text-muted text-xs">(아티스트 소속)</span></label>
+          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
         </div>
+      </div>
+      <div>
+        <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
+        ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
       </div>
       <div>
         <label class="label">고객측 담당자</label>
         ${personCombo({ selectedId: p.contact_party_id, options: contactOptions(), companyOptions: partyOptions({ role: "company" }) })}
-      </div>
-      <div>
-        <label class="label">프로젝트 매니저</label>
-        ${managerSelect(p.manager_id)}
       </div>
       <div>
         <label class="label">메모</label>
