@@ -85,7 +85,7 @@ function projectIdentity(p) {
  *     우측=PM + 그 밑에 다음 세션(진행 중, 디데이만 임박도 색 강조). 금액은 청구 필요 탭(tab==="billing")에서만.
  *  ② 하단 접기 토글 바(<details>) → 카운트 요약, 펼치면 세션 일정(다가오는 세션 우선)·곡별 작업자 인라인 미리보기.
  */
-function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null } = {}) {
+function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null, mine = false } = {}) {
   const isBilling = tab === "billing";
   // 정체성(주) / 부제(프로젝트명). 정체성 없으면 제목을 주 줄로 승격(부제 생략).
   const identity = projectIdentity(p);
@@ -137,19 +137,20 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
           <span>${esc(counts)}</span>
           <svg class="h-3.5 w-3.5 shrink-0 transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         </summary>
-        <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab })}</div>
+        <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>
       </details>
     </div>`;
 }
 
 
 /** 인라인 요약 본문 — 세션 일정(날짜·시간) + 곡·콘텐츠(아티스트·제목·작업자). data.listProjectSummaries 결과 1건. */
-function projectSummaryHtml(s, { isAdmin = false, projectId = null, tab = "active" } = {}) {
+function projectSummaryHtml(s, { isAdmin = false, projectId = null, tab = "active", mine = false } = {}) {
   if (!s || (!s.sessions.length && !s.tracks.length)) {
     return `<span class="text-muted">등록된 세션·곡·콘텐츠가 없습니다.</span>`;
   }
   // 완료 후 목록으로 복귀하며 이 카드를 다시 펼친다(?open=). 스크롤은 app.js가 보존(경로 동일).
-  const ret = `/projects?tab=${esc(tab)}${projectId ? `&open=${projectId}` : ""}`;
+  // mine=1(내 프로젝트만 필터)이면 보존해 필터된 뷰를 유지(2026-07-12).
+  const ret = `/projects?tab=${esc(tab)}${mine ? "&mine=1" : ""}${projectId ? `&open=${projectId}` : ""}`;
   // 프로젝트 목록 펼침에서 바로 완료(2026-07-11 사용자 요청 — 프로젝트 안 안 들어가고 완료). 편집 권한자·예정/완료 세션만.
   const sessToggle = (se) => {
     if (!isAdmin || (se.status !== "예정" && se.status !== "완료")) return "";

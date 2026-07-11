@@ -166,3 +166,39 @@ test("projectSummaryHtml: 편집자면 곡·콘텐츠 작업에도 완료 토글
   assert.doesNotMatch(plain, /\/projects\/tasks\/99\/status/, "비편집자는 작업 토글 없음");
   assert.match(plain, /믹싱/, "비편집자도 작업 라벨은 표시");
 });
+
+// ── '내 프로젝트만' 필터(2026-07-12) ──
+test("listProjectIdsForManager: PM·담당 세션·담당 작업 합집합 + 무관 제외", () => {
+  const d = db();
+  // 담당자 2명(하우스), 프로젝트 4개
+  const me = Number(d.prepare("INSERT INTO project_managers (name, active) VALUES ('나', 1)").run().lastInsertRowid);
+  const other = Number(d.prepare("INSERT INTO project_managers (name, active) VALUES ('남', 1)").run().lastInsertRowid);
+  const pjPM = Number(d.prepare("INSERT INTO projects (title, project_type, manager_id) VALUES ('PM프로젝트','session',?)").run(me).lastInsertRowid);
+  const pjSess = Number(d.prepare("INSERT INTO projects (title, project_type, manager_id) VALUES ('세션프로젝트','session',?)").run(other).lastInsertRowid);
+  const pjTask = Number(d.prepare("INSERT INTO projects (title, project_type, manager_id) VALUES ('작업프로젝트','session',?)").run(other).lastInsertRowid);
+  const pjNone = Number(d.prepare("INSERT INTO projects (title, project_type, manager_id) VALUES ('무관프로젝트','session',?)").run(other).lastInsertRowid);
+  // ② 세션 담당(session_engineers): pjSess의 세션에 나를 배정
+  const s = Number(d.prepare("INSERT INTO sessions (project_id, session_type, session_date, status) VALUES (?, '녹음', '2026-07-20', '예정')").run(pjSess).lastInsertRowid);
+  d.prepare("INSERT INTO session_engineers (session_id, manager_id) VALUES (?, ?)").run(s, me);
+  // ③ 작업 담당(track_tasks.engineer_id): pjTask의 트랙 작업에 나를 배정
+  const tr = Number(d.prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(pjTask).lastInsertRowid);
+  d.prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, engineer_id) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 0, 0, 'Pending', ?)").run(tr, me);
+
+  const ids = D.listProjectIdsForManager(me);
+  assert.ok(ids.has(pjPM), "PM 프로젝트 포함");
+  assert.ok(ids.has(pjSess), "담당 세션 프로젝트 포함");
+  assert.ok(ids.has(pjTask), "담당 작업 프로젝트 포함");
+  assert.ok(!ids.has(pjNone), "무관 프로젝트 제외");
+  assert.strictEqual(ids.size, 3, "합집합=3(중복 없음)");
+
+  assert.strictEqual(D.listProjectIdsForManager(null).size, 0, "담당자 없으면 빈 집합");
+  assert.strictEqual(D.listProjectIdsForManager(99999).size, 0, "관여 없는 담당자는 빈 집합");
+});
+
+test("projectSummaryHtml: mine=true면 완료 복귀 경로에 &mine=1 보존", () => {
+  const summary = { sessions: [{ id: 42, session_date: "2999-07-15", start_time: "14:00", end_time: "17:30", session_type: "녹음", status: "예정" }], tracks: [], taskTypes: [] };
+  const withMine = views.projectSummaryHtml(summary, { isAdmin: true, projectId: 7, tab: "active", mine: true });
+  assert.match(withMine, /name="return" value="\/projects\?tab=active&mine=1&open=7"/, "mine 보존");
+  const noMine = views.projectSummaryHtml(summary, { isAdmin: true, projectId: 7, tab: "active" });
+  assert.doesNotMatch(noMine, /mine=1/, "mine 미지정이면 없음");
+});
