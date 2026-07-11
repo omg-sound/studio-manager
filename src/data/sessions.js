@@ -22,20 +22,28 @@ const { computeRatePrice } = require("./rate-items"); // 무순환
 
 /** 프로젝트의 세션 목록(날짜순). 권한 없으면 null. */
 function listSessionsForProject(user, projectId) {
-  const { isSessionInvoiced } = require("../data"); // invoices와 상호의존 → 지연 require
   const project = getProjectForUser(user, projectId);
   if (!project) return null;
   // 항상 날짜순(2026-07-05 사용자 요청 — 이전 작성순 created_at에서 전환). 같은 날은 시작 시각순, 동률은 id로 안정 정렬.
   const rows = db()
     .prepare("SELECT * FROM sessions WHERE project_id = ? ORDER BY session_date ASC, start_time ASC, id ASC")
     .all(projectId);
+  if (!rows.length) return { project, rows: [] };
+  // N+1 회피(감사 L9 — 전역 목록 upcomingSessions와 통일): rate_items 1회 로드(withBilling) +
+  // 청구 작업(세션당 1건, 부분 유니크)·청구여부를 세션 id IN 배치 1쿼리씩(행마다 단건 조회 폐지).
+  const bill = withBilling();
+  const ids = rows.map((r) => r.id);
+  const ph = ids.map(() => "?").join(",");
+  const taskBySession = new Map();
+  for (const t of db().prepare(`SELECT id, session_id FROM track_tasks WHERE session_id IN (${ph})`).all(...ids)) taskBySession.set(t.session_id, t.id);
+  const invoicedSet = new Set();
+  for (const r of db().prepare(`SELECT DISTINCT session_id FROM invoice_items WHERE session_id IN (${ph})`).all(...ids)) invoicedSet.add(r.session_id);
   return {
     project,
     rows: rows.map((row) => ({
-      ...row,
-      billing: sessionRateAmount(row),
-      billed_task_id: db().prepare("SELECT id FROM track_tasks WHERE session_id = ?").get(row.id)?.id || null,
-      invoiced: isSessionInvoiced(row.id),
+      ...bill(row),
+      billed_task_id: taskBySession.get(row.id) || null,
+      invoiced: invoicedSet.has(row.id),
     })),
   };
 }
