@@ -111,6 +111,7 @@ test("nextSessionLine: 디데이 색 단계 + PM 밑 우측 열", () => {
   // 경계에서 멀찍이(1·10·30일) — 타임존 ±1일 오차에도 단계 안 바뀌게.
   const soon = views.projectListRow(pRow({ manager_name: "박수한", next_session_date: ymdPlusLocal(1) }), emptySummary, { tab: "active" });
   assert.match(soon, /text-danger/, "3일 이내 = 빨강(danger)");
+  assert.match(soon, /border-border\/70[^"]*text-sm[^"]*font-bold/, "디데이 = 옅은 보더 pill·크게(text-sm 볼드)");
   assert.match(soon, /다음 세션/, "다음 세션 줄 렌더");
   assert.ok(soon.indexOf("PM 박수한") < soon.indexOf("다음 세션"), "다음 세션이 PM 밑(뒤)에 온다");
 

@@ -44,12 +44,15 @@ function nextSessionLine(p) {
   const d = daysUntilYmd(p.next_session_date);
   const dday = d === 0 ? "오늘" : d > 0 ? `D-${d}` : `${-d}일 지남`;
   // 디데이만 임박도 색 단계로 강조(2026-07-11 사용자 요청 — PM 밑, 디데이만 눈에 띄게):
-  // 3일 이내=빨강 볼드(진한색) / 2주 이내=주황(중간색) / 그 외=검정 기본(멀리).
+  // 3일 이내=빨강(진한색) / 2주 이내=주황(중간색) / 그 외=검정 기본(멀리). 옅은 보더 pill·크게(text-sm).
   let ddayCls;
-  if (d != null && d <= 3) ddayCls = "font-semibold text-danger";
-  else if (d != null && d <= 14) ddayCls = "font-medium text-warning";
+  if (d != null && d <= 3) ddayCls = "text-danger";
+  else if (d != null && d <= 14) ddayCls = "text-warning";
   else ddayCls = "text-fg";
-  return `<div class="mt-0.5 text-xs text-muted">다음 세션 ${esc(formatYmdShort(p.next_session_date))} · <span class="${ddayCls}">${esc(dday)}</span></div>`;
+  return `<div class="mt-1 flex items-center justify-end gap-1.5 text-xs text-muted">
+    <span>다음 세션 ${esc(formatYmdShort(p.next_session_date))}</span>
+    <span class="inline-flex items-center rounded-md border border-border/70 px-1.5 py-0.5 text-sm font-bold ${ddayCls}">${esc(dday)}</span>
+  </div>`;
 }
 
 
