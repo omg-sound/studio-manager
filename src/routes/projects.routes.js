@@ -536,7 +536,8 @@ router.post("/tasks/:taskId/status", requireEditor, (req, res) => {
   try {
     const task = setTaskStatus(req.user, Number(req.params.taskId), req.body.status);
     if (!task) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-    res.redirect(`/projects/${task.project_id}?tab=tracks&flash=saved`);
+    const back = safePath(req.body.return); // 목록 펼침에서 완료 시 목록으로 복귀(내부 경로만)
+    res.redirect(back || `/projects/${task.project_id}?tab=tracks&flash=saved`);
   } catch (e) {
     if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "수정 불가", message: "이미 청구된 작업은 수정할 수 없습니다.", user: req.user }));
     throw e;

@@ -155,3 +155,14 @@ test("projectSummaryHtml: 편집자면 목록 펼침 세션에 완료 토글(?op
   const plain = views.projectSummaryHtml(summary, { isAdmin: false, projectId: 7 });
   assert.doesNotMatch(plain, /\/sessions\/42\/status/, "비편집자는 완료 토글 없음");
 });
+
+test("projectSummaryHtml: 편집자면 곡·콘텐츠 작업에도 완료 토글(?open= 복귀)", () => {
+  const summary = { sessions: [], tracks: [{ id: 1, title: "월광", artist: "추화정", engineers: ["박수한"], tasks: [{ id: 99, label: "믹싱", status: "Pending" }] }], taskTypes: [] };
+  const admin = views.projectSummaryHtml(summary, { isAdmin: true, projectId: 7, tab: "active" });
+  assert.match(admin, /\/projects\/tasks\/99\/status/, "작업 완료 폼 액션");
+  assert.match(admin, /name="return" value="\/projects\?tab=active&open=7"/, "완료 후 그 카드 재펼침 복귀");
+  assert.match(admin, /믹싱/, "작업 라벨 표시");
+  const plain = views.projectSummaryHtml(summary, { isAdmin: false, projectId: 7 });
+  assert.doesNotMatch(plain, /\/projects\/tasks\/99\/status/, "비편집자는 작업 토글 없음");
+  assert.match(plain, /믹싱/, "비편집자도 작업 라벨은 표시");
+});

@@ -160,6 +160,16 @@ function projectSummaryHtml(s, { isAdmin = false, projectId = null, tab = "activ
         <button class="btn-ghost btn-xs ${done ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${done}"><span aria-hidden="true" class="inline-block w-3 text-center ${done ? "" : "opacity-60"}">${done ? "✓" : "−"}</span>완료</button>
       </form>`;
   };
+  // 곡·콘텐츠 작업(후반작업)도 목록 펼침에서 바로 완료(2026-07-11 사용자 요청 — 세션과 동일). status=Pending↔Completed.
+  const taskToggle = (tk) => {
+    if (!isAdmin) return "";
+    const done = tk.status === "Completed";
+    return `<form method="post" action="/projects/tasks/${tk.id}/status" class="shrink-0">
+        <input type="hidden" name="status" value="${done ? "Pending" : "Completed"}" />
+        <input type="hidden" name="return" value="${ret}" />
+        <button class="btn-ghost btn-xs ${done ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${done}"><span aria-hidden="true" class="inline-block w-3 text-center ${done ? "" : "opacity-60"}">${done ? "✓" : "−"}</span>완료</button>
+      </form>`;
+  };
   const blocks = [];
   if (s.sessions.length) {
     // 다가오는 세션(오늘 이후) 먼저, 지난 세션은 그 뒤(최근 순)로 재정렬 — 지난 세션이 앞을 먹어 다가오는 게 잘리는 것 방지.
@@ -179,17 +189,20 @@ function projectSummaryHtml(s, { isAdmin = false, projectId = null, tab = "activ
     blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">세션 ${s.sessions.length}</div><ul class="space-y-0.5">${items}${more}</ul></div>`);
   }
   if (s.tracks.length) {
+    // 곡별로 제목 + 그 아래 작업(믹싱·마스터링 등) 목록 — 각 작업에 완료 토글(세션과 동일). 편집 권한자만 토글, 완료는 '· 완료' 병기.
     const items = s.tracks.slice(0, 10).map((tr) => {
       const artist = tr.artist ? `<span class="text-muted">${esc(tr.artist)} · </span>` : "";
       const eng = tr.engineers.length ? ` <span class="text-muted">(${esc(tr.engineers.join(", "))})</span>` : "";
-      return `<li>${artist}<span class="text-fg/80">${esc(tr.title)}</span>${eng}</li>`;
+      const head = `<div class="truncate text-fg/80">${artist}${esc(tr.title)}${eng}</div>`;
+      const taskLis = (tr.tasks || []).map((tk) => {
+        const done = tk.status === "Completed";
+        const st = done ? ` <span class="text-muted">· 완료</span>` : "";
+        return `<li class="flex items-center justify-between gap-2 pl-3"><span class="min-w-0 truncate text-fg/70">${esc(tk.label)}${st}</span>${taskToggle(tk)}</li>`;
+      }).join("");
+      return `<li>${head}${taskLis ? `<ul class="mt-0.5 space-y-0.5">${taskLis}</ul>` : ""}</li>`;
     }).join("");
     const more = s.tracks.length > 10 ? `<li class="text-muted">외 ${s.tracks.length - 10}곡</li>` : "";
-    // 작업 종류별 내역(튠 1 · 믹싱 1 · 마스터링 1) — 무슨 작업인지 한눈에.
-    const typeSummary = s.taskTypes && s.taskTypes.length
-      ? `<div class="mt-1 text-fg/70"><span class="text-muted">작업</span> ${s.taskTypes.map((t) => `${esc(t.label)} ${t.count}`).join(" · ")}</div>`
-      : "";
-    blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">곡·콘텐츠 ${s.tracks.length}</div><ul class="space-y-0.5">${items}${more}</ul>${typeSummary}</div>`);
+    blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">곡·콘텐츠 ${s.tracks.length}</div><ul class="space-y-1.5">${items}${more}</ul></div>`);
   }
   // 세로 스택(2026-07-11 사용자 요청): 세션 블록은 전폭(완료 토글이 행 오른쪽 끝에 정렬), 곡·콘텐츠는 다음 줄로.
   return `<div class="space-y-3">${blocks.join("")}</div>`;

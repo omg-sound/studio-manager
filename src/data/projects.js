@@ -187,7 +187,7 @@ function listProjectSummaries(projectIds) {
   if (!ids.length) return {};
   const ph = ids.map(() => "?").join(",");
   const out = {};
-  for (const id of ids) out[id] = { sessions: [], tracks: [], taskTypes: [] };
+  for (const id of ids) out[id] = { sessions: [], tracks: [] };
   const sessions = db()
     .prepare(
       `SELECT id, project_id, session_date, start_time, end_time, session_type, status
@@ -198,9 +198,12 @@ function listProjectSummaries(projectIds) {
   for (const s of sessions) if (out[s.project_id]) out[s.project_id].sessions.push(s);
   const taskRows = db()
     .prepare(
-      `SELECT tr.project_id, tr.id AS track_id, tr.title, tr.artist, t.engineer_name
+      `SELECT tr.project_id, tr.id AS track_id, tr.title, tr.artist,
+              t.id AS task_id, t.status AS task_status, t.engineer_name,
+              COALESCE(NULLIF(tt.label, ''), t.task_type) AS type_label
        FROM project_tracks tr
        LEFT JOIN track_tasks t ON t.track_id = tr.id
+       LEFT JOIN task_types tt ON tt.key = t.task_type
        WHERE tr.project_id IN (${ph})
        ORDER BY tr.created_at ASC, tr.id ASC, t.created_at ASC, t.id ASC`
     )
@@ -209,25 +212,14 @@ function listProjectSummaries(projectIds) {
   for (const r of taskRows) {
     let tk = trackMap[r.track_id];
     if (!tk) {
-      tk = { id: r.track_id, title: r.title, artist: r.artist, engineers: [] };
+      tk = { id: r.track_id, title: r.title, artist: r.artist, engineers: [], tasks: [] };
       trackMap[r.track_id] = tk;
       if (out[r.project_id]) out[r.project_id].tracks.push(tk);
     }
     if (r.engineer_name && !tk.engineers.includes(r.engineer_name)) tk.engineers.push(r.engineer_name);
+    if (r.task_id) tk.tasks.push({ id: r.task_id, label: r.type_label, status: r.task_status }); // 목록 펼침에서 작업 단위 완료 토글용
   }
-  // 작업 종류별 집계(펼침 요약 '튠 1 · 믹싱 1 · 마스터링 1'). 라벨은 task_types JOIN(삭제 종류는 key 폴백).
-  const typeRows = db()
-    .prepare(
-      `SELECT tr.project_id, COALESCE(NULLIF(tt.label, ''), t.task_type) AS type_label, COUNT(*) AS cnt
-       FROM track_tasks t
-       JOIN project_tracks tr ON tr.id = t.track_id
-       LEFT JOIN task_types tt ON tt.key = t.task_type
-       WHERE tr.project_id IN (${ph})
-       GROUP BY tr.project_id, t.task_type
-       ORDER BY tr.project_id, MIN(t.created_at), MIN(t.id)`
-    )
-    .all(...ids);
-  for (const r of typeRows) if (out[r.project_id]) out[r.project_id].taskTypes.push({ label: r.type_label, count: r.cnt });
+  // (작업 종류별 집계 typeRows는 2026-07-11 제거 — 펼침이 이제 작업을 개별 표시하므로 aggregate 요약 불필요.)
   return out;
 }
 
