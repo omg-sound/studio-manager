@@ -454,7 +454,8 @@ function monthCalendar(ym, sessions) {
         // 칩 라벨 = 아티스트/회사/프로젝트(누구·무엇인지 식별). 시간은 데스크톱에서만(모바일은 좁아 내용이 가려짐 — 사용자 요청).
         const label = esc(String(s.artist || s.production_company || s.artist_company || s.project_title || s.session_type).trim());
         const t = s.start_time ? esc(s.start_time) : "";
-        return `<a href="/projects/${s.project_id}?tab=sessions" class="block truncate rounded ${calendarChipColor(s.status)} px-1.5 py-0.5 text-[11px] font-medium leading-snug hover:opacity-80 sm:text-xs" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}">${t ? `<span class="hidden font-normal opacity-70 sm:inline">${t} </span>` : ""}${label}</a>`;
+        // data-session-card: app.js가 클릭 가로채 GET .../card 조각을 중앙 모달로(서베이 흐름 유지). 무JS 폴백=프로젝트 세션 탭 링크.
+        return `<a href="/projects/${s.project_id}?tab=sessions" data-session-card="/sessions/${s.id}/card" class="block truncate rounded ${calendarChipColor(s.status)} px-1.5 py-0.5 text-[11px] font-medium leading-snug hover:opacity-80 sm:text-xs" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}">${t ? `<span class="hidden font-normal opacity-70 sm:inline">${t} </span>` : ""}${label}</a>`;
       })
       .join("");
     cells += `<div class="${CELL} ${isToday ? "bg-primary/5" : ""}">
@@ -480,4 +481,59 @@ function monthCalendar(ym, sessions) {
     </div>`;
 }
 
-module.exports = { sessionProjectCard, sessionsSection, monthCalendar, sessionBookingFields }; // sessionRow·sessionCreateForm은 내부 전용. sessionBookingFields는 UI 상호작용 테스트(test/ui-interactions)가 세션 폼을 단독 마운트하는 용도로만 노출.
+/**
+ * 캘린더 세션 팝오버(중앙 모달) — 칩 클릭 시 app.js가 GET /sessions/:id/card로 불러와 표시(2026-07-11 사용자 요청).
+ * 구글 캘린더식 상세: 아티스트·프로젝트 / 날짜·시간·종류 / 예약·엔지니어·디렉터 / 예상 청구액·소요 / 메모 + 완료 토글 + 프로젝트 링크.
+ * 완료는 폼 POST → 캘린더로 복귀(return, 리로드). 서베이(캘린더)에서 안 떠나고 처리.
+ */
+function sessionCardModal(s, { canEdit = false } = {}) {
+  const ret = `/sessions?view=calendar&month=${esc(String(s.session_date || "").slice(0, 7))}`;
+  const directors = listSessionDirectors(s.id);
+  const engineers = listSessionEngineers(s.id);
+  const title = [String(s.artist || "").trim(), String(s.production_company || s.artist_company || "").trim()].filter(Boolean).join(" · ") || s.project_title || "세션";
+  const lines = [];
+  const bookerEng = [
+    s.booker_name ? `예약 ${esc(s.booker_name)}` : "",
+    engineers.length ? `엔지니어 ${engineers.map((e) => esc(e.name)).join(", ")}` : "",
+  ].filter(Boolean).join(" · ");
+  if (bookerEng) lines.push(bookerEng);
+  if (directors.length) lines.push(`디렉터 ${directors.map((d) => esc(personLabel(d.name, d.activity_name))).join(", ")}`);
+  if (s.memo) lines.push(esc(s.memo));
+  const bill = s.billing
+    ? `${s.billing.amount > 0 ? `예상 청구액 ${formatKRW(s.billing.amount)}` : "청구액 미정"} · ${s.billing.allDay ? "종일" : `${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분`} · ${esc(s.billing.item.name)}`
+    : "";
+  const isDone = s.status === "완료";
+  const canToggle = canEdit && (s.status === "예정" || s.status === "완료");
+  const statusBadge = s.status !== "예정" && s.status !== "완료"
+    ? `<span class="badge ${SESSION_STATUS_BADGE[s.status] || "bg-muted/10 text-muted"}">${esc(s.status)}</span>` : "";
+  const completeForm = canToggle
+    ? `<form method="post" action="/sessions/${s.id}/status">
+         <input type="hidden" name="status" value="${isDone ? "예정" : "완료"}" />
+         <input type="hidden" name="return" value="${ret}" />
+         <button class="btn-sm ${isDone ? "border-success/40 bg-success/10 text-success" : "btn-primary"}" type="submit" aria-pressed="${isDone}">${isDone ? "✓ 완료됨 · 되돌리기" : "완료 처리"}</button>
+       </form>`
+    : "";
+  return `
+    <div data-modal data-session-modal class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div class="card w-full max-w-md">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="badge bg-bg text-muted">${esc(s.session_type)}</span>${statusBadge}
+            </div>
+            <div class="mt-1 truncate font-display text-base font-semibold">${esc(title)}</div>
+            <div class="mt-0.5 text-sm text-muted tabular">${esc(formatYmdShort(s.session_date))} · ${timeLabel(s)}</div>
+          </div>
+          <button type="button" class="btn-ghost btn-xs shrink-0" data-modal-close aria-label="닫기">✕</button>
+        </div>
+        ${lines.length ? `<div class="mt-2 space-y-0.5 text-sm text-muted">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` : ""}
+        ${bill ? `<div class="mt-2 text-sm tabular ${s.billing.amount > 0 ? "text-success" : "text-muted"}">${bill}</div>` : ""}
+        <div class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+          ${completeForm || "<span></span>"}
+          <a href="/projects/${s.project_id}?tab=sessions" class="btn-ghost btn-sm">프로젝트로 ↗</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+module.exports = { sessionProjectCard, sessionsSection, monthCalendar, sessionBookingFields, sessionCardModal }; // sessionRow·sessionCreateForm은 내부 전용. sessionBookingFields는 UI 상호작용 테스트(test/ui-interactions)가 세션 폼을 단독 마운트하는 용도로만 노출.

@@ -10,6 +10,7 @@ const {
   upcomingSessions,
   pastSessions,
   sessionsForMonth,
+  getSessionCard,
   getProjectForUser,
   getSessionForUser,
   createSession,
@@ -27,7 +28,8 @@ const {
 } = require("../data");
 const { config, SESSION_TIME_SLOTS, RENTAL_SESSION_TYPES } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox, personLabel, personComboOptionsScript, personComboCompanyScript } = require("../views");
-const { sessionProjectCard, monthCalendar } = require("../views.sessions");
+const { sessionProjectCard, monthCalendar, sessionCardModal } = require("../views.sessions");
+const { safePath } = require("../lib/nav");
 const { todayYmd } = require("../lib/date");
 const { asyncHandler } = require("../lib/async");
 const calendar = require("../calendar");
@@ -109,7 +111,7 @@ function sessionConflictMessage(c, user) {
 // ── 전역 일정(다가오는 세션 + 지난 세션) ──
 router.get("/sessions", requireAuth, (req, res) => {
   const editable = canEdit(req.user);
-  const view = req.query.view === "calendar" ? "calendar" : "list";
+  const view = req.query.view === "list" ? "list" : "calendar"; // 기본=캘린더(서베이, 2026-07-11 사용자 요청)
   const viewTab = (v, label) =>
     `<a href="/sessions?view=${v}" class="rounded-md px-3 py-1 text-sm ${view === v ? "bg-primary text-primary-fg" : "text-muted hover:text-fg"}">${label}</a>`;
   const viewToggle = `<div class="ml-auto flex gap-0.5 rounded-lg border border-border p-0.5">${viewTab("list", "목록")}${viewTab("calendar", "캘린더")}</div>`;
@@ -175,6 +177,13 @@ router.get("/sessions", requireAuth, (req, res) => {
     ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)", action: viewToggle })}
     ${content}`;
   res.send(layout({ title: "일정", user: req.user, current: "/sessions", body, full: view === "calendar" }));
+});
+
+// ── 캘린더 세션 카드(팝오버 조각) — 칩 클릭 시 app.js가 fetch해 중앙 모달로 표시(2026-07-11) ──
+router.get("/sessions/:id/card", requireAuth, (req, res) => {
+  const s = getSessionCard(req.user, Number(req.params.id));
+  if (!s) return res.status(404).send('<div class="card m-4 text-sm text-muted">세션을 찾을 수 없습니다.</div>');
+  res.send(sessionCardModal(s, { canEdit: canEdit(req.user) }));
 });
 
 // ── 검색 제안(typeahead JSON) — 다가오는+지난 세션에서 매칭 → 프로젝트 세션 탭으로 이동 ──
@@ -296,7 +305,8 @@ router.post("/sessions/:id/status", requireEditor, asyncHandler(async (req, res)
   }
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
   await syncSessionEvent(req.user, r); // 상태변경(취소→일정 삭제) 캘린더 동기화
-  res.redirect(`/projects/${r.project_id}?tab=sessions&flash=saved`);
+  const back = safePath(req.body.return); // 캘린더 팝오버에서 완료 시 캘린더로 복귀(내부 경로만)
+  res.redirect(back || `/projects/${r.project_id}?tab=sessions&flash=saved`);
 }));
 
 // ── 세션 '청구 안 함'(무료 처리) 토글(2026-07-06 사용자 요청 — 리허설 등 의도적 무료 세션) ──

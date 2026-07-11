@@ -586,6 +586,34 @@
   });
 })();
 
+// 캘린더 세션 팝오버([data-session-card], 2026-07-11): 칩 클릭 → GET .../card 조각을 중앙 모달로.
+// 완료는 조각 안 폼 POST(리로드) — 서베이(캘린더)에서 안 떠나고 처리. 무JS면 링크 폴백(프로젝트 세션 탭).
+(function () {
+  "use strict";
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest && e.target.closest("[data-session-card]");
+    if (!el) return;
+    e.preventDefault();
+    var url = el.getAttribute("data-session-card");
+    if (!url) return;
+    fetch(url, { headers: { "X-Requested-With": "fetch" } })
+      .then(function (r) { return r.ok ? r.text() : null; })
+      .then(function (html) {
+        if (!html) return;
+        var wrap = document.createElement("div");
+        wrap.innerHTML = html;
+        var modal = wrap.firstElementChild; // [data-modal] → 스크롤 잠금 옵저버·data-modal-close(✕) 자동 처리
+        if (!modal) return;
+        document.body.appendChild(modal);
+        // 배경 클릭 닫기(함정 #25: mousedown도 배경에서 시작했는지 확인해 드래그-아웃 오작동 방지).
+        var mdOnBackdrop = false;
+        modal.addEventListener("mousedown", function (ev) { mdOnBackdrop = ev.target === modal; });
+        modal.addEventListener("click", function (ev) { if (ev.target === modal && mdOnBackdrop && modal.parentNode) modal.parentNode.removeChild(modal); });
+      })
+      .catch(function () {});
+  });
+})();
+
 // 할인 폼([data-discount-form]): 정률(%) → 정액(원) 자동변환 + 공급가/할인/과세표준/VAT/총액 미리보기 갱신.
 // 공급가는 체크된 항목(input[data-line-amount])의 합으로 동적 계산(항목 체크 변경 시 갱신). 체크박스가 없으면 data-supply 폴백.
 (function () {

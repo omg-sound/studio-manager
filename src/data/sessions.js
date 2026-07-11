@@ -523,6 +523,17 @@ function sessionsForMonth(_user, ym) {
     .map(withBilling());
 }
 
+/** 세션 카드(캘린더 팝오버) 단건 — sessionsForMonth와 동일 enrich(프로젝트 필드 조인 + billing). */
+function getSessionCard(_user, id) {
+  const row = db()
+    .prepare(
+      `SELECT s.*, p.title AS project_title, p.artist, p.artist_company, p.production_company FROM sessions s
+       JOIN projects p ON p.id = s.project_id WHERE s.id = ?`
+    )
+    .get(Number(id));
+  return row ? withBilling()(row) : null;
+}
+
 module.exports = {
   listSessionsForProject,
   getSessionForUser,
@@ -542,4 +553,5 @@ module.exports = {
   upcomingSessions,
   pastSessions,
   sessionsForMonth,
+  getSessionCard,
 };
