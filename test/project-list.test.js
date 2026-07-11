@@ -67,3 +67,23 @@ test("projectListRow 다음 세션 없으면 줄 생략", () => {
   assert.doesNotMatch(html, /예정 세션 없음/);
   assert.doesNotMatch(html, /다음 세션/);
 });
+
+const { todayYmd } = require("../src/lib/date");
+
+test("projectSummaryHtml: 다가오는 세션이 지난 세션보다 먼저", () => {
+  const today = todayYmd();
+  const y = Number(today.slice(0, 4));
+  const past = `${y - 1}-01-01`;
+  const future = `${y + 1}-12-31`;
+  const summary = {
+    sessions: [
+      { session_date: past, start_time: "10:00", end_time: "12:00", session_type: "믹싱", status: "완료" },
+      { session_date: future, start_time: "14:00", end_time: "16:00", session_type: "녹음", status: "예정" },
+    ],
+    tracks: [], taskTypes: [],
+  };
+  const html = views.projectSummaryHtml(summary);
+  // formatYmdShort는 연도를 렌더링하지 않아("M월 D일") 연도 문자열로는 순서를 판별할 수 없다.
+  // 대신 두 세션을 구분하는 session_type(미래=녹음·과거=믹싱) 등장 순서로 검증.
+  assert.ok(html.indexOf("녹음") < html.indexOf("믹싱"), "미래 세션이 과거 세션보다 앞에 렌더");
+});

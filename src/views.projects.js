@@ -137,10 +137,16 @@ function projectSummaryHtml(s) {
   }
   const blocks = [];
   if (s.sessions.length) {
-    const items = s.sessions.slice(0, 8).map((se) => {
+    // 다가오는 세션(오늘 이후) 먼저, 지난 세션은 그 뒤(최근 순)로 재정렬 — 지난 세션이 앞을 먹어 다가오는 게 잘리는 것 방지.
+    const today = todayYmd();
+    const upcoming = s.sessions.filter((se) => se.session_date >= today);
+    const past = s.sessions.filter((se) => se.session_date < today).reverse();
+    const ordered = [...upcoming, ...past];
+    const items = ordered.slice(0, 8).map((se) => {
       const time = se.start_time ? ` ${esc(se.start_time)}${se.end_time ? "–" + esc(se.end_time) : ""}` : "";
       const st = se.status && se.status !== "예정" ? ` <span class="text-muted">· ${esc(se.status)}</span>` : "";
-      return `<li><span class="tabular text-fg/80">${esc(formatYmdShort(se.session_date))}${time}</span> <span class="text-muted">· ${esc(se.session_type)}</span>${st}</li>`;
+      const dateCls = se.session_date < today ? "text-muted" : "text-fg/80";
+      return `<li><span class="tabular ${dateCls}">${esc(formatYmdShort(se.session_date))}${time}</span> <span class="text-muted">· ${esc(se.session_type)}</span>${st}</li>`;
     }).join("");
     const more = s.sessions.length > 8 ? `<li class="text-muted">외 ${s.sessions.length - 8}건</li>` : "";
     blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">세션 ${s.sessions.length}</div><ul class="space-y-0.5">${items}${more}</ul></div>`);
