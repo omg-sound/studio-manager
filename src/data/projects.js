@@ -231,6 +231,29 @@ function listProjectSummaries(projectIds) {
   return out;
 }
 
+/**
+ * 목록 rows를 진행 중(active)/청구 필요(billing)/완료(done) 3그룹으로 분류.
+ *  - active  = !is_completed. 다가오는 세션 임박순(next_session_date ASC, 없으면 뒤로, 동률은 입력 순서=SQL created_at DESC 유지).
+ *  - billing = is_completed && unbilled_cnt>0 (활동 끝났는데 미청구 — 지금 처리할 액션).
+ *  - done    = is_completed && unbilled_cnt===0 (청구까지 끝난 아카이브).
+ * Array.sort는 Node에서 안정 정렬이라 동률/양쪽 세션 없음은 SQL 순서를 보존한다.
+ */
+function splitProjectTabs(rows) {
+  const list = rows || [];
+  const active = list.filter((r) => !r.is_completed);
+  const billing = list.filter((r) => r.is_completed && Number(r.unbilled_cnt) > 0);
+  const done = list.filter((r) => r.is_completed && Number(r.unbilled_cnt) === 0);
+  active.sort((a, b) => {
+    const ad = a.next_session_date || "";
+    const bd = b.next_session_date || "";
+    if (ad && bd) return ad < bd ? -1 : ad > bd ? 1 : 0;
+    if (ad) return -1; // a만 다가오는 세션 있음 → 앞
+    if (bd) return 1;  // b만 있음 → a 뒤로
+    return 0;          // 둘 다 없음 → 입력 순서 유지
+  });
+  return { active, billing, done };
+}
+
 // ── 프로젝트 아티스트 다대다(2026-07-05 — 콤마로 여러 명) ── artist TEXT=콤마 표시 목록, artist_id=첫(대표), 전체=project_artists.
 
 /** 프로젝트 아티스트 목록을 통째로 교체(session_directors 패턴). ids=party id 배열(dedup·falsy 제거). */
@@ -278,5 +301,6 @@ module.exports = {
   getProjectForUser,
   setProjectArtists,
   listProjectArtists,
+  splitProjectTabs,
   deleteProject,
 };
