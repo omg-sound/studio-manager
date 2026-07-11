@@ -73,8 +73,8 @@ router.get("/", requireAuth, (req, res) => {
         .join("")
     : emptyState("이번 주 예정된 세션이 없습니다.", { icon: "sessions" });
 
-  // 청구 필요 = 완료됐는데 미청구 항목이 남은 프로젝트(프로젝트 완료 탭 상단 그룹과 동일 정의, 2026-07-05 사용자 요청).
-  // 청구 생성 권한자(canBill=치프·대표·스태프) 전원에게 — 스태프가 청구 생성 담당. 상위 5개 + 완료 탭 전체 링크.
+  // 청구 필요 = 완료됐는데 미청구 항목이 남은 프로젝트(프로젝트 목록 '청구 필요' 탭 splitProjectTabs.billing과 동일 정의).
+  // 청구 생성 권한자(canBill=치프·대표·스태프) 전원에게 — 스태프가 청구 생성 담당. 상위 5개 + 청구 필요 탭 전체 링크.
   let unbilledCard = "";
   if (canBill(user)) {
     const needBilling = listProjects(user, {}).filter((p) => p.is_completed && Number(p.unbilled_cnt) > 0);
@@ -91,7 +91,7 @@ router.get("/", requireAuth, (req, res) => {
     <div class="card mt-4">
       <div class="mb-2 flex items-center justify-between gap-2">
         <h2 class="font-display text-base font-semibold">청구 필요</h2>
-        <a href="/projects?tab=done" class="text-xs text-muted hover:text-fg hover:underline">완료 탭에서 전체 보기 ${needBilling.length}건 ↗</a>
+        <a href="/projects?tab=billing" class="text-xs text-muted hover:text-fg hover:underline">청구 필요 탭에서 전체 보기 ${needBilling.length}건 ↗</a>
       </div>
       ${rowsHtml}
     </div>`;
