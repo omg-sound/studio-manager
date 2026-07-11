@@ -55,55 +55,69 @@ function trackCount(p) {
 }
 
 
+/** 카드 정체성 줄: "아티스트 · 회사". 회사가 아티스트 본인으로 파생된 경우 아티스트만. 여러 아티스트면 "외 N". 둘 다 없으면 null(→ 제목 승격). */
+function projectIdentity(p) {
+  const artists = String(p.artist || "").split(",").map((s) => s.trim()).filter(Boolean);
+  let artistPart = "";
+  if (artists.length === 1) artistPart = artists[0];
+  else if (artists.length > 1) artistPart = `${artists[0]} 외 ${artists.length - 1}`;
+  const company = String(p.client_name || "").trim();
+  const parts = [];
+  if (artistPart) parts.push(artistPart);
+  if (company && company !== artistPart && !artists.includes(company)) parts.push(company);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+
 /**
  * 목록 행 — 두 클릭 영역:
  *  ① 상단(제목 / 아티스트·회사 / 우측 PM·금액) → 프로젝트 상세로 이동(<a>).
  *  ② 하단 요약 줄(곡·콘텐츠·예정/완료 세션 수) → 접기 토글, 펼치면 세션 일정·곡별 작업자 인라인 요약(프로젝트 안 안 가고 미리보기).
  */
-function projectListRow(p, summary, { isChief: chief = false, tab = "active", q = "" } = {}) {
-  const metaLine = [p.artist, p.client_name, contactMetaPart(p)].filter(Boolean).join(" · ") || "정보 미정";
-  const n = trackCount(p);
-  const amt = projectAmount(p);
-  const amountLine = amt
-    ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>`
-    : `<div class="text-sm text-muted">견적 미정</div>`;
+function projectListRow(p, summary, { tab = "active" } = {}) {
+  const isBilling = tab === "billing";
+  // 정체성(주) / 부제(프로젝트명). 정체성 없으면 제목을 주 줄로 승격(부제 생략).
+  const identity = projectIdentity(p);
+  const mainLine = identity ? esc(identity) : esc(p.title || "제목 없음");
+  const subtitle = identity && p.title ? `<div class="mt-0.5 truncate text-sm text-muted">${esc(p.title)}</div>` : "";
+
+  // 다음 세션(진행 중에서만 의미 — 완료/청구필요는 next_session_date가 null이라 자연 생략).
+  const nextLine = nextSessionLine(p);
+
+  // PM(우측 유지). 금액은 청구 필요 탭에서만.
   const pmLine = p.manager_name ? `<div class="text-xs text-muted">PM ${esc(p.manager_name)}</div>` : "";
-  // 세션(예정·완료)을 앞에, 곡·콘텐츠 뒤에. 곡·콘텐츠 있으면 작업 개수 + 상태(대기/완료) 병기.
+  const amt = projectAmount(p);
+  const amountLine = isBilling && amt ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>` : "";
+  const rightCol = pmLine || amountLine ? `<div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>` : "";
+
+  // 청구 필요 배지(청구 필요 탭 전용).
+  const billingBadge = isBilling && Number(p.unbilled_cnt) > 0
+    ? `<div class="mt-1"><span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span></div>` : "";
+
+  // 접힘 토글 바 카운트 — 0·곡 없음은 생략(문구 없음). 전부 비면 최소 라벨.
+  const n = trackCount(p);
   const taskCnt = Number(p.task_cnt) || 0;
   const taskStatus = [
     Number(p.task_pending) ? `대기 ${p.task_pending}` : "",
     Number(p.task_done) ? `완료 ${p.task_done}` : "",
   ].filter(Boolean).join(" · ");
-  const trackPart = n
-    ? `곡·콘텐츠 ${n}${taskCnt ? ` · 작업 ${taskCnt}${taskStatus ? ` (${taskStatus})` : ""}` : ""}`
-    : "곡·콘텐츠 미정";
+  const trackPart = n ? `곡·콘텐츠 ${n}${taskCnt ? ` · 작업 ${taskCnt}${taskStatus ? ` (${taskStatus})` : ""}` : ""}` : "";
   const counts = [
     Number(p.sess_scheduled) ? `예정 세션 ${p.sess_scheduled}` : "",
     Number(p.sess_done) ? `완료 세션 ${p.sess_done}` : "",
     trackPart,
-  ].filter(Boolean).join(" · ");
-  // 한 프로젝트 = 밝은 바탕(bg-surface=흰색) 라운드 블록 하나(제목행 + 요약 접기행). 블록 사이 여백(space-y)으로 구분.
-  // 호버 강조는 두 영역(상단 링크 / 하단 요약 토글)에 각각 row-link(hover:bg-elevated/60)로 분리 — 위·아래가 따로 강조된다.
-  // 내부 제목→요약 구분선은 옅게(border/40) 종속.
-  // 작성일(생성일) — 링크 밖 상단 스트립. 치프는 날짜 인라인 수정(data-autosubmit), 그 외는 표시만.
-  const dateStr = esc(String(p.created_at || "").slice(0, 10));
-  const dateRow = chief
-    ? `<form method="post" action="/projects/${p.id}/created-at" class="px-4 pt-2.5">
-         <input type="hidden" name="tab" value="${esc(tab)}" />${q ? `<input type="hidden" name="q" value="${esc(q)}" />` : ""}
-         <input type="date" name="created_at" value="${dateStr}" data-autosubmit aria-label="작성일 수정" class="rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" />
-       </form>`
-    : `<div class="px-4 pt-2.5 text-xs text-muted tabular">${dateStr}</div>`;
+  ].filter(Boolean).join(" · ") || "세션·곡 상세";
+
   return `
     <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
-      ${dateRow}
-      <a href="/projects/${p.id}" class="row-link flex items-start justify-between gap-3 px-4 pb-3 pt-1">
+      <a href="/projects/${p.id}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
         <div class="min-w-0">
-          <div class="truncate font-semibold">${esc(p.title)}</div>
-          ${tab === "done" && Number(p.unbilled_cnt) > 0 ? `<div class="mt-1"><span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span></div>` : ""}
-          <div class="mt-0.5 truncate text-sm text-fg/80">${esc(metaLine)}</div>
-          ${nextSessionLine(p)}
+          <div class="truncate font-semibold">${mainLine}</div>
+          ${subtitle}
+          ${billingBadge}
+          ${nextLine}
         </div>
-        <div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>
+        ${rightCol}
       </a>
       <details class="group/proj">
         <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
@@ -777,6 +791,8 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
 module.exports = { artistCombo,
   newProjectMenu,
   projectListRow,
+  projectIdentity,
+  projectSummaryHtml,
   projectForm,
   projectMetaCard,
   projectMetaReadonly,
