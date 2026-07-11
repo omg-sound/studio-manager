@@ -354,6 +354,14 @@ function init() {
     );
     CREATE INDEX IF NOT EXISTS idx_project_artists_party ON project_artists(party_id);
 
+    CREATE TABLE IF NOT EXISTS project_contacts (
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      party_id   INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (project_id, party_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_contacts_party ON project_contacts(party_id);
+
     CREATE INDEX IF NOT EXISTS idx_rate_items_active ON rate_items(active, name);
     CREATE INDEX IF NOT EXISTS idx_task_types_active ON task_types(active, sort_order, label);
     CREATE INDEX IF NOT EXISTS idx_project_tracks_project ON project_tracks(project_id);
@@ -570,6 +578,11 @@ function init() {
   if (!getState("project_artists_backfill_v1")) {
     d.exec("INSERT OR IGNORE INTO project_artists (project_id, party_id) SELECT id, artist_id FROM projects WHERE artist_id IS NOT NULL");
     setState("project_artists_backfill_v1", "done");
+  }
+  // 프로젝트 고객측 담당자 다대다 백필(2026-07-11): 기존 단일 contact_party_id를 project_contacts로 1회 복사(멱등·중복 무시).
+  if (!getState("project_contacts_backfill_v1")) {
+    d.exec("INSERT OR IGNORE INTO project_contacts (project_id, party_id) SELECT id, contact_party_id FROM projects WHERE contact_party_id IS NOT NULL");
+    setState("project_contacts_backfill_v1", "done");
   }
   // 청구 마감일 개념 삭제(2026-07-05 사용자 결정): 기존 due_date 값을 비워 연체 파생(isOverdue)·D-day 표시를 자연 소멸.
   // 컬럼은 레거시 잔존(입력·표시 UI 전부 제거 — 신규 청구는 항상 NULL). 연체 인프라(배지·대시보드 배너·cron)는 무발동 잔존.

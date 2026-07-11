@@ -19,6 +19,7 @@ const { formatYmdShort, daysUntilYmd, todayYmd } = require("./lib/date");
 const {
   clientOptions,
   contactOptions,
+  listProjectContacts,
   partyOptions,
   getParty,
   listProjectManagers,
@@ -283,16 +284,16 @@ function projectForm(p = {}, err = "") {
         </div>
       </div>
       <div>
-        <label class="label">아티스트 <span class="font-normal text-muted text-xs">(여러 명은 콤마 · 소속/레이블은 아티스트에 저장)</span></label>
+        <label class="label">아티스트</label>
         ${artistCombo(p)}
       </div>
       <div>
-        <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
+        <label class="label">제작/운영</label>
         ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions(), companyOptions: partyOptions({ role: "company" }) })}
+        ${(() => { const sel = p.id ? listProjectContacts(p.id) : []; return personCombo({ multi: true, selected: sel, options: contactOptions(), companyOptions: partyOptions({ role: "company" }), placeholder: sel.length ? "" : "담당자 — 검색 또는 새로 등록" }); })()}
       </div>
       <div>
         <label class="label">메모</label>
@@ -322,16 +323,16 @@ function projectEditForm(p = {}, err = "") {
         </div>
       </div>
       <div>
-        <label class="label">아티스트 <span class="font-normal text-muted text-xs">(여러 명은 콤마 · 소속/레이블은 아티스트에 저장)</span></label>
+        <label class="label">아티스트</label>
         ${artistCombo(p)}
       </div>
       <div>
-        <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
+        <label class="label">제작/운영</label>
         ${companyCombo("production_company", p.production_company, "제작사", "제작/운영", { partyIdField: "production_party_id", partyIdValue: p.production_id })}
       </div>
       <div>
         <label class="label">고객측 담당자</label>
-        ${personCombo({ selectedId: p.contact_party_id, options: contactOptions(), companyOptions: partyOptions({ role: "company" }) })}
+        ${(() => { const sel = p.id ? listProjectContacts(p.id) : []; return personCombo({ multi: true, selected: sel, options: contactOptions(), companyOptions: partyOptions({ role: "company" }), placeholder: sel.length ? "" : "담당자 — 검색 또는 새로 등록" }); })()}
       </div>
       <div>
         <label class="label">메모</label>

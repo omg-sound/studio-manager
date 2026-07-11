@@ -54,6 +54,7 @@ const {
   resolvePartyByDisplay,
   currentAffiliation,
   setProjectArtists,
+  setProjectContacts,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, capList, tabBar: renderTabs, searchBox } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
@@ -94,12 +95,26 @@ function markArtistParty(partyId, activityName) {
  *  - 아티스트: 그룹 체크→group party / 명시 선택(artist_contact_id=party id) / 이름(본명 우선)으로 사람 party. 개인은 is_artist·활동명 세팅.
  *  - 소속사·제작사: 조직 party 찾거나 생성. 고객측 담당자: 사람 party.
  */
+// 고객측 담당자 = 콤마로 여러 명(2026-07-11, personCombo multi 칩). 제출 = 칩마다 contact_id(당사자 id·신규는 빈값) +
+// contact_name(순수 본명) 쌍(인덱스 페어링, linkClientContact와 동일). id 있으면 그대로, 신규 이름은 resolvePersonByName(재사용/생성).
+function resolveContactIds(b) {
+  const asArr = (v) => (Array.isArray(v) ? v : v != null && v !== "" ? [v] : []);
+  const rawIds = asArr(b.contact_id);
+  const rawNames = asArr(b.contact_name);
+  const ids = [];
+  const push = (pid) => { if (pid && !ids.includes(pid)) ids.push(pid); };
+  for (let i = 0; i < Math.max(rawIds.length, rawNames.length); i++) {
+    const pid = Number(rawIds[i]) || null;
+    if (pid) { push(pid); continue; }
+    const nm = String(rawNames[i] || "").trim();
+    if (nm) push(resolvePersonByName(nm));
+  }
+  return ids;
+}
+
 function resolveProjectParties(b) {
-  const contactId = b.contact_id
-    ? Number(b.contact_id)
-    : String(b.contact_name || "").trim()
-      ? resolvePersonByName(b.contact_name.trim())
-      : null;
+  const contactIds = resolveContactIds(b);
+  const contactId = contactIds[0] || null; // 첫(대표) = contact_party_id 호환(청구처 파생·관계자 탭·표시)
   // 아티스트 = 콤마로 여러 명 가능(2026-07-05 사용자 요청): "아이유, 태연" → 각 이름을 party로 해석해
   // project_artists(다대다)에 전부 기록, artist_id=첫(대표) 아티스트(청구처 파생·레거시 호환), artist TEXT=정규화된 콤마 목록(표시).
   const artistNames = String(b.artist || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -149,6 +164,7 @@ function resolveProjectParties(b) {
   if (productionId) addCompanyRole(productionId, "제작사");
   return {
     contactId,
+    contactIds,
     artistId,
     artistIds,
     artistText,
@@ -269,6 +285,7 @@ router.post("/", requireEditor, (req, res) => {
       memo: String(b.memo || "").trim() || null,
     });
   setProjectArtists(info.lastInsertRowid, parties.artistIds); // 다대다 전체 기록(각 아티스트 상세 '연결 프로젝트' 매칭)
+  setProjectContacts(info.lastInsertRowid, parties.contactIds); // 고객측 담당자 다대다(첫=contact_party_id)
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
 });
 
@@ -434,6 +451,7 @@ router.post("/:id", requireEditor, (req, res) => {
       memo: String(b.memo || "").trim() || null,
     });
   setProjectArtists(id, parties.artistIds); // 다대다 목록 통째 교체
+  setProjectContacts(id, parties.contactIds); // 고객측 담당자 다대다 통째 교체(첫=contact_party_id)
   if (isFetch) return res.json({ ok: true });
   res.redirect(`/projects/${id}?flash=saved`);
 });

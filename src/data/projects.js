@@ -281,6 +281,33 @@ function listProjectArtists(projectId) {
     .all(Number(projectId));
 }
 
+// ── 프로젝트 고객측 담당자 다대다(2026-07-11 — 콤마로 여러 명, project_artists 패턴) ── contact_party_id=첫(대표), 전체=project_contacts.
+
+/** 프로젝트 담당자 목록을 통째로 교체(project_artists 패턴). ids=party id 배열(dedup·falsy 제거·순서 보존). */
+function setProjectContacts(projectId, ids) {
+  const pid = Number(projectId);
+  const d = db();
+  d.prepare("DELETE FROM project_contacts WHERE project_id = ?").run(pid);
+  const ins = d.prepare("INSERT OR IGNORE INTO project_contacts (project_id, party_id) VALUES (?, ?)");
+  const seen = new Set();
+  for (const id of ids || []) {
+    const n = Number(id);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    ins.run(pid, n);
+  }
+}
+
+/** 프로젝트의 담당자 party 목록(등록 순서) — personCombo(multi) 칩 프리필용. */
+function listProjectContacts(projectId) {
+  return db()
+    .prepare(
+      `SELECT p.* FROM project_contacts pc JOIN parties p ON p.id = pc.party_id
+        WHERE pc.project_id = ? ORDER BY pc.created_at, p.name COLLATE NOCASE`
+    )
+    .all(Number(projectId));
+}
+
 /** 프로젝트 삭제. 청구된 작업·세션이 있으면 거부(매출 추적 보존, deleteTrack과 정합). */
 function deleteProject(projectId) {
   const pid = Number(projectId);
@@ -301,6 +328,8 @@ module.exports = {
   getProjectForUser,
   setProjectArtists,
   listProjectArtists,
+  setProjectContacts,
+  listProjectContacts,
   splitProjectTabs,
   deleteProject,
 };

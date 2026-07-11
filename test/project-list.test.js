@@ -1,6 +1,13 @@
 "use strict";
-const { test } = require("node:test");
+// 격리 DB 셋업(렌더 테스트 projectMetaCard가 contactOptions()·listProjectContacts()로 DB를 건드리므로 — 다른 테스트와 동일 패턴).
+process.env.NODE_ENV = "test";
+const { tempDbPath, cleanupDb } = require("./helpers");
+process.env.DB_PATH = tempDbPath();
+const { test, after } = require("node:test");
 const assert = require("node:assert");
+const { db, init } = require("../src/db");
+init();
+after(() => cleanupDb(process.env.DB_PATH, db()));
 const { splitProjectTabs } = require("../src/data/projects");
 
 const row = (o) => ({ is_completed: false, unbilled_cnt: 0, next_session_date: null, created_at: "2026-07-01 10:00:00", ...o });
@@ -121,4 +128,20 @@ test("nextSessionLine: 디데이 색 단계 + PM 밑 우측 열", () => {
   const far = views.projectListRow(pRow({ next_session_date: ymdPlusLocal(30) }), emptySummary, { tab: "active" });
   assert.doesNotMatch(far, /text-danger/, "멀리 = 빨강 아님");
   assert.doesNotMatch(far, /text-warning/, "멀리 = 주황 아님");
+});
+
+// 프로젝트 고객측 담당자 다대다(2026-07-11): set/list 라운드트립 + 연결 프로젝트 매칭 + 관계자 노출.
+const D = require("../src/data");
+test("project_contacts: set/list + 연결 프로젝트 + 관계자", () => {
+  const p1 = D.createPerson({ name: "담당갑" });
+  const p2 = D.createPerson({ name: "담당을" });
+  const info = db().prepare("INSERT INTO projects (title, project_type) VALUES ('멀티담당', 'session')").run();
+  const pid = Number(info.lastInsertRowid);
+  D.setProjectContacts(pid, [p1, p2]);
+  assert.deepStrictEqual(D.listProjectContacts(pid).map((x) => x.id).sort((a, b) => a - b), [p1, p2].sort((a, b) => a - b), "set→list 라운드트립");
+  assert.ok(D.listProjectsForParty(p1).some((pr) => pr.id === pid), "담당갑 연결 프로젝트");
+  assert.ok(D.listProjectsForParty(p2).some((pr) => pr.id === pid), "담당을 연결 프로젝트");
+  assert.ok(D.listAssociates({}).some((a) => a.id === p2), "담당자는 관계자 탭에 노출");
+  D.setProjectContacts(pid, [p2]); // 통째 교체
+  assert.deepStrictEqual(D.listProjectContacts(pid).map((x) => x.id), [p2], "교체 반영");
 });
