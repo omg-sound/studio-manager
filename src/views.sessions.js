@@ -513,8 +513,10 @@ function sessionCardModal(s, { canEdit = false } = {}) {
          <button class="btn-sm ${isDone ? "border-success/40 bg-success/10 text-success" : "btn-primary"}" type="submit" aria-pressed="${isDone}">${isDone ? "✓ 완료됨 · 되돌리기" : "완료 처리"}</button>
        </form>`
     : "";
+  // 모달 위치 = 전체 화면 가운데가 아니라 콘텐츠(캘린더) 영역 가운데(2026-07-11 사용자 요청):
+  // 데스크톱은 사이드바(sm:w-56=14rem) 폭만큼 왼쪽을 비워(sm:left-64) 캘린더 열 안에서 중앙 정렬. 모바일(드로어)은 left-0 전폭.
   return `
-    <div data-modal data-session-modal class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div data-modal data-session-modal class="fixed inset-y-0 right-0 left-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:left-64">
       <div class="card w-full max-w-md">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
@@ -529,8 +531,8 @@ function sessionCardModal(s, { canEdit = false } = {}) {
         ${lines.length ? `<div class="mt-2 space-y-0.5 text-sm text-muted">${lines.map((l) => `<div>${l}</div>`).join("")}</div>` : ""}
         ${bill ? `<div class="mt-2 text-sm tabular ${s.billing.amount > 0 ? "text-success" : "text-muted"}">${bill}</div>` : ""}
         <div class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-          ${completeForm || "<span></span>"}
           <a href="/projects/${s.project_id}?tab=sessions" class="btn-ghost btn-sm">프로젝트로 ↗</a>
+          ${completeForm || "<span></span>"}
         </div>
       </div>
     </div>`;
