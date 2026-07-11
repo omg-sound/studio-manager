@@ -151,6 +151,20 @@ test("deleteParty: payer_id 참조를 SET NULL로 정리(인보이스 보존)", 
   assert.equal(inv.payer_id, null, "payer_id는 NULL로 정리");
 });
 
+test("deleteParty: 다대다 담당자(project_contacts)·아티스트 연결 정리 + 프로젝트 컬럼 SET NULL (감사 L3)", () => {
+  const person = D.createPerson({ name: "삭제될담당자" });
+  const pj = db().prepare("INSERT INTO projects (title, project_type, contact_party_id) VALUES (?,?,?)").run("프로젝트X", "session", person);
+  const projectId = Number(pj.lastInsertRowid);
+  D.setProjectContacts(projectId, [person]); // 다대다 조인에 기록
+  D.setProjectArtists(projectId, [person]);
+  assert.equal(db().prepare("SELECT COUNT(*) c FROM project_contacts WHERE party_id=?").get(person).c, 1, "선행: 조인에 기록됨");
+  D.deleteParty(person);
+  assert.equal(D.getParty(person), null, "party 삭제됨");
+  assert.equal(db().prepare("SELECT COUNT(*) c FROM project_contacts WHERE party_id=?").get(person).c, 0, "project_contacts 정리");
+  assert.equal(db().prepare("SELECT COUNT(*) c FROM project_artists WHERE party_id=?").get(person).c, 0, "project_artists 정리");
+  assert.equal(db().prepare("SELECT contact_party_id FROM projects WHERE id=?").get(projectId).contact_party_id, null, "contact_party_id SET NULL");
+});
+
 // ── 그룹 소속사 ↔ 멤버 소속사 연동(상속·전파·오버라이드) ──
 test("그룹 소속사: 멤버 상속·따르던 멤버 전파·개별 오버라이드 유지", () => {
   const A = D.createCompany({ name: "레이블A", roles: "소속사/레이블" });

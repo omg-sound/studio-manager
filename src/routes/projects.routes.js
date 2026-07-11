@@ -623,6 +623,7 @@ router.post("/:id/invoices/from-tasks", requireBilling, (req, res) => {
       issueDate: cleanYmd(req.body.issued_date),
       dueDate: cleanYmd(req.body.due_date),
       discount: parseMoney(req.body.discount_amount),
+      discountPct: req.body.discount_pct, // 정률(%) — 정액 미입력 시 서버가 공급가 기준 산정(JS-off 폴백)
       vatIncluded: req.body.vat_included != null, // 부가세 포함 체크박스(기본 체크) — 해제 시 미전송 → false(현금 거래)
       taskAmounts: extractAmountMap(req.body, "task_amount"), // 금액은 청구 시점 확정 — 작업별 입력/조정 금액
       sessionAmounts: extractAmountMap(req.body, "session_amount"), // 녹음 세션도 작업처럼 금액 수정 가능
@@ -658,6 +659,7 @@ router.get("/:id/invoices/preview/:type/:name", requireBilling, asyncHandler(asy
       issueDate: cleanYmd(b.issued_date),
       dueDate: cleanYmd(b.due_date),
       discount: parseMoney(b.discount_amount),
+      discountPct: b.discount_pct, // 정률(%) — 정액 미입력 시 서버 산정(JS-off 폴백·미리보기 PDF도 동일)
       vatIncluded: b.vat_included != null,
       taskAmounts: extractAmountMap(b, "task_amount"),
       sessionAmounts: extractAmountMap(b, "session_amount"),

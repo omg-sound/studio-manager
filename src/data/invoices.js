@@ -277,7 +277,7 @@ function invoiceAmountsFromSupply(supply, discount, vatIncluded = true) {
  * 청구 초안 계산(읽기 전용, 쓰기 없음) — 청구서 생성과 미리보기 PDF가 공유.
  * 선택 작업/세션 + 폼 입력 금액 → 라인아이템·공급가·할인·VAT·총액·청구처 계산. 반환: null(권한 없음) 또는 draft 객체.
  */
-function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, vatIncluded = true, taskAmounts = {}, sessionAmounts = {} } = {}) {
+function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, issueDate, dueDate, title, discount, discountPct, vatIncluded = true, taskAmounts = {}, sessionAmounts = {} } = {}) {
   const { sessionRateAmount } = require("../data"); // sessions와 상호의존 → 지연 require
   const project = getProjectForUser(user, projectId);
   if (!project || !canBill(user)) return null;
@@ -330,7 +330,14 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
 
 
   const subtotal = tasks.reduce((s, t) => s + (t.total_price || 0), 0) + billSessions.reduce((s, x) => s + x.amount, 0);
-  const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, discount || 0, vatIncluded);
+  // 할인: 정액(discount) 우선. 정액이 없고 정률(%)만 있으면 공급가 기준으로 서버가 산정한다 —
+  // 정률→정액 변환은 원래 app.js(JS)뿐이라 JS 미동작 시 %만 입력하면 할인이 조용히 0으로 적용되던 것(감사 L2).
+  let effDiscount = discount || 0;
+  if (!effDiscount) {
+    const pct = Number(discountPct);
+    if (pct > 0) effDiscount = Math.round((subtotal * Math.min(100, pct)) / 100);
+  }
+  const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, effDiscount, vatIncluded);
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
   // 청구처(payer) = parties.id. 폼 선택(clientId=party id) 우선, 없으면 프로젝트에서 제작사›소속사›아티스트 파생.
@@ -349,7 +356,14 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
     const desc = [formatYmdShort(session.session_date), project.artist, calc.item.name].filter(Boolean).join(" · ");
     items.push({ task_id: null, session_id: session.id, track_title: null, task_type: null, description: desc, quantity: 1, unit_price: amount, amount, item_date: session.session_date || null });
   }
-  items.sort((a, b) => (a.item_date || "").localeCompare(b.item_date || "")); // 날짜순(동일 날짜는 원래 순서 유지 — Array#sort는 안정 정렬)
+  // 날짜순 — 값 없는 라인은 뒤로(조회 listInvoiceItemsForInvoice의 'item_date IS NULL' 뒤 정렬과 통일, 감사 L4). 동일 날짜는 원래 순서 유지(Array#sort 안정 정렬).
+  items.sort((a, b) => {
+    const ad = a.item_date || "", bd = b.item_date || "";
+    if (!ad && !bd) return 0;
+    if (!ad) return 1;
+    if (!bd) return -1;
+    return ad.localeCompare(bd);
+  });
   return { project, tasks, billSessions, items, subtotal, discountAmt, tax, total, issued, dueDate: dueDate || null, invoiceTitle, resolvedPayerId };
 }
 

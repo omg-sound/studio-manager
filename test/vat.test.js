@@ -140,6 +140,27 @@ test("할인 포함 createInvoiceFromTasks: 공급가 1,000,000 · 할인 100,00
   assert.strictEqual(inv.amount, 990_000, "총액 = 900,000 + 90,000");
 });
 
+// ── 정률(%) 서버 폴백(감사 L2) — 정액 미입력 + %만 오면 서버가 공급가 기준 산정(JS-off 안전망) ──
+test("정률 폴백: discount 없이 discountPct=10 → 서버가 공급가*10% 산정(할인 100,000)", () => {
+  const { projectId, taskId } = seedTask(1_000_000);
+  const inv = createInvoiceFromTasks(CHIEF, { projectId, taskIds: [taskId], issueDate: "2026-06-15", discountPct: "10" });
+  assert.strictEqual(inv.discount_amount, 100_000, "정액 미입력 시 %로 산정");
+  assert.strictEqual(inv.amount, 990_000);
+});
+
+test("정률 폴백: 정액(discount)이 있으면 % 무시(정액 우선)", () => {
+  const { projectId, taskId } = seedTask(1_000_000);
+  const inv = createInvoiceFromTasks(CHIEF, { projectId, taskIds: [taskId], issueDate: "2026-06-15", discount: 50_000, discountPct: "10" });
+  assert.strictEqual(inv.discount_amount, 50_000, "정액이 있으면 %는 무시");
+});
+
+test("정률 폴백: %도 정액도 없으면 할인 0", () => {
+  const { projectId, taskId } = seedTask(1_000_000);
+  const inv = createInvoiceFromTasks(CHIEF, { projectId, taskIds: [taskId], issueDate: "2026-06-15" });
+  assert.strictEqual(inv.discount_amount, 0);
+  assert.strictEqual(inv.amount, 1_100_000);
+});
+
 // ── 부가세 토글(vatIncluded=false = 현금/부가세 미포함) ──
 test("VAT off: 부가세 미포함(현금) — tax 0, total=공급가", () => {
   const r = invoiceAmountsFromSupply(1_000_000, 0, false);
