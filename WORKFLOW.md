@@ -155,7 +155,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 214개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 226개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -185,7 +185,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 214개(단위+가드+상호작용+스모크)
+npm test                                   # 전체 226개(단위+가드+상호작용+스모크)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 node --test test/smoke.test.js             # 실서버 기동 스모크(주요 화면 22개 200 + owner/staff 권한 매트릭스 — '조용히 죽는' 회귀·권한 배선 드리프트 검출)
@@ -227,7 +227,8 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 7. ✅ (완료) **data.js 모듈 분리** — 2049→58줄 순수 재export 허브 + 14개 도메인 모듈(`src/data/*.js`). 공개 export 124개 분리 전후 동일(매 커밋 대조). 상호의존(invoices↔sessions)만 지연 require, 나머지는 형제 모듈 직접 require. CLAUDE.md TODO 9 참조.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션·2026-07-11n 최신)**: **감사 L1~L4 정리** — ①**L1** 취소 캘린더 삭제 무음 catch→`console.warn`(sessions.routes.js) ②**L2 할인 정률(%) 서버 폴백**(`computeInvoiceDraft` discountPct 인자 — 정액 없이 %만 오면 공급가 기준 산정, JS-off 시 조용히 0 적용되던 것; 폼 name=discount_pct·양 라우트 전달) ③**L3 `deleteParty` 트랜잭션 래핑** + `project_contacts` 명시 삭제(project_artists와 일관) ④**L4 초안 라인 정렬 NULL 뒤로**(조회 정렬과 통일). 회귀 4(vat 정률 3·party deleteParty 1). `src/data/{invoices,parties}.js`·`src/routes/{projects,sessions}.routes.js`·`src/views.projects.js`. 214 테스트·E2E 검증.
+> **완료(이번 세션·2026-07-11o 최신)**: **감사 L7~L9 마무리(/audit 완결)** — ①**L7 `format.test.js`**(formatPhone·formatBizNo 스펙 케이스 — 세금문서 노출값) ②**L8 `calendar-event-times.test.js`**(eventTimes export 후 — 시간세션 KST·야간 익일·종일 배타적 end.date·월/연/윤년 경계 +1일 무밀림) ③**L9 `listSessionsForProject` N+1 제거**(withBilling 1회 + 청구작업·청구여부 IN 배치, 전역 목록과 통일). 회귀 12(format 6·calendar 6). `src/data/sessions.js`·`src/calendar.js` + 신규 테스트 2. 226 테스트·데이터 E2E. **→ /audit 조치 전량 완료**(Top 1~3·M4~M6·L1~L10, 잠복 SSRF 갭 포함, 200→226).
+> **완료(2026-07-11n)**: **감사 L1~L4 정리** — ①**L1** 취소 캘린더 삭제 무음 catch→`console.warn`(sessions.routes.js) ②**L2 할인 정률(%) 서버 폴백**(`computeInvoiceDraft` discountPct 인자 — 정액 없이 %만 오면 공급가 기준 산정, JS-off 시 조용히 0 적용되던 것; 폼 name=discount_pct·양 라우트 전달) ③**L3 `deleteParty` 트랜잭션 래핑** + `project_contacts` 명시 삭제(project_artists와 일관) ④**L4 초안 라인 정렬 NULL 뒤로**(조회 정렬과 통일). 회귀 4(vat 정률 3·party deleteParty 1). `src/data/{invoices,parties}.js`·`src/routes/{projects,sessions}.routes.js`·`src/views.projects.js`. 214 테스트·E2E 검증.
 > **완료(2026-07-11m)**: **감사 L5·L6 보안 테스트 + SSRF 결함 수정** — ①**L5 `ssrf.test.js`**(isPrivateIp/isSsrfSafe 대역·매핑우회·경계) → 테스트가 **실 SSRF 갭 검출**: fc00::/7 ULA 패턴 `f[ce]`가 fd 대역(fd00::/8 — 흔한 ULA)을 놓침 → `f[cde]` 교정(재현→근본원인, 함정 #11 🔒 승격) ②**L6 `token-gate.test.js`**(공개링크 tokenGate 존재/철회/만료/유효). 순수 함수 노출(notify export·deliverables module.exports). `src/notify.js`·`src/routes/deliverables.routes.js` + 신규 테스트 2. 210 테스트(+10).
 > **완료(2026-07-11l)**: **감사 M4~M6 통합 리팩터**(뿌리 하나 — 연락처/관계자 사람 행 렌더) — ①**M6 `personListRow` 공용 헬퍼**(views.js): `/contacts`·`/clients?group=associate`의 복붙 두 블록을 한 줄 호출로(fromParam만 차이) ②**M4 `classifyParty(party, preAff)`**: 객체+미리 계산한 소속을 받아 행당 재조회 제거(`arguments.length`로 null 소속 구분) ③**M5 인덱스 2개**(`idx_sessions_director_party`·`idx_projects_production` — classifyParty director/production 참조 풀스캔 → COVERING INDEX). 고아 import 정리. `src/views.js`·`src/data/parties.js`·`src/routes/{contacts,clients}.routes.js`·`src/db.js`. 200 테스트·EXPLAIN QUERY PLAN·E2E(동일 렌더) 검증.
 > **완료(2026-07-11k)**: **종합 진단(/audit) Top 3 + 문서 정렬 수정**(4축 병렬 감사 후 조치) — ①**M1 은폐형 catch 수정**(`contacts.routes.js` POST `/`·`/:id` — 모든 예외를 "이름을 입력하세요"로 오보+무로깅하던 것을 `PARTY_NAME_REQUIRED`만 폼 재렌더·나머지는 전역 핸들러(500+로깅)로 위임, 함정 #21⑨ 은폐 클래스) ②**M2 프로젝트 생성/수정 트랜잭션 래핑**(`projects.routes.js` — INSERT/UPDATE + setProjectArtists/setProjectContacts를 세션 경로와 동일 `BEGIN IMMEDIATE`로, 컬럼↔다대다 조인 반쪽 갱신 방지) ③**M3 스모크에 역할별 권한 배선 매트릭스**(owner/staff 로그인 후 requireInvoice·requireStaff 차단·허용 기계 검증 — 라우트↔미들웨어 드리프트 잠금) ④**L10 문서 테스트 개수 154/142→200 정렬**(층별 분해도 실측 일치). 감사 결과 보안 Critical/High 0. 200 테스트·build green·DEV_LOGIN E2E(연락처 저장·프로젝트 저장 정상) 검증.

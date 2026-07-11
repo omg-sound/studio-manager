@@ -207,6 +207,7 @@ module.exports = {
   calendarClient,
   listCalendars,
   rfc3339Kst,
+  eventTimes, // 종일/다일/야간 시간 조립(순수) — 테스트 노출(KST +1일 산술 회귀 잠금)
   busySlotsForDate,
   eventBody,
   createEvent,
