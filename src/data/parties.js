@@ -198,22 +198,31 @@ function deleteParty(id) {
     const storage = require("../storage");
     for (const f of orphanFiles) Promise.resolve(storage.remove(f.storage_backend, f.file_id)).catch((e) => console.warn("[deleteParty] 첨부 삭제 실패(고아 파일 잔존):", f.storage_backend, f.file_id, e && e.message));
   });
-  d.prepare("UPDATE invoices SET payer_id = NULL WHERE payer_id = ?").run(pid);
-  d.prepare("UPDATE projects SET artist_id = NULL WHERE artist_id = ?").run(pid);
-  d.prepare("UPDATE projects SET agency_id = NULL WHERE agency_id = ?").run(pid);
-  d.prepare("UPDATE projects SET production_id = NULL WHERE production_id = ?").run(pid);
-  d.prepare("UPDATE projects SET contact_party_id = NULL WHERE contact_party_id = ?").run(pid);
-  d.prepare("UPDATE project_managers SET party_id = NULL WHERE party_id = ?").run(pid);
-  d.prepare("UPDATE sessions SET director_party_id = NULL WHERE director_party_id = ?").run(pid);
-  d.prepare("DELETE FROM session_directors WHERE party_id = ?").run(pid);
-  d.prepare("DELETE FROM project_artists WHERE party_id = ?").run(pid); // 다대다 아티스트 연결 해제(FK CASCADE 대비 명시)
-  // 이 사람이 대표인 회사들 — 삭제 후 남은 대표로 레거시 컬럼(첫 대표 id·콤마 이름)을 재동기화(공동대표 승계).
-  const ownedCompanies = d.prepare("SELECT company_id FROM company_owners WHERE party_id = ?").all(pid).map((r) => r.company_id);
-  d.prepare("DELETE FROM company_owners WHERE party_id = ? OR company_id = ?").run(pid, pid);
-  d.prepare("UPDATE parties SET owner_party_id = NULL WHERE owner_party_id = ?").run(pid);
-  d.prepare("UPDATE parties SET group_id = NULL WHERE group_id = ?").run(pid); // 그룹 삭제 시 멤버 소속 해제
-  d.prepare("DELETE FROM parties WHERE id = ?").run(pid);
-  for (const cid of ownedCompanies) syncCompanyOwnerColumns(cid);
+  // 역할 참조 정리 + 삭제를 한 트랜잭션으로 — 중간 실패 시 참조가 반쪽만 SET NULL/삭제된 채 남지 않게(감사 L3).
+  d.exec("BEGIN IMMEDIATE;");
+  try {
+    d.prepare("UPDATE invoices SET payer_id = NULL WHERE payer_id = ?").run(pid);
+    d.prepare("UPDATE projects SET artist_id = NULL WHERE artist_id = ?").run(pid);
+    d.prepare("UPDATE projects SET agency_id = NULL WHERE agency_id = ?").run(pid);
+    d.prepare("UPDATE projects SET production_id = NULL WHERE production_id = ?").run(pid);
+    d.prepare("UPDATE projects SET contact_party_id = NULL WHERE contact_party_id = ?").run(pid);
+    d.prepare("UPDATE project_managers SET party_id = NULL WHERE party_id = ?").run(pid);
+    d.prepare("UPDATE sessions SET director_party_id = NULL WHERE director_party_id = ?").run(pid);
+    d.prepare("DELETE FROM session_directors WHERE party_id = ?").run(pid);
+    d.prepare("DELETE FROM project_artists WHERE party_id = ?").run(pid); // 다대다 아티스트 연결 해제(FK CASCADE 대비 명시)
+    d.prepare("DELETE FROM project_contacts WHERE party_id = ?").run(pid); // 다대다 고객측 담당자 연결 해제(project_artists와 일관 — 감사 L3, FK CASCADE 있지만 명시)
+    // 이 사람이 대표인 회사들 — 삭제 후 남은 대표로 레거시 컬럼(첫 대표 id·콤마 이름)을 재동기화(공동대표 승계).
+    const ownedCompanies = d.prepare("SELECT company_id FROM company_owners WHERE party_id = ?").all(pid).map((r) => r.company_id);
+    d.prepare("DELETE FROM company_owners WHERE party_id = ? OR company_id = ?").run(pid, pid);
+    d.prepare("UPDATE parties SET owner_party_id = NULL WHERE owner_party_id = ?").run(pid);
+    d.prepare("UPDATE parties SET group_id = NULL WHERE group_id = ?").run(pid); // 그룹 삭제 시 멤버 소속 해제
+    d.prepare("DELETE FROM parties WHERE id = ?").run(pid);
+    for (const cid of ownedCompanies) syncCompanyOwnerColumns(cid);
+    d.exec("COMMIT;");
+  } catch (e) {
+    d.exec("ROLLBACK;");
+    throw e;
+  }
 }
 
 // ── Google People 동기화 참조 ──

@@ -80,7 +80,7 @@ async function syncSessionEvent(user, session) {
   const project = getProjectForUser(user, session.project_id);
   if (!project) return { synced: false, reason: "프로젝트를 찾을 수 없음" };
   if (session.status === "취소") {
-    try { if (session.gcal_event_id) { await calendar.deleteEvent(session.gcal_event_id); setSessionEventId(session.id, null); } } catch (_e) {}
+    try { if (session.gcal_event_id) { await calendar.deleteEvent(session.gcal_event_id); setSessionEventId(session.id, null); } } catch (e) { console.warn("[sessions] 취소 캘린더 삭제 동기화 실패 —", (e && e.message) || e); }
     return { synced: true }; // 취소는 삭제 동기화(또는 원래 없었음)
   }
   const st = calendar.syncStatus(); // 설정 수준 준비 상태(미연동/캘린더 미선택 등)

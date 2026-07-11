@@ -790,7 +790,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
               <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
             </div>
             <div class="relative w-24">
-              <input class="input py-1.5 text-sm pr-6" inputmode="decimal" placeholder="0" data-discount-pct />
+              <input class="input py-1.5 text-sm pr-6" inputmode="decimal" name="discount_pct" placeholder="0" data-discount-pct />
               <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">%</span>
             </div>
           </div>
