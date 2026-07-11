@@ -19,6 +19,8 @@ const {
   listProjects,
   listProjectSummaries,
   splitProjectTabs,
+  listProjectIdsForManager,
+  getManagerByUserId,
   getProjectForUser,
   deleteProject,
   createGroup,
@@ -185,7 +187,19 @@ router.get("/", requireAuth, (req, res) => {
   const user = req.user;
   const canCreate = canEdit(user); // 대표(열람전용)는 새 프로젝트 버튼 숨김
   const q = (req.query.q || "").toString().trim();
-  const rows = listProjects(user, { q });
+  let rows = listProjects(user, { q });
+
+  // '내 프로젝트만' 필터(2026-07-12) — 전 프로젝트 열람은 유지하고 opt-in 필터만 얹는다(?mine=1, 기억 안 함).
+  // 내 것 = 로그인 사용자의 담당자(project_managers) 기준 PM·담당 세션·담당 작업 관여(listProjectIdsForManager).
+  // 담당자 행이 없는 계정(대표 등)은 관여 개념이 없어 토글 자체를 숨긴다.
+  const myManager = getManagerByUserId(user.id);
+  const mineAvailable = Boolean(myManager);
+  const mine = mineAvailable && req.query.mine === "1";
+  if (mine) {
+    const myIds = listProjectIdsForManager(myManager.id);
+    rows = rows.filter((p) => myIds.has(p.id));
+  }
+  const keepQ = `${q ? "&q=" + encodeURIComponent(q) : ""}${mine ? "&mine=1" : ""}`; // 탭·더보기·검색 링크에 필터 상태 보존
 
   const searched = Boolean(q);
   // 3탭 분류(진행 중/청구 필요/완료). active는 splitProjectTabs 내부에서 이미 세션 임박순 정렬됨.
@@ -202,40 +216,48 @@ router.get("/", requireAuth, (req, res) => {
           { key: "done", label: `완료 ${done.length}` },
         ],
         activeKey: tab,
-        hrefFn: (k) => `/projects?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+        hrefFn: (k) => `/projects?tab=${k}${keepQ}`,
       })
+    : "";
+  // '내 프로젝트만' 토글 pill — 담당자 계정만 노출. 켜짐=강조, 클릭 토글(tab·q 보존).
+  const mineToggle = mineAvailable
+    ? `<div class="mb-3"><a href="/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}${mine ? "" : "&mine=1"}" class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm ${mine ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted hover:text-fg"}">${mine ? "✓ " : ""}내 프로젝트만</a></div>`
     : "";
   let list;
   if (!rows.length) {
     list = searched
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
-      : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
+      : mine
+        ? emptyState("내가 관여한 프로젝트가 없습니다.", { card: true, icon: "projects" })
+        : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
   } else if (!activeRows.length) {
-    const emptyMsg = { active: "진행 중인 프로젝트가 없습니다.", billing: "청구가 필요한 프로젝트가 없습니다.", done: "완료된 프로젝트가 없습니다." }[tab];
+    const scope = mine ? "내가 관여한 " : "";
+    const emptyMsg = { active: `${scope}진행 중인 프로젝트가 없습니다.`, billing: `${scope}청구가 필요한 프로젝트가 없습니다.`, done: `${scope}완료된 프로젝트가 없습니다.` }[tab];
     list = emptyState(emptyMsg, { card: true });
   } else {
     // 목록 상한(2026-07-09 스케일 점검) — 완료 탭이 해가 갈수록 누적되므로 기본 100건 + 더 보기. 요약도 표시분만 배치 조회.
-    const cap = capList(activeRows, req.query, (n) => `/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
+    const cap = capList(activeRows, req.query, (n) => `/projects?tab=${tab}${keepQ}&limit=${n}`);
     const summaries = listProjectSummaries(cap.shown.map((r) => r.id)); // 인라인 요약(배치 2쿼리)
     const isAdmin = canEdit(user); // 펼침 세션 완료 토글 노출(편집 권한자). 완료 후 ?open=로 그 카드 재펼침.
     const openId = Number(req.query.open) || null;
-    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId })).join("")}</div>${cap.more}`;
+    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
 
   const searchBar = searchBox({
     action: "/projects", q, placeholder: "프로젝트 · 아티스트 검색", label: "프로젝트 검색",
-    suggestUrl: "/projects/suggest", hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />`,
+    suggestUrl: "/projects/suggest", hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />${mine ? `<input type="hidden" name="mine" value="1" />` : ""}`,
   });
   const resultNote = searched
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/projects" class="text-primary hover:underline">전체 보기</a></div>`
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/projects${mine ? "?mine=1" : ""}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
   const body = `
     ${pageHeader({ title: "프로젝트", desc: "전체 프로젝트", action })}
     ${searchBar}
     ${resultNote}
+    ${mineToggle}
     ${projTabs}
     ${list}`;
   res.send(layout({ title: "프로젝트", user, current: "/projects", body }));

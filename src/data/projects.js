@@ -300,6 +300,24 @@ function listProjectContacts(projectId) {
     .all(Number(projectId));
 }
 
+/**
+ * 담당자(project_managers.id)가 '관여한' 프로젝트 id 집합(2026-07-12 — '내 프로젝트만' 필터).
+ * 관여 = PM(projects.manager_id) OR 담당 세션(session_engineers) OR 담당 작업(track_tasks.engineer_id).
+ * 한 쿼리(UNION)로 id만 뽑아 Set 반환 — 라우트가 listProjects 결과를 이 집합으로 거른다(listProjects 무변경).
+ */
+function listProjectIdsForManager(managerId) {
+  const mid = Number(managerId);
+  if (!mid) return new Set();
+  const rows = db()
+    .prepare(
+      `SELECT id AS project_id FROM projects WHERE manager_id = @mid
+       UNION SELECT s.project_id FROM session_engineers se JOIN sessions s ON s.id = se.session_id WHERE se.manager_id = @mid
+       UNION SELECT tr.project_id FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE t.engineer_id = @mid`
+    )
+    .all({ mid });
+  return new Set(rows.map((r) => r.project_id));
+}
+
 /** 프로젝트 삭제. 청구된 작업·세션이 있으면 거부(매출 추적 보존, deleteTrack과 정합). */
 function deleteProject(projectId) {
   const pid = Number(projectId);
@@ -323,5 +341,6 @@ module.exports = {
   setProjectContacts,
   listProjectContacts,
   splitProjectTabs,
+  listProjectIdsForManager,
   deleteProject,
 };
