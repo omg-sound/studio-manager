@@ -191,7 +191,8 @@ function projectSummaryHtml(s, { isAdmin = false, projectId = null, tab = "activ
       : "";
     blocks.push(`<div><div class="mb-0.5 font-medium text-fg/60">곡·콘텐츠 ${s.tracks.length}</div><ul class="space-y-0.5">${items}${more}</ul>${typeSummary}</div>`);
   }
-  return `<div class="grid gap-3 sm:grid-cols-2">${blocks.join("")}</div>`;
+  // 세로 스택(2026-07-11 사용자 요청): 세션 블록은 전폭(완료 토글이 행 오른쪽 끝에 정렬), 곡·콘텐츠는 다음 줄로.
+  return `<div class="space-y-3">${blocks.join("")}</div>`;
 }
 
 
