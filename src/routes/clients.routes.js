@@ -10,7 +10,7 @@ const {
   listInvoicesForParty,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
   setOrgContacts, setCompanyOwners, listCompanyOwners, listContacts, listAssociates, resolvePersonByName,
-  listArtistsForAgency, currentAffiliation, classifyParty,
+  listArtistsForAgency,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
   setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty,
@@ -22,7 +22,7 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, personListRow, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 const { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
 
@@ -130,25 +130,8 @@ router.get("/", (req, res) => {
         rows: displayed.map((c) => {
           // 우측 정보(사업자·전화·이메일)는 이름만 링크(listRowLinked)로 분리 → 드래그·복사해도 상세로 안 들어감.
           if (group === "associate") {
-            // 관계자(사람·비아티스트): 이름(→연락처)·소속 회사(→회사 상세) 각각 링크(밑줄 분리). 직함 텍스트 + 역할 배지.
-            const cur = currentAffiliation(c.id);
-            const roleBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
-            const nameLink = `<a href="/contacts/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personName(c))}</a>`;
-            let orgPart = "";
-            if (cur && cur.client_id) {
-              const orgA = `<a href="/clients/${cur.client_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
-              orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
-            }
-            const right = (c.phone || c.email)
-              ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}${c.email ? `<div>${copyable(c.email)}</div>` : ""}</div>`
-              : "";
-            return `<div class="flex items-start justify-between gap-4 px-4 py-3">
-              <div class="min-w-0">
-                <div class="truncate">${nameLink}${orgPart}</div>
-                ${roleBadges ? `<div class="mt-1 flex flex-wrap gap-1">${roleBadges}</div>` : ""}
-              </div>
-              ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
-            </div>`;
+            // 관계자(사람·비아티스트) = 연락처와 동일 대상 → 연락처 목록과 공용 헬퍼(from 복귀 쿼리만 추가).
+            return personListRow(c, { fromParam });
           }
           if (c.is_artist) {
             // 아티스트(개인) / 그룹(밴드·아이돌) — 배지로 구분. 이름 뒤에 소속사·소속 그룹, 오른쪽에 전화→이메일.

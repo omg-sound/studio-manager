@@ -378,8 +378,14 @@ function partyOptions({ role } = {}) {
 
 // ── 역할 배지 ──
 
-/** 당사자 역할 배지 — 조직/그룹/아티스트/스태프/외주/담당자/디렉터/대표. */
-function classifyParty(party) {
+/**
+ * 당사자 역할 배지 — 조직/그룹/아티스트/스태프/외주/담당자/디렉터/대표.
+ * @param party  party 객체(권장 — 목록 렌더 시 행마다 재조회 방지) 또는 party id.
+ * @param preAff (선택) 이미 계산한 현재 소속(`currentAffiliation` 결과) — 목록에서 재사용해 행당 조회 1건 절약.
+ *               넘기지 않으면 내부에서 조회. null(무소속)도 유효한 전달값이라 `arguments.length`로 구분.
+ */
+function classifyParty(party, preAff) {
+  const hasPreAff = arguments.length > 1;
   const p = typeof party === "object" ? party : getParty(party);
   if (!p) return [{ label: "미상", cls: "badge-neutral" }];
   const id = p.id;
@@ -397,7 +403,7 @@ function classifyParty(party) {
     const u = p.user_id ? db().prepare("SELECT role FROM users WHERE id = ?").get(p.user_id) : null;
     if (u) badges.push({ label: u.role === "owner" ? "대표" : "녹음실 스태프", cls: "badge-info" });
     else {
-      const a = currentAffiliation(id);
+      const a = hasPreAff ? preAff : currentAffiliation(id);
       if (a && a.org_id) badges.push({ label: "고객측 담당자", cls: "badge-success" });
     }
   }

@@ -31,7 +31,7 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, copyable, searchBox, companyCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, personListRow, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo } = require("../views");
 
 const router = express.Router();
 
@@ -82,28 +82,8 @@ router.get("/", (req, res) => {
   const cap = capList(rows, req.query, (n) => `/contacts?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   const list = rows.length
     ? listGroup({
-        rows: cap.shown.map((c) => {
-          const cur = currentAffiliation(c.id);
-          const typeBadges = classifyParty(c.id, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
-          // 클라이언트 목록과 동일 흐름: 이름(→연락처)·소속 회사(→회사 상세)를 각각 링크(밑줄 분리), 직함은 텍스트.
-          // 우측 전화·이메일은 비링크 → 드래그·복사해도 상세로 안 들어감.
-          const nameLink = `<a href="/contacts/${c.id}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personName(c))}</a>`;
-          let orgPart = "";
-          if (cur && cur.client_id) {
-            const orgA = `<a href="/clients/${cur.client_id}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
-            orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
-          }
-          const right = (c.phone || c.email)
-            ? `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}${c.email ? `<div>${copyable(c.email)}</div>` : ""}</div>`
-            : "";
-          return `<div class="flex items-start justify-between gap-4 px-4 py-3">
-            <div class="min-w-0">
-              <div class="truncate">${nameLink}${orgPart}</div>
-              ${typeBadges ? `<div class="mt-1 flex flex-wrap gap-1">${typeBadges}</div>` : ""}
-            </div>
-            ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
-          </div>`;
-        }),
+        rows: cap.shown.map((c) => personListRow(c)), // 공용 헬퍼(클라이언트 관계자 탭과 동일 렌더)
+
       }) + cap.more
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
