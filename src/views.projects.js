@@ -221,10 +221,20 @@ function projectMetaReadonly(p) {
 
 
 /** 관리자 메타 카드(프로젝트 탭): 편집 폼을 항상 펼쳐서 표시(접기 없음 — 한 프로젝트만 보이므로). */
-function projectMetaCard(p, err = "") {
+function projectMetaCard(p, err = "", { chief = false } = {}) {
+  // 치프 전용 작성일(생성일) 편집 — 완료/청구 필요 탭 정렬(작성일순)에 영향. 목록에서 상세로 이동(2026-07-11).
+  const dateStr = esc(String(p.created_at || "").slice(0, 10));
+  const createdEdit = chief
+    ? `<form method="post" action="/projects/${p.id}/created-at" class="mb-3 flex items-center gap-2 border-b border-border/40 pb-3">
+         <input type="hidden" name="return" value="/projects/${p.id}?tab=project" />
+         <label class="text-xs text-muted">작성일</label>
+         <input type="date" name="created_at" value="${dateStr}" data-autosubmit class="rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" />
+       </form>`
+    : "";
   return `
     <div class="card">
       <form id="del-proj-${p.id}" method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?" class="hidden"></form>
+      ${createdEdit}
       ${projectEditForm(p, err)}
     </div>`;
 }

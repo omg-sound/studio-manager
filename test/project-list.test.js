@@ -70,6 +70,15 @@ test("projectListRow 다음 세션 없으면 줄 생략", () => {
 
 const { todayYmd } = require("../src/lib/date");
 
+test("projectMetaCard: 치프만 작성일 편집 필드", () => {
+  const p = pRow({ created_at: "2026-07-01 10:00:00" });
+  const chiefHtml = views.projectMetaCard(p, "", { chief: true });
+  assert.match(chiefHtml, /\/projects\/7\/created-at/);
+  assert.match(chiefHtml, /type="date"/);
+  const plainHtml = views.projectMetaCard(p, "", { chief: false });
+  assert.doesNotMatch(plainHtml, /\/projects\/7\/created-at/);
+});
+
 test("projectSummaryHtml: 다가오는 세션이 지난 세션보다 먼저", () => {
   const today = todayYmd();
   const y = Number(today.slice(0, 4));

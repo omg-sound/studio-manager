@@ -14,6 +14,7 @@ const { config } = require("../config");
 const { renderInvoicePdf } = require("../invoice-pdf");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
+const { safePath } = require("../lib/nav");
 const {
   listProjects,
   listProjectSummaries,
@@ -266,7 +267,7 @@ router.post("/", requireEditor, (req, res) => {
   res.redirect(`/projects/${info.lastInsertRowid}?flash=created`);
 });
 
-// ── 작성일(생성일) 수정 (치프 전용) — 목록에서 인라인 date 입력, 시각(HH:MM:SS)은 보존 ──
+// ── 작성일(생성일) 수정 (치프 전용) — 상세 메타 카드 date 입력, 시각(HH:MM:SS)은 보존 ──
 router.post("/:id/created-at", requireChief, (req, res) => {
   const id = Number(req.params.id);
   const date = String(req.body.created_at || "").trim();
@@ -275,7 +276,9 @@ router.post("/:id/created-at", requireChief, (req, res) => {
     const timePart = String(p.created_at || "").slice(10); // " HH:MM:SS"(있으면 보존해 같은 날 정렬 안정)
     db().prepare("UPDATE projects SET created_at = ? WHERE id = ?").run(date + (timePart || " 00:00:00"), id);
   }
-  const tab = req.body.tab === "done" ? "done" : "active";
+  const back = safePath(req.body.return);
+  if (back) return res.redirect(back);
+  const tab = ["billing", "done"].includes(req.body.tab) ? req.body.tab : "active";
   const q = String(req.body.q || "").trim();
   res.redirect(`/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`);
 });
@@ -310,7 +313,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   const managers = editable ? listProjectManagers() : []; // 작업·세션 엔지니어 선택용(담당자 마스터)
 
   const meta = editable
-    ? projectMetaCard({ ...p, ...(formState || {}) }, err)
+    ? projectMetaCard({ ...p, ...(formState || {}) }, err, { chief: isChief(req.user) })
     : projectMetaReadonly(p);
 
   const desc = p.artist || p.client_name || "프로젝트";
