@@ -17,6 +17,7 @@ const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록
 const {
   listProjects,
   listProjectSummaries,
+  splitProjectTabs,
   getProjectForUser,
   deleteProject,
   createGroup,
@@ -165,18 +166,17 @@ router.get("/", requireAuth, (req, res) => {
   const rows = listProjects(user, { q });
 
   const searched = Boolean(q);
-  // 진행 중 / 완료로 분리. 완료 = 다가오는 세션 없음 + 미완료 작업 없음 + 활동 있었음(data.js is_completed).
-  const ongoing = rows.filter((r) => !r.is_completed);
-  // 완료 탭 = 청구 대기 큐(2026-07-05 사용자 요청): 미청구 항목 있는 프로젝트를 위로, 청구 끝난 것은 아래로.
-  // 그룹 내 순서는 생성일 최신순 유지(Array.sort 안정 정렬 — SQL이 이미 created_at DESC).
-  const done = rows.filter((r) => r.is_completed).sort((a, b) => (Number(b.unbilled_cnt) > 0 ? 1 : 0) - (Number(a.unbilled_cnt) > 0 ? 1 : 0));
-  // 접기 섹션 → 탭바(연락처 방식). ?tab=active(기본)/done, 검색어 유지. 활성 탭 목록만 렌더.
-  const tab = req.query.tab === "done" ? "done" : "active";
-  const activeRows = tab === "done" ? done : ongoing;
+  // 3탭 분류(진행 중/청구 필요/완료). active는 splitProjectTabs 내부에서 이미 세션 임박순 정렬됨.
+  const { active, billing, done } = splitProjectTabs(rows);
+  const tabGroups = { active, billing, done };
+  // 접기 섹션 → 탭바(연락처 방식). ?tab=active(기본)/billing/done, 검색어 유지. 활성 탭 목록만 렌더.
+  const tab = ["billing", "done"].includes(req.query.tab) ? req.query.tab : "active";
+  const activeRows = tabGroups[tab];
   const projTabs = rows.length
     ? renderTabs({
         tabs: [
-          { key: "active", label: `진행 중 ${ongoing.length}` },
+          { key: "active", label: `진행 중 ${active.length}` },
+          { key: "billing", label: `청구 필요 ${billing.length}` },
           { key: "done", label: `완료 ${done.length}` },
         ],
         activeKey: tab,
@@ -189,13 +189,13 @@ router.get("/", requireAuth, (req, res) => {
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("프로젝트가 없습니다.", { card: true, icon: "projects", cta: canCreate ? { href: "/projects/new", label: "+ 새 프로젝트" } : null });
   } else if (!activeRows.length) {
-    list = emptyState(tab === "done" ? "완료된 프로젝트가 없습니다." : "진행 중인 프로젝트가 없습니다.", { card: true });
+    const emptyMsg = { active: "진행 중인 프로젝트가 없습니다.", billing: "청구가 필요한 프로젝트가 없습니다.", done: "완료된 프로젝트가 없습니다." }[tab];
+    list = emptyState(emptyMsg, { card: true });
   } else {
-    const chief = isChief(req.user); // 치프만 목록에서 작성일 인라인 수정
     // 목록 상한(2026-07-09 스케일 점검) — 완료 탭이 해가 갈수록 누적되므로 기본 100건 + 더 보기. 요약도 표시분만 배치 조회.
     const cap = capList(activeRows, req.query, (n) => `/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
     const summaries = listProjectSummaries(cap.shown.map((r) => r.id)); // 인라인 요약(배치 2쿼리)
-    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { isChief: chief, tab, q })).join("")}</div>${cap.more}`;
+    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
