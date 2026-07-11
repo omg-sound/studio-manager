@@ -43,8 +43,13 @@ function nextSessionLine(p) {
   if (!p.next_session_date) return "";
   const d = daysUntilYmd(p.next_session_date);
   const dday = d === 0 ? "오늘" : d > 0 ? `D-${d}` : `${-d}일 지남`;
-  const cls = d != null && d <= 3 ? "font-medium text-primary" : "text-muted";
-  return `<div class="mt-0.5 text-xs ${cls}">다음 세션 ${esc(formatYmdShort(p.next_session_date))} · ${dday}</div>`;
+  // 디데이만 임박도 색 단계로 강조(2026-07-11 사용자 요청 — PM 밑, 디데이만 눈에 띄게):
+  // 3일 이내=빨강 볼드(진한색) / 2주 이내=주황(중간색) / 그 외=검정 기본(멀리).
+  let ddayCls;
+  if (d != null && d <= 3) ddayCls = "font-semibold text-danger";
+  else if (d != null && d <= 14) ddayCls = "font-medium text-warning";
+  else ddayCls = "text-fg";
+  return `<div class="mt-0.5 text-xs text-muted">다음 세션 ${esc(formatYmdShort(p.next_session_date))} · <span class="${ddayCls}">${esc(dday)}</span></div>`;
 }
 
 
@@ -71,8 +76,8 @@ function projectIdentity(p) {
 
 /**
  * 목록 행(2026-07-11 정체성 중심 재설계) — 두 클릭 영역:
- *  ① 상단 링크(<a>) → 프로젝트 상세: 정체성(아티스트·회사, 주) / 프로젝트명(부제) / 다음 세션(진행 중) / 우측 PM.
- *     금액은 청구 필요 탭(tab==="billing")에서만 + '청구 필요 N' 배지.
+ *  ① 상단 링크(<a>) → 프로젝트 상세: 좌측=정체성(아티스트·회사, 주) / 프로젝트명(부제) / '청구 필요' 배지,
+ *     우측=PM + 그 밑에 다음 세션(진행 중, 디데이만 임박도 색 강조). 금액은 청구 필요 탭(tab==="billing")에서만.
  *  ② 하단 접기 토글 바(<details>) → 카운트 요약, 펼치면 세션 일정(다가오는 세션 우선)·곡별 작업자 인라인 미리보기.
  */
 function projectListRow(p, summary, { tab = "active" } = {}) {
@@ -89,7 +94,10 @@ function projectListRow(p, summary, { tab = "active" } = {}) {
   const pmLine = p.manager_name ? `<div class="text-xs text-muted">PM ${esc(p.manager_name)}</div>` : "";
   const amt = projectAmount(p);
   const amountLine = isBilling && amt ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>` : "";
-  const rightCol = pmLine || amountLine ? `<div class="shrink-0 pl-2 text-right">${pmLine}${amountLine}</div>` : "";
+  // 다음 세션은 PM 밑(우측 열)으로 이동(2026-07-11 사용자 요청). 금액(청구 필요 탭)과는 공존하지 않음(완료엔 다음 세션 없음).
+  const rightCol = pmLine || amountLine || nextLine
+    ? `<div class="shrink-0 pl-2 text-right">${pmLine}${nextLine}${amountLine}</div>`
+    : "";
 
   // 청구 필요 배지(청구 필요 탭 전용).
   const billingBadge = isBilling && Number(p.unbilled_cnt) > 0
@@ -116,7 +124,6 @@ function projectListRow(p, summary, { tab = "active" } = {}) {
           <div class="truncate font-semibold">${mainLine}</div>
           ${subtitle}
           ${billingBadge}
-          ${nextLine}
         </div>
         ${rightCol}
       </a>

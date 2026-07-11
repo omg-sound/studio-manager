@@ -96,3 +96,28 @@ test("projectSummaryHtml: 다가오는 세션이 지난 세션보다 먼저", ()
   // 대신 두 세션을 구분하는 session_type(미래=녹음·과거=믹싱) 등장 순서로 검증.
   assert.ok(html.indexOf("녹음") < html.indexOf("믹싱"), "미래 세션이 과거 세션보다 앞에 렌더");
 });
+
+// 다음 세션: 디데이 색 단계(2026-07-11) — 3일내 빨강 / 2주내 주황 / 멀리 검정, PM 밑 우측 열.
+function ymdPlusLocal(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${da}`;
+}
+
+test("nextSessionLine: 디데이 색 단계 + PM 밑 우측 열", () => {
+  // 경계에서 멀찍이(1·10·30일) — 타임존 ±1일 오차에도 단계 안 바뀌게.
+  const soon = views.projectListRow(pRow({ manager_name: "박수한", next_session_date: ymdPlusLocal(1) }), emptySummary, { tab: "active" });
+  assert.match(soon, /text-danger/, "3일 이내 = 빨강(danger)");
+  assert.match(soon, /다음 세션/, "다음 세션 줄 렌더");
+  assert.ok(soon.indexOf("PM 박수한") < soon.indexOf("다음 세션"), "다음 세션이 PM 밑(뒤)에 온다");
+
+  const mid = views.projectListRow(pRow({ next_session_date: ymdPlusLocal(10) }), emptySummary, { tab: "active" });
+  assert.match(mid, /text-warning/, "2주 이내 = 주황(warning)");
+
+  const far = views.projectListRow(pRow({ next_session_date: ymdPlusLocal(30) }), emptySummary, { tab: "active" });
+  assert.doesNotMatch(far, /text-danger/, "멀리 = 빨강 아님");
+  assert.doesNotMatch(far, /text-warning/, "멀리 = 주황 아님");
+});
