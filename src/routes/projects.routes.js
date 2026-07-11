@@ -52,6 +52,7 @@ const {
   ensureCompanyParty,
   addCompanyRole,
   resolvePartyByDisplay,
+  currentAffiliation,
   setProjectArtists,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, capList, tabBar: renderTabs, searchBox } = require("../views");
@@ -138,9 +139,12 @@ function resolveProjectParties(b) {
   const prodPartyId = b.production_party_id ? Number(b.production_party_id) : null;
   const prodText = String(b.production_company || "").trim();
   const productionId = prodPartyId || (prodText ? resolvePartyByDisplay(prodText) || ensureCompanyParty(prodText, "제작사") : null);
-  const agencyId = ensureCompanyParty(b.artist_company, "소속사/레이블");
-  // 소속/레이블·제작/운영에 회사가 지정되면 그 회사 클라이언트 역할에도 해당 역할을 반영(사람이면 no-op·이미 있으면 멱등, 2026-07-10 사용자 요청).
-  // 콤보 선택·기존 회사 재사용 경로 모두 roles를 안 건드리던 것 — 한 회사가 소속/레이블·제작/운영을 겸하면 두 배지가 함께 뜨게.
+  // 소속/레이블 = 아티스트 속성 → 프로젝트 폼 입력 필드 제거(2026-07-11 사용자 결정). 첫(대표) 아티스트의 현재 소속에서 파생.
+  // 다중 아티스트는 첫 아티스트 기준(사용자 확인), 소속 미설정이면 null(소속 지정은 아티스트/연락처 쪽에서). 표시 TEXT도 파생 이름 사용.
+  const aff = artistId ? currentAffiliation(artistId) : null;
+  const agencyId = aff && aff.org_id ? aff.org_id : null;
+  const agencyName = aff && aff.org_name ? aff.org_name : null;
+  // 파생 소속사·제작/운영 회사에 클라이언트 역할 반영(사람이면 no-op·멱등, 2026-07-10). 소속/레이블 배지 일관.
   if (agencyId) addCompanyRole(agencyId, "소속사/레이블");
   if (productionId) addCompanyRole(productionId, "제작사");
   return {
@@ -149,6 +153,7 @@ function resolveProjectParties(b) {
     artistIds,
     artistText,
     agencyId,
+    agencyName,
     productionId,
   };
 }
@@ -254,7 +259,7 @@ router.post("/", requireEditor, (req, res) => {
       project_type: type,
       // 표시용 denormalized TEXT 유지(목록·요약 렌더). 정체성/청구는 party 참조가 진실원천.
       artist: parties.artistText, // 콤마 다중 정규화("아이유, 태연")
-      artist_company: String(b.artist_company || "").trim() || null,
+      artist_company: parties.agencyName, // 첫 아티스트 소속에서 파생(폼 입력 필드 폐기)
       production_company: String(b.production_company || "").trim() || null,
       artist_id: parties.artistId,
       agency_id: parties.agencyId,
@@ -419,7 +424,7 @@ router.post("/:id", requireEditor, (req, res) => {
       id,
       title,
       artist: parties.artistText, // 콤마 다중 정규화
-      artist_company: String(b.artist_company || "").trim() || null,
+      artist_company: parties.agencyName, // 첫 아티스트 소속에서 파생(폼 입력 필드 폐기)
       production_company: String(b.production_company || "").trim() || null,
       artist_id: parties.artistId,
       agency_id: parties.agencyId,

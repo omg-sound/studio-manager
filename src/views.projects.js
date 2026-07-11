@@ -282,15 +282,9 @@ function projectForm(p = {}, err = "") {
           ${managerSelect(p.manager_id)}
         </div>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="label">아티스트</label>
-          ${artistCombo(p)}
-        </div>
-        <div>
-          <label class="label">소속/레이블 <span class="font-normal text-muted text-xs">(아티스트 소속)</span></label>
-          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
-        </div>
+      <div>
+        <label class="label">아티스트 <span class="font-normal text-muted text-xs">(여러 명은 콤마 · 소속/레이블은 아티스트에 저장)</span></label>
+        ${artistCombo(p)}
       </div>
       <div>
         <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
@@ -327,15 +321,9 @@ function projectEditForm(p = {}, err = "") {
           ${managerSelect(p.manager_id)}
         </div>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="label">아티스트</label>
-          ${artistCombo(p)}
-        </div>
-        <div>
-          <label class="label">소속/레이블 <span class="font-normal text-muted text-xs">(아티스트 소속)</span></label>
-          ${companyCombo("artist_company", p.artist_company, "소속사/레이블", "소속/레이블")}
-        </div>
+      <div>
+        <label class="label">아티스트 <span class="font-normal text-muted text-xs">(여러 명은 콤마 · 소속/레이블은 아티스트에 저장)</span></label>
+        ${artistCombo(p)}
       </div>
       <div>
         <label class="label">제작/운영 <span class="font-normal text-muted text-xs">(업체 또는 개인)</span></label>
