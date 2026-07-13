@@ -24,6 +24,8 @@ const AUTH_BASE = "https://kauth.kakao.com";
 const API_BASE = "https://kapi.kakao.com";
 
 const EXPIRY_MARGIN_MS = 5 * 60 * 1000; // 만료 5분 전이면 미리 갱신
+const MEMO_SEND_URL = `${API_BASE}/v2/api/talk/memo/default/send`;
+const TEXT_MAX = 200;
 
 /** 카카오 인가 URL — scope talk_message(나에게 보내기). state=CSRF 논스. */
 function getAuthUrl(state) {
@@ -160,6 +162,36 @@ async function keepAlive() {
   return { ok: Boolean(at) };
 }
 
+/** 카카오 "나에게 보내기"(텍스트 템플릿). 미연동·토큰 없음이면 skip. fail-safe(throw 없음). */
+async function sendToMe({ text, url, buttonTitle } = {}) {
+  if (!isLinked()) return { ok: false, skipped: "not_linked" };
+  const token = await getAccessToken();
+  if (!token) return { ok: false, skipped: "no_token" };
+  try {
+    const template = {
+      object_type: "text",
+      text: String(text || "").slice(0, TEXT_MAX),
+      link: url ? { web_url: url, mobile_web_url: url } : {},
+    };
+    if (url && buttonTitle) template.button_title = buttonTitle;
+    const body = new URLSearchParams({ template_object: JSON.stringify(template) });
+    const res = await fetch(MEMO_SEND_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      console.warn("[kakao] sendToMe 응답", res.status);
+      return { ok: false, error: `send ${res.status}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    console.warn("[kakao] sendToMe 실패:", e && e.message ? e.message : String(e));
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+
 module.exports = {
   getAuthUrl,
   exchangeCode,
@@ -169,6 +201,7 @@ module.exports = {
   disconnect,
   getAccessToken,
   keepAlive,
+  sendToMe,
   // 내부 상수(테스트·후속 태스크에서 참조)
   _keys: { K_REFRESH, K_ACCESS, K_EXPIRES, K_NICKNAME, K_LINKED_AT, K_EXPIRED },
 };

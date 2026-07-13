@@ -99,3 +99,50 @@ test("getAccessToken: 유효하면 그대로, 만료면 갱신, invalid_grant면
     global.fetch = origFetch;
   }
 });
+
+test("sendToMe: 미연동이면 skip, 연동이면 memo API에 텍스트 템플릿 전송", async () => {
+  process.env.KAKAO_REST_API_KEY = "test_key";
+  delete require.cache[require.resolve("../src/config")];
+  delete require.cache[require.resolve("../src/kakao")];
+  const k = require("../src/kakao");
+  k.disconnect();
+  assert.deepEqual(await k.sendToMe({ text: "hi" }), { ok: false, skipped: "not_linked" }, "미연동 skip");
+
+  k.saveTokens({ refreshToken: "RT1", accessToken: "ATvalid", expiresInSec: 3600, nickname: "n" });
+  const origFetch = global.fetch;
+  let sent = null;
+  global.fetch = async (url, init) => {
+    sent = { url: String(url), body: init.body };
+    return { ok: true, json: async () => ({ result_code: 0 }) };
+  };
+  try {
+    const r = await k.sendToMe({ text: "청구 발행\nOMG-1", url: "https://x/invoices/1", buttonTitle: "청구서 보기" });
+    assert.equal(r.ok, true);
+    assert.ok(sent.url.includes("/v2/api/talk/memo/default/send"), "memo API 호출");
+    const params = new URLSearchParams(sent.body);
+    const tpl = JSON.parse(params.get("template_object"));
+    assert.equal(tpl.object_type, "text");
+    assert.ok(tpl.text.includes("OMG-1"));
+    assert.equal(tpl.link.web_url, "https://x/invoices/1");
+    assert.equal(tpl.button_title, "청구서 보기");
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
+test("sendToMe: text 200자 초과 절단", async () => {
+  process.env.KAKAO_REST_API_KEY = "test_key";
+  delete require.cache[require.resolve("../src/config")];
+  delete require.cache[require.resolve("../src/kakao")];
+  const k = require("../src/kakao");
+  k.saveTokens({ refreshToken: "RT1", accessToken: "ATvalid", expiresInSec: 3600 });
+  const origFetch = global.fetch;
+  let tplText = null;
+  global.fetch = async (url, init) => { tplText = JSON.parse(new URLSearchParams(init.body).get("template_object")).text; return { ok: true, json: async () => ({}) }; };
+  try {
+    await k.sendToMe({ text: "가".repeat(300) });
+    assert.ok(tplText.length <= 200, "200자 이하로 절단");
+  } finally {
+    global.fetch = origFetch;
+  }
+});
