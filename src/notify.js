@@ -130,16 +130,39 @@ async function notify(event) {
   }
 }
 
+// in-flight 알림 추적(2026-07-13 점검) — main 커밋=자동배포라 재시작이 잦은데, fire-and-forget 전송이
+// SIGTERM 순간 그대로 죽으면 카카오(대표의 유일한 청구 알림 채널) 알림이 무음 유실된다. server.js의
+// SIGTERM 핸들러가 drainNotifications()로 진행 중 전송을 짧게 기다린 뒤 종료한다.
+const inFlight = new Set();
+
 /** 비차단 호출 — 호출부에서 await 없이 사용(응답 지연·예외 전파 방지). */
 function notifyAsync(event) {
-  Promise.resolve()
+  const p = Promise.resolve()
     .then(() => notify(event))
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => inFlight.delete(p));
+  inFlight.add(p);
 }
 
-/** notify 이벤트 → 카카오 텍스트(제목/본문/프로젝트 필드 조립). 200자 절단은 kakao.sendToMe가 처리. */
+/** 진행 중 알림 전송을 최대 timeoutMs까지 대기(종료 시그널용). 반환=대기 시작 시점의 건수. */
+async function drainNotifications(timeoutMs = 5000) {
+  const n = inFlight.size;
+  if (!n) return { drained: 0 };
+  await Promise.race([
+    Promise.allSettled([...inFlight]),
+    new Promise((r) => setTimeout(r, timeoutMs)),
+  ]);
+  return { drained: n };
+}
+
+/** notify 이벤트 → 카카오 텍스트. 200자 절단은 kakao.sendToMe가 처리.
+ *  제목 "[분류] 나머지"를 "🧾 분류 ⏎ 나머지" 2줄 헤더로 변환 — 설계 문서 §5의 카카오 표시 형식
+ *  (웹훅 title은 그대로 두고 카카오 표시만 변환. 테스트 발송 문구 '🧾 테스트 알림'과 모양 일치 — 2026-07-13 점검). */
 function formatKakaoText(event) {
-  const lines = [event.title, event.text];
+  const title = String(event.title || "");
+  const m = title.match(/^\[([^\]]+)\]\s*(.*)$/);
+  const lines = m ? [`🧾 ${m[1]}`, m[2]] : [title];
+  lines.push(event.text);
   for (const f of event.fields || []) if (f && f.value) lines.push(`${f.label}: ${f.value}`);
   return lines.filter(Boolean).join("\n");
 }
@@ -174,6 +197,7 @@ module.exports = {
   notify,
   notifyAsync,
   notifyInvoiceIssued,
+  drainNotifications,
   formatKakaoText,
   getWebhookUrl,
   getConfiguredWebhook,

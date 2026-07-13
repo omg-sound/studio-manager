@@ -13,14 +13,16 @@ const kakao = require("../src/kakao");
 
 test.after(() => cleanupDb(process.env.DB_PATH, db()));
 
-test("formatKakaoText: 제목·본문·프로젝트 필드 조립", () => {
+test("formatKakaoText: 설계 §5 형식 — 🧾 2줄 헤더 + 본문·프로젝트 필드", () => {
   const text = notify.formatKakaoText({
     type: "invoice_issued",
     title: "[청구 발행] OMG-202607-003",
     text: "₩1,100,000 · (주)월간윤종신",
     fields: [{ label: "프로젝트", value: "루나 1집" }],
   });
-  assert.ok(text.includes("OMG-202607-003"));
+  const lines = text.split("\n");
+  assert.equal(lines[0], "🧾 청구 발행", "1줄=이모지+분류(설계 §5·테스트 발송 문구와 모양 일치)");
+  assert.equal(lines[1], "OMG-202607-003", "2줄=청구번호");
   assert.ok(text.includes("(주)월간윤종신"));
   assert.ok(text.includes("루나 1집"));
 });
@@ -71,5 +73,23 @@ test("notify: 웹훅이 사설 IP(ssrf 차단)여도 invoice_issued는 카카오
   } finally {
     kakao.sendToMe = orig;
     notify.setWebhookUrl("");
+  }
+});
+
+// SIGTERM 드레인(2026-07-13 점검): fire-and-forget 전송이 재시작 순간 죽어 알림이 무음 유실되던 것 —
+// notifyAsync가 in-flight로 추적되고 drainNotifications가 완료를 기다리는지 잠금.
+test("drainNotifications: notifyAsync 진행 중 전송을 기다린 뒤 반환", async () => {
+  kakao.saveTokens({ refreshToken: "RT1", accessToken: "AT", expiresInSec: 3600 });
+  let finished = false;
+  const orig = kakao.sendToMe;
+  kakao.sendToMe = async () => { await new Promise((r) => setTimeout(r, 40)); finished = true; return { ok: true }; };
+  try {
+    notify.notifyAsync({ type: "invoice_issued", title: "T", text: "X", fields: [] });
+    assert.equal(finished, false, "발사 직후엔 미완료(비차단)");
+    const r = await notify.drainNotifications(2000);
+    assert.ok(r.drained >= 1, "진행 중 1건 이상 대기");
+    assert.equal(finished, true, "드레인 후 전송 완료 보장");
+  } finally {
+    kakao.sendToMe = orig;
   }
 });

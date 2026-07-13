@@ -170,4 +170,15 @@ const server = app.listen(config.port, "0.0.0.0", () => {
 process.on("unhandledRejection", (r) => console.error("[unhandledRejection]", r));
 process.on("uncaughtException", (e) => console.error("[uncaughtException]", e));
 
+// 배포 재시작(SIGTERM) 시 진행 중인 알림 전송(카카오·웹훅 — fire-and-forget)을 최대 5초 기다린 뒤 종료.
+// main 커밋=자동배포라 재시작이 잦은데, 즉시 종료되면 방금 발행한 청구의 카카오 알림이 무음 유실된다(2026-07-13 점검).
+process.once("SIGTERM", async () => {
+  try {
+    const { drained } = await require("./notify").drainNotifications(5000);
+    if (drained) console.log(`[shutdown] 진행 중 알림 ${drained}건 전송 대기 완료`);
+  } catch (_e) { /* 종료를 막지 않음 */ }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref(); // close가 안 끝나도 종료 보장
+});
+
 module.exports = server;
