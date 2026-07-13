@@ -84,6 +84,8 @@ Blueprint Apply 시 또는 각 서비스 **Environment** 탭에서 입력한다.
 | `GOOGLE_CLIENT_ID` | 4단계 OAuth 클라이언트 ID |
 | `GOOGLE_CLIENT_SECRET` | 4단계 OAuth 클라이언트 시크릿 |
 | `BACKUP_TOKEN` | cron 인증 토큰. 강한 랜덤값: `openssl rand -hex 32` |
+| `KAKAO_REST_API_KEY` | (선택) 카카오톡 청구 발행 알림 — 4.5단계 REST API 키. 미설정 시 기능 휴면 |
+| `KAKAO_CLIENT_SECRET` | (선택) 카카오 앱 [보안]에서 Client Secret 활성화 시(권장) |
 
 ### cron 서비스 (`omg-studios-cron`)
 
@@ -126,11 +128,12 @@ Blueprint Apply 시 또는 각 서비스 **Environment** 탭에서 입력한다.
 
 1. [developers.kakao.com](https://developers.kakao.com)에서 애플리케이션 등록 → **REST API 키** 확보.
 2. [카카오 로그인] 활성화 + Redirect URI 등록: `{BASE_URL}/auth/kakao/callback` (로컬·프로덕션 각각 등록).
-3. [카카오 로그인 > 동의항목]에서 **카카오톡 메시지 전송(`talk_message`)** 활성화 — "나에게 보내기"는 비즈 앱 전환 없이 개인 개발자 앱에서도 가능.
-4. Render env: `KAKAO_REST_API_KEY` (카카오 앱에서 client secret을 켰다면 `KAKAO_CLIENT_SECRET`도).
+3. [카카오 로그인 > 동의항목]에서 **카카오톡 메시지 전송(`talk_message`)** 활성화 — "나에게 보내기"는 비즈 앱 전환 없이 개인 개발자 앱에서도 가능. **닉네임(`profile_nickname`)도 '필수 동의'로 활성화**(설정 화면의 '현재 수신: OOO' 표시용 — 없으면 '연결됨'으로만 표시돼 누구 계정인지 식별 불가).
+4. Render env: `KAKAO_REST_API_KEY`. **보안 권장**: 카카오 앱 [보안] 탭에서 Client Secret을 활성화하고 `KAKAO_CLIENT_SECRET`도 설정(인가 코드가 URL로 노출돼도 제3자의 토큰 교환 차단).
 5. 배포 후 **관리 > 환경설정 > 알림 > 카카오 알림**에서 `[카카오로 연동하기]`(받을 사람 본인이 자기 카카오로 로그인) → `[테스트 알림 보내기]`로 확인.
+6. 연동 후 카카오 디벨로퍼스 콘솔에서 **'나에게 보내기' 일일 발송 한도(쿼터)** 를 확인해 둔다(개인 개발자 앱 한도 — 청구 발행 빈도상 충분한지, 설계 문서 §9 미해결 항목의 이관).
 
-수신자를 바꾸려면 `[연동 해제]` 후 새로 받을 사람이 자기 카카오로 다시 연동한다(send-to-me는 인증한 계정 본인에게만 발송). 토큰은 자동 갱신되며(구글 드라이브·캘린더와 동일), 일일 cron이 keep-alive로 침묵 기간에도 유지한다.
+수신자를 바꾸려면 `[연동 해제]` 후 새로 받을 사람이 자기 카카오로 다시 연동한다(send-to-me는 인증한 계정 본인에게만 발송). 토큰은 자동 갱신되며(구글 드라이브·캘린더와 동일), 일일 cron이 keep-alive로 침묵 기간에도 유지한다. 연동이 만료되면(수신자의 카카오 해제·장기 갱신 실패) **관리 > 시스템 탭 '⚠️ 확인 필요'와 연동 상태 배지**에 표시된다.
 
 ---
 
@@ -228,3 +231,4 @@ curl -fsS -X POST \
 4. **재시작**: Render 대시보드에서 서비스 Restart → 기동 로그에서 마이그레이션 에러 없음 확인(백업은 VACUUM INTO 산출물이라 멱등 마이그레이션이 그대로 통과).
 5. **검증**: `/healthz` → 로그인 → 청구·프로젝트 건수 눈으로 대조 → 아무 프로젝트 1개 생성·삭제(쓰기 확인).
 6. **주의**: 백업 시점(전일 03:00) 이후 입력분은 유실 — 당일 작업분은 수기로 재입력. 첨부 파일은 Drive `drive.file` 앱 폴더에 그대로 있어 DB의 file_id 참조가 자동 복구된다(로컬 저장분이 있었다면 그것만 유실 — 관리›환경설정 '자료 저장'에서 로컬 잔존 여부 확인).
+7. **⚠️ 서비스를 새로 만들 때(Blueprint 재적용·재프로비저닝)는 `SESSION_SECRET`·`TOKEN_ENC_KEY`를 반드시 원본 값으로 이관**한다(render.yaml이 `generateValue: true`라 그대로 두면 새 랜덤값 발급). `TOKEN_ENC_KEY`가 바뀌면 DB의 암호화 비밀(Drive·캘린더 refresh token, 알림 웹훅 URL, **카카오 토큰**, 외주 주민등록번호·계좌번호)이 전부 조용히 복호화 실패한다 — 카카오는 시스템 탭에 '만료'로 표면화되지만 나머지는 재연동·재입력 전까지 무음. 복원 후 체크리스트: 시스템 탭 연동 배지(캘린더·Drive·연락처·웹훅·카카오) 확인 + 카카오 [테스트 알림 보내기].

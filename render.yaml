@@ -39,6 +39,10 @@ services:
         sync: false
       - key: GOOGLE_PLACES_API_KEY
         sync: false # (선택) 장소 주소 자동완성 — Places API(New) 키. 미설정 시 자동완성 비활성(자유입력만)
+      - key: KAKAO_REST_API_KEY
+        sync: false # (선택) 카카오톡 청구 발행 알림('나에게 보내기') — DEPLOY.md §4.5. 미설정 시 기능 휴면
+      - key: KAKAO_CLIENT_SECRET
+        sync: false # (선택) 카카오 앱 [보안]에서 Client Secret 활성화 시(권장 — 인가 코드 유출 대비)
       - key: MAX_UPLOAD_MB
         value: "200"
       - key: BACKUP_TOKEN
