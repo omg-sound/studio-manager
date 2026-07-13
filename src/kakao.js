@@ -23,6 +23,8 @@ const K_EXPIRED = "kakao_expired";             // "1"이면 연동 만료(재연
 const AUTH_BASE = "https://kauth.kakao.com";
 const API_BASE = "https://kapi.kakao.com";
 
+const EXPIRY_MARGIN_MS = 5 * 60 * 1000; // 만료 5분 전이면 미리 갱신
+
 /** 카카오 인가 URL — scope talk_message(나에게 보내기). state=CSRF 논스. */
 function getAuthUrl(state) {
   const p = new URLSearchParams({
@@ -105,6 +107,59 @@ function disconnect() {
   [K_REFRESH, K_ACCESS, K_EXPIRES, K_NICKNAME, K_LINKED_AT, K_EXPIRED].forEach((k) => setState(k, null));
 }
 
+function accessValid() {
+  const at = decrypt(getState(K_ACCESS));
+  const exp = getState(K_EXPIRES);
+  if (!at || !exp) return null;
+  return Date.parse(exp) - Date.now() > EXPIRY_MARGIN_MS ? at : null;
+}
+
+/** 리프레시 토큰으로 액세스 토큰 갱신. 성공 시 저장, 실패 시 만료 표시. 반환=새 토큰 또는 null. */
+async function refreshAccess() {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+  try {
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: config.kakao.restApiKey,
+      refresh_token: refresh,
+    });
+    if (config.kakao.clientSecret) body.append("client_secret", config.kakao.clientSecret);
+    const res = await fetch(`${AUTH_BASE}/oauth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      signal: AbortSignal.timeout(8000),
+    });
+    const tok = await res.json();
+    if (!res.ok || !tok.access_token) {
+      // invalid_grant = 사용자 해제 or 리프레시 만료 → 재연동 필요
+      if (tok && tok.error === "invalid_grant") setState(K_EXPIRED, "1");
+      console.warn("[kakao] 토큰 갱신 실패:", res.status, tok && tok.error);
+      return null;
+    }
+    // 카카오는 리프레시 토큰이 1개월 미만 남았을 때만 새 refresh_token 발급 → 있을 때만 교체.
+    saveTokens({ refreshToken: tok.refresh_token, accessToken: tok.access_token, expiresInSec: tok.expires_in });
+    return tok.access_token;
+  } catch (e) {
+    console.warn("[kakao] 토큰 갱신 예외:", e && e.message ? e.message : String(e));
+    return null;
+  }
+}
+
+/** 유효 액세스 토큰 반환(만료면 자동 갱신). 미연동·갱신 실패면 null. */
+async function getAccessToken() {
+  if (!isLinked()) return null;
+  return accessValid() || (await refreshAccess());
+}
+
+/** cron용 keep-alive 강제 갱신 — 청구가 오래 없어도 리프레시 토큰을 2개월 안에 계속 연장. */
+async function keepAlive() {
+  if (!isLinked()) return { ok: false, skipped: "not_linked" };
+  const at = await refreshAccess();
+  return { ok: Boolean(at) };
+}
+
 module.exports = {
   getAuthUrl,
   exchangeCode,
@@ -112,6 +167,8 @@ module.exports = {
   getLinkStatus,
   isLinked,
   disconnect,
+  getAccessToken,
+  keepAlive,
   // 내부 상수(테스트·후속 태스크에서 참조)
   _keys: { K_REFRESH, K_ACCESS, K_EXPIRES, K_NICKNAME, K_LINKED_AT, K_EXPIRED },
 };
