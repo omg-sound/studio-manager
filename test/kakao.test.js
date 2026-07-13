@@ -31,3 +31,42 @@ test("saveTokens·getLinkStatus·disconnect 왕복", () => {
   assert.equal(kakao.isLinked(), false, "해제 후 미연동");
   assert.equal(kakao.getLinkStatus().nickname, null);
 });
+
+test("getAuthUrl: scope talk_message + redirect + state 포함", () => {
+  process.env.KAKAO_REST_API_KEY = "test_key";
+  delete require.cache[require.resolve("../src/config")];
+  delete require.cache[require.resolve("../src/kakao")];
+  const k = require("../src/kakao");
+  const url = k.getAuthUrl("nonce123");
+  assert.ok(url.startsWith("https://kauth.kakao.com/oauth/authorize?"));
+  assert.ok(url.includes("scope=talk_message"));
+  assert.ok(url.includes("response_type=code"));
+  assert.ok(url.includes("state=nonce123"));
+  assert.ok(url.includes("client_id=test_key"));
+});
+
+test("exchangeCode: 토큰 교환 + 프로필 닉네임 저장(fetch mock)", async () => {
+  process.env.KAKAO_REST_API_KEY = "test_key";
+  delete require.cache[require.resolve("../src/config")];
+  delete require.cache[require.resolve("../src/kakao")];
+  const k = require("../src/kakao");
+  const origFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes("/oauth/token")) {
+      return { ok: true, json: async () => ({ access_token: "AT1", refresh_token: "RT1", expires_in: 21600 }) };
+    }
+    if (String(url).includes("/v2/user/me")) {
+      return { ok: true, json: async () => ({ properties: { nickname: "치프엔지" } }) };
+    }
+    throw new Error("unexpected url " + url);
+  };
+  try {
+    const r = await k.exchangeCode("code_abc");
+    assert.equal(r.ok, true);
+    assert.equal(r.nickname, "치프엔지");
+    assert.equal(k.getLinkStatus().nickname, "치프엔지");
+    assert.equal(k.isLinked(), true);
+  } finally {
+    global.fetch = origFetch;
+  }
+});

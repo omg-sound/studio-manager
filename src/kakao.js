@@ -20,6 +20,60 @@ const K_NICKNAME = "kakao_nickname";           // 평문(표시용)
 const K_LINKED_AT = "kakao_linked_at";         // ISO(평문)
 const K_EXPIRED = "kakao_expired";             // "1"이면 연동 만료(재연동 필요)
 
+const AUTH_BASE = "https://kauth.kakao.com";
+const API_BASE = "https://kapi.kakao.com";
+
+/** 카카오 인가 URL — scope talk_message(나에게 보내기). state=CSRF 논스. */
+function getAuthUrl(state) {
+  const p = new URLSearchParams({
+    client_id: config.kakao.restApiKey,
+    redirect_uri: config.kakao.redirectUri,
+    response_type: "code",
+    scope: "talk_message",
+    state: String(state || ""),
+  });
+  return `${AUTH_BASE}/oauth/authorize?${p.toString()}`;
+}
+
+/** 인가 코드 → 토큰 교환 + 프로필 닉네임 조회 + 저장. fail-safe(throw 없음). */
+async function exchangeCode(code) {
+  try {
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: config.kakao.restApiKey,
+      redirect_uri: config.kakao.redirectUri,
+      code: String(code || ""),
+    });
+    if (config.kakao.clientSecret) body.append("client_secret", config.kakao.clientSecret);
+    const tokRes = await fetch(`${AUTH_BASE}/oauth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      signal: AbortSignal.timeout(8000),
+    });
+    const tok = await tokRes.json();
+    if (!tokRes.ok || !tok.refresh_token) {
+      return { ok: false, error: `token ${tokRes.status} ${tok.error || ""}` };
+    }
+    // 프로필(닉네임) — 표시용. 실패해도 연동은 성립(닉네임 없이 저장).
+    let nickname = null;
+    try {
+      const meRes = await fetch(`${API_BASE}/v2/user/me`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${tok.access_token}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      const me = await meRes.json();
+      nickname = (me && me.properties && me.properties.nickname) || null;
+    } catch (_e) { /* 닉네임 없이 진행 */ }
+    saveTokens({ refreshToken: tok.refresh_token, accessToken: tok.access_token, expiresInSec: tok.expires_in, nickname });
+    return { ok: true, nickname };
+  } catch (e) {
+    console.warn("[kakao] exchangeCode 실패:", e && e.message ? e.message : String(e));
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+
 /** 토큰·프로필 저장(연동/갱신 공통). expiresInSec 기준으로 만료 시각 계산. */
 function saveTokens({ refreshToken, accessToken, expiresInSec, nickname } = {}) {
   if (refreshToken) setState(K_REFRESH, encrypt(refreshToken)); // 카카오는 회전 시에만 새 refresh 발급 → 있을 때만 갱신
@@ -52,6 +106,8 @@ function disconnect() {
 }
 
 module.exports = {
+  getAuthUrl,
+  exchangeCode,
   saveTokens,
   getLinkStatus,
   isLinked,
