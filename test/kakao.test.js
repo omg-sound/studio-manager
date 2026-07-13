@@ -9,6 +9,10 @@ const { db, init } = require("../src/db");
 init();
 const kakao = require("../src/kakao");
 
+// baseline fetch 스텁 — disconnect의 best-effort unlink 등 개별 테스트가 모킹하지 않은 호출이
+// 실제 카카오 API로 나가는 것 차단(CI 외부 네트워크 금지). 각 테스트의 origFetch 복원도 이 스텁으로 돌아온다.
+global.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
+
 test.after(() => cleanupDb(process.env.DB_PATH, db()));
 
 test("saveTokens·getLinkStatus·disconnect 왕복", () => {
@@ -145,4 +149,175 @@ test("sendToMe: text 200자 초과 절단", async () => {
   } finally {
     global.fetch = origFetch;
   }
+});
+
+// ── 2026-07-13 전수 점검 회귀 잠금 ──────────────────────────────────────────────
+
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+function freshKakao() {
+  process.env.KAKAO_REST_API_KEY = "test_key";
+  delete require.cache[require.resolve("../src/config")];
+  delete require.cache[require.resolve("../src/kakao")];
+  return require("../src/kakao");
+}
+
+test("exchangeCode 실패: 비200·refresh 없음 → ok:false·미연동(토큰 미저장)", async () => {
+  const k = freshKakao();
+  k.disconnect();
+  const origFetch = global.fetch;
+  global.fetch = async () => ({ ok: false, status: 400, json: async () => ({ error: "invalid_grant" }) });
+  try {
+    const r = await k.exchangeCode("bad_code");
+    assert.equal(r.ok, false);
+    assert.equal(k.isLinked(), false, "실패 시 토큰 미저장");
+  } finally { global.fetch = origFetch; }
+});
+
+test("exchangeCode: 프로필 조회 실패해도 연동은 성립(닉네임 없이 저장)", async () => {
+  const k = freshKakao();
+  k.disconnect();
+  const origFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes("/oauth/token")) return { ok: true, json: async () => ({ access_token: "AT", refresh_token: "RT", expires_in: 21600, scope: "talk_message" }) };
+    throw new Error("profile down");
+  };
+  try {
+    const r = await k.exchangeCode("code");
+    assert.equal(r.ok, true, "프로필 실패는 연동을 막지 않음");
+    assert.equal(r.nickname, null);
+    assert.equal(k.isLinked(), true);
+  } finally { global.fetch = origFetch; }
+});
+
+test("exchangeCode: scope에 talk_message 없으면 연동 거부(무늬만 연동 방지)", async () => {
+  const k = freshKakao();
+  k.disconnect();
+  const origFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).includes("/oauth/token")) return { ok: true, json: async () => ({ access_token: "AT", refresh_token: "RT", expires_in: 21600, scope: "profile_nickname" }) };
+    return { ok: true, json: async () => ({}) };
+  };
+  try {
+    const r = await k.exchangeCode("code");
+    assert.equal(r.ok, false, "메시지 동의 없으면 거부");
+    assert.ok(String(r.error).includes("talk_message"), "안내에 원인 명시");
+    assert.equal(k.isLinked(), false, "토큰 미저장");
+  } finally { global.fetch = origFetch; }
+});
+
+test("refreshAccess single-flight: 동시 갱신 2건이 토큰 요청 1회를 공유(경합 오판 방지)", async () => {
+  const k = freshKakao();
+  k.disconnect();
+  k.saveTokens({ refreshToken: "RT1", accessToken: "AT_OLD", expiresInSec: 21600 });
+  const { setState } = require("../src/db");
+  setState("kakao_access_expires_at", new Date(Date.now() - 1000).toISOString()); // 만료 강제
+  const origFetch = global.fetch;
+  let tokenCalls = 0;
+  global.fetch = async (url) => {
+    if (String(url).includes("/oauth/token")) {
+      tokenCalls++;
+      await new Promise((r) => setTimeout(r, 20)); // in-flight 겹침 재현
+      return { ok: true, json: async () => ({ access_token: "AT_NEW", expires_in: 21600 }) };
+    }
+    return { ok: true, json: async () => ({}) };
+  };
+  try {
+    const [a, b] = await Promise.all([k.getAccessToken(), k.getAccessToken()]);
+    assert.equal(a, "AT_NEW");
+    assert.equal(b, "AT_NEW");
+    assert.equal(tokenCalls, 1, "갱신 요청은 1회만(직렬화)");
+  } finally { global.fetch = origFetch; }
+});
+
+test("sendToMe 401: 캐시 토큰 폐기 → 갱신 → 1회 재전송(6시간 무음 유실 방지)", async () => {
+  const k = freshKakao();
+  k.disconnect();
+  k.saveTokens({ refreshToken: "RT1", accessToken: "AT_DEAD", expiresInSec: 21600 });
+  const origFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => {
+    const u = String(url);
+    calls.push(u.includes("/talk/memo") ? "memo" : u.includes("/oauth/token") ? "token" : "etc");
+    if (u.includes("/talk/memo") && calls.filter((c) => c === "memo").length === 1) {
+      return { ok: false, status: 401, json: async () => ({}) }; // 서버측 무효화된 토큰
+    }
+    if (u.includes("/oauth/token")) return { ok: true, json: async () => ({ access_token: "AT_FRESH", expires_in: 21600 }) };
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  try {
+    const r = await k.sendToMe({ text: "청구 발행" });
+    assert.equal(r.ok, true, "재시도로 성공");
+    assert.deepEqual(calls, ["memo", "token", "memo"], "401 → 갱신 → 재전송 1회");
+  } finally { global.fetch = origFetch; }
+});
+
+test("sendToMe: 코드포인트 절단 — 경계 이모지에서 lone surrogate 생성 금지", async () => {
+  const k = freshKakao();
+  k.disconnect();
+  k.saveTokens({ refreshToken: "RT1", accessToken: "AT", expiresInSec: 21600 });
+  const origFetch = global.fetch;
+  let sentText = null;
+  global.fetch = async (url, init) => {
+    if (String(url).includes("/talk/memo")) sentText = JSON.parse(new URLSearchParams(init.body).get("template_object")).text;
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  try {
+    await k.sendToMe({ text: "가".repeat(199) + "😀😀" }); // 코드유닛 203 — 옛 slice(0,200)은 😀를 반토막 냈다
+    assert.ok(sentText, "발송됨");
+    assert.ok(!LONE_SURROGATE.test(sentText), "서로게이트 페어가 안 깨짐");
+    assert.ok([...sentText].length <= 200, "코드포인트 200 이하");
+    assert.ok(sentText.endsWith("😀"), "경계 이모지가 통째로 보존/절단됨");
+  } finally { global.fetch = origFetch; }
+});
+
+test("disconnect: 카카오 unlink를 best-effort 호출하고, 실패해도 로컬 키는 삭제", async () => {
+  const k = freshKakao();
+  k.saveTokens({ refreshToken: "RT1", accessToken: "AT_LIVE", expiresInSec: 21600, nickname: "n" });
+  const origFetch = global.fetch;
+  const unlinkCalls = [];
+  global.fetch = async (url, init) => {
+    if (String(url).includes("/v1/user/unlink")) {
+      unlinkCalls.push((init && init.headers && init.headers.Authorization) || "");
+      throw new Error("network down"); // 실패해도 무시돼야
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  try {
+    k.disconnect();
+    await new Promise((r) => setImmediate(r)); // fire-and-forget 소진
+    await new Promise((r) => setImmediate(r));
+    assert.equal(unlinkCalls.length, 1, "unlink 1회 시도");
+    assert.ok(unlinkCalls[0].includes("AT_LIVE"), "지우기 전 확보한 토큰으로 호출");
+    assert.equal(k.isLinked(), false, "실패해도 로컬 해제는 완료");
+    assert.equal(k.getLinkStatus().nickname, null);
+  } finally { global.fetch = origFetch; }
+});
+
+test("getLinkStatus: 저장값은 있는데 복호화 실패(TOKEN_ENC_KEY 불일치)면 expired로 표면화", () => {
+  const k = freshKakao();
+  k.disconnect();
+  const { setState } = require("../src/db");
+  setState("kakao_refresh_token", "garbage-not-encrypted"); // 키 불일치·손상 재현
+  const st = k.getLinkStatus();
+  assert.equal(st.linked, false);
+  assert.equal(st.expired, true, "'처음부터 미연동'으로 위장되지 않고 재연동 필요로 표시");
+  k.disconnect();
+});
+
+test("keepAlive: 연동 상태면 강제 갱신 1회, 미연동이면 skip", async () => {
+  const k = freshKakao();
+  k.disconnect();
+  assert.deepEqual(await k.keepAlive(), { ok: false, skipped: "not_linked" });
+  k.saveTokens({ refreshToken: "RT1", accessToken: "AT", expiresInSec: 21600 });
+  const origFetch = global.fetch;
+  let tokenCalls = 0;
+  global.fetch = async (url) => {
+    if (String(url).includes("/oauth/token")) { tokenCalls++; return { ok: true, json: async () => ({ access_token: "AT2", expires_in: 21600 }) }; }
+    return { ok: true, json: async () => ({}) };
+  };
+  try {
+    const r = await k.keepAlive();
+    assert.equal(r.ok, true);
+    assert.equal(tokenCalls, 1, "액세스가 유효해도 강제 갱신(리프레시 수명 연장 목적)");
+  } finally { global.fetch = origFetch; }
 });

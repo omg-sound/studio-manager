@@ -59,6 +59,11 @@ async function exchangeCode(code) {
     if (!tokRes.ok || !tok.refresh_token) {
       return { ok: false, error: `token ${tokRes.status} ${tok.error || ""}` };
     }
+    // 동의 화면에서 '카카오톡 메시지 전송'을 해제하고 진행하면 토큰은 발급되지만 발송이 전부 403으로 죽는다(2026-07-13 점검).
+    // scope가 응답에 있는데 talk_message가 없으면 연동 자체를 거부(토큰 미저장) — '연동 완료'로 위장되는 것 방지.
+    if (typeof tok.scope === "string" && !tok.scope.split(" ").includes("talk_message")) {
+      return { ok: false, error: "메시지 전송(talk_message) 동의가 필요합니다 — 동의 화면에서 체크 후 다시 연동하세요" };
+    }
     // 프로필(닉네임) — 표시용. 실패해도 연동은 성립(닉네임 없이 저장).
     let nickname = null;
     try {
@@ -95,18 +100,33 @@ function isLinked() {
 }
 
 function getLinkStatus() {
+  // 저장값은 있는데 복호화가 실패하면(TOKEN_ENC_KEY 불일치 — 서비스 재생성 복구 등) '처음부터 미연동'처럼 보여
+  // 알림 두절이 은폐된다(2026-07-13 점검) → expired로 표면화해 설정 화면·시스템 탭이 '재연동 필요'를 띄우게 한다.
+  const rawRefresh = getState(K_REFRESH);
+  const brokenDecrypt = Boolean(rawRefresh) && !decrypt(rawRefresh);
   return {
     configured: config.kakaoConfigured,
     linked: isLinked(),
     nickname: getState(K_NICKNAME) || null,
     linkedAt: getState(K_LINKED_AT) || null,
-    expired: getState(K_EXPIRED) === "1",
+    expired: getState(K_EXPIRED) === "1" || brokenDecrypt,
   };
 }
 
-/** 연동 해제 — 저장 키 전부 삭제(카카오 unlink API는 Task에서 best-effort로 추가). */
+/** 연동 해제 — 카카오 측 앱-계정 연결을 best-effort로 끊고(unlink, 실패해도 진행) 저장 키 전부 삭제. */
 function disconnect() {
+  // 로컬만 지우면 카카오 측 발급 토큰(access ~6h·refresh ~2개월)이 살아 남는다(2026-07-13 점검) — 지우기 전에 토큰을 확보해 무효화 시도.
+  const at = decrypt(getState(K_ACCESS));
   [K_REFRESH, K_ACCESS, K_EXPIRES, K_NICKNAME, K_LINKED_AT, K_EXPIRED].forEach((k) => setState(k, null));
+  if (at) {
+    fetch(`${API_BASE}/v1/user/unlink`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${at}` },
+      signal: AbortSignal.timeout(8000),
+    })
+      .then((res) => { if (!res.ok) console.warn("[kakao] unlink 응답(무시)", res.status); })
+      .catch((e) => console.warn("[kakao] unlink 실패(무시):", e && e.message ? e.message : String(e)));
+  }
 }
 
 function accessValid() {
@@ -116,8 +136,20 @@ function accessValid() {
   return Date.parse(exp) - Date.now() > EXPIRY_MARGIN_MS ? at : null;
 }
 
-/** 리프레시 토큰으로 액세스 토큰 갱신. 성공 시 저장, 실패 시 만료 표시. 반환=새 토큰 또는 null. */
-async function refreshAccess() {
+/**
+ * 리프레시 토큰으로 액세스 토큰 갱신. 성공 시 저장, 실패 시 만료 표시. 반환=새 토큰 또는 null.
+ * **single-flight**(2026-07-13 점검): 동시 갱신 2개가 병행되면 카카오 토큰 회전 창에서 A가 새 리프레시를
+ * 저장한 직후 B(구 토큰)가 invalid_grant를 받아 유효한 연동을 expired로 뒤집는 경합이 있었다 —
+ * in-flight Promise를 공유해 프로세스 내 갱신을 직렬화(단일 인스턴스 배포 전제).
+ */
+let refreshInFlight = null;
+function refreshAccess() {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = doRefreshAccess().finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function doRefreshAccess() {
   const refresh = getRefreshToken();
   if (!refresh) return null;
   try {
@@ -162,6 +194,17 @@ async function keepAlive() {
   return { ok: Boolean(at) };
 }
 
+/** memo API POST 1회(내부 전용) — 상태코드 판단은 호출부(sendToMe)가 한다. */
+async function postMemo(token, template) {
+  const body = new URLSearchParams({ template_object: JSON.stringify(template) });
+  return fetch(MEMO_SEND_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+    signal: AbortSignal.timeout(8000),
+  });
+}
+
 /** 카카오 "나에게 보내기"(텍스트 템플릿). 미연동·토큰 없음이면 skip. fail-safe(throw 없음). */
 async function sendToMe({ text, url, buttonTitle } = {}) {
   if (!isLinked()) return { ok: false, skipped: "not_linked" };
@@ -170,17 +213,21 @@ async function sendToMe({ text, url, buttonTitle } = {}) {
   try {
     const template = {
       object_type: "text",
-      text: String(text || "").slice(0, TEXT_MAX),
+      // 코드포인트 기준 절단(2026-07-13 점검) — slice(0,200)은 UTF-16 코드유닛 절단이라 경계에 이모지
+      // (서로게이트 페어)가 걸치면 lone surrogate가 생겨 깨진 문자/400 거부가 됐다.
+      text: [...String(text || "")].slice(0, TEXT_MAX).join(""),
       link: url ? { web_url: url, mobile_web_url: url } : {},
     };
     if (url && buttonTitle) template.button_title = buttonTitle;
-    const body = new URLSearchParams({ template_object: JSON.stringify(template) });
-    const res = await fetch(MEMO_SEND_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-      signal: AbortSignal.timeout(8000),
-    });
+    let res = await postMemo(token, template);
+    if (res.status === 401) {
+      // 서버측 토큰 무효화(카카오 로그아웃·비밀번호 변경 등) — 로컬 만료 전이라도 캐시를 버리고 갱신 후 1회 재시도.
+      // (이전엔 로컬 만료까지 최대 ~6시간 동안 매 발송이 401로 무음 유실됐다 — 2026-07-13 점검.)
+      setState(K_ACCESS, null);
+      setState(K_EXPIRES, null);
+      const fresh = await refreshAccess();
+      if (fresh) res = await postMemo(fresh, template);
+    }
     if (!res.ok) {
       console.warn("[kakao] sendToMe 응답", res.status);
       return { ok: false, error: `send ${res.status}` };
