@@ -321,3 +321,31 @@ test("keepAlive: 연동 상태면 강제 갱신 1회, 미연동이면 skip", asy
     assert.equal(tokenCalls, 1, "액세스가 유효해도 강제 갱신(리프레시 수명 연장 목적)");
   } finally { global.fetch = origFetch; }
 });
+
+test("설정 렌더: 연동됨=닉네임·해제·테스트 노출 / 만료=재연동 경고 / 시스템 탭=경고·배지(2026-07-13 점검)", () => {
+  process.env.KAKAO_REST_API_KEY = "test_key";
+  delete require.cache[require.resolve("../src/config")];
+  delete require.cache[require.resolve("../src/kakao")];
+  delete require.cache[require.resolve("../src/views.settings")];
+  const k = require("../src/kakao");
+  const vs = require("../src/views.settings");
+  const { setState } = require("../src/db");
+
+  // 연동됨 상태 — smoke는 미설정 분기만 지나가므로 이 분기는 여기서 잠근다.
+  k.disconnect();
+  k.saveTokens({ refreshToken: "RT1", accessToken: "AT", expiresInSec: 21600, nickname: "김보종" });
+  const linkedHtml = vs.kakaoAlertSection(true);
+  assert.ok(linkedHtml.includes("김보종"), "수신자 닉네임 표시");
+  assert.ok(linkedHtml.includes("/settings/kakao/disconnect"), "해제 폼");
+  assert.ok(linkedHtml.includes("/settings/kakao/test"), "테스트 발송 폼");
+  assert.ok(vs.systemTab(true).includes("카카오 알림"), "시스템 탭 연동 배지에 카카오 존재");
+  assert.ok(!vs.systemWarnings().some((w) => w.includes("카카오")), "정상 연동이면 경고 없음");
+
+  // 만료 상태 — 경고 카드·재연동 버튼.
+  setState("kakao_expired", "1");
+  const expiredHtml = vs.kakaoAlertSection(true);
+  assert.ok(expiredHtml.includes("만료"), "만료 경고 문구");
+  assert.ok(expiredHtml.includes("/auth/kakao"), "재연동 버튼");
+  assert.ok(vs.systemWarnings().some((w) => w.includes("카카오")), "시스템 탭 경고에 카카오 만료 노출");
+  k.disconnect();
+});

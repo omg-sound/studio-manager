@@ -686,6 +686,9 @@ function systemWarnings() {
   if (free != null && free < 500 * 1024 * 1024) warns.push(`디스크 여유 공간이 ${formatBytes(free)}뿐입니다 — 가득 차면 DB 저장이 실패합니다(백업 보존 축소·디스크 증설 검토).`);
   if (config.googleConfigured && !drive.isLinked()) warns.push("구글 Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
   if (!getState("studio_calendar_id")) warns.push("스튜디오 캘린더 미설정 — 세션의 구글 캘린더 자동 연동이 꺼져 있습니다.");
+  // 카카오 알림 만료(2026-07-13 점검): 갱신 실패·사용자 해제·TOKEN_ENC_KEY 불일치로 청구 발행 알림이
+  // 조용히 끊기는데 경고가 알림 섹션에만 묻혀 있었다 — Drive·캘린더와 동일 클래스(조용한 장애)라 여기서 가시화.
+  if (config.kakaoConfigured && kakao.getLinkStatus().expired) warns.push("카카오 알림 연동이 만료되었습니다 — 청구 발행 알림이 중단된 상태입니다. 환경설정 > 알림에서 다시 연동하세요.");
   return warns;
 }
 
@@ -717,6 +720,7 @@ function systemTab(chief) {
         <span>구글 Drive ${badge(linked, "연동됨", "미연동")}</span>
         <span>구글 연락처 ${badge(peopleOn, "푸시 가능", "미연동")}</span>
         <span>알림 웹훅 ${badge(alerts.isConfigured(), "설정됨", "미설정")}</span>
+        ${(() => { const kst = kakao.getLinkStatus(); return `<span>카카오 알림 ${badge(kst.linked, "연동됨", !kst.configured ? "미설정" : kst.expired ? "만료 — 재연동 필요" : "미연동")}</span>`; })()}
       </div>
       <p class="mt-2 text-xs text-muted">세부 설정·연결은 환경설정 탭에서.</p>
     </section>`;
