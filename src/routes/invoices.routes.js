@@ -138,7 +138,7 @@ function payerView(inv) {
 
 router.get("/:id", requireBilling, (req, res) => {
   const inv = getInvoiceForUser(req.user, Number(req.params.id));
-  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다. 정정(삭제 후 재발행)된 청구일 수 있으니 청구 목록에서 최신 청구서를 확인하세요.", user: req.user }));
   const admin = canBill(req.user); // 보기·삭제 권한(치프·대표·스태프)
   const canProcess = canInvoice(req.user); // 계산서·입금 처리 = 대표·치프
   // 목록에서 넘어온 복귀 경로(?return= — 보던 탭·검색·open 카드 보존, 2026-07-08 사용자 요청
@@ -215,7 +215,7 @@ router.get("/:id", requireBilling, (req, res) => {
 // ── 거래명세서 PDF (발행/입금완료 또는 견적서 타입은 미발행도 허용. PII → 인증 필수·no-store·즉석 스트리밍) ──
 router.get(["/:id/statement.pdf", "/:id/statement/:name"], requireBilling, asyncHandler(async (req, res) => {
   let inv = getInvoiceForUser(req.user, Number(req.params.id));
-  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다. 정정(삭제 후 재발행)된 청구일 수 있으니 청구 목록에서 최신 청구서를 확인하세요.", user: req.user }));
   const docType = normalizeDocType(req.query.type);
   inv = ensureInvoiceNumber(inv); // 수동 발행분도 채번 보장(발행/입금완료 한정, 내부 가드 있음)
   // 3종 문서(견적서·내역서·거래명세서) 모두 상태 무관 발행 허용 — 참고용 문서라 미발행 초안에서도 뽑을 수 있게(사용자 요청).

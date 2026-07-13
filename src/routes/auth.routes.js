@@ -176,8 +176,20 @@ router.get("/auth/kakao", requireChief, (req, res) => {
 router.get("/auth/kakao/callback", requireChief, async (req, res) => {
   const cookieNonce = req.cookies && req.cookies["_kakao_nonce"];
   res.clearCookie("_kakao_nonce", { path: "/" });
+  // 동의 화면 취소/거부 — 카카오는 error 쿼리로 복귀(access_denied 등). 이전엔 이 분기가 없어
+  // code=undefined로 토큰 교환을 발사한 뒤 원시 에러("token 400 …")를 노출했다(2026-07-13 점검).
+  if (req.query.error) {
+    const denied = req.query.error === "access_denied";
+    const msg = denied
+      ? "카카오 연동을 취소했습니다."
+      : "카카오 연동에 실패했습니다: " + String(req.query.error_description || req.query.error).slice(0, 120);
+    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(msg) + (denied ? "" : "&notice_warn=1"));
+  }
   if (!req.query.state || !cookieNonce || req.query.state !== cookieNonce) {
     return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("카카오 연동 검증에 실패했습니다(다시 시도하세요).") + "&notice_warn=1");
+  }
+  if (!req.query.code) {
+    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("카카오 인가 코드가 없습니다 — 다시 시도하세요.") + "&notice_warn=1");
   }
   const r = await kakao.exchangeCode(req.query.code);
   if (!r.ok) {
