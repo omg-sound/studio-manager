@@ -3,7 +3,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { requireChief, requireStaff, isChief, syncUserToManager, findUserById } = require("../auth");
-const { normalizeRole } = require("../config");
+const { normalizeRole, config } = require("../config");
 const {
   createRoom,
   deleteRoom,
@@ -41,6 +41,7 @@ const {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
+  kakaoAlertSection,
   googleContactsSection,
   systemTab,
   systemWarnings,
@@ -56,6 +57,7 @@ const { migrateLocalFilesToDrive, driveFileCount } = require("../lib/storage-mig
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const calendar = require("../calendar");
 const alerts = require("../notify");
+const kakao = require("../kakao");
 const { eventInputForSession } = require("./sessions.routes"); // 캘린더 재동기화 버튼 — 세션 캘린더 이벤트 입력(제목·설명) 재사용
 
 const router = express.Router();
@@ -86,7 +88,7 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
       { id: "ops", label: "스튜디오 운영", html: roomsSection() + studioHoursSection() + defaultBookerSection() },
       { id: "google", label: "구글 연동", html: (await studioCalendarSection()) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
       { id: "docs", label: "문서 · 청구", html: studioInfoSection() },
-      { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) },
+      { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) + kakaoAlertSection(isChief(req.user)) },
     ];
     const anchorNav = `<nav class="mb-1 flex flex-wrap gap-1.5" aria-label="환경설정 바로가기">
         ${groups.map((g) => `<a href="#set-${g.id}" class="badge badge-neutral hover:text-fg">${esc(g.label)}</a>`).join("")}
@@ -248,6 +250,17 @@ router.post("/alert-webhook", requireChief, (req, res) => {
 router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) => {
   await alerts.notify({ type: "test", title: "[테스트] OMG Studios 알림", text: "알림 채널이 정상 연결되었습니다." });
   res.redirect("/settings?tab=settings&flash=tested");
+}));
+
+router.post("/kakao/disconnect", requireChief, (req, res) => {
+  kakao.disconnect();
+  res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("카카오 알림 연동을 해제했습니다."));
+});
+
+router.post("/kakao/test", requireChief, asyncHandler(async (req, res) => {
+  const r = await kakao.sendToMe({ text: "🧾 테스트 알림\nOMG Studios 카카오 알림이 정상 연동되었습니다.", url: config.baseUrl || undefined, buttonTitle: config.baseUrl ? "열기" : undefined });
+  const msg = r.ok ? "테스트 알림을 보냈습니다 — 카카오톡을 확인하세요." : "테스트 알림 발송 실패(연동 상태를 확인하세요).";
+  res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(msg) + (r.ok ? "" : "&notice_warn=1"));
 }));
 
 // 로그인 계정(owner 포함) → 연락처 보장(+하우스 담당자 연결은 ensurePartyForUser가 자체 처리). 담당자 있으면 성·이름 보강.

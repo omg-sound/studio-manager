@@ -21,6 +21,7 @@ const { esc, formatKRW, formatBytes, emptyState, detailsChevron, explain } = req
 const drive = require("./drive");
 const calendar = require("./calendar");
 const alerts = require("./notify");
+const kakao = require("./kakao");
 const { localFileCount, driveFileCount } = require("./lib/storage-migrate");
 const fs = require("fs");
 const path = require("path");
@@ -451,6 +452,35 @@ function alertWebhookSection(chief = true) {
     </div>`;
 }
 
+/** 카카오 알림(청구 발행) — '나에게 보내기' 연동. 스튜디오 전체 1개 수신자. 치프 전용 관리. */
+function kakaoAlertSection(chief = true) {
+  const st = kakao.getLinkStatus();
+  let controls;
+  if (!st.configured) {
+    controls = `<p class="text-sm text-muted">환경변수 <span class="text-fg">KAKAO_REST_API_KEY</span> 미설정 — 카카오 앱 등록 후 배포 설정에 추가하세요.</p>`;
+  } else if (!chief) {
+    controls = `<p class="text-sm text-muted">${st.linked ? `현재 수신: <span class="text-fg">${esc(st.nickname || "연결됨")}</span>` : "카카오 알림 미연동."} 변경은 <span class="text-fg">치프 엔지니어</span>만 가능합니다.</p>`;
+  } else if (st.linked) {
+    controls = `
+      <p class="text-sm">현재 수신: <span class="font-semibold text-fg">${esc(st.nickname || "연결됨")}</span> <span class="text-xs text-muted">(이 카카오 계정으로 청구 발행 알림이 옵니다)</span></p>
+      <div class="flex gap-2">
+        <form method="post" action="/settings/kakao/test"><button class="btn-ghost btn-sm" type="submit">테스트 알림 보내기</button></form>
+        <form method="post" action="/settings/kakao/disconnect" data-confirm="카카오 알림 연동을 해제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">연동 해제</button></form>
+      </div>`;
+  } else {
+    const expiredNote = st.expired ? `<p class="mb-1 text-xs text-warning">⚠️ 연동이 만료되었습니다 — 다시 연동해 주세요.</p>` : "";
+    controls = `${expiredNote}<a href="/auth/kakao" class="btn-primary btn-sm inline-block">카카오로 연동하기</a>`;
+  }
+  return `
+    <div class="${SETTING_BLOCK}">
+      <div>
+        <h2 class="text-sm font-semibold">카카오 알림 (청구 발행)</h2>
+        ${explain(`청구 탭에서 청구가 생성될 때, 연동한 카카오 계정으로 카카오톡 알림을 보냅니다("나에게 보내기"). 받을 사람이 직접 자기 카카오로 연동해야 합니다.`)}
+      </div>
+      ${controls}
+    </div>`;
+}
+
 /** last_login(ISO UTC) → '오늘/어제/N일 전/미로그인' 상대 표시(계정 위생, 2026-07-09 관리 개선). */
 function lastLoginLabel(iso) {
   if (!iso) return "";
@@ -765,6 +795,7 @@ module.exports = {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
+  kakaoAlertSection,
   googleContactsSection,
   systemTab,
   systemWarnings,
