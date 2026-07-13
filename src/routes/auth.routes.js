@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const express = require("express");
 const { config } = require("../config");
 const { db } = require("../db");
+const kakao = require("../kakao");
 const {
   setSessionCookie,
   clearSessionCookie,
@@ -11,6 +12,7 @@ const {
   oauthClient,
   touchLastLogin,
   VIEWAS_COOKIE,
+  requireChief,
 } = require("../auth");
 const { saveRefreshToken, setDriveAccountEmail } = require("../drive");
 const { layout, esc } = require("../views");
@@ -161,6 +163,27 @@ router.get("/auth/google/callback", async (req, res) => {
     console.error("[oauth callback]", e);
     res.redirect("/login?err=" + encodeURIComponent("Google 로그인 실패"));
   }
+});
+
+// 카카오 알림 연동(로그인과 별개 — /auth/google?drive=1과 동일 구조). 치프 전용.
+router.get("/auth/kakao", requireChief, (req, res) => {
+  if (!config.kakaoConfigured) return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("카카오 REST API 키(KAKAO_REST_API_KEY)가 설정되지 않았습니다.") + "&notice_warn=1");
+  const nonce = crypto.randomBytes(16).toString("hex");
+  res.cookie("_kakao_nonce", nonce, { httpOnly: true, secure: config.isProd, sameSite: "lax", maxAge: 10 * 60 * 1000, path: "/" });
+  res.redirect(kakao.getAuthUrl(nonce));
+});
+
+router.get("/auth/kakao/callback", requireChief, async (req, res) => {
+  const cookieNonce = req.cookies && req.cookies["_kakao_nonce"];
+  res.clearCookie("_kakao_nonce", { path: "/" });
+  if (!req.query.state || !cookieNonce || req.query.state !== cookieNonce) {
+    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("카카오 연동 검증에 실패했습니다(다시 시도하세요).") + "&notice_warn=1");
+  }
+  const r = await kakao.exchangeCode(req.query.code);
+  if (!r.ok) {
+    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("카카오 연동에 실패했습니다: " + (r.error || "")) + "&notice_warn=1");
+  }
+  res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(`카카오 알림 연동 완료 — 수신: ${r.nickname || "연결됨"}`));
 });
 
 // ── 개발 전용 로그인(OAuth 자격증명 없이 검증) ──
