@@ -15,6 +15,7 @@ const dns = require("dns");
 const { isIP } = require("net");
 const { getState, setState, encrypt, decrypt } = require("./db");
 const { config } = require("./config");
+const kakao = require("./kakao");
 
 // 사설·링크로컬·루프백 IP 패턴(IPv4 + IPv6)
 const PRIVATE_IP_PATTERNS = [
@@ -88,6 +89,16 @@ function buildPayload(event) {
   return { text, content: text, type: event.type || "alert" };
 }
 
+/** 카카오 채널 — invoice_issued 이벤트만. fail-safe(throw 없음·notify 흐름 비차단). */
+async function dispatchKakao(event) {
+  try {
+    if (!event || event.type !== "invoice_issued") return;
+    await kakao.sendToMe({ text: formatKakaoText(event), url: event.url, buttonTitle: "청구서 보기" });
+  } catch (e) {
+    console.warn("[notify] 카카오 전송 실패(무시):", e && e.message ? e.message : String(e));
+  }
+}
+
 /**
  * 알림 전송(fail-safe). 절대 throw하지 않음. 미설정이면 조용히 skip.
  * @returns {Promise<{ok:boolean, skipped?:string, status?:number, error?:string}>}
@@ -95,7 +106,7 @@ function buildPayload(event) {
 async function notify(event) {
   try {
     const url = getWebhookUrl();
-    if (!url) return { ok: false, skipped: "not_configured" };
+    if (!url) { await dispatchKakao(event); return { ok: false, skipped: "not_configured" }; }
     // SSRF 방어: 사설/링크로컬 IP 대역이면 차단
     const safe = await isSsrfSafe(url);
     if (!safe) {
@@ -109,6 +120,7 @@ async function notify(event) {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) console.warn(`[notify] 웹훅 응답 ${res.status} (${event.type})`);
+    await dispatchKakao(event); // 청구 발행만 카카오로(fail-safe)
     return { ok: res.ok, status: res.status };
   } catch (e) {
     console.warn("[notify] 전송 실패(무시):", e && e.message ? e.message : String(e));
@@ -121,6 +133,13 @@ function notifyAsync(event) {
   Promise.resolve()
     .then(() => notify(event))
     .catch(() => {});
+}
+
+/** notify 이벤트 → 카카오 텍스트(제목/본문/프로젝트 필드 조립). 200자 절단은 kakao.sendToMe가 처리. */
+function formatKakaoText(event) {
+  const lines = [event.title, event.text];
+  for (const f of event.fields || []) if (f && f.value) lines.push(`${f.label}: ${f.value}`);
+  return lines.filter(Boolean).join("\n");
 }
 
 /** 원화 표기(views.formatKRW와 동일 출력) — notify를 뷰 레이어에 의존시키지 않으려 인라인. */
@@ -153,6 +172,7 @@ module.exports = {
   notify,
   notifyAsync,
   notifyInvoiceIssued,
+  formatKakaoText,
   getWebhookUrl,
   getConfiguredWebhook,
   setWebhookUrl,
