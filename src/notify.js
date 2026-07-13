@@ -105,8 +105,11 @@ async function dispatchKakao(event) {
  */
 async function notify(event) {
   try {
+    // 카카오는 웹훅과 독립 채널 — 웹훅 분기(미설정·ssrf 차단·fetch throw)와 무관하게 먼저 발송한다(invoice_issued만, 자체 fail-safe).
+    // (웹훅 제어 흐름에 묶어두면 웹훅 설정·오류 시 카카오가 조용히 누락됨 — 최종 브랜치 리뷰 Important.)
+    await dispatchKakao(event);
     const url = getWebhookUrl();
-    if (!url) { await dispatchKakao(event); return { ok: false, skipped: "not_configured" }; }
+    if (!url) return { ok: false, skipped: "not_configured" };
     // SSRF 방어: 사설/링크로컬 IP 대역이면 차단
     const safe = await isSsrfSafe(url);
     if (!safe) {
@@ -120,7 +123,6 @@ async function notify(event) {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) console.warn(`[notify] 웹훅 응답 ${res.status} (${event.type})`);
-    await dispatchKakao(event); // 청구 발행만 카카오로(fail-safe)
     return { ok: res.ok, status: res.status };
   } catch (e) {
     console.warn("[notify] 전송 실패(무시):", e && e.message ? e.message : String(e));

@@ -55,3 +55,21 @@ test("notify: 카카오 send가 throw해도 notify는 정상 반환(fail-safe)",
     kakao.sendToMe = orig;
   }
 });
+
+// 카카오는 웹훅과 독립 — 웹훅 분기(ssrf 차단·throw 등) 결과와 무관하게 invoice_issued는 카카오로 발송돼야 한다.
+// (최종 브랜치 리뷰 Important: dispatchKakao가 웹훅 제어 흐름에 묶여 ssrf_blocked/catch 분기에서 카카오가 누락되던 것.)
+test("notify: 웹훅이 사설 IP(ssrf 차단)여도 invoice_issued는 카카오로 발송(웹훅과 독립)", async () => {
+  kakao.saveTokens({ refreshToken: "RT1", accessToken: "AT", expiresInSec: 3600, nickname: "n" });
+  notify.setWebhookUrl("http://127.0.0.1:9/hook"); // 사설 IP → isSsrfSafe=false → ssrf_blocked 분기
+  const calls = [];
+  const orig = kakao.sendToMe;
+  kakao.sendToMe = async (arg) => { calls.push(arg); return { ok: true }; };
+  try {
+    const r = await notify.notify({ type: "invoice_issued", title: "T", text: "X", url: "https://x/invoices/7", fields: [] });
+    assert.equal(r.skipped, "ssrf_blocked", "웹훅은 ssrf로 차단됨(분기 확인)");
+    assert.equal(calls.length, 1, "그래도 카카오는 발송됨(웹훅 분기와 독립)");
+  } finally {
+    kakao.sendToMe = orig;
+    notify.setWebhookUrl("");
+  }
+});
