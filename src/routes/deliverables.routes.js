@@ -20,7 +20,7 @@ const {
 const storage = require("../storage");
 const { activeBackend } = storage;
 const { asyncHandler } = require("../lib/async");
-const { layout, pageHeader, esc, formatBytes, emptyState } = require("../views");
+const { layout, pageHeader, esc, formatBytes, emptyState, dateCombo } = require("../views");
 const { deliverablesSection, deliverableRow, linkStatus } = require("../views.deliverables");
 const { todayYmd, isValidYmd, formatYmdShort } = require("../lib/date");
 
@@ -285,7 +285,7 @@ function uploadForm(project, b = {}) {
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="label">공유 링크 만료일(선택)</label>
-          <input class="input" type="date" name="expires_at" value="${esc(b.expires_at || "")}" />
+          ${dateCombo("expires_at", b.expires_at || "", { label: "공유 링크 만료일", inputCls: "input w-full" })}
         </div>
         <div class="flex items-end">
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="make_link" checked /> 업로드 즉시 공유 링크 발급</label>

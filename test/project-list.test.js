@@ -151,7 +151,10 @@ test("projectMetaCard: 치프만 작성일 편집 필드", () => {
   const p = pRow({ created_at: "2026-07-01 10:00:00" });
   const chiefHtml = views.projectMetaCard(p, "", { chief: true });
   assert.match(chiefHtml, /\/projects\/7\/created-at/);
-  assert.match(chiefHtml, /type="date"/);
+  // 날짜 칸 = 공용 날짜 콤보(2026-07-14 — 브라우저 기본 date 입력 대체). 값은 hidden(name=created_at),
+  // data-autosubmit도 hidden에 있어야 변경 시 자동 제출이 그대로 동작한다.
+  assert.match(chiefHtml, /data-date-combo/);
+  assert.match(chiefHtml, /<input type="hidden" name="created_at" value="2026-07-01" data-date-hidden data-autosubmit/);
   const plainHtml = views.projectMetaCard(p, "", { chief: false });
   assert.doesNotMatch(plainHtml, /\/projects\/7\/created-at/);
 });

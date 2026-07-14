@@ -13,7 +13,7 @@ const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
-const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage, copyable, dirtyActionRow } = require("../views");
+const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage, copyable, dirtyActionRow, dateCombo } = require("../views");
 const { safePath } = require("../lib/nav");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
 const { formatYmdShort, todayYmd, isValidYmd } = require("../lib/date");
@@ -298,7 +298,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
               <form method="post" action="/workers/${w.id}/payout-all" class="flex flex-wrap items-center gap-1.5" data-confirm="미지급 ${unpaidItems.length}건 · ${esc(formatKRW(unpaid))}을 전부 지급 처리할까요? (원천세 3.3% 제외 실지급 ${esc(formatKRW(whUnpaid.net))})">
                 <input type="hidden" name="return" value="detail" />
                 <label class="text-xs text-muted" for="payall-date">지급일</label>
-                <input id="payall-date" class="input w-36 py-1 text-xs" type="date" name="paid_on" value="${todayYmd()}" />
+                ${dateCombo("paid_on", todayYmd(), { label: "지급일", inputCls: "input w-36 py-1 text-xs" })}
                 <button class="btn-ghost btn-xs text-primary" type="submit">전부 지급 처리</button>
               </form>
             </div>

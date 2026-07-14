@@ -13,6 +13,7 @@ const {
   personCombo,
   payerCombo,
   companyCombo,
+  dateCombo,
   pageHeader,
 } = require("./views");
 const { formatYmdShort, daysUntilYmd, todayYmd } = require("./lib/date");
@@ -309,7 +310,7 @@ function projectMetaCard(p, err = "", { chief = false } = {}) {
     ? `<form method="post" action="/projects/${p.id}/created-at" class="mb-3 flex items-center gap-2 border-b border-border/40 pb-3">
          <input type="hidden" name="return" value="/projects/${p.id}?tab=project" />
          <label class="text-xs text-muted">작성일</label>
-         <input type="date" name="created_at" value="${dateStr}" data-autosubmit class="rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" />
+         ${dateCombo("created_at", dateStr, { marker: "data-autosubmit", label: "작성일", inputCls: "w-[8.5rem] rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" })}
        </form>`
     : "";
   return `
@@ -862,7 +863,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <div class="grid gap-2 sm:grid-cols-2">
           <div>
             <label class="label mb-1 text-xs">발행일</label>
-            <input class="input py-1.5 text-sm" type="date" name="issued_date" value="${esc(todayYmd())}" />
+            ${dateCombo("issued_date", todayYmd(), { label: "발행일", inputCls: "input w-full py-1.5 text-sm" })}
           </div>
         </div>
         <div class="mb-2">

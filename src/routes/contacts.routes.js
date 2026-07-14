@@ -31,7 +31,7 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, personListRow, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, personListRow, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo, dateCombo } = require("../views");
 
 const router = express.Router();
 
@@ -301,8 +301,8 @@ router.get("/:id", (req, res) => {
                   ${companyCombo("affiliation_company", a.client_name || "", "소속사/레이블", "회사")}
                 </div>
                 <div><label class="label mb-0.5 text-xs">직함</label><input class="input py-1.5 text-sm" name="title" value="${esc(a.title || "")}" placeholder="예: A&amp;R · 매니저" /></div>
-                <div><label class="label mb-0.5 text-xs">시작일</label><input class="input py-1.5 text-sm" type="date" name="started_on" value="${esc(a.started_on || "")}" /></div>
-                <div><label class="label mb-0.5 text-xs">종료일 <span class="font-normal text-muted">(비우면 현재)</span></label><input class="input py-1.5 text-sm" type="date" name="ended_on" value="${esc(a.ended_on || "")}" /></div>
+                <div><label class="label mb-0.5 text-xs">시작일</label>${dateCombo("started_on", a.started_on || "", { label: "시작일", inputCls: "input w-full py-1.5 text-sm" })}</div>
+                <div><label class="label mb-0.5 text-xs">종료일 <span class="font-normal text-muted">(비우면 현재)</span></label>${dateCombo("ended_on", a.ended_on || "", { label: "종료일", inputCls: "input w-full py-1.5 text-sm" })}</div>
               </div>
               <div><label class="label mb-0.5 text-xs">메모</label><input class="input py-1.5 text-sm" name="memo" value="${esc(a.memo || "")}" /></div>
               <div class="flex items-center gap-2">
@@ -341,7 +341,7 @@ router.get("/:id", (req, res) => {
         </div>
         <div><label class="label">직함</label><input class="input" name="title" placeholder="예: A&amp;R · 매니저" /></div>
       </div>
-      <div><label class="label">시작일</label><input class="input" type="date" name="started_on" /></div>
+      <div><label class="label">시작일</label>${dateCombo("started_on", "", { label: "시작일", inputCls: "input w-full" })}</div>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="closeCurrent" value="1" checked /> 기존 현재 소속 종료(이직)</label>
       <button class="btn-primary" type="submit">소속 추가</button>
     </form>`;

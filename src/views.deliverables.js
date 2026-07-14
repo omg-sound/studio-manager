@@ -4,7 +4,7 @@
  * 자료 전달(deliverables) 목록/행 렌더. 프로젝트 상세와 타임라인에서 공유.
  */
 
-const { esc, formatBytes, emptyState, detailsChevron } = require("./views");
+const { esc, formatBytes, emptyState, detailsChevron, dateCombo } = require("./views");
 const { todayYmd } = require("./lib/date");
 
 const KIND_BADGE = {
@@ -53,7 +53,7 @@ function deliverableRow(dv, { isAdmin, baseUrl }) {
         <form method="post" action="/deliverables/${dv.id}/token" class="flex items-end gap-2">
           <div>
             <label class="label mb-0.5 text-xs">만료일(선택)</label>
-            <input type="date" name="expires_at" class="input py-1 text-xs" value="${esc(dv.expires_at || "")}" />
+            ${dateCombo("expires_at", dv.expires_at || "", { label: "만료일", inputCls: "input w-full py-1 text-xs" })}
           </div>
           <button class="btn-ghost btn-xs">${dv.access_token ? "링크 갱신" : "링크 발급"}</button>
         </form>

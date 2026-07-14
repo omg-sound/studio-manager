@@ -762,6 +762,24 @@ function fileViewerPage({ title, rawUrl }) {
 <body class="bg-black"><img src="${esc(rawUrl)}" alt="${esc(title)}" data-viewer-img class="h-screen w-screen object-contain" /><script src="/js/viewer.js?v=${ASSET_VERSION}" defer></script></body></html>`;
 }
 
+/**
+ * 날짜 콤보(2026-07-14 — 브라우저 기본 `<input type="date">` 대체. 앱 전 날짜 칸 공용).
+ * 보이는 칸 = 자유 타이핑("317"·"3/17"·"2026-03-17"·"3월 17일"·"오늘"/"내일"), 표시 = "2026. 3. 17. (화)".
+ * 값 = hidden(YYYY-MM-DD, name·마커 보유) → 서버 계약·기존 change 리스너(자동제출 등)가 그대로 동작.
+ * 팝오버(월 그리드·‹ ›·화살표키)는 app.js `[data-date-combo]`가 생성. 보이는 입력엔 name 없음(함정 #19).
+ * @param {string} name 제출 필드명
+ * @param {string} value YYYY-MM-DD(빈 값 허용)
+ * @param {{label?:string, required?:boolean, marker?:string, cls?:string, inputCls?:string}} opts marker=hidden에 붙일 data-* 속성
+ */
+function dateCombo(name, value, { label = "날짜", required = false, marker = "", cls = "", inputCls = "input w-[9.5rem] py-1.5 text-sm" } = {}) {
+  const { formatYmdCombo } = require("./lib/date"); // 지연 require(순환 회피)
+  return `<div class="relative ${cls}" data-date-combo>
+      <input type="hidden" name="${esc(name)}" value="${esc(value || "")}" data-date-hidden ${marker} ${required ? "required" : ""} />
+      <input class="${inputCls}" type="text" value="${esc(formatYmdCombo(value))}" placeholder="2026. 3. 17." autocomplete="off" data-date-input aria-label="${esc(label)}" role="combobox" aria-expanded="false" />
+      <div class="absolute left-0 z-30 mt-1 hidden w-64 rounded-lg border border-border bg-surface p-2 shadow-lg" data-date-pop role="dialog"></div>
+    </div>`;
+}
+
 function copyable(value, { cls = "", display = "" } = {}) {
   if (value == null || value === "") return "";
   const v = esc(String(value));
@@ -879,4 +897,4 @@ function groupCombo(fieldName, selectedId, currentName, groups = []) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personListRow, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, fileViewerPage };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personListRow, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, dateCombo, fileViewerPage };

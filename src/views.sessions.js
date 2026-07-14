@@ -3,7 +3,7 @@
 /** 세션(스튜디오 일정) 렌더 — 프로젝트 상세 섹션 + 전역 일정에서 공유. */
 
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, SESSION_TYPE_RATE_KIND } = require("./config");
-const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personComboCompanyScript, personLabel } = require("./views");
+const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personComboCompanyScript, personLabel, dateCombo } = require("./views");
 const { formatYmdShort, formatYmdCombo, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers, listRateCategories, rateCategoryKind } = require("./data");
 
@@ -196,16 +196,6 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
         <!-- 30분 단위 시간 목록은 app.js가 초기화 시 생성(48개 × 폼당 2박스가 서버 HTML을 불리던 것 — 2026-07-09 스케일 점검) -->
         <div class="absolute left-0 z-30 mt-1 hidden max-h-56 w-24 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-time-pop role="listbox"></div>
       </div>`;
-  // 날짜 콤보(2026-07-14 사용자 요청 — 브라우저 기본 date 입력은 연/월/일 칸을 오가야 해 타이핑이 불편하고,
-  // 클릭 시 네이티브 달력이 떠 흐름을 끊었다). 구글 캘린더식: 자유 타이핑("317"·"3/17"·"3월 17일"·"내일") +
-  // 월 그리드 팝오버(‹ › 이동·클릭·화살표키). 보이는 입력은 name 없음(함정 #19), 제출·기존 로직은 hidden(YYYY-MM-DD).
-  // 마커(data-session-date/data-end-date)를 hidden에 두어 소요 역산·겹침 조회 코드가 그대로 동작한다.
-  const dateCombo = (name, val, marker, label, required = false) => `<div class="relative" data-date-combo>
-        <input type="hidden" name="${name}" value="${esc(val || "")}" data-date-hidden ${marker} ${required ? "required" : ""} />
-        <input class="input w-[9.5rem] py-1.5 text-sm" type="text" value="${esc(formatYmdCombo(val))}" placeholder="2026. 3. 17." autocomplete="off" data-date-input aria-label="${esc(label)}" role="combobox" aria-expanded="false" />
-        <!-- 월 그리드는 app.js가 생성(서버 HTML 비대 방지 — 시간 콤보와 같은 규약) -->
-        <div class="absolute left-0 z-30 mt-1 hidden w-64 rounded-lg border border-border bg-surface p-2 shadow-lg" data-date-pop role="dialog"></div>
-      </div>`;
   const endDateInit = (() => {
     const d = s.session_date || todayYmd();
     if (s.all_day && s.end_date && s.end_date > d) return s.end_date; // 종일 다일 일정: 저장된 종료 날짜 복원
@@ -228,13 +218,13 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
         <!-- 줄바꿈 단위 = 시작(날짜+시간) / 종료(–+시간+날짜) 두 덩어리. 폭이 좁아 접히더라도 종료 시간과 종료 날짜가
              떨어지지 않게 한 묶음으로 둔다(2026-07-14 사용자 리포트 — 종료 날짜만 다음 줄로 가 연관이 끊겨 보이던 것). -->
         <div class="flex items-center gap-2">
-          ${dateCombo("session_date", s.session_date || todayYmd(), "data-session-date", "날짜", true)}
+          ${dateCombo("session_date", s.session_date || todayYmd(), { marker: "data-session-date", label: "날짜", required: true })}
           ${timeBox("start_time", s.start_time, "14:00", 'data-start-input aria-label="시작 시간"')}
         </div>
         <div class="flex items-center gap-2">
           <span class="text-muted">–</span>
           ${timeBox("end_time", s.end_time, "18:00", 'data-end-input aria-label="종료 시간"')}
-          ${dateCombo("end_date", endDateInit, "data-end-date", "종료 날짜")}
+          ${dateCombo("end_date", endDateInit, { marker: "data-end-date", label: "종료 날짜" })}
         </div>
         <label class="flex w-fit cursor-pointer items-center gap-2 pl-1 text-sm">
           <input type="checkbox" name="all_day" value="1" class="h-4 w-4 rounded border-border text-primary" data-all-day ${s.all_day ? "checked" : ""} /> 종일
