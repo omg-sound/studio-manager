@@ -51,24 +51,50 @@ test("encodeSubject: ASCII는 그대로", () => {
   assert.strictEqual(mailer.encodeSubject("OMG-202607-001"), "OMG-202607-001");
 });
 
-test("invoiceMail: 제목·본문·바로가기 링크(BASE_URL 기준)", () => {
+test("invoiceMail: 제목 + 청구처 정보(홈택스 입력값) + 청구 항목·합계 + 링크", () => {
   const inv = {
-    id: 42, invoice_number: "OMG-202607-001", client_name: "(주)이담",
-    project_artist: "아이유", project_title: "루나 1집", amount: 1320000,
+    id: 42, invoice_number: "OMG-202607-014", client_name: "(주)모스트콘텐츠",
+    project_artist: "아이유", project_title: "모스트콘텐츠 경서", amount: 1430000, tax_amount: 130000,
+    payer_snapshot: JSON.stringify({
+      kind: "company", name: "(주)모스트콘텐츠", biz_no: "114-87-20378", owner_name: "유진오",
+      address: "서울특별시 서초구 방배로 43, 4층", email: "ouenter@hometax.go.kr",
+      contacts: [{ name: "신혜원", phone: "010-9366-1086", email: "shw412@mostcontents.com" }],
+    }),
   };
-  const { subject, html } = mailer.invoiceMail(inv);
-  assert.strictEqual(subject, "[청구 발행] OMG-202607-001 · 아이유");
-  assert.match(html, /OMG-202607-001/);
-  assert.match(html, /\(주\)이담/);
-  assert.match(html, /아이유/);
-  assert.match(html, /루나 1집/);
-  assert.match(html, /₩1,320,000/);
-  assert.match(html, /href="https:\/\/erp\.omgworks\.kr\/invoices\/42"/, "링크는 BASE_URL 기준");
+  const payer = JSON.parse(inv.payer_snapshot);
+  const items = [
+    { description: "6월 4일 · 경서 · 보컬녹음", amount: 300000 },
+    { description: "슈퍼스타 - 믹싱", amount: 1000000 },
+  ];
+  const { subject, html } = mailer.invoiceMail(inv, { payer, items });
 
-  // 아티스트 없으면 제목은 청구처로 폴백, 아티스트 행은 생략
-  const noArtist = mailer.invoiceMail({ id: 7, invoice_number: "OMG-1", client_name: "(주)이담", amount: 0 });
-  assert.strictEqual(noArtist.subject, "[청구 발행] OMG-1 · (주)이담");
-  assert.doesNotMatch(noArtist.html, /아티스트/);
+  assert.strictEqual(subject, "[청구 발행] OMG-202607-014 · 아이유");
+  // 청구처 정보(홈택스 공급받는자 입력값)
+  assert.match(html, /사업자등록번호[\s\S]*114-87-20378/);
+  assert.match(html, /\(주\)모스트콘텐츠/);
+  assert.match(html, /성명\(대표자\)[\s\S]*유진오/);
+  assert.match(html, /방배로 43/);
+  assert.match(html, /ouenter@hometax\.go\.kr/);
+  assert.match(html, /신혜원 · 010-9366-1086 · shw412@mostcontents\.com/);
+  // 청구 항목 + 합계(소계·VAT·총액)
+  assert.match(html, /보컬녹음[\s\S]*₩300,000/);
+  assert.match(html, /슈퍼스타 - 믹싱[\s\S]*₩1,000,000/);
+  assert.match(html, /소계[\s\S]*₩1,300,000/);
+  assert.match(html, /VAT[\s\S]*₩130,000/);
+  assert.match(html, /총액[\s\S]*₩1,430,000/);
+  assert.match(html, /href="https:\/\/erp\.omgworks\.kr\/invoices\/42"/, "링크는 BASE_URL 기준");
+});
+
+test("invoiceMail: 개인 청구처는 현금영수증·성명(대표자 행 없음), 아티스트 없으면 제목은 청구처", () => {
+  const payer = { kind: "person", name: "박수한", cash_receipt_no: "010-1234-5678" };
+  const { subject, html } = mailer.invoiceMail(
+    { id: 7, invoice_number: "OMG-1", client_name: "박수한", amount: 110000, tax_amount: 10000 },
+    { payer, items: [{ description: "믹싱", amount: 100000 }] }
+  );
+  assert.strictEqual(subject, "[청구 발행] OMG-1 · 박수한");
+  assert.match(html, /현금영수증[\s\S]*010-1234-5678/);
+  assert.doesNotMatch(html, /사업자등록번호/);
+  assert.doesNotMatch(html, /성명\(대표자\)/);
 });
 
 test("invoiceMail: HTML 이스케이프(청구처·프로젝트명에 태그가 있어도 주입 안 됨)", () => {
