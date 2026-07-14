@@ -51,10 +51,10 @@ function nextSessionLine(p) {
   if (d != null && d <= 3) ddayCls = "text-danger";
   else if (d != null && d <= 14) ddayCls = "text-warning";
   else ddayCls = "text-muted";
-  return `<div class="mt-1 flex items-center justify-end gap-1.5 text-xs text-muted">
-    <span>다음 세션 ${esc(formatYmdShort(p.next_session_date))}</span>
+  return `<span class="proj-next inline-flex items-center gap-1.5 text-xs text-muted">
+    <span>${esc(formatYmdShort(p.next_session_date))}</span>
     <span class="inline-flex items-center rounded-md border border-border/70 px-1.5 py-0.5 text-sm font-bold ${ddayCls}">${esc(dday)}</span>
-  </div>`;
+  </span>`;
 }
 
 
@@ -97,39 +97,54 @@ function projectRowHref(p, tab) {
 }
 
 
+/** 아티스트 열(지메일의 '보낸사람') — 여러 명이면 "외 N", 아티스트가 없으면 회사, 둘 다 없으면 제목. */
+function projectArtistLabel(p) {
+  const artists = String(p.artist || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (artists.length === 1) return artists[0];
+  if (artists.length > 1) return `${artists[0]} 외 ${artists.length - 1}`;
+  const company = String(p.client_name || "").trim();
+  return company || String(p.title || "제목 없음");
+}
+
+/** 부제 열(지메일의 '제목·미리보기') — "제작사 · 프로젝트명". 아티스트 열이 이미 그 값이면 그 조각은 생략. */
+function projectSubLabel(p) {
+  const head = projectArtistLabel(p);
+  const company = String(p.client_name || "").trim();
+  const title = String(p.title || "").trim();
+  const artists = String(p.artist || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const parts = [];
+  if (company && company !== head && !artists.includes(company)) parts.push(company);
+  if (title && title !== head) parts.push(title);
+  return parts.join(" · ");
+}
+
+
 /**
- * 목록 행(2026-07-11 정체성 중심 재설계) — 두 클릭 영역:
- *  ① 상단 링크(<a>) → 프로젝트 상세: 좌측=정체성(아티스트·회사, 주) / 프로젝트명(부제) / '청구 필요' 배지,
- *     우측=PM + 그 밑에 다음 세션(진행 중, 디데이만 임박도 색 강조). 금액은 청구 필요 탭(tab==="billing")에서만.
- *  ② 하단 접기 토글 바(<details>) → 카운트 요약, 펼치면 세션 일정(다가오는 세션 우선)·곡별 작업자 인라인 미리보기.
+ * 목록 행(2026-07-14 지메일식 재설계 — DOM 한 벌 + CSS 밀도 전환[좁게 기본 / 넓게 = :root[data-density="comfy"]]).
+ *  - 클릭 규약: **행 어디를 눌러도 펼침**(<summary>), **제목(아티스트·부제) 링크만 상세로**(projectRowHref).
+ *  - 좁게(기본): [아티스트][제작사 · 프로젝트명][탭별 우측값][⌄] 한 줄. PM·작성일·카운트 요약은 CSS로 숨김.
+ *  - 넓게: 아티스트/부제 2줄 + 우측 작성일·PM·다음 세션(또는 금액) + 하단 카운트 요약(마크업은 동일).
+ *  - 우측값(탭별): 진행 중=다음 세션·디데이 / 청구 필요=금액·'청구 필요 N' / 완료=작성일.
  */
 function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null, mine = false } = {}) {
   const isBilling = tab === "billing";
-  // 정체성(주) / 부제(프로젝트명). 정체성 없으면 제목을 주 줄로 승격(부제 생략).
-  const identity = projectIdentity(p);
-  const mainLine = identity ? esc(identity) : esc(p.title || "제목 없음");
-  const subtitle = identity && p.title ? `<div class="mt-0.5 truncate text-sm text-muted">${esc(p.title)}</div>` : "";
+  const isDone = tab === "done";
 
-  // 다음 세션(진행 중에서만 의미 — 완료/청구필요는 next_session_date가 null이라 자연 생략).
-  const nextLine = nextSessionLine(p);
+  // 좌측 2요소(좁게=가로, 넓게=세로 — 배치는 CSS).
+  const artist = esc(projectArtistLabel(p));
+  const sub = esc(projectSubLabel(p));
 
-  // PM(우측 유지). 금액은 청구 필요 탭에서만.
-  // 작성일은 PM 위(2026-07-14 사용자 요청 — 목록 정렬 근거[작성일 최신순]가 카드에서 보이게).
-  const createdLine = p.created_at
-    ? `<div class="text-xs text-muted tabular">${esc(String(p.created_at).slice(0, 10))}</div>` : "";
-  const pmLine = p.manager_name ? `<div class="text-xs text-muted">PM ${esc(p.manager_name)}</div>` : "";
+  // 우측 열. 작성일은 완료 탭에서만 좁게에도 노출(그 탭의 정렬 근거), 그 외 탭에선 넓게 전용.
+  const created = p.created_at
+    ? `<span class="proj-created${isDone ? "" : " proj-comfy-only"} text-xs text-muted tabular">${esc(String(p.created_at).slice(0, 10))}</span>` : "";
+  const pm = p.manager_name ? `<span class="proj-pm proj-comfy-only text-xs text-muted">PM ${esc(p.manager_name)}</span>` : "";
+  const next = nextSessionLine(p); // 진행 중에서만 값이 있다(완료·청구필요는 next_session_date=null)
   const amt = projectAmount(p);
-  const amountLine = isBilling && amt ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>` : "";
-  // 다음 세션은 PM 밑(우측 열)으로 이동(2026-07-11 사용자 요청). 금액(청구 필요 탭)과는 공존하지 않음(완료엔 다음 세션 없음).
-  const rightCol = createdLine || pmLine || amountLine || nextLine
-    ? `<div class="shrink-0 pl-2 text-right">${createdLine}${pmLine}${nextLine}${amountLine}</div>`
-    : "";
-
-  // 청구 필요 배지(청구 필요 탭 전용).
+  const amount = isBilling && amt ? `<span class="proj-amount text-sm font-medium tabular">${formatKRW(amt)}</span>` : "";
   const billingBadge = isBilling && Number(p.unbilled_cnt) > 0
-    ? `<div class="mt-1"><span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span></div>` : "";
+    ? `<span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span>` : "";
 
-  // 접힘 토글 바 카운트 — 0·곡 없음은 생략(문구 없음). 전부 비면 최소 라벨.
+  // 카운트 요약(넓게 전용) — 0·곡 없음은 생략. 전부 비면 렌더 안 함.
   const n = trackCount(p);
   const taskCnt = Number(p.task_cnt) || 0;
   const taskStatus = [
@@ -137,30 +152,27 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
     Number(p.task_done) ? `완료 ${p.task_done}` : "",
   ].filter(Boolean).join(" · ");
   const trackPart = n ? `곡·콘텐츠 ${n}${taskCnt ? ` · 작업 ${taskCnt}${taskStatus ? ` (${taskStatus})` : ""}` : ""}` : "";
-  const counts = [
+  const countsText = [
     Number(p.sess_scheduled) ? `예정 세션 ${p.sess_scheduled}` : "",
     Number(p.sess_done) ? `완료 세션 ${p.sess_done}` : "",
     trackPart,
-  ].filter(Boolean).join(" · ") || "세션·곡 상세";
+  ].filter(Boolean).join(" · ");
+  const counts = countsText
+    ? `<span class="proj-counts proj-comfy-only text-xs text-muted">${esc(countsText)}</span>` : "";
 
   return `
-    <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
-      <a href="${projectRowHref(p, tab)}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
-        <div class="min-w-0">
-          <div class="truncate font-semibold">${mainLine}</div>
-          ${subtitle}
-          ${billingBadge}
-        </div>
-        ${rightCol}
-      </a>
-      <details class="group/proj"${openId != null && Number(p.id) === Number(openId) ? " open" : ""} id="proj-${p.id}">
-        <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted hover:text-fg">
-          <span>${esc(counts)}</span>
-          <svg class="h-3.5 w-3.5 shrink-0 transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-        </summary>
-        <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>
-      </details>
-    </div>`;
+    <details class="proj-row group/proj"${openId != null && Number(p.id) === Number(openId) ? " open" : ""} id="proj-${p.id}">
+      <summary class="proj-summary row-link">
+        <a href="${projectRowHref(p, tab)}" class="proj-main">
+          <span class="proj-artist">${artist}</span>
+          <span class="proj-sub">${sub}</span>
+        </a>
+        <span class="proj-meta">${created}${pm}${next}${amount}${billingBadge}</span>
+        <svg class="proj-chevron transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        ${counts}
+      </summary>
+      <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>
+    </details>`;
 }
 
 
@@ -859,6 +871,8 @@ module.exports = { artistCombo,
   newProjectMenu,
   projectListRow,
   projectIdentity,
+  projectArtistLabel,
+  projectSubLabel,
   projectRowHref,
   projectSummaryHtml,
   projectForm,

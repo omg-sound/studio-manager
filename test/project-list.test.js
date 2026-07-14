@@ -55,12 +55,39 @@ test("projectIdentity: 아티스트·회사, 중복·다중·폴백", () => {
   assert.strictEqual(views.projectIdentity(pRow({ artist: "", client_name: "" })), null, "둘 다 없으면 null");
 });
 
-test("projectListRow 진행 중: 정체성 굵게·금액 없음·작성일 없음", () => {
+test("projectListRow 진행 중(지메일식 한 줄): 아티스트 열 + 제작사·프로젝트명 부제, 금액 없음", () => {
   const html = views.projectListRow(pRow({ task_total: 500000 }), emptySummary, { tab: "active" });
-  assert.match(html, /아이유 · \(주\)이담/);
-  assert.doesNotMatch(html, /₩/, "진행 중 카드에 금액 없음");
+  assert.match(html, /class="proj-artist">아이유</, "좌측 고정 열 = 아티스트");
+  assert.match(html, /class="proj-sub">\(주\)이담 · 루나/, "부제 = 제작사 · 프로젝트명");
+  assert.doesNotMatch(html, /₩/, "진행 중 행에 금액 없음");
   assert.doesNotMatch(html, /type="date"/, "작성일 입력 없음");
-  assert.doesNotMatch(html, /곡·콘텐츠 미정/, "곡 없으면 '미정' 문구 없음");
+});
+
+test("projectArtistLabel/SubLabel: 다중·중복·폴백", () => {
+  assert.strictEqual(views.projectArtistLabel(pRow({ artist: "아이유,태연" })), "아이유 외 1");
+  assert.strictEqual(views.projectArtistLabel(pRow({ artist: "" })), "(주)이담", "아티스트 없으면 회사 승격");
+  assert.strictEqual(views.projectArtistLabel(pRow({ artist: "", client_name: "" })), "루나 1집 - 타이틀곡 '월광'", "둘 다 없으면 제목");
+  assert.strictEqual(views.projectSubLabel(pRow({ client_name: "아이유" })), "루나 1집 - 타이틀곡 '월광'", "회사=아티스트면 회사 조각 생략");
+  assert.strictEqual(views.projectSubLabel(pRow({ artist: "", client_name: "" })), "", "제목이 아티스트 열로 승격되면 부제 비움");
+});
+
+test("projectListRow: 밀도 계약 — 넓게 전용 요소는 마크업에 있되 proj-comfy-only(좁게에선 CSS로 숨김)", () => {
+  const p = pRow({ created_at: "2026-07-01 10:00:00", sess_scheduled: 2 });
+  const html = views.projectListRow(p, emptySummary, { tab: "active" });
+  assert.match(html, /class="proj-created proj-comfy-only[^"]*">2026-07-01</, "작성일(진행 중=넓게 전용)");
+  assert.match(html, /class="proj-pm proj-comfy-only[^"]*">PM 박수한</, "PM=넓게 전용");
+  assert.match(html, /class="proj-counts proj-comfy-only[^"]*">예정 세션 2</, "카운트 요약=넓게 전용");
+  assert.doesNotMatch(html, /10:00:00/, "작성일 시각은 표시 안 함");
+  // 완료 탭에선 작성일이 좁게에도 보인다(그 탭의 정렬 근거).
+  const doneHtml = views.projectListRow(p, emptySummary, { tab: "done" });
+  assert.match(doneHtml, /class="proj-created text-xs/, "완료 탭 작성일은 항상 표시");
+});
+
+test("projectListRow: 행=펼침(summary), 제목만 링크(details 구조)", () => {
+  const html = views.projectListRow(pRow({ sess_cnt: 1 }), emptySummary, { tab: "active" });
+  assert.match(html, /<details class="proj-row/, "행 전체가 details");
+  assert.match(html, /<summary class="proj-summary/, "행 클릭 = 펼침");
+  assert.match(html, /<a href="\/projects\/7\?tab=sessions" class="proj-main"/, "제목(아티스트·부제)만 상세 링크");
 });
 
 test("projectListRow 청구 필요: 배지 + 금액 노출", () => {
@@ -83,12 +110,11 @@ test("projectRowHref: 청구 필요=청구 탭, 진행 중=세션(없고 곡만 
   assert.match(views.projectListRow(withSess, emptySummary, { tab: "billing" }), /href="\/projects\/7\?tab=invoice"/);
 });
 
-test("projectListRow: 작성일이 PM 위 우측 열에 표시", () => {
-  const html = views.projectListRow(pRow({ created_at: "2026-07-01 10:00:00" }), emptySummary, { tab: "active" });
-  const right = html.slice(html.indexOf('shrink-0 pl-2 text-right'));
-  assert.match(right, /2026-07-01/, "작성일 표시(시각 제외)");
-  assert.ok(right.indexOf("2026-07-01") < right.indexOf("PM 박수한"), "작성일이 PM보다 위");
-  assert.doesNotMatch(html, /10:00:00/, "시각은 표시 안 함");
+test("projectListRow: 우측 열 순서 = 작성일 → PM → 다음 세션(넓게 세로 스택)", () => {
+  const html = views.projectListRow(pRow({ created_at: "2026-07-01 10:00:00", next_session_date: "2099-01-01" }), emptySummary, { tab: "active" });
+  const meta = html.slice(html.indexOf('class="proj-meta"'));
+  assert.ok(meta.indexOf("2026-07-01") < meta.indexOf("PM 박수한"), "작성일이 PM보다 앞");
+  assert.ok(meta.indexOf("PM 박수한") < meta.indexOf("proj-next"), "PM 다음이 다음 세션");
 });
 
 test("projectListRow 다음 세션 없으면 줄 생략", () => {
@@ -136,13 +162,13 @@ function ymdPlusLocal(days) {
   return `${y}-${m}-${da}`;
 }
 
-test("nextSessionLine: 디데이 색 단계 + PM 밑 우측 열", () => {
+test("nextSessionLine: 디데이 색 단계 + PM 뒤(넓게에선 밑) 배치", () => {
   // 경계에서 멀찍이(1·10·30일) — 타임존 ±1일 오차에도 단계 안 바뀌게.
   const soon = views.projectListRow(pRow({ manager_name: "박수한", next_session_date: ymdPlusLocal(1) }), emptySummary, { tab: "active" });
   assert.match(soon, /text-danger/, "3일 이내 = 빨강(danger)");
   assert.match(soon, /border-border\/70[^"]*text-sm[^"]*font-bold/, "디데이 = 옅은 보더 pill·크게(text-sm 볼드)");
-  assert.match(soon, /다음 세션/, "다음 세션 줄 렌더");
-  assert.ok(soon.indexOf("PM 박수한") < soon.indexOf("다음 세션"), "다음 세션이 PM 밑(뒤)에 온다");
+  assert.match(soon, /class="proj-next/, "다음 세션 렌더");
+  assert.ok(soon.indexOf("PM 박수한") < soon.indexOf("proj-next"), "다음 세션이 PM 뒤(넓게에선 밑)");
 
   const mid = views.projectListRow(pRow({ next_session_date: ymdPlusLocal(10) }), emptySummary, { tab: "active" });
   assert.match(mid, /text-warning/, "2주 이내 = 주황(warning)");

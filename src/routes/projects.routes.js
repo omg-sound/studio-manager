@@ -220,9 +220,15 @@ router.get("/", requireAuth, (req, res) => {
       })
     : "";
   // '내 프로젝트만' 토글 pill — 담당자 계정만 노출. 켜짐=강조, 클릭 토글(tab·q 보존).
-  const mineToggle = mineAvailable
-    ? `<div class="mb-3"><a href="/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}${mine ? "" : "&mine=1"}" class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm ${mine ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted hover:text-fg"}">${mine ? "✓ " : ""}내 프로젝트만</a></div>`
+  const minePill = mineAvailable
+    ? `<a href="/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}${mine ? "" : "&mine=1"}" class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm ${mine ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted hover:text-fg"}">${mine ? "✓ " : ""}내 프로젝트만</a>`
     : "";
+  // 밀도 토글(좁게/넓게) — 저장은 localStorage(기기별), CSS 전환이라 서버 왕복 없음(app.js [data-density-toggle]).
+  const densityPill = `<button type="button" data-density-toggle class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm text-muted hover:text-fg">
+      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
+      <span data-density-label>넓게</span>
+    </button>`;
+  const mineToggle = `<div class="mb-3 flex items-center gap-2">${minePill}<span class="ml-auto">${densityPill}</span></div>`;
   let list;
   if (!rows.length) {
     list = searched
@@ -240,7 +246,8 @@ router.get("/", requireAuth, (req, res) => {
     const summaries = listProjectSummaries(cap.shown.map((r) => r.id)); // 인라인 요약(배치 2쿼리)
     const isAdmin = canEdit(user); // 펼침 세션 완료 토글 노출(편집 권한자). 완료 후 ?open=로 그 카드 재펼침.
     const openId = Number(req.query.open) || null;
-    list = `<div class="space-y-2">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine })).join("")}</div>${cap.more}`;
+    // 카드 테두리 없이 구분선 목록(2026-07-14 사용자 결정) — 행 자체가 border-b(.proj-row).
+    list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
