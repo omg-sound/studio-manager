@@ -100,8 +100,15 @@ router.get("/", requireBilling, (req, res) => {
   const openId = req.query.open ? Number(req.query.open) : null; // 토글 처리 후 그 카드의 '상태 처리' 펼침 유지(+스크롤)
   // 목록 상한(2026-07-09 스케일 점검) — 입금완료 탭은 해가 갈수록 누적되므로 기본 100건 + 더 보기.
   const cap = capList(rows, req.query, (n) => `${retPath}&limit=${n}`);
-  const list = cap.shown.length
-    ? `<div class="space-y-2">${cap.shown.map((i) => invoiceRow(i, { isAdmin: admin, isInvoicer: invoicer, ret: retPath, openId })).join("")}</div>${cap.more}`
+  // 밀도 토글(좁게/넓게) — 프로젝트 목록과 **같은 설정**(localStorage["density"])을 공유한다(app.js [data-density-toggle]).
+  const densityPill = `<div class="mb-3 flex justify-end"><button type="button" data-density-toggle class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm text-muted hover:text-fg">
+      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
+      <span data-density-label>넓게</span>
+    </button></div>`;
+  // 행 펼침 본문(청구 항목·소계·VAT·PDF)에 쓸 항목 — 표시분(기본 100건)만 조회(프로젝트 청구 탭과 동일 방식).
+  const shown = cap.shown.map((i) => ({ ...i, items: (listInvoiceItemsForInvoice(req.user, i.id) || {}).rows || [] }));
+  const list = shown.length
+    ? `${densityPill}<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${shown.map((i) => invoiceRow(i, { items: i.items, isAdmin: admin, isInvoicer: invoicer, ret: retPath, openId })).join("")}</div>${cap.more}`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });

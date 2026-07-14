@@ -1041,3 +1041,31 @@ test("업체 등록 모달: 저장 성공 시 콤보에 반영되고 '등록 실
   assert.equal(doc.querySelector('input[name="production_party_id"]').value, "77", "party id 세팅");
   assert.ok(modal.classList.contains("hidden"), "모달 닫힘");
 });
+
+// ── 청구 목록 한 줄 행: 상태 pill 클릭이 행 펼침을 건드리지 않는다(2026-07-15) ──
+// <summary> 안의 버튼은 클릭하면 펼침이 함께 일어나는 게 기본 동작. app.js가 기본 동작을 막고 폼만 직접 제출한다.
+test("청구 목록 행: 상태 pill 클릭 = 폼 제출만(행은 안 펼쳐짐), 행 여백 클릭 = 펼침", () => {
+  const { invoiceRow } = require("../src/views.invoices");
+  const inv = {
+    id: 7, title: "청구", invoice_number: "OMG-1", issued_date: "2026-07-14",
+    amount: 220000, paid_amount: 0, status: "발행", tax_status: "계산서 발행",
+    client_name: "(주)도너츠컬처", payer_kind: "company",
+    project_title: "진혁", project_production: "도너츠컬처", project_artist: "진혁",
+  };
+  const { win, doc } = mountDom(invoiceRow(inv, { isInvoicer: true, ret: "/invoices?tab=done" }));
+  const details = doc.querySelector("details.inv-row");
+  const pill = doc.querySelector("[data-row-action] button");
+  assert.ok(pill, "상태 pill");
+
+  let submitted = null;
+  const form = pill.closest("form");
+  form.addEventListener("submit", (e) => { e.preventDefault(); submitted = form.getAttribute("action"); });
+  form.requestSubmit = form.requestSubmit || function (b) { this.dispatchEvent(new win.Event("submit", { bubbles: true, cancelable: true })); }; // jsdom 미구현 폴백
+
+  assert.equal(details.open, false, "처음엔 접힘");
+  const click = new win.MouseEvent("click", { bubbles: true, cancelable: true });
+  pill.dispatchEvent(click);
+  assert.equal(details.open, false, "pill을 눌러도 행이 펼쳐지면 안 됨");
+  assert.equal(click.defaultPrevented, true, "기본 동작(펼침·암묵 제출) 차단");
+  assert.equal(submitted, "/invoices/7/tax-status", "폼은 직접 제출됨");
+});

@@ -145,6 +145,22 @@
   syncThemeLabel(document.documentElement.getAttribute("data-theme")); // 초기 로드 시 현재값 기준 1회 동기화
 })();
 
+// 행 안의 액션 버튼([data-row-action] 내부, 2026-07-15 청구 목록 한 줄 행):
+// <summary> 안에 있는 버튼은 클릭하면 **행 펼침(details 토글)이 함께 일어난다**(펼침이 summary 클릭의 기본 동작).
+// 기본 동작을 막으면 버튼의 폼 제출까지 함께 막히므로, 기본 동작을 막은 뒤 그 폼을 직접 제출한다
+// (requestSubmit(button) — 버튼의 name/value·폼 검증·다른 submit 리스너[스크롤 저장·이중 제출 가드]가 그대로 동작).
+(function () {
+  "use strict";
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-row-action] button");
+    if (!btn || !btn.closest("summary")) return;
+    e.preventDefault(); // 펼침 토글 + 암묵 제출을 모두 막고
+    var f = btn.form;
+    if (!f) return;
+    if (f.requestSubmit) f.requestSubmit(btn); else f.submit(); // 상태 토글만 수행
+  });
+})();
+
 // 프로젝트 목록 밀도 토글([data-density-toggle]): 좁게(기본)↔넓게 + localStorage["density"] 저장.
 // CSS 분기는 :root[data-density="comfy"](src.css) — 기본(좁게)은 속성 없음이라 깜빡임 없음. 테마 토글과 동일 구조.
 (function () {

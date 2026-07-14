@@ -488,7 +488,8 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
   }
   // (목록 이메일 파생 payer_email·contact_email은 2026-07-08 목록 이메일 줄 폐지와 함께 제거 — 발행 이메일은 상세 청구처 카드에서.)
   const sql = `
-    SELECT i.*, p.title AS project_title, ${PAYER_DISPLAY_SQL} AS client_name, c.kind AS payer_kind, c.is_artist AS payer_is_artist
+    SELECT i.*, p.title AS project_title, p.production_company AS project_production, p.artist AS project_artist,
+           ${PAYER_DISPLAY_SQL} AS client_name, c.kind AS payer_kind, c.is_artist AS payer_is_artist
     FROM invoices i
     LEFT JOIN projects p ON p.id = i.project_id
     LEFT JOIN parties c ON c.id = i.payer_id

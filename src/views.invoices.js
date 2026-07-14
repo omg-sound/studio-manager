@@ -75,14 +75,43 @@ function invoiceBadge(inv) {
  * 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
  * 색 계열: 세션 완료 토글과 동일한 은은한 success(초록) 흐름. 무JS 동작(폼 제출).
  */
-function taxToggleButtons(inv, retPath) {
+function taxToggleButtons(inv, retPath, { compact = false } = {}) {
   const retHidden = `<input type="hidden" name="return" value="${esc(retPath || "/invoices")}" />`;
   const taxDoc = taxDocOf(inv);
   const taxIssued = inv.tax_status === "계산서 발행" || inv.tax_status === "입금완료";
   const isPaid = inv.tax_status === "입금완료";
-  const toggleBtn = (target, label, lit) =>
-    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost btn-sm ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit"><span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(label)}</button></form>`;
-  return `${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", `${taxDoc} 발행 완료`, taxIssued)}${toggleBtn(isPaid ? "계산서 발행" : "입금완료", "입금완료", isPaid)}`;
+  // compact(목록 한 줄 행) = 짧은 라벨('계산서'/'입금')로 자리를 줄인다. 넓게 모드에선 CSS가 긴 라벨로 교체
+  // (두 라벨 모두 렌더하고 .inv-narrow-only/.inv-comfy-only로 전환 — 밀도 전환에 서버 왕복 0).
+  const label = (short, long) =>
+    compact
+      ? `<span class="inv-narrow-only">${esc(short)}</span><span class="inv-comfy-only">${esc(long)}</span>`
+      : esc(long);
+  const toggleBtn = (target, short, long, lit) =>
+    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost ${compact ? "btn-xs" : "btn-sm"} ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit"><span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${label(short, long)}</button></form>`;
+  return `${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", taxDoc, `${taxDoc} 발행 완료`, taxIssued)}${toggleBtn(isPaid ? "계산서 발행" : "입금완료", "입금", "입금완료", isPaid)}`;
+}
+
+/** 목록 행 첫 열 = 청구처(결제 주체). 미지정이면 청구 제목으로 폴백. */
+function invoicePayerLabel(inv) {
+  return payerName(inv) || String(inv.title || "청구처 미지정");
+}
+
+/**
+ * 목록 행 부제 = "제작사 · 아티스트"(2026-07-15 지메일식 재설계).
+ * 청구처와 같은 제작사는 생략(같은 이름 두 번 방지), 아티스트 여러 명은 "외 N",
+ * 둘 다 없으면 프로젝트명, 프로젝트도 없으면(수동 발행 잔존분) 빈 문자열.
+ */
+function invoiceSubLabel(inv) {
+  const head = invoicePayerLabel(inv);
+  const prod = String(inv.project_production || "").trim();
+  const artists = String(inv.project_artist || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const artist = artists.length > 1 ? `${artists[0]} 외 ${artists.length - 1}` : artists[0] || "";
+  const parts = [];
+  if (prod && prod !== head) parts.push(prod);
+  if (artist && artist !== head) parts.push(artist);
+  if (parts.length) return parts.join(" · ");
+  const title = String(inv.project_title || "").trim();
+  return title && title !== head ? title : "";
 }
 
 /**
@@ -94,7 +123,7 @@ function taxToggleButtons(inv, retPath) {
 // (입금 이력·수동 입금 UI는 2026-07-05 폐기 — 분납 없는 워크플로: 입금 처리는 [입금완료] 토글 하나.
 //  payments 인프라(addPayment·deletePayment 등)는 토글의 자동 완납·되돌리기가 사용하므로 데이터 레이어에 잔존.)
 
-function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, returnTo = "" } = {}) {
+function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, returnTo = "", inList = false } = {}) {
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행(미발행 초안도 견적서·내역서·거래명세서)
   const ret = esc(returnTo);
 
@@ -140,7 +169,7 @@ function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, re
              <input type="hidden" name="return" value="${ret}" />
              <button class="btn-ghost btn-sm text-danger">삭제</button>
            </form>
-           <span class="text-xs text-muted">청구서 발행·계산서·입금 처리는 <a href="/invoices?tab=todo" class="text-primary hover:underline">청구 메뉴</a>에서 합니다. 수정은 삭제 후 재발행.</span>
+           ${inList ? `<span class="text-xs text-muted">수정은 삭제 후 재발행.</span>` : `<span class="text-xs text-muted">청구서 발행·계산서·입금 처리는 <a href="/invoices?tab=todo" class="text-primary hover:underline">청구 메뉴</a>에서 합니다. 수정은 삭제 후 재발행.</span>`}
          </div>
        </div>`
     : "";
@@ -196,33 +225,39 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
     </details>`;
   }
 
-  // 목록 페이지: 프로젝트 목록처럼 각 청구서를 개별 카드로. **제목만 링크**(2026-07-06 사용자 요청 — 이전엔 카드 전체가 링크라
-  // 상태 처리 버튼과 히트 영역이 겹쳤음; listRowLinked와 동일한 '제목만 링크' 패턴). 상태 처리 버튼은 **접이식 폐기 — 금액 바로 밑에 항상 노출**
-  // (계산서|현금영수증 발행 완료 / 입금완료, 권한자=대표·치프만). 토글 후 ?open=ID로 복귀 → 그 카드로 스크롤(app.js #inv-<id>).
+  // ── 목록 페이지 = 지메일식 한 줄 행(2026-07-15 사용자 요청 — 프로젝트 목록과 동일 골격) ──
+  //  · 좌측: [청구처(굵게·고정 폭)] [제작사 · 아티스트]  ← 목록에서 먼저 봐야 할 건 '누가 내는가'
+  //  · 우측: [금액] [계산서 pill][입금 pill] [⌄]
+  //  · 클릭 규약: **행 어디를 눌러도 펼침**(청구 항목·소계·PDF), **청구처(제목) 링크만 상세로**.
+  //    상태 pill은 <summary> 안이라 클릭하면 펼침이 함께 일어난다 → app.js가 [data-row-action] 안의 클릭에서
+  //    기본동작(펼침+암묵 제출)을 막고 그 폼을 직접 requestSubmit한다(펼침 없이 상태만 토글).
+  //  · 밀도(좁게/넓게)는 프로젝트 목록과 같은 설정(localStorage["density"]) 공유 — CSS만 전환.
   const retBase = ret || "/invoices";
   const retWithOpen = retBase + (retBase.includes("?") ? "&" : "?") + "open=" + inv.id;
-  const actions = isInvoicer
-    ? `<div class="mt-2 flex flex-wrap justify-end gap-2">${taxToggleButtons(inv, retWithOpen)}</div>`
-    : "";
-  // (이메일 줄은 2026-07-08 폐지 — 계산서 발행은 어차피 상세를 보며 하는 흐름이라 목록 중복 정보. 상세 청구처 카드에 유지.)
-  // 배지(계산서·입금 상태)는 제목 뒤 같은 줄(2026-07-08 사용자 요청). flex-wrap 필수(2026-07-09 UI 실측 —
-  // 좁은 폭에서 shrink-0 배지("현금영수증 미발행")가 제목을 "루..."까지 잠식하던 것: 안 맞으면 배지가 다음 줄로 내려가 제목 전폭 유지).
-  const left = `
-    <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-      <a href="/invoices/${inv.id}?return=${encodeURIComponent(retWithOpen)}" class="min-w-0 max-w-full truncate font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-primary/40">${esc(inv.title)}</a>
-      ${invoiceBadge(inv)}
-    </div>
-    <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
-  const right = `
-    <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
-    ${actions}`;
+  const isOpenRow = openId != null && Number(openId) === inv.id;
+  const payer = invoicePayerLabel(inv);
+  const subLabel = invoiceSubLabel(inv);
+  // 권한 없으면(스태프) 처리 버튼 대신 상태 배지만.
+  const status = isInvoicer
+    ? `<span class="inv-actions" data-row-action>${taxToggleButtons(inv, retWithOpen, { compact: true })}</span>`
+    : invoiceBadge(inv);
+  const meta = `<span class="inv-meta">
+      <span class="inv-amount tabular">${formatKRW(inv.amount)}</span>
+      ${status}
+      <span class="inv-doc inv-comfy-only">${esc(inv.invoice_number || "번호 없음")}${inv.issued_date ? " · " + esc(inv.issued_date) : ""}</span>
+    </span>`;
   return `
-    <div id="inv-${inv.id}" class="overflow-hidden rounded-xl border border-border/60 bg-surface px-4 py-3">
-      <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div class="min-w-0 flex-1 basis-52">${left}</div>
-        <div class="ml-auto shrink-0 pl-2 text-right">${right}</div>
-      </div>
-    </div>`;
+    <details id="inv-${inv.id}" class="inv-row group/inv"${isOpenRow ? " open" : ""}>
+      <summary class="inv-summary row-link">
+        <a href="/invoices/${inv.id}?return=${encodeURIComponent(retWithOpen)}" class="inv-main">
+          <span class="inv-payer">${esc(payer)}</span>
+          <span class="inv-sub">${esc(subLabel)}</span>
+        </a>
+        ${meta}
+        <svg class="inv-chevron transition-transform group-open/inv:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+      </summary>
+      ${invoiceExpandBody(inv, { items, payments: inv.payments || [], isAdmin, returnTo: retWithOpen, inList: true })}
+    </details>`;
 }
 
 /**

@@ -294,6 +294,91 @@ input[data-datepick]::-webkit-calendar-picker-indicator { display: none; }
   margin-top: 0.375rem;
 }
 
+/* ── 청구 목록 한 줄 행(2026-07-15 — 프로젝트 목록과 같은 골격·같은 밀도 설정) ──
+   좁게(기본): [청구처][제작사·아티스트] ··· [금액][계산서][입금][⌄]
+   넓게(:root[data-density="comfy"]): 2줄 + 청구번호·발행일 + 상태 pill 긴 라벨.
+   ⚠️ 링크(.inv-main)는 내용 폭만 — flex:1이면 행 여백까지 링크가 먹어 '행=펼침' 규약이 깨진다(프로젝트 목록의 함정). */
+.inv-row {
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+}
+.inv-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+.inv-summary::-webkit-details-marker { display: none; }
+.inv-main {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: baseline;
+  gap: 0.75rem;
+  text-underline-offset: 3px;
+}
+.inv-main:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
+.inv-main:hover .inv-sub { color: rgb(var(--color-primary)); }
+.inv-summary:hover .inv-chevron { color: rgb(var(--color-fg)); }
+.inv-payer {
+  flex: none;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inv-sub {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  color: rgb(var(--color-muted));
+}
+.inv-meta {
+  display: flex;
+  flex: none;
+  margin-left: auto; /* 링크가 내용 폭만 차지하므로 우측값은 auto 마진(사이 여백 = 펼침 영역) */
+  align-items: center;
+  gap: 0.5rem;
+}
+.inv-amount { font-size: 0.875rem; font-weight: 600; }
+.inv-actions { display: flex; align-items: center; gap: 0.25rem; }
+.inv-chevron {
+  height: 0.875rem;
+  width: 0.875rem;
+  flex: none;
+  color: rgb(var(--color-muted));
+}
+/* 밀도별 라벨 교체(짧은 '계산서' ↔ 긴 '계산서 발행 완료') + 넓게 전용 청구번호·발행일 */
+.inv-comfy-only { display: none; }
+.inv-narrow-only { display: inline; }
+@media (min-width: 640px) {
+  .inv-payer { width: 11rem; } /* 청구처 고정 열 — 훑기 쉬운 정렬 */
+}
+@media (max-width: 639.98px) {
+  .inv-main { flex-wrap: wrap; }
+  .inv-sub { flex-basis: 100%; }
+}
+:root[data-density="comfy"] .inv-summary {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 0.75rem 1rem;
+}
+:root[data-density="comfy"] .inv-main { display: inline-block; max-width: 100%; }
+:root[data-density="comfy"] .inv-payer { width: auto; }
+:root[data-density="comfy"] .inv-sub { display: block; margin-top: 0.125rem; }
+:root[data-density="comfy"] .inv-meta {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+:root[data-density="comfy"] .inv-comfy-only { display: inline; }
+:root[data-density="comfy"] .inv-narrow-only { display: none; }
+:root[data-density="comfy"] .inv-doc { font-size: 0.75rem; color: rgb(var(--color-muted)); }
+
 @layer utilities {
   /* 금액·시간 세로정렬용 등폭 숫자(소비 레인이 금액·시간 셀에 적용). */
   .tabular {
