@@ -688,7 +688,7 @@ function systemWarnings() {
   if (config.googleConfigured && !drive.isLinked()) warns.push("구글 Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
   if (!getState("studio_calendar_id")) warns.push("스튜디오 캘린더 미설정 — 세션의 구글 캘린더 자동 연동이 꺼져 있습니다.");
   // 청구 알림 메일(2026-07-14): 수신 주소가 없으면 청구가 발행돼도 아무에게도 안 간다(조용한 장애 클래스).
-  if (!mailer.getRecipients().length) warns.push("청구 알림 이메일 수신 주소가 없습니다 — 청구가 발행돼도 알림이 발송되지 않습니다(환경설정 > 알림).");
+  if (!mailer.getRecipients().length) warns.push("청구 알림 이메일 수신 주소가 없습니다 — 청구가 발행돼도 알림이 발송되지 않습니다(환경설정 > 일반 > 알림).");
   return warns;
 }
 
@@ -722,7 +722,7 @@ function systemTab(chief) {
         <span>알림 웹훅 ${badge(alerts.isConfigured(), "설정됨", "미설정")}</span>
         <span>청구 알림 메일 ${badge(mailer.isConfigured(), `수신 ${mailer.getRecipients().length}명`, "미설정")}</span>
       </div>
-      <p class="mt-2 text-xs text-muted">세부 설정·연결은 환경설정 탭에서.</p>
+      <p class="mt-2 text-xs text-muted">세부 설정·연결은 일반 탭에서.</p>
     </section>`;
 
   // 백업 — 마지막 백업 시각·크기·보관 개수 + 수동 백업(치프).

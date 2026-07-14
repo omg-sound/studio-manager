@@ -88,7 +88,7 @@ router.get("/", (req, res) => {
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : tab === "staff"
-        ? emptyState("녹음실 스태프 연락처가 없습니다. 관리 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
+        ? emptyState("녹음실 스태프 연락처가 없습니다. 환경설정 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
         : tab === "worker"
           ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
           : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });

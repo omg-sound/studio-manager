@@ -64,7 +64,7 @@ const router = express.Router();
 
 // 탭 순서·기본 탭 = 환경설정(2026-07-09 사용자 요청 — 이전 담당자 우선에서 전환).
 const SETTINGS_TABS = [
-  { key: "settings", label: "환경설정" },
+  { key: "settings", label: "일반" },
   { key: "content", label: "콘텐츠" },
   { key: "people", label: "담당자" },
   { key: "system", label: "시스템" }, // 연동·백업·데이터 상태 + 감사 로그(2026-07-09 관리 개선) — 경고 있으면 라벨에 ⚠️
@@ -104,11 +104,11 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "관리", desc: "환경설정 · 콘텐츠 · 담당자 · 시스템" })}
+    ${pageHeader({ title: "환경설정", desc: "일반 · 콘텐츠 · 담당자 · 시스템" })}
     ${tabBar}
     <div class="space-y-3">${tabContent}</div>`;
 
-  res.send(layout({ title: "관리", user: req.user, current: "/settings", body, full: true }));
+  res.send(layout({ title: "환경설정", user: req.user, current: "/settings", body, full: true }));
 }));
 
 /** 파일 버퍼 매직바이트 검증(Content-Type 스푸핑 방어). */
@@ -172,7 +172,7 @@ router.get("/drive-check", requireStaff, asyncHandler(async (req, res) => {
       <p class="text-xs text-muted">Drive 권한이 만료됐을 수 있습니다 — <a class="text-primary hover:underline" href="/auth/google">구글 계정 재연동</a> 후 다시 시도하세요.</p></div>`;
   }
   const body = `
-    ${pageHeader({ title: "Drive 폴더 점검", desc: "첨부·자료 파일이 저장되는 실제 구글 Drive 폴더", back: { href: "/settings?tab=settings", label: "관리" } })}
+    ${pageHeader({ title: "Drive 폴더 점검", desc: "첨부·자료 파일이 저장되는 실제 구글 Drive 폴더", back: { href: "/settings?tab=settings", label: "환경설정" } })}
     ${card}`;
   res.send(layout({ title: "Drive 폴더 점검", user: req.user, current: "/settings", body }));
 }));

@@ -151,7 +151,7 @@ const NAV = [
   { href: "/clients", label: "클라이언트", key: "clients", access: "editor", group: "manage" },
   { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
   { href: "/revenue", label: "매출", key: "revenue", access: "invoice", group: "billing" },
-  { href: "/settings", label: "관리", key: "settings", access: "staff", group: "manage" },
+  { href: "/settings", label: "환경설정", key: "settings", access: "staff", group: "manage" },
 ];
 
 // 사이드바 그룹 순서·소제목. navItemsFor 결과를 group 키로 묶어 렌더(빈 그룹은 자동 생략).
@@ -302,8 +302,8 @@ const FLASH_MESSAGES = {
   drive_done: "로컬 파일을 구글 Drive로 이관했습니다.",
   drive_partial: "일부 파일을 Drive로 이관했습니다 — 실패분은 로컬에 남아 있습니다(로그 확인).",
   drive_unlinked: "구글 Drive 연동이 필요합니다 — 구글 계정 연동 후 다시 시도하세요.",
-  added_cal_off: "추가됨 · 구글 캘린더 자동 연동 안 됨 (관리 › 환경설정 › 스튜디오 캘린더 확인)",
-  saved_cal_off: "저장됨 · 구글 캘린더 자동 연동 안 됨 (관리 › 환경설정 › 스튜디오 캘린더 확인)",
+  added_cal_off: "추가됨 · 구글 캘린더 자동 연동 안 됨 (환경설정 › 일반 › 스튜디오 캘린더 확인)",
+  saved_cal_off: "저장됨 · 구글 캘린더 자동 연동 안 됨 (환경설정 › 일반 › 스튜디오 캘린더 확인)",
 };
 const FLASH_WARN = new Set(["last_chief", "drive_partial", "drive_unlinked", "added_cal_off", "saved_cal_off"]);
 function flashBanner(query) {

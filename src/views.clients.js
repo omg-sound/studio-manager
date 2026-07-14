@@ -45,7 +45,7 @@ function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
     const backendTag = existing
       ? (existing.storage_backend === "drive"
           ? `<span class="text-xs text-muted">Drive</span>`
-          : `<span class="text-xs text-warning" title="Drive 업로드 실패로 로컬(서버 디스크)에 저장됨 — 관리 › 환경설정 › 자료 저장에서 Drive로 이관하세요">로컬 저장</span>`)
+          : `<span class="text-xs text-warning" title="Drive 업로드 실패로 로컬(서버 디스크)에 저장됨 — 환경설정 › 일반 › 자료 저장에서 Drive로 이관하세요">로컬 저장</span>`)
       : "";
     const existingRow = existing && ok
       ? `<div class="mb-2 flex flex-wrap items-center gap-3 text-sm">
