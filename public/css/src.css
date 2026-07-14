@@ -344,8 +344,19 @@ input[data-datepick]::-webkit-calendar-picker-indicator { display: none; }
   align-items: center;
   gap: 0.5rem;
 }
-.inv-amount { font-size: 0.875rem; font-weight: 600; }
+/* 금액·상태 pill은 **폭 고정** — 안 그러면 라벨 길이 차이(계산서 3글자 vs 현금영수증 5글자)만큼
+   pill이 넓어지며 금액 열이 행마다 다른 위치로 밀린다(2026-07-15 사용자 리포트). 열 정렬이 목적이므로
+   버튼은 최소 폭을 두고 라벨을 가운데 정렬한다. */
+.inv-amount {
+  min-width: 7rem;
+  text-align: right;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
 .inv-actions { display: flex; align-items: center; gap: 0.25rem; }
+.inv-actions form > button { justify-content: center; }
+.inv-actions form:first-child > button { min-width: 6.75rem; } /* 계산서 / 현금영수증 공통 폭 */
+.inv-actions form:last-child > button { min-width: 4.75rem; }  /* 입금 */
 .inv-chevron {
   height: 0.875rem;
   width: 0.875rem;
@@ -378,6 +389,9 @@ input[data-datepick]::-webkit-calendar-picker-indicator { display: none; }
 :root[data-density="comfy"] .inv-comfy-only { display: inline; }
 :root[data-density="comfy"] .inv-narrow-only { display: none; }
 :root[data-density="comfy"] .inv-doc { font-size: 0.75rem; color: rgb(var(--color-muted)); }
+/* 넓게: 긴 라벨(계산서 발행 완료 / 현금영수증 발행 완료)도 같은 폭으로 고정 */
+:root[data-density="comfy"] .inv-actions form:first-child > button { min-width: 10.5rem; }
+:root[data-density="comfy"] .inv-actions form:last-child > button { min-width: 6.5rem; }
 
 @layer utilities {
   /* 금액·시간 세로정렬용 등폭 숫자(소비 레인이 금액·시간 셀에 적용). */
