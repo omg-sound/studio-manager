@@ -41,6 +41,7 @@ const {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
+  alertEmailSection,
   googleContactsSection,
   systemTab,
   systemWarnings,
@@ -56,6 +57,7 @@ const { migrateLocalFilesToDrive, driveFileCount } = require("../lib/storage-mig
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const calendar = require("../calendar");
 const alerts = require("../notify");
+const mailer = require("../mailer");
 const { eventInputForSession } = require("./sessions.routes"); // 캘린더 재동기화 버튼 — 세션 캘린더 이벤트 입력(제목·설명) 재사용
 
 const router = express.Router();
@@ -86,7 +88,7 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
       { id: "ops", label: "스튜디오 운영", html: roomsSection() + studioHoursSection() + defaultBookerSection() },
       { id: "google", label: "구글 연동", html: (await studioCalendarSection()) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
       { id: "docs", label: "문서 · 청구", html: studioInfoSection() },
-      { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) },
+      { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) + alertEmailSection(isChief(req.user)) },
     ];
     const anchorNav = `<nav class="mb-1 flex flex-wrap gap-1.5" aria-label="환경설정 바로가기">
         ${groups.map((g) => `<a href="#set-${g.id}" class="badge badge-neutral hover:text-fg">${esc(g.label)}</a>`).join("")}
@@ -248,6 +250,29 @@ router.post("/alert-webhook", requireChief, (req, res) => {
 router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) => {
   await alerts.notify({ type: "test", title: "[테스트] OMG Studios 알림", text: "알림 채널이 정상 연결되었습니다." });
   res.redirect("/settings?tab=settings&flash=tested");
+}));
+
+// ── 청구 알림 이메일(2026-07-14) — 수신 주소 저장/테스트. 치프 전용(외부로 나가는 알림 채널). ──
+router.post("/alert-email", requireChief, (req, res) => {
+  const raw = String(req.body.alert_email || "");
+  const bad = mailer.invalidRecipients(raw);
+  if (bad.length) {
+    const msg = `이메일 형식이 올바르지 않습니다: ${bad.slice(0, 3).join(", ")}`;
+    return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(msg) + "&notice_warn=1");
+  }
+  mailer.setRecipients(raw);
+  res.redirect("/settings?tab=settings&flash=saved");
+});
+
+router.post("/alert-email/test", requireChief, asyncHandler(async (req, res) => {
+  const r = await mailer.send({
+    subject: "[테스트] OMG Studios 청구 알림",
+    html: `<p>청구 알림 메일이 정상 연결되었습니다.</p><p style="font-size:12px;color:#6E6A5F">OMG Studios 관리 시스템에서 자동 발송된 알림입니다.</p>`,
+  });
+  const msg = r.ok
+    ? `테스트 메일을 보냈습니다(${r.sent}명) — 수신함을 확인하세요.`
+    : `테스트 메일 발송 실패: ${r.skipped === "not_linked" ? "구글 미연동" : r.skipped === "no_recipients" ? "수신 주소 없음" : "메일 권한을 확인하세요(스튜디오 계정 재로그인)"}`;
+  res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(msg) + (r.ok ? "" : "&notice_warn=1"));
 }));
 
 router.post("/users", requireChief, (req, res) => {

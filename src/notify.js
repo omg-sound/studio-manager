@@ -88,12 +88,25 @@ function buildPayload(event) {
   return { text, content: text, type: event.type || "alert" };
 }
 
+/** 이메일 채널 — invoice_issued 이벤트만. 웹훅과 독립(웹훅 미설정·SSRF 차단·throw와 무관하게 발송).
+ *  지연 require: mailer가 drive/auth를 끌어와 순환 참조가 되지 않도록. fail-safe(throw 없음). */
+async function dispatchEmail(event) {
+  try {
+    if (!event || event.type !== "invoice_issued" || !event.invoice) return;
+    await require("./mailer").sendInvoiceIssued(event.invoice);
+  } catch (e) {
+    console.warn("[notify] 이메일 전송 실패(무시):", e && e.message ? e.message : String(e));
+  }
+}
+
 /**
  * 알림 전송(fail-safe). 절대 throw하지 않음. 미설정이면 조용히 skip.
  * @returns {Promise<{ok:boolean, skipped?:string, status?:number, error?:string}>}
  */
 async function notify(event) {
   try {
+    // 이메일은 웹훅과 독립 채널 — 웹훅 분기(미설정·ssrf 차단·fetch throw)와 무관하게 먼저 발송한다.
+    await dispatchEmail(event);
     const url = getWebhookUrl();
     if (!url) return { ok: false, skipped: "not_configured" };
     // SSRF 방어: 사설/링크로컬 IP 대역이면 차단
@@ -161,6 +174,7 @@ function notifyInvoiceIssued(inv) {
       text: `${formatKRW(inv.amount)} · ${inv.client_name || "청구처 미지정"}`,
       fields: [{ label: "프로젝트", value: inv.project_title || "-" }],
       url: config.baseUrl ? `${config.baseUrl}/invoices/${inv.id}` : undefined,
+      invoice: inv, // 이메일 채널이 본문(청구번호·청구처·아티스트·프로젝트·금액)을 조립하는 원본
     });
   } catch (e) {
     console.warn("[notify] invoice_issued 구성 실패(무시):", e && e.message ? e.message : String(e));

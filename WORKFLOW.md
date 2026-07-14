@@ -155,7 +155,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 236개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 252개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -185,7 +185,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 236개(단위+가드+상호작용+스모크)
+npm test                                   # 전체 252개(단위+가드+상호작용+스모크)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 node --test test/smoke.test.js             # 실서버 기동 스모크(주요 화면 22개 200 + owner/staff 권한 매트릭스 — '조용히 죽는' 회귀·권한 배선 드리프트 검출)
@@ -227,7 +227,9 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 7. ✅ (완료) **data.js 모듈 분리** — 2049→58줄 순수 재export 허브 + 14개 도메인 모듈(`src/data/*.js`). 공개 export 124개 분리 전후 동일(매 커밋 대조). 상호의존(invoices↔sessions)만 지연 require, 나머지는 형제 모듈 직접 require. CLAUDE.md TODO 9 참조.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션·2026-07-14 최신)**: **카카오톡 알림 전수 폐기**(사용자 결정 — '나와의 채팅'=메모장이라 푸시 인지 약함): `src/kakao.js`·`/auth/kakao`(+콜백)·`POST /settings/kakao/*`·관리>알림 섹션·시스템 탭 배지/경고·cron keepAlive·`config.kakao*`·`KAKAO_*` env(render.yaml·DEPLOY §3/§4.5/§9)·테스트 3파일 제거 + **1회 마이그레이션 `kakao_state_drop_v1`**(admin_state 토큰 키 6종 삭제). notify의 fail-safe·drainNotifications·웹훅은 유지(다음 채널=이메일이 재사용). 알림톡(SOLAPI) 안도 착수 전 폐기(관문 과대) — 설계 2종은 ⛔폐기 표시로 이력 보존. 234 테스트·전 화면 200·마이그레이션 실측. **다음**: ①도메인 `erp.omgworks.kr` 연결(+`config.baseUrl`이 RENDER_EXTERNAL_URL을 우선해 BASE_URL이 무시되는 결함 수정) → ②**청구 생성 시 이메일 알림**(지메일 API·studio 계정 토큰 재사용·수신 주소는 관리에서 지정).
+> **완료(이번 세션·2026-07-14 최신)**: **청구 발행 이메일 알림**(카카오·알림톡 폐기 후 최종 채널): `src/mailer.js`(지메일 API — googleapis 재사용·의존성 0, 발신=스튜디오 계정, 인증=Drive/캘린더와 동일 토큰 + 새 스코프 `gmail.send`) · `notify.dispatchEmail`(invoice_issued만·웹훅과 독립·fail-safe) · 관리>알림 수신 주소(콤마 다중·치프 전용 저장/테스트·형식 검증) · 시스템 탭 배지/⚠️경고 · 인보이스 조회에 `projects.artist` 파생. 선행(사용자): GCP Gmail API 활성화 + 스튜디오 계정 1회 재로그인(DEPLOY §4.7). 252 테스트(mailer 11·notify-email 5·settings-email 1)·E2E(저장·렌더·배지).
+> **완료(2026-07-14)**: **커스텀 도메인 erp.omgworks.kr** — whois CNAME → Render Custom Domain(Verified) → `BASE_URL` env → 구글 OAuth redirect URI. `config.baseUrl` 우선순위 수정(BASE_URL > RENDER_EXTERNAL_URL — 안 고치면 모든 외부 링크가 onrender.com으로 나감)·`test/config-baseurl.test.js`·DEPLOY §4.6 런북.
+> **완료(2026-07-14)**: **카카오톡 알림 전수 폐기**(사용자 결정 — '나와의 채팅'=메모장이라 푸시 인지 약함): `src/kakao.js`·`/auth/kakao`(+콜백)·`POST /settings/kakao/*`·관리>알림 섹션·시스템 탭 배지/경고·cron keepAlive·`config.kakao*`·`KAKAO_*` env(render.yaml·DEPLOY §3/§4.5/§9)·테스트 3파일 제거 + **1회 마이그레이션 `kakao_state_drop_v1`**(admin_state 토큰 키 6종 삭제). notify의 fail-safe·drainNotifications·웹훅은 유지(다음 채널=이메일이 재사용). 알림톡(SOLAPI) 안도 착수 전 폐기(관문 과대) — 설계 2종은 ⛔폐기 표시로 이력 보존. 234 테스트·전 화면 200·마이그레이션 실측. **다음**: ①도메인 `erp.omgworks.kr` 연결(+`config.baseUrl`이 RENDER_EXTERNAL_URL을 우선해 BASE_URL이 무시되는 결함 수정) → ②**청구 생성 시 이메일 알림**(지메일 API·studio 계정 토큰 재사용·수신 주소는 관리에서 지정).
 > **완료(2026-07-14)**: **프로젝트 목록 지메일식 한 줄 행 + 밀도 토글(좁게/넓게)** — 행=`<details>`(행 클릭=펼침·제목만 상세), 좁게 기본(아티스트/제작사·프로젝트명/탭별 우측값·42px), 넓게=동일 DOM에 CSS 전환(`:root[data-density="comfy"]`·작성일·PM·카운트 요약·구분선 목록), 토글=localStorage(서버 왕복 0·FOUC 없음). 제목 링크 밑줄(어포던스)·작성일은 완료 탭에서만(진행 중엔 다음 세션 날짜와 혼동). `src/views.projects.js`·`public/css/src.css`·`public/js/app.js`·`src/routes/projects.routes.js`. 256 테스트·실브라우저 E2E(클릭 규약 2종·두 밀도·모바일 390px 오버플로우 0). 설계=docs/superpowers/specs/2026-07-14-project-list-gmail-density-design.md.
 > **완료(2026-07-14)**: **프로젝트 목록 — 작성일 표기 + 탭별 목적지 직행**(사용자 요청): ①카드 우측 **PM 위에 작성일**(`created_at` 앞 10자·전 탭) — 완료 탭 정렬(작성일 최신순, 현행 유지 확인)의 근거가 목록에서 보이게 ②**카드 클릭 목적지를 탭 맥락에 맞춤**(`projectRowHref` — 청구 필요=`?tab=invoice` 직행 / 진행 중=`?tab=sessions`, 세션이 없고 곡·콘텐츠만 있으면 `?tab=tracks` / 완료=기본) ③판정용 `listProjects.sess_cnt` 파생. `src/data/projects.js`·`src/views.projects.js`. 252 테스트(project-list +2: 진입 탭 4경로·작성일 위치)·DEV_LOGIN E2E(3탭 링크·작성일 렌더). **진행 보류**: 카카오 '나에게 보내기'→**알림톡(SOLAPI) 전환 설계 확정·커밋**(docs/superpowers/specs/2026-07-14-alimtalk-invoice-alert-design.md — 나와의 채팅=메모장이라 푸시 인지가 약하다는 사용자 판단. 수신자=users.phone+alert_invoice, 대행사=솔라피 HTTP 직접, SMS 대체 없음, 템플릿 1종. **구현은 아직 시작 안 함** — 기존 카카오 코드 그대로 유지·프로덕션 미설정으로 휴면).
 > **완료(2026-07-13)**: **카카오톡 청구 발행 알림 + 전수 점검 후속**: ①구현 — `src/kakao.js`(OAuth 연동·토큰 암호화/자동 갱신·sendToMe·keepAlive) + notify가 `invoice_issued`만 카카오로(웹훅과 독립) + `/auth/kakao` 논스 CSRF + 관리>알림 연동/해제/테스트 + 일일 cron keepAlive. 설계 docs/superpowers/specs/2026-07-13-kakao-invoice-alert-design.md. ②6렌즈 전수 점검(적대적 검증) 후속 — single-flight 갱신(경합 오판)·sendToMe 401 재시도(6h 무음 유실)·코드포인트 절단·scope 검증(무늬만 연동 방지)·unlink best-effort·TOKEN_ENC_KEY 불일치 감지·🧾 메시지 스펙 정합·SIGTERM 알림 드레인·시스템 탭 경고/배지·콜백 취소/코드누락 처리·죽은 딥링크 404 안내·render.yaml/DEPLOY(§3·§4.5·§9) env·복구 요건. 250 테스트(카카오 22 — CSRF 라우트 잠금 포함).

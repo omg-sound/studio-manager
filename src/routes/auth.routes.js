@@ -91,6 +91,7 @@ router.get("/auth/google", (req, res) => {
       "https://www.googleapis.com/auth/drive.file", // 자료 전달 스토리지용 최소권한
       "https://www.googleapis.com/auth/calendar", // 예약 시 일정 자동 생성/수정/삭제(FreeBusy 하드차단은 다중 룸 도입으로 폐기)
       "https://www.googleapis.com/auth/contacts", // Google People API — 연락처 앱→Google push
+      "https://www.googleapis.com/auth/gmail.send", // 청구 발행 알림 메일 발송(스튜디오 계정 명의, 2026-07-14)
     ],
     state: Buffer.from(JSON.stringify({ next, nonce })).toString("base64url"),
   };

@@ -21,6 +21,7 @@ const { esc, formatKRW, formatBytes, emptyState, detailsChevron, explain } = req
 const drive = require("./drive");
 const calendar = require("./calendar");
 const alerts = require("./notify");
+const mailer = require("./mailer");
 const { localFileCount, driveFileCount } = require("./lib/storage-migrate");
 const fs = require("fs");
 const path = require("path");
@@ -451,6 +452,36 @@ function alertWebhookSection(chief = true) {
     </div>`;
 }
 
+/** 청구 알림 이메일(2026-07-14) — 청구 생성 시 지정 주소로 발송. 발신=스튜디오 구글 계정(지메일 API). */
+function alertEmailSection(chief = true) {
+  const raw = mailer.getRecipientsRaw();
+  const list = mailer.getRecipients();
+  const linked = Boolean(mailer.gmailClient());
+  const linkNote = !linked
+    ? `<p class="mt-1 text-xs text-warning">구글 미연동 — 자료 저장(구글 Drive) 연결 후 발송됩니다.</p>`
+    : `<p class="mt-1 text-xs text-muted">발신: <span class="text-fg">${esc(config.studioDriveEmail)}</span> · 메일 권한이 없다는 오류가 나면 그 계정으로 한 번 다시 로그인하세요(새 발송 권한 반영).</p>`;
+  const status = list.length
+    ? `<p class="text-sm">현재 수신: <span class="font-semibold text-fg">${esc(list.join(", "))}</span> <span class="text-xs text-muted">(${list.length}명)</span></p>`
+    : `<p class="text-sm text-muted">수신 주소 미설정 — 청구 알림 메일이 발송되지 않습니다.</p>`;
+  const controls = chief
+    ? `<form method="post" action="/settings/alert-email" class="flex gap-2">
+        <input class="input py-1.5 text-sm" name="alert_email" value="${esc(raw)}" placeholder="owner@omgworks.kr, chief@omgworks.kr" />
+        <button class="btn-primary shrink-0 btn-sm" type="submit">저장</button>
+      </form>
+      ${list.length ? `<form method="post" action="/settings/alert-email/test"><button class="btn-ghost btn-sm" type="submit">테스트 메일 보내기</button></form>` : ""}`
+    : `<p class="text-sm text-muted">변경은 <span class="text-fg">치프 엔지니어</span>만 가능합니다.</p>`;
+  return `
+    <div class="${SETTING_BLOCK}">
+      <div>
+        <h2 class="text-sm font-semibold">청구 알림 이메일</h2>
+        ${explain(`프로젝트 청구 탭에서 청구가 생성될 때, 아래 주소로 알림 메일을 보냅니다(청구번호·청구처·아티스트·금액 + 청구서 바로가기). 여러 명은 콤마로 구분하세요. 비우면 알림을 끕니다.`)}
+        ${linkNote}
+      </div>
+      ${status}
+      ${controls}
+    </div>`;
+}
+
 /** last_login(ISO UTC) → '오늘/어제/N일 전/미로그인' 상대 표시(계정 위생, 2026-07-09 관리 개선). */
 function lastLoginLabel(iso) {
   if (!iso) return "";
@@ -656,6 +687,8 @@ function systemWarnings() {
   if (free != null && free < 500 * 1024 * 1024) warns.push(`디스크 여유 공간이 ${formatBytes(free)}뿐입니다 — 가득 차면 DB 저장이 실패합니다(백업 보존 축소·디스크 증설 검토).`);
   if (config.googleConfigured && !drive.isLinked()) warns.push("구글 Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
   if (!getState("studio_calendar_id")) warns.push("스튜디오 캘린더 미설정 — 세션의 구글 캘린더 자동 연동이 꺼져 있습니다.");
+  // 청구 알림 메일(2026-07-14): 수신 주소가 없으면 청구가 발행돼도 아무에게도 안 간다(조용한 장애 클래스).
+  if (!mailer.getRecipients().length) warns.push("청구 알림 이메일 수신 주소가 없습니다 — 청구가 발행돼도 알림이 발송되지 않습니다(환경설정 > 알림).");
   return warns;
 }
 
@@ -687,6 +720,7 @@ function systemTab(chief) {
         <span>구글 Drive ${badge(linked, "연동됨", "미연동")}</span>
         <span>구글 연락처 ${badge(peopleOn, "푸시 가능", "미연동")}</span>
         <span>알림 웹훅 ${badge(alerts.isConfigured(), "설정됨", "미설정")}</span>
+        <span>청구 알림 메일 ${badge(mailer.isConfigured(), `수신 ${mailer.getRecipients().length}명`, "미설정")}</span>
       </div>
       <p class="mt-2 text-xs text-muted">세부 설정·연결은 환경설정 탭에서.</p>
     </section>`;
@@ -765,6 +799,7 @@ module.exports = {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
+  alertEmailSection,
   googleContactsSection,
   systemTab,
   systemWarnings,
