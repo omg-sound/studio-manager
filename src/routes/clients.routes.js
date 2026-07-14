@@ -13,7 +13,7 @@ const {
   listArtistsForAgency,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
-  setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty,
+  setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty, resolveCompanyByName, addCompanyRole,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -262,9 +262,36 @@ router.post("/", (req, res) => {
     id = createGroup({ name, phone: b.phone, email: b.email, memo: b.memo, cash_receipt_no: b.cash_receipt_no, contact_party_id: resolveContactPartyId(b) });
   } else if (type === "company") {
     const ownerIds = resolveOwnerIds(b); // 대표자 칩(공동대표) → 사람 party 목록
+    const bizNo = formatBizNo(b.biz_no);
+    // 같은 이름의 업체가 이미 있으면 **새로 만들지 않고 그 업체를 쓴다**(2026-07-14 — '뮤직팜'이 3개로 늘어난 사고:
+    // 서버에 이름 중복 검사가 없어 같은 폼을 두 번 저장하면 그대로 두 party가 생겼다).
+    // 단, 사업자등록번호가 서로 다르면 진짜 다른 회사이므로 새로 만든다(동명이업 허용).
+    const existingId = resolveCompanyByName(name);
+    const existing = existingId ? getParty(existingId) : null;
+    const differentBiz = existing && existing.biz_no && bizNo && existing.biz_no !== bizNo;
+    if (existing && !differentBiz) {
+      id = existing.id;
+      // 기존 값은 덮지 않고 **빈 칸만 채운다**(사용자가 새로 적어 온 정보는 살리되, 기존 정보는 보존).
+      const fill = {};
+      if (!existing.biz_no && bizNo) fill.biz_no = bizNo;
+      const addr = b.biz_address != null ? b.biz_address : b.address;
+      if (!existing.address && addr) fill.address = addr;
+      if (!existing.phone && b.phone) fill.phone = b.phone;
+      if (!existing.email && b.email) fill.email = b.email;
+      if (!existing.memo && b.memo) fill.memo = b.memo;
+      if (Object.keys(fill).length) updateParty(id, fill);
+      for (const role of String(companyRolesFrom(b) || "").split(",").map((r) => r.trim()).filter(Boolean)) addCompanyRole(id, role);
+      if (ownerIds.length) setCompanyOwners(id, ownerIds);
+      linkClientContact(id, b);
+      if (req.get("X-Requested-With") === "fetch") {
+        const pp = getParty(id);
+        return res.json({ ok: true, id, name: pp.name, kind: pp.kind, existing: true });
+      }
+      return res.redirect("/clients?notice=" + encodeURIComponent(`같은 이름의 업체가 이미 있어 기존 '${name}'에 반영했습니다.`) + "#c" + id);
+    }
     id = createCompany({
       name, phone: b.phone, email: b.email, memo: b.memo,
-      biz_no: formatBizNo(b.biz_no),
+      biz_no: bizNo,
       address: b.biz_address != null ? b.biz_address : b.address, roles: companyRolesFrom(b),
     });
     setCompanyOwners(id, ownerIds); // 호칭 '대표님'·소속(직함 '대표')·레거시 owner_party_id/owner_name 동기화

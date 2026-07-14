@@ -21,6 +21,37 @@
   }, true);
 })();
 
+// 이중 제출 방지(전 폼 공통, 2026-07-14 — 같은 업체('뮤직팜')가 3개로 늘어난 사고).
+// 저장 버튼을 두 번 누르거나 응답이 느려 다시 누르면 그대로 두 번 POST돼 **같은 레코드가 하나 더 생긴다**
+// (id가 연속으로 붙은 중복 3건이 그 흔적). 첫 제출만 통과시키고 이후 제출은 막는다.
+//  · 버튼 비활성화는 setTimeout(0) — 제출 직후에 해야 그 버튼의 name/value가 payload에 그대로 실린다.
+//  · 새 탭 제출(PDF 미리보기 formtarget=_blank)은 현재 페이지가 안 바뀌므로 제외.
+//  · 검증 실패로 페이지가 그대로일 때를 대비해 8초 후 해제 + bfcache 복귀(pageshow)에도 해제.
+(function () {
+  "use strict";
+  function buttons(f) { return f.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]'); }
+  function unlock(f) {
+    f.__submitting = false;
+    Array.prototype.forEach.call(buttons(f), function (b) { if (b.__lockedBySubmit) { b.disabled = false; b.__lockedBySubmit = false; } });
+  }
+  document.addEventListener("submit", function (e) {
+    var f = e.target;
+    if (!f || f.tagName !== "FORM") return;
+    if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return;
+    if (f.__submitting) { e.preventDefault(); return; } // 두 번째 제출 차단
+    f.__submitting = true;
+    setTimeout(function () {
+      Array.prototype.forEach.call(buttons(f), function (b) {
+        if (!b.disabled) { b.disabled = true; b.__lockedBySubmit = true; }
+      });
+    }, 0);
+    setTimeout(function () { unlock(f); }, 8000); // 서버가 같은 페이지를 다시 그린 경우(검증 오류 등) 복구
+  }, true);
+  window.addEventListener("pageshow", function () { // 뒤로가기(bfcache)로 돌아오면 버튼이 잠긴 채 남지 않게
+    Array.prototype.forEach.call(document.querySelectorAll("form"), unlock);
+  });
+})();
+
 // 클릭 복사([data-copy]) + 토스트 알림. 사업자등록번호 등 값을 눌러 클립보드에 복사.
 // window.__toast(msg)로 다른 곳에서도 짧은 토스트를 띄울 수 있다(CSP-safe, 인라인 0).
 (function () {

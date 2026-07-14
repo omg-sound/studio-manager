@@ -973,3 +973,31 @@ test("세션 폼: 날짜 콤보 — IME 조합 중 Enter는 무시(함정 #18)",
   inp.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true }));
   assert.equal(hid.value, "2026-03-05", "조합 중 Enter는 확정하지 않음");
 });
+
+// ── 이중 제출 방지(2026-07-14 — 같은 업체가 3개로 늘어난 사고: 저장 버튼을 두 번 누르면 그대로 두 번 POST) ──
+test("전 폼 공통: 두 번째 제출은 차단되고 저장 버튼이 잠긴다(새 탭 제출은 예외)", () => {
+  const { win, doc } = mountDom(`
+    <form id="f" action="/clients" method="post"><button type="submit" id="save">저장</button></form>
+    <form id="g" action="/x" method="post"><button type="submit" formtarget="_blank" id="pdf">미리보기</button></form>`);
+  const f = doc.getElementById("f");
+  const save = doc.getElementById("save");
+
+  const first = new win.Event("submit", { bubbles: true, cancelable: true });
+  f.dispatchEvent(first);
+  assert.equal(first.defaultPrevented, false, "첫 제출은 통과");
+
+  const second = new win.Event("submit", { bubbles: true, cancelable: true });
+  f.dispatchEvent(second);
+  assert.equal(second.defaultPrevented, true, "두 번째 제출은 차단(중복 레코드 방지)");
+
+  // 새 탭 제출(PDF 미리보기)은 현재 페이지가 안 바뀌므로 잠그지 않는다
+  const g = doc.getElementById("g");
+  const pdf1 = new win.Event("submit", { bubbles: true, cancelable: true });
+  Object.defineProperty(pdf1, "submitter", { value: doc.getElementById("pdf") });
+  g.dispatchEvent(pdf1);
+  const pdf2 = new win.Event("submit", { bubbles: true, cancelable: true });
+  Object.defineProperty(pdf2, "submitter", { value: doc.getElementById("pdf") });
+  g.dispatchEvent(pdf2);
+  assert.equal(pdf2.defaultPrevented, false, "새 탭 제출은 반복 가능");
+  assert.equal(save.disabled, false, "버튼 잠금은 setTimeout(0) — 제출 payload에 name/value가 실린 뒤");
+});

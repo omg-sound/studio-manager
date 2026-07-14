@@ -824,11 +824,20 @@ function listArtistsForAgency(orgId) {
     .all(Number(orgId));
 }
 
-/** 이름으로 조직 찾기(자동 생성 안 함). */
+/**
+ * 이름으로 조직 찾기(자동 생성 안 함).
+ * 공백·대소문자 차이는 같은 회사로 본다("뮤직팜 " = "뮤직 팜" = "뮤직팜") — 콤보에서 띄어쓰기만 다르게 쳐도
+ * 새 업체가 하나 더 생기던 중복 경로 차단(2026-07-14 뮤직팜 3중 등록 점검).
+ */
+function normalizeCompanyName(name) {
+  return String(name || "").replace(/\s+/g, "").toLowerCase();
+}
 function resolveCompanyByName(name) {
-  const n = String(name || "").trim();
-  if (!n) return null;
-  const ex = db().prepare("SELECT id FROM parties WHERE kind = 'company' AND name = ? ORDER BY id LIMIT 1").get(n);
+  const key = normalizeCompanyName(name);
+  if (!key) return null;
+  const ex = db()
+    .prepare("SELECT id FROM parties WHERE kind = 'company' AND LOWER(REPLACE(REPLACE(REPLACE(name, ' ', ''), CHAR(9), ''), CHAR(10), '')) = ? ORDER BY id LIMIT 1")
+    .get(key);
   return ex ? ex.id : null;
 }
 

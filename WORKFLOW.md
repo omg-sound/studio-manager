@@ -156,7 +156,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 272개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 274개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -186,7 +186,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 272개(단위+가드+상호작용+스모크)
+npm test                                   # 전체 274개(단위+가드+상호작용+스모크)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 node --test test/smoke.test.js             # 실서버 기동 스모크(주요 화면 22개 200 + owner/staff 권한 매트릭스 — '조용히 죽는' 회귀·권한 배선 드리프트 검출)
@@ -228,7 +228,8 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 7. ✅ (완료) **data.js 모듈 분리** — 2049→58줄 순수 재export 허브 + 14개 도메인 모듈(`src/data/*.js`). 공개 export 124개 분리 전후 동일(매 커밋 대조). 상호의존(invoices↔sessions)만 지연 require, 나머지는 형제 모듈 직접 require. CLAUDE.md TODO 9 참조.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
-> **완료(이번 세션·2026-07-14 최신)**: **세션 날짜 입력 = 커스텀 날짜 콤보**(사용자 요청 '구글처럼 타이핑이 잘 먹히고 월·일 고르는 게 원활하게'): 자유 타이핑(317·3/17·3월 17일·내일) + 월 그리드 팝오버(‹ ›·클릭·←→↑↓·Enter) + 표시 `2026. 3. 17. (화)`. 값은 hidden(YYYY-MM-DD)이라 서버 계약·소요 역산·겹침 조회 불변. 옛 네이티브 `showPicker` 자동 팝업 폐기. 272 테스트(jsdom 3)·실브라우저 E2E(타이핑·달력·키보드·제출 저장). **적용 범위=세션 폼 먼저**(청구 발행일·지급일 등 다른 날짜 칸은 써 보신 뒤 확장).
+> **완료(이번 세션·2026-07-14 최신)**: **중복 업체('뮤직팜' 3개) 원인 규명·봉합**: 같은 '새 업체' 폼이 연달아 3번 저장된 것(id 183·184·185 연속, 183만 참조 보유). ①`POST /clients`(업체)에 이름 중복 검사 신설 — 기존 업체 재사용(빈 칸만 채움·역할 추가), 사업자번호가 다르면 새로 생성. `resolveCompanyByName`은 공백·대소문자 무시. ②전 폼 공통 **이중 제출 가드**(첫 제출만 통과·버튼 잠금·8초/bfcache 해제·새 탭 제출 예외). 274 테스트·E2E.
+> **완료(2026-07-14)**: **세션 날짜 입력 = 커스텀 날짜 콤보**(사용자 요청 '구글처럼 타이핑이 잘 먹히고 월·일 고르는 게 원활하게'): 자유 타이핑(317·3/17·3월 17일·내일) + 월 그리드 팝오버(‹ ›·클릭·←→↑↓·Enter) + 표시 `2026. 3. 17. (화)`. 값은 hidden(YYYY-MM-DD)이라 서버 계약·소요 역산·겹침 조회 불변. 옛 네이티브 `showPicker` 자동 팝업 폐기. 272 테스트(jsdom 3)·실브라우저 E2E(타이핑·달력·키보드·제출 저장). **적용 범위=세션 폼 먼저**(청구 발행일·지급일 등 다른 날짜 칸은 써 보신 뒤 확장).
 > **완료(2026-07-14)**: **오늘 작업분 전수 점검(3렌즈 리뷰 — 정확성·보안/PII·UI계약) + 발견 결함 보수**. 🔴**계정 추가·역할 변경이 500**(카카오 제거 커밋이 인접한 `ensureContactForHouseUser` 정의를 함께 삭제 — 호출부 3곳 ReferenceError, 부분 커밋까지 발생): 함수 복구 + **스모크에 치프 쓰기 경로 추가**(계정 추가·역할 변경·알림 주소 저장 POST — GET 스모크로는 이 클래스가 안 잡힘). 🟠**청구 폼 localStorage 초안이 서버 확정 금액을 덮어씀**(즉시 저장 도입으로 초안이 유해해짐 — 다른 기기/다른 사람이 고친 금액이 옛 값으로 되살아나 그대로 발행될 수 있었음): 초안 폐기·기존 키 정리, 진실원천=DB. 🟠**상세 탭을 한 번만 눌러도 `?return=` 유실**(백링크가 다시 진행 중 탭으로 — 오늘 고친 그 증상): 탭 링크에 return 보존 + `nav.test.js` 가드 추가. 🟠**청구 메일 소계가 할인 이중 차감**(소계−할인+VAT≠총액): 소계=라인 합(화면과 동일 산술), 라인 없는 레거시만 과세표준 폴백. 그 외: 종일 세션 확정액이 프로젝트 예산에서 빠지던 것·0원 확정액이 빈 칸으로 렌더되던 것·메일 헤더 CRLF 차단·스냅샷 파싱 실패가 항목까지 날리던 것·알림 채널 변경 감사 로그(수신 주소 마스킹)·죽은 hidden(`data-am-agency`) 정리. 267 테스트·E2E(계정 추가 302·탭 이동 후 백링크·세션 금액 영속). **후속**: 확정 청구액 표시('예상 청구액'→'확정 청구액'·청구 폼 '확정 금액' — `billing.fixed`가 만들어만 지고 미사용이라 확정액을 단가표 산정치로 오인하던 것) · 목록 복귀에 `limit`·`open` 보존 · **시간 콤보 클릭 시 페이지가 맨 아래로 튀던 것**(팝업 정렬에 scrollIntoView를 써서 window까지 스크롤 — `pop.scrollTop`으로 교체, UI 가드레일 ⑦). 269 테스트.
 > **완료(2026-07-14)**: **청구 폼 세션 금액 즉시 저장**(사용자 요청 — 고친 금액이 새로고침하면 사라지던 것). `sessions.billing_amount`(NULL=단가표 산정) + `POST /sessions/:id/amount` + app.js 즉시 저장(작업 금액과 대칭)·`sessionRateAmount`/`sessionAmountsByProject` 확정액 우선. 0원=유효, 빈 칸=되돌리기, 청구된 세션은 409. 임시저장(초안) 미도입(생성=발행 원칙 유지). 256 테스트·E2E.
 > **완료(2026-07-14)**: **청구 발행 이메일 알림**(카카오·알림톡 폐기 후 최종 채널): `src/mailer.js`(지메일 API — googleapis 재사용·의존성 0, 발신=스튜디오 계정, 인증=Drive/캘린더와 동일 토큰 + 새 스코프 `gmail.send`) · `notify.dispatchEmail`(invoice_issued만·웹훅과 독립·fail-safe) · 관리>알림 수신 주소(콤마 다중·치프 전용 저장/테스트·형식 검증) · 시스템 탭 배지/⚠️경고 · 인보이스 조회에 `projects.artist` 파생. 선행(사용자): GCP Gmail API 활성화 + 스튜디오 계정 1회 재로그인(DEPLOY §4.7). 252 테스트(mailer 11·notify-email 5·settings-email 1)·E2E(저장·렌더·배지).
