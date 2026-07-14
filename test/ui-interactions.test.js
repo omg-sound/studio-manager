@@ -831,3 +831,67 @@ test("업체 생성 모달: 대표자를 칩으로 여러 명 담고, 저장 시
   assert.deepEqual(body.getAll("owner_name"), ["김대표", "박대표"], "이름 쌍 전송");
   assert.deepEqual(body.getAll("owner_id"), [String(a), String(b)], "id 쌍 전송(인덱스 페어링)");
 });
+
+// ── 새 아티스트 등록 모달: 유형(개인/그룹) 선택 + 소속 그룹(2026-07-14 사용자 리포트) ──
+// 이전엔 '그룹(밴드·팀)' 체크박스뿐이라 "이 사람이 그룹 소속인가" vs "이 이름 자체가 그룹인가"가 불명확했다.
+// 이제 유형을 먼저 고르고(라벨·필드가 그에 맞게 바뀜), 개인이면 '소속 그룹'을 그 자리에서 지정한다.
+test("아티스트 모달: 유형=그룹이면 라벨이 '그룹명'이 되고 사람 항목(본명·소속 그룹·전화·이메일)이 숨는다", () => {
+  const { win, doc, input, pop } = mountArtist();
+  input.value = "세븐틴"; fire(win, input, "input");
+  fire(win, pop.querySelector("button[data-new]"), "click"); // 새 아티스트 등록 → 모달
+  const modal = doc.querySelector("[data-artist-modal]");
+  assert.ok(!modal.classList.contains("hidden"), "모달 열림");
+  const type = modal.querySelector("[data-am-type]");
+  const label = modal.querySelector("[data-am-name-label]");
+  const realWrap = modal.querySelector("[data-am-real-wrap]");
+  const groupWrap = modal.querySelector("[data-am-group-wrap]");
+  const personOnly = [...modal.querySelectorAll("[data-am-person-only]")];
+
+  // 기본 = 개인 아티스트
+  assert.equal(type.value, "artist");
+  assert.equal(label.textContent, "활동명");
+  assert.ok(!realWrap.classList.contains("hidden"), "개인: 본명 보임");
+  assert.ok(!groupWrap.classList.contains("hidden"), "개인: 소속 그룹 보임");
+  assert.ok(personOnly.every((el) => !el.classList.contains("hidden")), "개인: 전화·이메일 보임");
+
+  // 그룹으로 전환
+  type.value = "group"; fire(win, type, "change");
+  assert.equal(label.textContent, "그룹명");
+  assert.ok(realWrap.classList.contains("hidden"), "그룹: 본명 숨김");
+  assert.ok(groupWrap.classList.contains("hidden"), "그룹: 소속 그룹 숨김(그룹이 그룹에 속하지 않음)");
+  assert.ok(personOnly.every((el) => el.classList.contains("hidden")), "그룹: 전화·이메일 숨김");
+});
+
+test("아티스트 모달: 개인 등록 시 소속 그룹·소속사가 payload에 담긴다(group_id·agency_company)", async () => {
+  const { createGroup, createCompany } = require("../src/data");
+  const gid = createGroup({ name: "세븐틴" });
+  createCompany({ name: "플레디스" });
+  const { win, doc, input, pop } = mountArtist();
+  let sent = null;
+  win.fetch = (url, opt) => { sent = { url, body: String(opt.body) }; return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, id: 999, name: "예린", kind: "person" }) }); };
+
+  input.value = "예린"; fire(win, input, "input");
+  fire(win, pop.querySelector("button[data-new]"), "click");
+  const modal = doc.querySelector("[data-artist-modal]");
+  modal.querySelector("[data-am-name]").value = "예린";
+  modal.querySelector("[data-am-real]").value = "김예린";
+  // 소속 그룹 선택(미니 콤보)
+  const gIn = modal.querySelector("[data-am-group-input]");
+  gIn.value = "세븐틴"; fire(win, gIn, "input");
+  fire(win, modal.querySelector("[data-am-group-pop] button[data-gridx]"), "click");
+  assert.equal(modal.querySelector("[data-am-group-id]").value, String(gid), "그룹 id 확정");
+  // 소속사 선택
+  const aIn = modal.querySelector("[data-am-agency-input]");
+  aIn.value = "플레디스"; fire(win, aIn, "input");
+  fire(win, modal.querySelector("[data-am-agency-pop] button[data-agidx]"), "click");
+
+  fire(win, modal.querySelector("[data-am-save]"), "click");
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(sent, "등록 fetch 발사");
+  const p = new URLSearchParams(sent.body);
+  assert.equal(p.get("type"), "artist");
+  assert.equal(p.get("name"), "예린");
+  assert.equal(p.get("real_name"), "김예린");
+  assert.equal(p.get("group_id"), String(gid), "소속 그룹 전달");
+  assert.equal(p.get("agency_company"), "플레디스", "소속사는 이름으로 전달(서버가 재사용/생성)");
+});

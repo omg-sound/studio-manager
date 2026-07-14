@@ -1373,22 +1373,40 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var modal = root.querySelector("[data-artist-modal]");
     function openModal() {
       if (!modal) { asNew(); return; }
-      var mName = modal.querySelector("[data-am-name]"), mGroup = modal.querySelector("[data-am-group]"),
-          mRealWrap = modal.querySelector("[data-am-real-wrap]"), mReal = modal.querySelector("[data-am-real]"),
+      var mName = modal.querySelector("[data-am-name]"), mType = modal.querySelector("[data-am-type]"),
+          mReal = modal.querySelector("[data-am-real]"),
           mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
           mAgencyInput = modal.querySelector("[data-am-agency-input]"), mEmail = modal.querySelector("[data-am-email]"),
+          mGroupId = modal.querySelector("[data-am-group-id]"), mGroupInput = modal.querySelector("[data-am-group-input]"),
           mErr = modal.querySelector("[data-am-err]");
-      mName.value = input.value.trim(); mGroup.checked = false; // 타이핑한 검색어 프리필
+      mName.value = input.value.trim(); // 타이핑한 검색어 프리필
+      if (mType) mType.value = "artist"; // 기본 = 개인 아티스트
       if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = ""; if (mEmail) mEmail.value = "";
-      mErr.classList.add("hidden"); mRealWrap.classList.remove("hidden");
+      if (mGroupId) mGroupId.value = ""; if (mGroupInput) mGroupInput.value = "";
+      mErr.classList.add("hidden");
+      if (modal.__amApplyType) modal.__amApplyType(); // 유형별 필드 표시 초기화
       modal.classList.remove("hidden"); modal.classList.add("flex");
       hide(); mName.focus();
     }
     if (modal) {
-      var mGroup = modal.querySelector("[data-am-group]"), mRealWrap = modal.querySelector("[data-am-real-wrap]"),
+      var mType = modal.querySelector("[data-am-type]"), mRealWrap = modal.querySelector("[data-am-real-wrap]"),
+          mGroupWrap = modal.querySelector("[data-am-group-wrap]"), mNameLabel = modal.querySelector("[data-am-name-label]"),
           mSave = modal.querySelector("[data-am-save]"), mCancel = modal.querySelector("[data-am-cancel]");
       function closeModal() { modal.classList.add("hidden"); modal.classList.remove("flex"); }
-      mGroup.addEventListener("change", function () { mRealWrap.classList.toggle("hidden", mGroup.checked); });
+      function isGroupType() { return mType && mType.value === "group"; }
+      // 유형(개인/그룹)에 따라 라벨·필드 전환(2026-07-14) — 그룹은 사람 항목(본명·소속 그룹·전화·이메일)이 없다.
+      function applyType() {
+        var g = isGroupType();
+        if (mNameLabel) mNameLabel.textContent = g ? "그룹명" : "활동명";
+        var nameInput = modal.querySelector("[data-am-name]");
+        if (nameInput) nameInput.placeholder = g ? "밴드 · 팀 이름" : "아티스트 활동명";
+        if (mRealWrap) mRealWrap.classList.toggle("hidden", g);
+        if (mGroupWrap) mGroupWrap.classList.toggle("hidden", g);
+        Array.prototype.forEach.call(modal.querySelectorAll("[data-am-person-only]"), function (el) { el.classList.toggle("hidden", g); });
+      }
+      modal.__amApplyType = applyType;
+      if (mType) mType.addEventListener("change", applyType);
+      applyType();
       mCancel.addEventListener("click", closeModal);
       // 배경 클릭 닫기 — 단, 텍스트 드래그 선택이 모달 배경에서 끝난 경우(mousedown은 안쪽, mouseup=click은 배경)는
       // 닫지 않는다(2026-07-06 사용자 리포트: 이름 전체 선택하려 드래그했는데 마우스를 뗀 지점이 모달 밖이라 닫히던 버그).
@@ -1404,20 +1422,24 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
             mAgencyInput = modal.querySelector("[data-am-agency-input]"), mErr = modal.querySelector("[data-am-err]");
         var agName = mAgencyInput ? mAgencyInput.value.trim() : ""; // 모달에서 입력·선택한 소속사명 → 등록 후 프로젝트 소속사 필드에 반영
         var nm = mName.value.trim();
-        if (!nm) { mErr.textContent = "활동명을 입력하세요."; mErr.classList.remove("hidden"); return; }
+        if (!nm) { mErr.textContent = (isGroupType() ? "그룹명" : "활동명") + "을 입력하세요."; mErr.classList.remove("hidden"); return; }
         mSave.disabled = true; mErr.classList.add("hidden");
+        var isGroup = isGroupType();
+        var mGroupIdEl = modal.querySelector("[data-am-group-id]"), mGroupInputEl = modal.querySelector("[data-am-group-input]");
         var body = new URLSearchParams();
-        body.append("type", mGroup.checked ? "group" : "artist"); body.append("name", nm);
-        if (!mGroup.checked && mReal && mReal.value.trim()) body.append("real_name", mReal.value.trim());
-        if (mAgency && mAgency.value) body.append("agency_id", mAgency.value);
-        if (mPhone && mPhone.value.trim()) body.append("phone", mPhone.value.trim());
-        if (mEmail && mEmail.value.trim()) body.append("email", mEmail.value.trim());
+        body.append("type", isGroup ? "group" : "artist"); body.append("name", nm);
+        if (!isGroup && mReal && mReal.value.trim()) body.append("real_name", mReal.value.trim());
+        // 소속사는 **이름**으로 보낸다(서버가 ensureCompanyParty로 재사용/생성) — agency_id만 보내면 서버가 무시했다(2026-07-14 수정).
+        if (agName) body.append("agency_company", agName);
+        if (!isGroup && mGroupIdEl && mGroupIdEl.value) body.append("group_id", mGroupIdEl.value); // 소속 그룹(멤버 연결)
+        if (!isGroup && mPhone && mPhone.value.trim()) body.append("phone", mPhone.value.trim());
+        if (!isGroup && mEmail && mEmail.value.trim()) body.append("email", mEmail.value.trim());
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
             if (!d || !d.ok) throw new Error("fail");
-            var rn = !mGroup.checked && mReal && mReal.value.trim() ? mReal.value.trim() : "";
-            announceParty({ kind: mGroup.checked ? "group" : "person", id: d.id, name: d.name, isArtist: true, realName: rn, agency: agName || "" }); // 전역 브로드캐스트 → 이 콤보 포함 모든 콤보 옵션에 반영
+            var rn = !isGroup && mReal && mReal.value.trim() ? mReal.value.trim() : "";
+            announceParty({ kind: isGroup ? "group" : "person", id: d.id, name: d.name, isArtist: true, realName: rn, agency: agName || "" }); // 전역 브로드캐스트 → 이 콤보 포함 모든 콤보 옵션에 반영
             var first2 = chipList().length === 0;
             addChip(d.name, rn, d.id); // 등록한 아티스트를 칩으로
             if (first2 || !currentAgencyValue()) fillAgency(agName); // 소속사는 첫 아티스트 기준(이미 있으면 유지)
@@ -1463,6 +1485,44 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
           }
         });
         comboKbdNav(agInput, agPop); // 소속사 미니콤보도 방향키·엔터 선택
+      }
+
+      // 소속 그룹 미니 콤보(2026-07-14 — 개인 아티스트를 등록하면서 그 자리에서 밴드·팀 멤버로 연결).
+      // 소속사 콤보와 같은 골격: 검색 + '＋ 새 그룹 등록'(fetch POST /clients type=group) → hidden group_id.
+      var grInput = modal.querySelector("[data-am-group-input]"), grHid = modal.querySelector("[data-am-group-id]"),
+          grPop = modal.querySelector("[data-am-group-pop]"), grOptsEl = modal.querySelector("[data-am-group-options]");
+      var grOpts = []; try { grOpts = JSON.parse((grOptsEl && grOptsEl.textContent) || "[]"); } catch (e) { grOpts = []; }
+      document.addEventListener("party-created", function (e) { var p = e.detail; if (!p || p.kind !== "group") return; if (!grOpts.some(function (o) { return String(o.id) === String(p.id); })) grOpts.push({ id: p.id, name: p.name }); }); // 새 그룹 → 옵션에 반영
+      if (grInput && grHid && grPop) {
+        var grRowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
+        var grView = [];
+        function grHide() { grPop.classList.add("hidden"); }
+        function grRender() {
+          var q = grInput.value.trim().toLowerCase();
+          grView = (q ? comboRankSort(grOpts, q, function (o) { return [o.name]; }) : grOpts).slice(0, 10);
+          var html = grView.map(function (o, i) { return '<button type="button" class="' + grRowCls + '" data-gridx="' + i + '"><span class="truncate text-fg">' + esc(o.name) + '</span></button>'; }).join("");
+          if (q && !grView.some(function (o) { return String(o.name).toLowerCase() === q; })) html += '<button type="button" class="' + grRowCls + ' text-primary" data-grnew="1"><span class="truncate">＋ \'' + esc(grInput.value.trim()) + '\'(으)로 새 그룹 등록</span><span class="shrink-0 text-xs text-muted">새로 등록</span></button>';
+          grPop.innerHTML = html || '<div class="px-3 py-2 text-sm text-muted">이름을 입력해 새 그룹으로 등록</div>'; grPop.classList.remove("hidden");
+        }
+        grInput.addEventListener("focus", grRender);
+        grInput.addEventListener("click", grRender);
+        grInput.addEventListener("input", function () { grHid.value = ""; grRender(); }); // 타이핑 중 id 해제
+        grInput.addEventListener("blur", function () { setTimeout(grHide, 150); });
+        grPop.addEventListener("mousedown", function (e) { e.preventDefault(); });
+        grPop.addEventListener("click", function (e) {
+          var b = e.target.closest("button"); if (!b) return;
+          if (b.hasAttribute("data-gridx")) { var o = grView[Number(b.getAttribute("data-gridx"))]; grInput.value = o.name; grHid.value = o.id; grHide(); }
+          else if (b.hasAttribute("data-grnew")) {
+            var nm = grInput.value.trim(); if (!nm) return;
+            b.disabled = true;
+            var body = new URLSearchParams(); body.append("type", "group"); body.append("name", nm);
+            fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); grHid.value = d.id; grInput.value = d.name; announceParty({ kind: "group", id: d.id, name: d.name, isArtist: true }); grHide(); })
+              .catch(function () { b.disabled = false; });
+          }
+        });
+        comboKbdNav(grInput, grPop);
       }
       // 모달 안에서 엔터 → 바깥 프로젝트 폼 제출 방지 + '등록'(mSave) 실행(소속사 콤보가 이미 처리했으면 스킵)
       modal.addEventListener("keydown", function (e) {

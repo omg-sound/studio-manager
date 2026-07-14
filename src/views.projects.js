@@ -28,6 +28,7 @@ const {
   taskTypeUnitPrice,
   payerDocMeta,
   peekInvoiceNumber,
+  listGroupsForPicker,
 } = require("./data");
 
 /** "+ 새 프로젝트" 버튼 — 유형 구분 없이 단일 진입(모든 프로젝트가 세션 일정+곡·콘텐츠 동일). */
@@ -436,7 +437,8 @@ function artistCombo(p = {}) {
     agency: o.company || "", // 현재 소속사 → 아티스트 선택 시 소속사/레이블 필드 자동 채움
   }));
   const json = JSON.stringify(opts).replace(/</g, "\\u003c"); // </script> 브레이크아웃 방지
-  const companies = partyOptions({ role: "company" }); // 모달 소속사 select용
+  const companies = partyOptions({ role: "company" }); // 모달 소속사 미니콤보용
+  const groups = listGroupsForPicker(); // 모달 소속 그룹 미니콤보용(개인 아티스트가 속한 밴드·팀)
   // Gmail식 칩(2026-07-10 — 콤마 텍스트 방식에서 전환, 담당자·디렉터·대표자와 통일).
   // **서버 계약 불변**: hidden `artist`=활동명 콤마 목록, `artist_contact_id`=단일 선택일 때만 명시 id.
   // 칩 라벨은 '활동명 (본명)' 병기(본명은 단일 프리필 또는 옵션에서 옴). app.js chipEl과 마크업 형식 동일.
@@ -468,9 +470,24 @@ function artistCombo(p = {}) {
       <div data-artist-modal class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
         <div class="w-full max-w-sm space-y-3 rounded-xl border border-border bg-bg p-4 shadow-xl" role="dialog" aria-modal="true">
           <div class="font-display text-lg font-semibold">새 아티스트 등록</div>
-          <div><label class="label">활동명(이름)</label><input class="input" data-am-name placeholder="아티스트 활동명" /></div>
-          <label class="flex w-fit cursor-pointer items-center gap-1.5 text-sm text-muted"><input type="checkbox" data-am-group class="h-4 w-4 rounded border-border text-primary" /> 그룹(밴드·팀)</label>
-          <div data-am-real-wrap><label class="label">본명 <span class="text-xs font-normal text-muted">(활동명과 다르면 · 개인)</span></label><input class="input" data-am-real placeholder="본명(선택)" /></div>
+          <!-- 유형 먼저(2026-07-14 사용자 리포트 '그룹 체크가 [이 사람이 그룹 소속]인지 [이름 자체가 그룹]인지 불명확').
+               개인=사람 party(활동명·본명·소속 그룹), 그룹=group party(그룹명). name 없는 select(폼 제출 안 됨·app.js가 읽음). -->
+          <div><label class="label">등록 유형</label>
+            <select class="input" data-am-type>
+              <option value="artist" selected>개인 아티스트 (솔로·멤버)</option>
+              <option value="group">그룹 (밴드 · 팀 자체)</option>
+            </select>
+          </div>
+          <div><label class="label" data-am-name-label>활동명</label><input class="input" data-am-name placeholder="아티스트 활동명" /></div>
+          <div data-am-real-wrap><label class="label">본명 <span class="text-xs font-normal text-muted">(활동명과 다르면)</span></label><input class="input" data-am-real placeholder="본명(선택)" /></div>
+          <div data-am-group-wrap><label class="label">소속 그룹 <span class="text-xs font-normal text-muted">(선택 · 밴드·팀 멤버면)</span></label>
+            <input type="hidden" data-am-group-id value="" />
+            <div class="relative">
+              <input class="input" data-am-group-input autocomplete="off" placeholder="그룹 검색 또는 새로 등록" role="combobox" aria-expanded="false" aria-autocomplete="list" />
+              <div class="absolute left-0 right-0 z-10 mt-1 hidden max-h-40 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-am-group-pop role="listbox"></div>
+            </div>
+            <script type="application/json" data-am-group-options>${JSON.stringify(groups.map((g) => ({ id: g.id, name: g.name }))).replace(/</g, "\\u003c")}</script>
+          </div>
           <div><label class="label">소속사 <span class="text-xs font-normal text-muted">(선택)</span></label>
             <input type="hidden" data-am-agency value="" />
             <div class="relative">
@@ -479,8 +496,8 @@ function artistCombo(p = {}) {
             </div>
             <script type="application/json" data-am-agency-options>${JSON.stringify(companies.map((co) => ({ id: co.id, name: co.name }))).replace(/</g, "\\u003c")}</script>
           </div>
-          <div><label class="label">전화 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" data-am-phone autocomplete="off" /></div>
-          <div><label class="label">이메일 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" type="email" data-am-email autocomplete="off" /></div>
+          <div data-am-person-only><label class="label">전화 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" data-am-phone autocomplete="off" /></div>
+          <div data-am-person-only><label class="label">이메일 <span class="text-xs font-normal text-muted">(선택)</span></label><input class="input" type="email" data-am-email autocomplete="off" /></div>
           <div class="flex items-center gap-2 pt-1">
             <button type="button" class="btn-primary" data-am-save>등록</button>
             <button type="button" class="btn-ghost" data-am-cancel>취소</button>
