@@ -66,7 +66,7 @@ git add -A && git commit -m "..." && git push   # autoDeploy=commit → web/cron
 | `DB_PATH` | `/var/data/app.db` |
 | `MAX_UPLOAD_MB` | `200` |
 | `SESSION_SECRET` / `TOKEN_ENC_KEY` | `generateValue: true` (Render가 강한 랜덤값 자동 생성) |
-| `BASE_URL` | 비움 → `RENDER_EXTERNAL_URL` 자동 사용 |
+| `BASE_URL` | 비움 → `RENDER_EXTERNAL_URL`(onrender.com) 자동 사용. **커스텀 도메인을 쓰면 반드시 그 주소로 명시**(§4.6) — 명시값이 자동 주입값을 이긴다 |
 | cron 스케줄 | `0 18 * * *` (UTC) = **매일 03:00 KST** |
 | cron → web 트리거 | `WEB_HOSTPORT`(private network host:port) 자동 주입 |
 
@@ -109,14 +109,40 @@ Blueprint Apply 시 또는 각 서비스 **Environment** 탭에서 입력한다.
 5. **Google Calendar API 활성화**(세션 겹침 검사용 — 아래 §6.5).
 6. 발급된 Client ID/Secret을 3단계 web 서비스 env에 입력.
 
-> redirect URI는 `{BASE_URL}/auth/google/callback`. Render는 `RENDER_EXTERNAL_URL`을 `BASE_URL`로
-> 자동 도출하므로, **배포 후 확정된 onrender.com 도메인**으로 redirect URI를 맞춰야 한다.
+> redirect URI는 `{BASE_URL}/auth/google/callback`. `BASE_URL`을 비우면 Render가 주입하는
+> `RENDER_EXTERNAL_URL`(onrender.com)이 쓰이므로 그 주소로 맞춘다. **커스텀 도메인을 붙이면 §4.6을 따라
+> `BASE_URL`을 그 주소로 명시하고 redirect URI도 추가**해야 한다.
 
 ### 4-1. OAuth 스코프 변경 시 재동의
 
 앱은 `openid·email·profile·drive.file·calendar`(캘린더 읽기+쓰기) 스코프를 요청한다. **스코프를 바꾼 배포
 이후에는 치프가 한 번 다시 로그인(구글 동의)** 해야 새 권한이 담긴 refresh token이 저장된다(기존 토큰엔 새 권한 없음).
 `calendar`(전체)는 겹침 검사(FreeBusy 읽기) + **예약 시 일정 자동 생성/수정/삭제(쓰기)** 에 모두 쓰인다.
+
+---
+
+## 4.6. 커스텀 도메인 연결 (`erp.omgworks.kr`) — 선택
+
+앱이 만드는 **모든 외부 링크**(구글 OAuth redirect_uri, 자료 전달 공개 링크 `/d/:token`, 청구 발행 알림, 캘린더 일정의 프로젝트 링크)가 `config.baseUrl`에서 나온다. 도메인만 붙이고 `BASE_URL`을 안 넣으면 링크가 계속 onrender.com으로 나가므로, **아래 3·4단계를 반드시 함께** 한다.
+
+1. **Render** → 서비스 `omg-studios-manager` → Settings → **Custom Domains** → `erp.omgworks.kr` 추가. Render가 표시하는 **CNAME 대상**(`omg-studios-manager.onrender.com`)을 확인한다. TLS 인증서는 검증 후 자동 발급(Let's Encrypt).
+2. **DNS(whois.co.kr 등 도메인 관리업체)** → DNS 관리에서 레코드 추가:
+   `CNAME` / 호스트 `erp` / 값 `omg-studios-manager.onrender.com`
+   - 서브도메인이라 CNAME으로 충분하다(루트 도메인이면 CNAME 불가 — ALIAS/ANAME 또는 A 레코드 필요).
+   - **네임서버가 그 업체 DNS를 쓰고 있어야** 여기서 추가한 레코드가 적용된다(다른 곳으로 위임돼 있으면 그쪽에서 추가).
+   - 전파 후 Render 대시보드의 도메인 상태가 **Verified**로 바뀐다(보통 수분~1시간).
+3. **Render env**: `BASE_URL=https://erp.omgworks.kr` 추가 → 재배포.
+   ⚠️ Render는 `RENDER_EXTERNAL_URL`(=onrender.com)을 **항상 주입하고 지울 수 없다**. `src/config.js`는 **BASE_URL을 우선**하도록 돼 있다(2026-07-14 수정, `test/config-baseurl.test.js`가 회귀 잠금). 이 순서가 뒤집히면 도메인을 붙여도 모든 링크가 옛 주소로 나간다.
+4. **Google Cloud Console** → OAuth 클라이언트:
+   - 승인된 리디렉션 URI에 `https://erp.omgworks.kr/auth/google/callback` **추가**(기존 onrender.com 항목은 롤백 대비로 남겨둔다)
+   - 승인된 자바스크립트 원본에 `https://erp.omgworks.kr` 추가
+   - 이걸 빠뜨리면 **로그인이 `redirect_uri_mismatch`로 실패**한다.
+
+**부수 영향**
+- 쿠키는 도메인별이라 새 주소에서 **전원 재로그인** 필요(데이터 영향 없음).
+- 이미 발송한 `onrender.com/d/...` 자료 전달 링크는 **계속 동작**한다(Render가 두 도메인 모두 서비스).
+- 기존 캘린더 일정 설명의 링크는 옛 주소 그대로다 — 새 주소로 갱신하려면 **관리 > 환경설정 > 기존 캘린더 일정 재동기화**.
+- `trust proxy`·secure 쿠키·동일출처(CSRF) 검사는 Host 기준이라 코드 변경 없이 그대로 동작한다.
 
 ---
 

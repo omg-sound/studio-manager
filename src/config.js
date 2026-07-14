@@ -4,10 +4,15 @@ require("dotenv").config();
 
 const path = require("path");
 
-// Render는 RENDER_EXTERNAL_URL을 자동 주입한다 → BASE_URL로 도출(플레이북1 §1).
+// 앱이 만들어 **밖으로 나가는 모든 링크**의 기준 주소 — 구글 OAuth redirect_uri, 자료 전달 공개 링크(/d/:token),
+// 청구 발행 알림, 캘린더 일정의 프로젝트 링크가 전부 이 값을 쓴다.
+// 우선순위: BASE_URL(명시) > RENDER_EXTERNAL_URL(Render 자동 주입) > 로컬.
+// ⚠️ 커스텀 도메인(erp.omgworks.kr) 필수 조건: Render는 RENDER_EXTERNAL_URL(=*.onrender.com)을 **항상** 주입하고
+// 지울 수 없다. 이전엔 그 값이 BASE_URL보다 우선해서, 도메인을 붙이고 BASE_URL을 설정해도 링크가 전부
+// onrender.com으로 나갔다(2026-07-14 도메인 연결 검토에서 발견). 명시 설정이 자동 주입을 이긴다.
 const baseUrl =
-  process.env.RENDER_EXTERNAL_URL ||
   process.env.BASE_URL ||
+  process.env.RENDER_EXTERNAL_URL ||
   `http://localhost:${process.env.PORT || 3000}`;
 
 const config = {
