@@ -78,6 +78,24 @@ test("projectListRow: 밀도 계약 — 넓게 전용 요소는 마크업에 있
   assert.match(html, /class="proj-counts proj-comfy-only[^"]*">예정 세션 2</, "카운트 요약=넓게 전용");
 });
 
+test("projectRowHref: 목록 상태(탭·검색·mine)를 return으로 실어 보낸다(상세 백링크 복귀)", () => {
+  const p = pRow({ sess_cnt: 1 });
+  const listQuery = "/projects?tab=done&q=%EC%95%84%EC%9D%B4&mine=1";
+  // 완료 탭 → 기본 탭 진입 + return
+  const done = views.projectRowHref(p, "done", listQuery);
+  assert.strictEqual(done, `/projects/7?return=${encodeURIComponent(listQuery)}`);
+  // 진행 중(세션 탭 진입)에도 return이 붙는다
+  const active = views.projectRowHref(p, "active", "/projects?tab=active");
+  assert.strictEqual(active, "/projects/7?tab=sessions&return=" + encodeURIComponent("/projects?tab=active"));
+  // 청구 필요
+  const billing = views.projectRowHref(p, "billing", "/projects?tab=billing");
+  assert.strictEqual(billing, "/projects/7?tab=invoice&return=" + encodeURIComponent("/projects?tab=billing"));
+  // listQuery 없으면 기존 그대로(다른 진입점 호환)
+  assert.strictEqual(views.projectRowHref(p, "done"), "/projects/7");
+  // 카드 렌더에도 반영
+  assert.match(views.projectListRow(p, emptySummary, { tab: "done", listQuery }), /return=/);
+});
+
 test("projectListRow: 작성일은 완료 탭에서만(진행 중은 다음 세션 날짜와 섞이므로 미표시)", () => {
   const p = pRow({ created_at: "2026-07-01 10:00:00", next_session_date: "2099-01-01" });
   for (const tab of ["active", "billing"]) {

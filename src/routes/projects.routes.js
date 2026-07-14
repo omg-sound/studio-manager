@@ -247,7 +247,8 @@ router.get("/", requireAuth, (req, res) => {
     const isAdmin = canEdit(user); // 펼침 세션 완료 토글 노출(편집 권한자). 완료 후 ?open=로 그 카드 재펼침.
     const openId = Number(req.query.open) || null;
     // 카드 테두리 없이 구분선 목록(2026-07-14 사용자 결정) — 행 자체가 border-b(.proj-row).
-    list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine })).join("")}</div>${cap.more}`;
+    const listQuery = `/projects?tab=${tab}${keepQ}`; // 상세 백링크 복귀 경로(보던 탭·검색·mine 유지)
+    list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine, listQuery })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
@@ -432,7 +433,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   }
 
   const errorModal = req.query.error === "session_invoiced" ? sessionInvoicedModal(p.id) : "";
-  const body = [flashBanner(req.query), errorModal, pageHeader({ title: p.title, desc, back: { href: "/projects", label: "프로젝트" } }), tabBar, tabContent].join("\n");
+  const body = [flashBanner(req.query), errorModal, pageHeader({ title: p.title, desc, back: { href: safePath(req.query.return) || "/projects", label: "프로젝트" } }), tabBar, tabContent].join("\n");
   res.send(layout({ title: p.title, user: req.user, current: "/projects", body }));
 }
 

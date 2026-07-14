@@ -86,14 +86,18 @@ function projectIdentity(p) {
  *  - 완료 탭·그 외 → 기본(정보 탭)
  * 청구 탭은 canBill(치프·대표·스태프=전원)이라 권한으로 막히지 않는다.
  */
-function projectRowHref(p, tab) {
+function projectRowHref(p, tab, listQuery = "") {
   const base = `/projects/${p.id}`;
-  if (tab === "billing") return `${base}?tab=invoice`;
+  // 상세 백링크가 **보던 목록(탭·검색·내 프로젝트만)** 으로 돌아오도록 복귀 경로를 실어 보낸다
+  // (2026-07-14 사용자 요청 — 완료 탭에서 들어갔다가 나오면 진행 중 탭으로 떨어지던 것). 청구 상세 return과 동일 패턴.
+  const ret = listQuery ? `return=${encodeURIComponent(listQuery)}` : "";
+  const with_ = (qs) => (qs ? `${base}?${qs}${ret ? `&${ret}` : ""}` : ret ? `${base}?${ret}` : base);
+  if (tab === "billing") return with_("tab=invoice");
   if (tab === "active") {
-    if (Number(p.sess_cnt) > 0) return `${base}?tab=sessions`;
-    if (trackCount(p) > 0) return `${base}?tab=tracks`;
+    if (Number(p.sess_cnt) > 0) return with_("tab=sessions");
+    if (trackCount(p) > 0) return with_("tab=tracks");
   }
-  return base;
+  return with_("");
 }
 
 
@@ -126,7 +130,7 @@ function projectSubLabel(p) {
  *  - 넓게: 아티스트/부제 2줄 + 우측 작성일·PM·다음 세션(또는 금액) + 하단 카운트 요약(마크업은 동일).
  *  - 우측값(탭별): 진행 중=다음 세션·디데이 / 청구 필요=금액·'청구 필요 N' / 완료=작성일.
  */
-function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null, mine = false } = {}) {
+function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null, mine = false, listQuery = "" } = {}) {
   const isBilling = tab === "billing";
   const isDone = tab === "done";
 
@@ -164,7 +168,7 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   return `
     <details class="proj-row group/proj"${openId != null && Number(p.id) === Number(openId) ? " open" : ""} id="proj-${p.id}">
       <summary class="proj-summary row-link">
-        <a href="${projectRowHref(p, tab)}" class="proj-main">
+        <a href="${projectRowHref(p, tab, listQuery)}" class="proj-main">
           <span class="proj-artist">${artist}</span>
           <span class="proj-sub">${sub}</span>
         </a>
