@@ -214,12 +214,18 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
   return `
     <input type="hidden" name="status" value="${esc(s.status || "예정")}" />
     <div class="space-y-3" data-time-block>
-      <div class="flex flex-wrap items-center gap-2">
-        <input class="input w-auto py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date data-datepick aria-label="날짜" required />
-        ${timeBox("start_time", s.start_time, "14:00", 'data-start-input aria-label="시작 시간"')}
-        <span class="text-muted">–</span>
-        ${timeBox("end_time", s.end_time, "18:00", 'data-end-input aria-label="종료 시간"')}
-        <input class="input w-auto py-1.5 text-sm" type="date" name="end_date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <!-- 줄바꿈 단위 = 시작(날짜+시간) / 종료(–+시간+날짜) 두 덩어리. 폭이 좁아 접히더라도 종료 시간과 종료 날짜가
+             떨어지지 않게 한 묶음으로 둔다(2026-07-14 사용자 리포트 — 종료 날짜만 다음 줄로 가 연관이 끊겨 보이던 것). -->
+        <div class="flex items-center gap-2">
+          <input class="input w-auto py-1.5 text-sm" type="date" name="session_date" value="${esc(s.session_date || todayYmd())}" data-session-date data-datepick aria-label="날짜" required />
+          ${timeBox("start_time", s.start_time, "14:00", 'data-start-input aria-label="시작 시간"')}
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-muted">–</span>
+          ${timeBox("end_time", s.end_time, "18:00", 'data-end-input aria-label="종료 시간"')}
+          <input class="input w-auto py-1.5 text-sm" type="date" name="end_date" value="${endDateInit}" data-end-date data-datepick aria-label="종료 날짜" />
+        </div>
         <label class="flex w-fit cursor-pointer items-center gap-2 pl-1 text-sm">
           <input type="checkbox" name="all_day" value="1" class="h-4 w-4 rounded border-border text-primary" data-all-day ${s.all_day ? "checked" : ""} /> 종일
         </label>
