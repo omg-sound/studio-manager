@@ -14,6 +14,7 @@ const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage, copyable, dirtyActionRow } = require("../views");
+const { safePath } = require("../lib/nav");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
 const { formatYmdShort, todayYmd, isValidYmd } = require("../lib/date");
 const { withholding33 } = require("../lib/tax"); // 외주 원천징수 3.3% 표시(2026-07-09 사용자 요청)
@@ -124,7 +125,7 @@ router.get("/", requireInvoice, (req, res) => {
             : "";
           return `
         <div class="card mb-2">
-          <a href="/workers/${w.id}" class="flex items-center justify-between gap-3 hover:opacity-80">
+          <a href="/workers/${w.id}?return=${encodeURIComponent(req.originalUrl)}" class="flex items-center justify-between gap-3 hover:opacity-80">
             <div class="min-w-0">
               <span class="font-semibold">${esc(w.name)}</span>
               ${w.email || w.phone ? `<div class="mt-0.5 text-xs text-muted">${esc(w.email || "")}${w.email && w.phone ? " · " : ""}${esc(w.phone || "")}</div>` : ""}
@@ -411,7 +412,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?${unpaidForDelete > 0 ? esc(` ⚠️ 미지급 ${formatKRW(unpaidForDelete)} 기록이 함께 사라집니다.`) : ""}"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
+    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: safePath(req.query.return) || "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?${unpaidForDelete > 0 ? esc(` ⚠️ 미지급 ${formatKRW(unpaidForDelete)} 기록이 함께 사라집니다.`) : ""}"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
     ${w.party_id ? `<div class="-mt-3 mb-3 text-sm"><span class="text-muted">연락처로 보기</span> <a href="/contacts/${w.party_id}" class="text-primary hover:underline">${esc(w.name)} ↗</a></div>` : ""}
     ${tabBarHtml}
     ${content}`;

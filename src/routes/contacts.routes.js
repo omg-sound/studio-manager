@@ -82,7 +82,7 @@ router.get("/", (req, res) => {
   const cap = capList(rows, req.query, (n) => `/contacts?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   const list = rows.length
     ? listGroup({
-        rows: cap.shown.map((c) => personListRow(c)), // 공용 헬퍼(클라이언트 관계자 탭과 동일 렌더)
+        rows: cap.shown.map((c) => personListRow(c, { returnTo: req.originalUrl })), // 공용 헬퍼 + 복귀 경로(보던 탭·검색 유지)
 
       }) + cap.more
     : q
@@ -373,7 +373,9 @@ router.get("/:id", (req, res) => {
   const retQ = String(req.query.return || "");
   const ret = safePath(retQ);
   const backHref = ret || (from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/contacts");
-  const backLabel = ret ? (ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : "돌아가기") : from ? "클라이언트" : "연락처";
+  const backLabel = ret
+    ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "클라이언트" : ret.startsWith("/contacts") ? "연락처" : "돌아가기"
+    : from ? "클라이언트" : "연락처";
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: personName(c), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}

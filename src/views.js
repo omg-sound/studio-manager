@@ -544,14 +544,17 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {object} [opt]
  * @param {string} [opt.fromParam=""] 상세 링크에 붙일 복귀 쿼리(`?from=...`) — 클라이언트 관계자 탭만 사용.
  */
-function personListRow(c, { fromParam = "" } = {}) {
+// returnTo(2026-07-14): 상세 백링크가 **보던 목록(탭·검색)** 으로 돌아오도록 현재 목록 주소를 실어 보낸다.
+// fromParam(클라이언트 목록 필터)과 함께 오면 둘 다 붙인다(기존 동작 보존).
+function personListRow(c, { fromParam = "", returnTo = "" } = {}) {
+  const retQ = returnTo ? `${fromParam ? "&" : "?"}return=${encodeURIComponent(returnTo)}` : "";
   const { currentAffiliation, classifyParty } = require("./data"); // 지연 require(data는 views를 require하지 않음)
   const cur = currentAffiliation(c.id);
   const badges = classifyParty(c, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
-  const nameLink = `<a href="/contacts/${c.id}${fromParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personName(c))}</a>`;
+  const nameLink = `<a href="/contacts/${c.id}${fromParam}${retQ}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(personName(c))}</a>`;
   let orgPart = "";
   if (cur && cur.client_id) {
-    const orgA = `<a href="/clients/${cur.client_id}${fromParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
+    const orgA = `<a href="/clients/${cur.client_id}${fromParam}${retQ}" class="text-xs font-normal text-muted hover:text-primary hover:underline">${esc(cur.client_name || "")}</a>`;
     orgPart = ` <span class="text-xs font-normal text-muted">· </span>${orgA}${cur.title ? ` <span class="text-xs font-normal text-muted">· ${esc(cur.title)}</span>` : ""}`;
   }
   const right = (c.phone || c.email)

@@ -47,3 +47,30 @@ test("invoiceTaxTab: tax_status → todo/done/paid 상호 배타 분류", () => 
     assert.equal(tabs.length, 1, `상태 '${s}'는 정확히 한 탭`);
   }
 });
+
+// ── 목록 → 상세 → 돌아가기 = 보던 목록으로 복귀(2026-07-14 사용자 요청 '모든 돌아가기를 이 방식으로') ──
+// 라우트 소스 계약을 검사한다: ①목록 행 링크가 ?return=<현재 목록 주소>를 실어 보내고
+// ②상세 백링크가 safePath(req.query.return)를 쓴다. 하나라도 빠지면 그 화면만 조용히 옛 동작(기본 목록)으로 돌아간다.
+const fs = require("fs");
+const path = require("path");
+const R = (f) => fs.readFileSync(path.join(__dirname, "..", "src", "routes", f), "utf8");
+
+test("전 목록: 상세 백링크가 return(safePath)으로 복귀 — 청구·프로젝트·연락처·클라이언트·외주", () => {
+  const backContract = [
+    ["invoices.routes.js", /safePath\(req\.query\.return\)\s*\|\|\s*"\/invoices"/],
+    ["projects.routes.js", /safePath\(req\.query\.return\)\s*\|\|\s*"\/projects"/],
+    ["workers.routes.js", /safePath\(req\.query\.return\)\s*\|\|\s*"\/workers"/],
+  ];
+  for (const [file, re] of backContract) assert.match(R(file), re, `${file}: 백링크가 return을 안 씀`);
+  // 연락처·클라이언트는 return + 레거시 from(필터) 폴백을 함께 쓴다.
+  assert.match(R("contacts.routes.js"), /const ret = safePath\(retQ\);/, "contacts: return 해석");
+  assert.match(R("clients.routes.js"), /const ret = safePath\(retQ\);/, "clients: return 해석");
+});
+
+test("전 목록: 행 링크가 현재 목록 주소를 return으로 넘긴다", () => {
+  assert.match(R("invoices.routes.js"), /ret: retPath/, "invoices: 행에 ret 전달");
+  assert.match(R("projects.routes.js"), /listQuery/, "projects: 행에 listQuery 전달");
+  assert.match(R("contacts.routes.js"), /personListRow\(c, \{ returnTo: req\.originalUrl \}\)/, "contacts: 행에 returnTo");
+  assert.match(R("clients.routes.js"), /return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "clients: 행에 return");
+  assert.match(R("workers.routes.js"), /\/workers\/\$\{w\.id\}\?return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "workers: 행에 return");
+});
