@@ -895,3 +895,81 @@ test("아티스트 모달: 개인 등록 시 소속 그룹·소속사가 payload
   assert.equal(p.get("group_id"), String(gid), "소속 그룹 전달");
   assert.equal(p.get("agency_company"), "플레디스", "소속사는 이름으로 전달(서버가 재사용/생성)");
 });
+
+// ── 날짜 콤보(2026-07-14 사용자 요청 — 브라우저 기본 date 입력이 타이핑을 방해하던 것) ──
+// 자유 타이핑 파싱 + 월 그리드 팝오버 + 키보드 이동. 값은 hidden(YYYY-MM-DD, 기존 로직·서버 계약 불변).
+test("세션 폼: 날짜 콤보 — 자유 타이핑(317·12/31·3월 17일) → hidden YYYY-MM-DD", () => {
+  const rateItems = db().prepare("SELECT * FROM rate_items").all();
+  const html = `<form data-session-form>${sessionBookingFields({ session_date: "2026-03-05" }, [], rateItems, [], "")}</form>`;
+  const { win, doc } = mountDom(html);
+  const combo = doc.querySelector("[data-date-combo]");
+  const inp = combo.querySelector("[data-date-input]");
+  const hid = combo.querySelector("[data-date-hidden]");
+
+  assert.equal(hid.getAttribute("name"), "session_date", "제출은 hidden(서버 계약 불변)");
+  assert.equal(inp.getAttribute("name"), null, "보이는 입력엔 name 없음(함정 #19)");
+  assert.equal(inp.value, "2026. 3. 5. (목)", "서버 렌더 표시 형식");
+
+  const type = (text) => {
+    inp.focus();
+    inp.value = text;
+    fire(win, inp, "input");
+    const e = new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+    inp.dispatchEvent(e);
+  };
+  type("317");
+  assert.equal(hid.value, "2026-03-17", "317 → 3월 17일(연도는 현재 값 기준)");
+  assert.equal(inp.value, "2026. 3. 17. (화)");
+  type("12/31");
+  assert.equal(hid.value, "2026-12-31");
+  type("3월 17일");
+  assert.equal(hid.value, "2026-03-17");
+  type("2027-01-02");
+  assert.equal(hid.value, "2027-01-02");
+  // 파싱 불가(2월 31일)는 무시하고 원래 값 유지 — 잘못된 날짜가 조용히 저장되지 않게
+  type("2월 31일");
+  assert.equal(hid.value, "2027-01-02", "롤오버 날짜 거부");
+});
+
+test("세션 폼: 날짜 콤보 — 월 그리드 팝오버(클릭·‹ ›)와 키보드 이동(↓ +7일, Enter 확정)", () => {
+  const rateItems = db().prepare("SELECT * FROM rate_items").all();
+  const html = `<form data-session-form>${sessionBookingFields({ session_date: "2026-03-05" }, [], rateItems, [], "")}</form>`;
+  const { win, doc } = mountDom(html);
+  const combo = doc.querySelector("[data-date-combo]");
+  const inp = combo.querySelector("[data-date-input]");
+  const hid = combo.querySelector("[data-date-hidden]");
+  const pop = combo.querySelector("[data-date-pop]");
+
+  inp.focus();
+  fire(win, inp, "focus");
+  assert.ok(!pop.classList.contains("hidden"), "포커스에 팝오버 열림");
+  assert.equal(pop.querySelectorAll("[data-dc-day]").length, 31, "3월 = 31일");
+
+  pop.querySelector('[data-dc-day="2026-03-20"]').dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  assert.equal(hid.value, "2026-03-20", "날짜 클릭 = 선택");
+  assert.ok(pop.classList.contains("hidden"), "선택 후 닫힘");
+
+  inp.focus(); fire(win, inp, "focus");
+  pop.querySelector("[data-dc-prev]").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  assert.match(pop.textContent, /2026년 2월/, "‹ = 이전 달");
+
+  // 키보드: ↓(+7일) → 칸에 미리보기 → Enter 확정(옛 텍스트를 다시 파싱하지 않아야 함)
+  inp.focus(); fire(win, inp, "focus");
+  inp.dispatchEvent(new win.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  assert.equal(inp.value, "2026. 3. 27. (금)", "↓ 이동이 칸에도 미리보기");
+  inp.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.equal(hid.value, "2026-03-27", "Enter = 확정");
+});
+
+test("세션 폼: 날짜 콤보 — IME 조합 중 Enter는 무시(함정 #18)", () => {
+  const rateItems = db().prepare("SELECT * FROM rate_items").all();
+  const html = `<form data-session-form>${sessionBookingFields({ session_date: "2026-03-05" }, [], rateItems, [], "")}</form>`;
+  const { win, doc } = mountDom(html);
+  const inp = doc.querySelector("[data-date-combo] [data-date-input]");
+  const hid = doc.querySelector("[data-date-combo] [data-date-hidden]");
+  inp.focus();
+  inp.value = "317";
+  fire(win, inp, "input");
+  inp.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true }));
+  assert.equal(hid.value, "2026-03-05", "조합 중 Enter는 확정하지 않음");
+});

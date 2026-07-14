@@ -347,6 +347,8 @@
     var mm = t.getMonth() + 1, dd = t.getDate();
     return t.getFullYear() + "-" + (mm < 10 ? "0" : "") + mm + "-" + (dd < 10 ? "0" : "") + dd;
   }
+  // 날짜 콤보의 값(hidden)은 포커스를 못 받으므로, 보이는 입력이 포커스면 '편집 중'으로 본다(자동 동기가 덮지 않게).
+  function isEditing(el) { return document.activeElement === el || (el && el.__dcInput && document.activeElement === el.__dcInput); }
   function updatePreview() {
     // 종일: 시간·종료날짜 자동 동기 안 함 — 종료 날짜는 사용자가 지정한 다일(예: 2/5~2/9) 값을 그대로 보존.
     if (allDay && allDay.checked) { updateConflictWarn(); return; }
@@ -355,7 +357,10 @@
     var sMin = toMin(start);
     // 종료 박스·종료 날짜 자동 동기(구글식): 시작+소요 → 종료. 자정 넘김이면 종료 날짜 +1일. 사용자가 편집 중인 칸은 덮지 않음.
     if (endInput && sMin != null && mins > 0 && document.activeElement !== endInput) writeTime(endInput, addMin(start, mins));
-    if (endDate && dateInput && document.activeElement !== endDate) endDate.value = sMin != null && mins > 0 && sMin + mins >= 1440 ? addDays(dateInput.value, 1) : dateInput.value || "";
+    if (endDate && dateInput && !isEditing(endDate)) {
+      endDate.value = sMin != null && mins > 0 && sMin + mins >= 1440 ? addDays(dateInput.value, 1) : dateInput.value || "";
+      if (endDate.__dcSync) endDate.__dcSync(); // 날짜 콤보: hidden을 코드로 바꿨으면 보이는 표시도 갱신
+    }
     updateConflictWarn();
   }
   function refreshAvailability() {
@@ -386,11 +391,132 @@
   if (roomSel) roomSel.addEventListener("change", syncExternalLoc);
   syncExternalLoc();
   if (dateInput) dateInput.addEventListener("change", function () { refreshAvailability(); updatePreview(); });
-  // 날짜 입력(datepick): 클릭/포커스 시 네이티브 달력 팝업(showPicker — 아이콘은 CSS로 숨김, 타이핑은 그대로).
-  Array.prototype.forEach.call(form.querySelectorAll("input[data-datepick]"), function (el) {
-    var open = function () { if (el.showPicker && !el.readOnly) { try { el.showPicker(); } catch (_e) { /* 사용자 제스처 밖 등 — 무시 */ } } };
-    el.addEventListener("click", open);
-    el.addEventListener("focus", open);
+
+  // ── 날짜 콤보([data-date-combo], 2026-07-14) ──────────────────────────────────────────────
+  // 구글 캘린더식: 보이는 칸은 자유 타이핑("317"·"3/17"·"2026-03-17"·"3월 17일"·"오늘"/"내일"),
+  // 값은 hidden(YYYY-MM-DD, name·data-session-date/data-end-date 마커 보유 — 기존 로직이 그대로 읽고 쓴다).
+  // 팝오버 = 월 그리드(‹ › 월 이동·클릭 선택·오늘/선택 강조). 키보드: ←→ ±1일, ↑↓ ±7일, Enter 확정, Esc 닫기.
+  // 브라우저 기본 date 입력은 연/월/일 칸을 오가야 하고 클릭 시 달력이 떠 타이핑을 끊었다(사용자 리포트).
+  var WD = ["일", "월", "화", "수", "목", "금", "토"];
+  function ymdParts(v) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || "")); return m ? [+m[1], +m[2], +m[3]] : null; }
+  function ymdOf(y, m, d) { var t = new Date(y, m - 1, d); return t.getFullYear() + "-" + pad2(t.getMonth() + 1) + "-" + pad2(t.getDate()); }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function fmtDateCombo(v) { // 서버 formatYmdCombo와 동일 형식(로드 직후 값이 튀지 않게)
+    var p = ymdParts(v);
+    if (!p) return "";
+    return p[0] + ". " + p[1] + ". " + p[2] + ". (" + WD[new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay()] + ")";
+  }
+  function todayLocal() { var t = new Date(); return ymdOf(t.getFullYear(), t.getMonth() + 1, t.getDate()); }
+  // 자유 타이핑 → YYYY-MM-DD(파싱 실패 = null → 표시를 원래 값으로 되돌림). 기준 연도 = 현재 값의 연도.
+  function parseDateText(text, baseYmd) {
+    var s = String(text || "").trim();
+    if (!s) return "";
+    if (s === "오늘") return todayLocal();
+    var base = ymdParts(baseYmd) || ymdParts(todayLocal());
+    if (s === "내일" || s === "모레") return addDays(baseYmd || todayLocal(), s === "내일" ? 1 : 2);
+    var nums = s.match(/\d+/g);
+    if (!nums) return null;
+    var y, m, d;
+    if (nums.length >= 3) { y = +nums[0]; m = +nums[1]; d = +nums[2]; if (y < 100) y += 2000; }
+    else if (nums.length === 2) { y = base[0]; m = +nums[0]; d = +nums[1]; }
+    else { // 숫자 한 덩어리: 20260317 / 0317 / 317 / 17(일)
+      var n = nums[0];
+      if (n.length === 8) { y = +n.slice(0, 4); m = +n.slice(4, 6); d = +n.slice(6); }
+      else if (n.length === 4) { y = base[0]; m = +n.slice(0, 2); d = +n.slice(2); }
+      else if (n.length === 3) { y = base[0]; m = +n.slice(0, 1); d = +n.slice(1); }
+      else if (n.length <= 2) { y = base[0]; m = base[1]; d = +n; }
+      else return null;
+    }
+    if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= 31)) return null;
+    var out = ymdOf(y, m, d);
+    return ymdParts(out) && +out.slice(5, 7) === m ? out : null; // 2월 31일 등(롤오버) 거부
+  }
+  Array.prototype.forEach.call(form.querySelectorAll("[data-date-combo]"), function (wrap) {
+    var hid = wrap.querySelector("[data-date-hidden]");
+    var inp = wrap.querySelector("[data-date-input]");
+    var pop = wrap.querySelector("[data-date-pop]");
+    if (!hid || !inp || !pop) return;
+    var view = ymdParts(hid.value) || ymdParts(todayLocal()); // 팝오버가 보고 있는 달
+    var cursor = hid.value || todayLocal(); // 키보드 이동 커서
+
+    function sync() { inp.value = fmtDateCombo(hid.value); } // 값이 코드로 바뀌면(종료 날짜 자동 계산 등) 표시 갱신
+    hid.__dcSync = sync;
+    hid.__dcInput = inp; // '사용자가 편집 중인 칸은 덮지 않음' 판정용(hidden은 포커스를 못 받는다)
+
+    function commit(v, opts) { // v="" → 비움(종료 날짜는 선택 항목)
+      if (v == null) return sync(); // 파싱 실패 → 되돌림
+      hid.value = v;
+      sync();
+      cursor = v || todayLocal();
+      view = ymdParts(cursor);
+      hid.dispatchEvent(new Event("change", { bubbles: true })); // 기존 리스너(겹침 조회·소요 역산) 재사용
+      if (!opts || !opts.keepOpen) close();
+    }
+    function close() { pop.classList.add("hidden"); inp.setAttribute("aria-expanded", "false"); }
+    function open() { render(); pop.classList.remove("hidden"); inp.setAttribute("aria-expanded", "true"); }
+    function render() {
+      var y = view[0], m = view[1];
+      var first = new Date(y, m - 1, 1).getDay();
+      var days = new Date(y, m, 0).getDate();
+      var today = todayLocal();
+      var head =
+        '<div class="mb-1 flex items-center justify-between">' +
+        '<button type="button" class="btn-ghost btn-xs" data-dc-prev aria-label="이전 달">‹</button>' +
+        '<span class="text-sm font-medium">' + y + "년 " + m + "월</span>" +
+        '<button type="button" class="btn-ghost btn-xs" data-dc-next aria-label="다음 달">›</button></div>';
+      var wd = '<div class="grid grid-cols-7 text-center text-[11px] text-muted">' + WD.map(function (w) { return "<span>" + w + "</span>"; }).join("") + "</div>";
+      var cells = "";
+      for (var i = 0; i < first; i++) cells += "<span></span>";
+      for (var d = 1; d <= days; d++) {
+        var v = ymdOf(y, m, d);
+        var cls = "rounded-md py-1 text-sm hover:bg-elevated";
+        if (v === hid.value) cls += " bg-primary text-primary-fg hover:bg-primary";
+        else if (v === cursor) cls += " ring-1 ring-primary";
+        else if (v === today) cls += " font-bold text-primary";
+        cells += '<button type="button" class="' + cls + '" data-dc-day="' + v + '">' + d + "</button>";
+      }
+      pop.innerHTML = head + wd + '<div class="mt-0.5 grid grid-cols-7 gap-0.5 text-center">' + cells + "</div>";
+    }
+
+    inp.addEventListener("focus", function () { inp.select(); open(); });
+    inp.addEventListener("click", open);
+    inp.addEventListener("blur", function () {
+      setTimeout(function () { commit(parseDateText(inp.value, hid.value)); }, 120); // 클릭 선택이 먼저 처리되게
+    });
+    inp.addEventListener("input", function () {
+      var v = parseDateText(inp.value, hid.value);
+      if (v) { cursor = v; view = ymdParts(v); render(); } // 타이핑에 맞춰 달력이 따라감(확정은 Enter·blur)
+    });
+    inp.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중(함정 #18)
+      var step = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" ? -7 : e.key === "ArrowDown" ? 7 : 0;
+      if (step && pop.classList.contains("hidden")) open();
+      if (step) {
+        e.preventDefault();
+        cursor = addDays(cursor || todayLocal(), step);
+        view = ymdParts(cursor);
+        inp.value = fmtDateCombo(cursor); // 이동한 날짜를 칸에도 미리보기(확정은 Enter — 안 그러면 Enter가 옛 텍스트를 다시 파싱)
+        render();
+        return;
+      }
+      if (e.key === "Enter") { e.preventDefault(); commit(parseDateText(inp.value, hid.value) || cursor); inp.blur(); }
+      else if (e.key === "Escape") { close(); sync(); }
+    });
+    pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur 방지(시간 콤보와 동일)
+    pop.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("button");
+      if (!b) return;
+      if (b.hasAttribute("data-dc-prev") || b.hasAttribute("data-dc-next")) {
+        var dir = b.hasAttribute("data-dc-prev") ? -1 : 1;
+        var mm = view[1] + dir, yy = view[0];
+        if (mm < 1) { mm = 12; yy--; } else if (mm > 12) { mm = 1; yy++; }
+        view = [yy, mm, 1];
+        render();
+        return;
+      }
+      if (b.hasAttribute("data-dc-day")) commit(b.getAttribute("data-dc-day"));
+    });
+    sync();
   });
   // 종료 날짜 직접 편집(구글식): 시작 날짜와의 일수 차 + 종료 시각으로 소요 역산(<24h만 표현 가능 — 밖이면 자동 보정).
   if (endDate) endDate.addEventListener("change", function () {
@@ -680,7 +806,6 @@
     return "₩" + String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
   function clamp(n) { return Math.min(Math.max(0, Math.round(n)), supply()); }
-
   function updatePreview() {
     var sup = supply();
     var discount = clamp(parseInt(String(amtInput.value).replace(/[^\d]/g, "") || "0", 10));

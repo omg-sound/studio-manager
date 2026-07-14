@@ -74,4 +74,16 @@ function minutesBetween(start, end) {
   return e - s;
 }
 
-module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, cleanTime, timeToMin, minutesBetween };
+/**
+ * 날짜 콤보 표시 형식 "2026. 3. 17. (화)" — 서버 초기 렌더와 app.js가 **같은 형식**을 써야 한다
+ * (다르면 페이지 로드 직후 값이 튄다). 요일은 UTC 파싱으로 계산 — 서버 TZ(Render=UTC)와 무관하게 고정.
+ */
+const WEEKDAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
+function formatYmdCombo(s) {
+  if (!isValidYmd(s)) return "";
+  const [y, m, d] = s.split("-").map(Number);
+  const wd = WEEKDAYS_KO[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${y}. ${m}. ${d}. (${wd})`;
+}
+
+module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, formatYmdCombo, cleanTime, timeToMin, minutesBetween };
