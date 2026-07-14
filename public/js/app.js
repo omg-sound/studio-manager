@@ -454,7 +454,10 @@
           var slot = Math.round(cur / 30) * 30 % 1440;
           near = pop.querySelector('[data-time-opt="' + addMin("00:00", slot) + '"]');
         }
-        if (near && near.scrollIntoView) near.scrollIntoView({ block: "start" }); // 미리 작성된 시간이 목록 최상단에 오게
+        // 미리 작성된 시간이 목록 최상단에 오게 — **팝업 안에서만** 스크롤한다.
+        // ⚠️ scrollIntoView는 스크롤 컨테이너뿐 아니라 window까지 함께 움직여, 늦은 시각(18:00 등)을 고르면
+        //    페이지가 통째로 아래로 튀었다(2026-07-14 사용자 리포트). pop이 absolute라 자식의 offsetParent = pop.
+        if (near) pop.scrollTop = near.offsetTop;
       }
     }
     function closePop() { pop.classList.add("hidden"); }

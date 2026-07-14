@@ -144,3 +144,14 @@ test("ui-guardrail: companyCombo 사람 옵션 키(kind/alt/honorific) ↔ app.j
   assert.ok(/o\.kind\s*!==\s*"person"|o\.kind\s*===\s*"person"/.test(APP), "app.js가 옵션 kind로 사람/회사 판별");
   assert.ok(/__pcSetById/.test(APP), "app.js personCombo가 __pcSetById 노출(제작/운영→담당자 자동채움 계약)");
 });
+
+// ── ⑦ 드롭다운 내부 스크롤은 컨테이너만 움직인다(2026-07-14 사용자 리포트) ──
+// 사고: 시간 콤보가 현재 값을 목록 최상단에 올리려고 scrollIntoView를 써서 **페이지까지 함께 스크롤**,
+// 늦은 시각(18:00 등)을 고르면 화면이 통째로 맨 아래로 튀었다. 팝업 내부 정렬은 scrollTop으로만.
+test("ui-guardrail: 시간 콤보 팝업은 scrollIntoView가 아니라 scrollTop으로 정렬(페이지 튐 방지)", () => {
+  const open = APP.slice(APP.indexOf("function openPop()"), APP.indexOf("function closePop()"));
+  assert.ok(open.length > 0, "app.js 시간 콤보 openPop 존재");
+  const code = open.replace(/\/\/[^\n]*/g, ""); // 주석 제거(설명문에 이름이 나오는 건 허용)
+  assert.ok(!/\.scrollIntoView\s*\(/.test(code), "openPop에서 scrollIntoView 호출 금지(window까지 스크롤됨)");
+  assert.ok(/pop\.scrollTop\s*=/.test(open), "팝업 자체의 scrollTop으로 정렬");
+});
