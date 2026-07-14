@@ -340,9 +340,13 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
   const { discount: discountAmt, tax, total } = invoiceAmountsFromSupply(subtotal, effDiscount, vatIncluded);
   const issued = issueDate || todayYmd();
   const invoiceTitle = String(title || "").trim() || `${project.title} 청구`;
-  // 청구처(payer) = parties.id. 폼 선택(clientId=party id) 우선, 없으면 프로젝트에서 제작사›소속사›아티스트 파생.
-  const resolvedPayerId = (clientId ? Number(clientId) : null) || project.production_id || project.agency_id || project.artist_id || null;
-  if (resolvedPayerId && !d.prepare("SELECT 1 FROM parties WHERE id = ?").get(resolvedPayerId)) throw new Error("CLIENT_NOT_FOUND");
+  // 청구처(payer) = parties.id — **항상 폼에서 명시 선택**(2026-07-15 사용자 결정).
+  // 이전엔 미선택 시 제작사›소속사›아티스트로 자동 파생했는데, '제작/운영 = 결제자'라는 가정이 실무와 어긋난다
+  // (예: 음악감독이 턴키로 받아 감독 개인이 결제). 조용한 기본값이 오발행을 부르므로 자동 파생을 폐기하고,
+  // 안 고르면 발행을 차단한다(폼은 프로젝트 당사자를 '추천 칩'으로 제시 — 흔한 경우는 1클릭).
+  const resolvedPayerId = clientId ? Number(clientId) : null;
+  if (!resolvedPayerId) throw new Error("PAYER_REQUIRED");
+  if (!d.prepare("SELECT 1 FROM parties WHERE id = ?").get(resolvedPayerId)) throw new Error("CLIENT_NOT_FOUND");
 
   // 라인아이템(청구서·PDF 공용). 작업=곡명 - 종류, 세션=녹음 세션 라인.
   // item_date = 정렬용 날짜 스냅샷(2026-07-05 사용자 요청 — 청구 항목도 세션 탭처럼 항상 날짜순).

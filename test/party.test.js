@@ -109,22 +109,30 @@ test("classifyParty: 아티스트·조직·그룹 배지", () => {
 });
 
 // ── 청구처(payer) 파생: 프로젝트 party 참조 → 인보이스 payer_id ──
-test("createInvoiceFromTasks: 청구처 미지정 시 프로젝트 제작사>소속사>아티스트 party로 파생", () => {
+// 청구처는 **항상 명시**(2026-07-15 사용자 결정) — '제작/운영 = 결제자' 자동 파생 폐기.
+// 배경: 음악감독이 턴키로 받아 감독 개인이 결제하는 등, 결제 주체가 제작사가 아닌 경우가 실제로 발생.
+// 조용한 기본값이 오발행을 부르므로 미선택이면 생성 자체를 막는다(폼은 당사자를 '추천 칩'으로만 제시).
+test("createInvoiceFromTasks: 청구처 미지정이면 PAYER_REQUIRED로 차단(자동 파생 없음)", () => {
   const artistId = D.createPerson({ name: "가창", nickname: "보컬A" });
-  const agencyId = D.createCompany({ name: "소속C", biz_no: "123-45-67890" }); // 세금계산서 정보(회사 청구처 발행 요건)
+  const agencyId = D.createCompany({ name: "소속C", biz_no: "123-45-67890" });
   const proj = db()
     .prepare("INSERT INTO projects (title, project_type, rate, artist_id, agency_id) VALUES (?, 'task', 0, ?, ?)")
-    .run("파생 테스트", artistId, agencyId);
+    .run("파생 없음 테스트", artistId, agencyId);
   const projectId = Number(proj.lastInsertRowid);
   const tr = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, ?, 'Music')").run(projectId, "곡");
   const tk = db()
     .prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 500000, 500000, 'Completed', 0)")
     .run(Number(tr.lastInsertRowid));
-  const inv = D.createInvoiceFromTasks(CHIEF, { projectId, taskIds: [Number(tk.lastInsertRowid)], issueDate: "2026-07-02" });
-  assert.ok(inv, "인보이스 생성");
-  // 청구처 미지정 → 제작사 없음·소속사(agencyId) 우선 파생
-  const payerId = db().prepare("SELECT payer_id FROM invoices WHERE id=?").get(inv.id).payer_id;
-  assert.equal(payerId, agencyId, "payer=소속사 party(제작사 없으므로)");
+  const taskId = Number(tk.lastInsertRowid);
+
+  // 소속사(agency)가 있어도 자동으로 청구처가 되지 않는다
+  assert.throws(() => D.createInvoiceFromTasks(CHIEF, { projectId, taskIds: [taskId], issueDate: "2026-07-02" }), /PAYER_REQUIRED/);
+  assert.equal(db().prepare("SELECT COUNT(*) AS n FROM invoices WHERE project_id = ?").get(projectId).n, 0, "인보이스 생성 안 됨");
+
+  // 명시하면 그 party로 발행(제작사가 아닌 사람도 가능 — 예: 턴키로 받은 음악감독)
+  const director = D.createPerson({ name: "음악감독", cash_receipt_no: "010-1234-5678" });
+  const inv = D.createInvoiceFromTasks(CHIEF, { projectId, taskIds: [taskId], clientId: director, issueDate: "2026-07-02" });
+  assert.equal(db().prepare("SELECT payer_id FROM invoices WHERE id=?").get(inv.id).payer_id, director, "payer=명시한 개인(음악감독)");
 });
 
 test("createInvoiceFromTasks: 명시 청구처(clientId=party) 우선", () => {

@@ -743,6 +743,32 @@ function taskQuickAdd(track) {
 }
 
 
+/**
+ * 청구처 추천 칩(2026-07-15 사용자 결정 — '청구처는 항상 직접 지정').
+ * 기본 선택값·서버 자동 파생을 폐기하면서(제작/운영=결제자 가정이 실무와 어긋남 — 음악감독이 턴키로 받아 결제하는 경우),
+ * 흔한 경우(제작사가 결제)를 1클릭으로 넣을 수 있게 이 프로젝트의 당사자를 칩으로 제시한다. 누르면 콤보에 채워질 뿐,
+ * 아무것도 미리 선택되지 않는다(안 고르면 서버가 PAYER_REQUIRED로 차단).
+ */
+function payerSuggestChips(project) {
+  const cand = [
+    { id: project.production_id, role: "제작/운영", name: project.production_company },
+    { id: project.agency_id, role: "소속/레이블", name: project.artist_company },
+    { id: project.artist_id, role: "아티스트", name: String(project.artist || "").split(",")[0].trim() },
+  ].filter((c) => c.id && c.name);
+  const seen = new Set();
+  const chips = cand.filter((c) => (seen.has(Number(c.id)) ? false : seen.add(Number(c.id))));
+  if (!chips.length) return "";
+  return `<div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <span class="text-xs text-muted">이 프로젝트의 당사자:</span>
+      ${chips
+        .map(
+          (c) => `<button type="button" class="rounded-full border border-border px-2.5 py-1 text-xs hover:border-primary hover:text-primary"
+             data-payer-suggest="${Number(c.id)}" data-payer-suggest-name="${esc(c.name)}">${esc(c.role)} ${esc(c.name)}</button>`
+        )
+        .join("")}
+    </div>`;
+}
+
 function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   const tasks = taskRows || [];
   if (!tasks.length && !sessionRows.length) {
@@ -823,8 +849,9 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
         <input class="input" name="title" value="${esc(project.title)} 청구" />
       </div>
       <div class="mb-2">
-        <label class="label mb-1 text-xs">청구처</label>
-        ${payerCombo({ selectedId: project.production_id || project.agency_id || project.artist_id, clientOptions: clientOptions(), contactOptions: contactOptions(), ...payerDocMeta() })}
+        <label class="label mb-1 text-xs">청구처 <span class="font-normal text-danger">*</span></label>
+        ${payerCombo({ selectedId: null, clientOptions: clientOptions(), contactOptions: contactOptions(), ...payerDocMeta() })}
+        ${payerSuggestChips(project)}
         <div data-payer-fix class="mt-1.5 hidden rounded-lg bg-warning/10 px-3 py-2">
           <p data-payer-warn class="text-sm text-warning"></p>
           <div class="mt-2 flex gap-2">

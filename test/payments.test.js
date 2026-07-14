@@ -9,9 +9,12 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 const { db, init } = require("../src/db");
-const { createInvoiceFromTasks, listPayments, addPayment, deletePayment, recomputePaid, balanceOf, payStatusOf } = require("../src/data");
+const { createInvoiceFromTasks, listPayments, addPayment, deletePayment, recomputePaid, balanceOf, payStatusOf, createCompany } = require("../src/data");
 
 init();
+
+// 청구처는 항상 명시(2026-07-15 — 자동 파생 폐기)
+const PAYER = createCompany({ name: "청구처회사", biz_no: "123-45-67890" });
 
 const CHIEF = { id: 1, role: "chief", email: "chief@omg.test" };
 
@@ -27,7 +30,7 @@ function seedInvoice(totalPrice) {
        VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, ?, ?, 'Completed', 0)`
     )
     .run(trackId, totalPrice, totalPrice);
-  return createInvoiceFromTasks(CHIEF, { projectId, taskIds: [Number(tk.lastInsertRowid)], issueDate: "2026-06-15" });
+  return createInvoiceFromTasks(CHIEF, { projectId, clientId: PAYER, taskIds: [Number(tk.lastInsertRowid)], issueDate: "2026-06-15" });
 }
 
 function reload(id) {

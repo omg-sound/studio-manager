@@ -37,6 +37,7 @@
   document.addEventListener("submit", function (e) {
     var f = e.target;
     if (!f || f.tagName !== "FORM") return;
+    if (e.defaultPrevented) return; // 폼 자체 검증(예: 청구처 미선택)이 막은 제출은 잠그지 않는다
     if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return;
     if (f.__submitting) { e.preventDefault(); return; } // 두 번째 제출 차단
     f.__submitting = true;
@@ -46,7 +47,7 @@
       });
     }, 0);
     setTimeout(function () { unlock(f); }, 8000); // 서버가 같은 페이지를 다시 그린 경우(검증 오류 등) 복구
-  }, true);
+  }); // 버블 단계 — 폼 검증(preventDefault)이 먼저 돌고, 통과한 제출만 잠근다
   window.addEventListener("pageshow", function () { // 뒤로가기(bfcache)로 돌아오면 버튼이 잠긴 채 남지 않게
     Array.prototype.forEach.call(document.querySelectorAll("form"), unlock);
   });
@@ -2311,7 +2312,33 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); });
     pop.addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; if (b.hasAttribute("data-idx")) pick(view[Number(b.getAttribute("data-idx"))]); });
     comboKbdNav(input, pop); // 방향키 이동·엔터 선택
-    // 초기 선택(서버 렌더된 기본 청구처)에 맞춰 문서 라벨·경고 표시
+
+    // 추천 칩([data-payer-suggest]) — 이 프로젝트의 당사자(제작/운영·소속·아티스트)를 1클릭으로 청구처에 넣는다.
+    // 기본 선택은 없다(2026-07-15 — '제작/운영=결제자' 자동 파생 폐기). 칩은 편의일 뿐 아무것도 미리 고르지 않는다.
+    if (form) {
+      Array.prototype.forEach.call(form.querySelectorAll("[data-payer-suggest]"), function (chip) {
+        chip.addEventListener("click", function () {
+          var pidv = chip.getAttribute("data-payer-suggest");
+          var it = items.filter(function (x) { return String(x.cid) === String(pidv) || String(x.pid) === String(pidv); })[0];
+          if (it) pick(it);
+          else { // 콤보 옵션에 없는 당사자(관계자 등) — id만 세팅하고 이름 표시
+            input.value = chip.getAttribute("data-payer-suggest-name") || "";
+            cid.value = pidv; pid.value = ""; applyDoc(null); fireInput(); hide();
+          }
+        });
+      });
+      // 청구처 미선택 제출 차단(서버도 PAYER_REQUIRED로 막지만, 여기서 바로 알려 준다).
+      form.addEventListener("submit", function (e) {
+        if (e.submitter && e.submitter.hasAttribute && e.submitter.hasAttribute("data-waive-btn")) return; // 청구 안 함 토글
+        if (!cid.value && !pid.value) {
+          e.preventDefault(); // 서버도 PAYER_REQUIRED로 막지만, 여기서 즉시 알려 준다(제출 자체를 안 보냄)
+          if (window.__toast) window.__toast("청구처를 선택하세요 — 실제 결제하는 곳·사람을 고릅니다.");
+          input.focus();
+        }
+      });
+    }
+
+    // 초기 문서 라벨·경고(선택값이 있을 때만 — 새 폼은 비어 있음)
     applyDoc(items.filter(function (it) { return (cid.value && String(it.cid) === String(cid.value)) || (pid.value && String(it.pid) === String(pid.value)); })[0]);
   });
 })();
