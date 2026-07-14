@@ -48,7 +48,7 @@ function sessionAmountsByProject(projectIds) {
   // ② 미청구 녹음 세션 = 예상 청구액(단가표 자동 산정).
   const rows = db()
     .prepare(
-      `SELECT s.id, s.project_id, s.start_time, s.end_time,
+      `SELECT s.id, s.project_id, s.start_time, s.end_time, s.billing_amount,
               ri.base_minutes, ri.base_price, ri.extra_minutes, ri.extra_price
        FROM sessions s
        JOIN rate_items ri ON ri.id = s.rate_item_id
@@ -62,6 +62,11 @@ function sessionAmountsByProject(projectIds) {
     .all(...projectIds);
   for (const row of rows) {
     if (invoicedSids.has(row.id)) continue; // 청구 확정분은 ①에서 확정액으로 반영
+    // 확정 청구액(청구 폼에서 고쳐 저장한 값)이 있으면 그것을, 없으면 단가표 산정치를 쓴다(2026-07-14).
+    if (row.billing_amount != null) {
+      sums[row.project_id] = (sums[row.project_id] || 0) + Math.round(row.billing_amount);
+      continue;
+    }
     const mins = minutesBetween(row.start_time, row.end_time);
     if (mins <= 0) continue;
     sums[row.project_id] = (sums[row.project_id] || 0) + computeRatePrice(row, mins);

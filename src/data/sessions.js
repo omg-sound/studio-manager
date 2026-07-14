@@ -306,13 +306,31 @@ function sessionRateAmount(session, itemOverride) {
   const item = itemOverride || db().prepare("SELECT * FROM rate_items WHERE id = ?").get(session.rate_item_id);
   if (!item) return null;
   // 종일 세션은 시간이 없어 시간제 산정 불가 → 1 기준 블록으로 취급(정액 항목=base_price, 시간제 항목=1Pro). 금액은 청구 시 조정.
+  // 확정 청구액(billing_amount)이 있으면 단가표 산정 대신 그 값을 쓴다(2026-07-14 — 청구 폼에서 고친 세션
+  // 금액이 폼 안에서만 살아 있다가 새로고침하면 사라지던 문제. 작업 total_price 즉시 저장과 대칭).
+  const fixed = session.billing_amount != null ? Math.round(session.billing_amount) : null;
   if (session.all_day) {
     const mins = item.base_minutes || 0;
-    return { item, minutes: mins, amount: computeRatePrice(item, mins), allDay: true };
+    return { item, minutes: mins, amount: fixed != null ? fixed : computeRatePrice(item, mins), allDay: true, fixed: fixed != null };
   }
   const minutes = minutesBetween(session.start_time, session.end_time);
   if (minutes <= 0) return null;
-  return { item, minutes, amount: computeRatePrice(item, minutes) };
+  return { item, minutes, amount: fixed != null ? fixed : computeRatePrice(item, minutes), fixed: fixed != null };
+}
+
+/**
+ * 세션 확정 청구액 저장(청구 폼 금액칸 즉시 저장 — 작업의 setTaskAmount와 대칭).
+ * amount=null이면 컬럼을 비워 **단가표 자동 산정으로 복귀**(빈 칸 = 되돌리기). 0은 '0원 청구'로 유효한 값.
+ * 이미 청구된 세션은 거부(invoice_items 스냅샷이 잠금).
+ */
+function setSessionAmount(user, sessionId, amount) {
+  const { isSessionInvoiced } = require("../data"); // invoices와 상호의존 → 지연 require
+  const s = getSessionForUser(user, sessionId);
+  if (!s) return null;
+  if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED");
+  const val = amount == null ? null : Math.max(0, Math.round(Number(amount) || 0));
+  db().prepare("UPDATE sessions SET billing_amount = ? WHERE id = ?").run(val, s.id);
+  return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
 }
 
 /**
@@ -557,6 +575,7 @@ module.exports = {
   setSessionEventId,
   setSessionStatus,
   setSessionWaived,
+  setSessionAmount,
   deleteSession,
   upcomingSessions,
   pastSessions,

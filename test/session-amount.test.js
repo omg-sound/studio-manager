@@ -1,0 +1,80 @@
+"use strict";
+
+// ── 세션 확정 청구액(2026-07-14 사용자 요청) ──
+// 청구 폼에서 고친 세션 금액이 폼 안에서만 살아 있다가 새로고침하면 단가표 산정치로 되돌아가던 문제.
+// 작업(total_price 즉시 저장)과 대칭으로 sessions.billing_amount에 즉시 저장한다.
+process.env.NODE_ENV = "test";
+const { tempDbPath, cleanupDb } = require("./helpers");
+process.env.DB_PATH = tempDbPath();
+
+const { test, after } = require("node:test");
+const assert = require("node:assert");
+const { db, init } = require("../src/db");
+init();
+after(() => cleanupDb(process.env.DB_PATH, db()));
+
+const D = require("../src/data");
+const user = { id: 1, role: "chief" };
+
+function seed() {
+  const d = db();
+  const rate = d
+    .prepare("INSERT INTO rate_items (name, category, base_minutes, base_price, extra_minutes, extra_price, active) VALUES (?,?,?,?,?,?,1)")
+    .run("보컬녹음", "스튜디오 녹음", 210, 300000, 60, 100000).lastInsertRowid;
+  const pid = d.prepare("INSERT INTO projects (title) VALUES (?)").run("세션 금액 테스트").lastInsertRowid;
+  const sid = d
+    .prepare(
+      `INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, status, rate_item_id)
+       VALUES (?,?,?,?,?,?,?)`
+    )
+    .run(pid, "녹음", "2026-07-01", "14:00", "17:30", "완료", rate).lastInsertRowid; // 3.5h = 1Pro = 300,000
+  return { pid, sid, rate };
+}
+
+test("세션 금액: 저장 전엔 단가표 산정(1Pro=300,000)", () => {
+  const { sid } = seed();
+  const s = D.getSessionForUser(user, sid);
+  const b = D.sessionRateAmount(s);
+  assert.strictEqual(b.amount, 300000);
+  assert.strictEqual(b.fixed, false, "단가표 산정치는 fixed=false");
+});
+
+test("세션 금액: 확정액을 저장하면 그 값이 쓰이고, 다시 조회해도 유지된다(폼 밖 영속)", () => {
+  const { pid, sid } = seed();
+  D.setSessionAmount(user, sid, 250000);
+
+  const s = D.getSessionForUser(user, sid);
+  assert.strictEqual(s.billing_amount, 250000, "DB에 저장");
+  const b = D.sessionRateAmount(s);
+  assert.strictEqual(b.amount, 250000, "산정 대신 확정액");
+  assert.strictEqual(b.fixed, true);
+
+  // 청구 폼의 후보 목록(다른 기기·새로고침 경로)도 확정액으로 보인다.
+  const billable = D.listBillableSessionsForProject(user, pid);
+  const row = billable.rows.find((r) => r.id === sid);
+  assert.strictEqual(row.billing.amount, 250000);
+
+  // 프로젝트 목록 금액(미청구 세션 합계)에도 반영.
+  const p = D.listProjects(user, {}).find((x) => x.id === pid);
+  assert.strictEqual(p.session_amount_total, 250000);
+});
+
+test("세션 금액: 0원도 유효한 확정액(무료 협의) / 빈 값이면 단가표 산정으로 복귀", () => {
+  const { sid } = seed();
+  D.setSessionAmount(user, sid, 0);
+  assert.strictEqual(D.sessionRateAmount(D.getSessionForUser(user, sid)).amount, 0, "0원 확정");
+
+  D.setSessionAmount(user, sid, null); // 빈 칸 = 되돌리기
+  const b = D.sessionRateAmount(D.getSessionForUser(user, sid));
+  assert.strictEqual(b.amount, 300000, "단가표 산정으로 복귀");
+  assert.strictEqual(b.fixed, false);
+});
+
+test("세션 금액: 이미 청구된 세션은 변경 거부(SESSION_INVOICED)", () => {
+  const { pid, sid } = seed();
+  const inv = db().prepare("INSERT INTO invoices (project_id, title, amount, status) VALUES (?,?,?,?)").run(pid, "청구", 330000, "발행").lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount) VALUES (?,?,?,1,300000,300000)").run(inv, sid, "세션");
+
+  assert.throws(() => D.setSessionAmount(user, sid, 111111), /SESSION_INVOICED/);
+  assert.strictEqual(db().prepare("SELECT billing_amount FROM sessions WHERE id = ?").get(sid).billing_amount, null, "값 안 바뀜");
+});

@@ -472,6 +472,7 @@ function init() {
   addColumn("parties", "contact_party_id", "INTEGER"); // 그룹의 담당자(parties.id, 사람 — 멤버 또는 관계자)
   addColumn("track_tasks", "waived", "INTEGER NOT NULL DEFAULT 0"); // 청구 안 함(무료 처리, 2026-07-06) — 청구 후보에서 되돌리기 가능하게 표시만, 예산·미청구 집계 제외
   addColumn("sessions", "waived", "INTEGER NOT NULL DEFAULT 0"); // 청구 안 함(무료 처리, 2026-07-06) — 위와 동일
+  addColumn("sessions", "billing_amount", "INTEGER"); // 확정 청구액(2026-07-14) — NULL이면 단가표 자동 산정, 값이 있으면 그 금액을 쓴다(청구 폼에서 고치면 즉시 저장 = 작업 total_price와 대칭)
   addColumn("project_managers", "id_number", "TEXT"); // 외주 작업자 주민등록번호/사업자등록번호(2026-07-06 사용자 요청) — 암호화 저장(db.encrypt), 정산 세금신고용
   addColumn("project_managers", "bank_name", "TEXT"); // 외주 작업자 정산 계좌 은행명
   addColumn("project_managers", "account_number", "TEXT"); // 외주 작업자 정산 계좌번호 — 암호화 저장(db.encrypt)

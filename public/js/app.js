@@ -820,17 +820,29 @@
   Array.prototype.forEach.call(document.querySelectorAll('input[name="phone"]'), function (el) { if (el.value) el.value = fmtPhone(el.value); });
 })();
 
-// 청구 폼 작업 금액 즉시 저장: task_amount_<id> 변경(포커스 이탈) 시 해당 작업 total_price에 바로 반영(초안 아님 → 목록·기본값 반영).
+// 청구 폼 금액 즉시 저장(포커스 이탈=change 시 DB 반영 → 초안 아님. 새로고침·다른 기기·다른 사람에게도 그대로).
+//  · task_amount_<id>    → 작업 total_price (POST /projects/tasks/:id/amount)
+//  · session_amount_<id> → 세션 billing_amount(확정 청구액, 2026-07-14 — 이전엔 폼 안에서만 살아 있다가 사라졌다).
+//    빈 값으로 지우면 NULL → 단가표 자동 산정으로 되돌아간다.
 (function () {
   "use strict";
   document.addEventListener("change", function (e) {
     var el = e.target;
     if (!el || !el.name) return;
-    var m = /^task_amount_(\d+)$/.exec(el.name);
-    if (!m) return;
+    var t = /^task_amount_(\d+)$/.exec(el.name);
+    var s = /^session_amount_(\d+)$/.exec(el.name);
+    if (!t && !s) return;
+    var digits = String(el.value).replace(/[^\d]/g, "");
     var body = new URLSearchParams();
-    body.append("amount", String(el.value).replace(/[^\d]/g, ""));
-    fetch("/projects/tasks/" + m[1] + "/amount", { method: "POST", body: body, headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" }).catch(function () {});
+    var url;
+    if (t) {
+      body.append("amount", digits);
+      url = "/projects/tasks/" + t[1] + "/amount";
+    } else {
+      body.append("amount", String(el.value).trim() === "" ? "" : digits); // 빈 칸 = 단가표 산정으로 복귀
+      url = "/sessions/" + s[1] + "/amount";
+    }
+    fetch(url, { method: "POST", body: body, headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" }).catch(function () {});
   });
 })();
 
