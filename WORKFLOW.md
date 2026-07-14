@@ -156,7 +156,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 
 ## 6. 검증 · 메인터넌스 명령
 
-### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 274개, CI Node 20/22 동일 실행)
+### 6-0. 테스트 체계 — 3층 방어선 + 스모크 (`npm test`, 275개, CI Node 20/22 동일 실행)
 
 > **철학(2026-07-04, 사용자 '아예 무결하게' 지시)**: 반복 실수는 주의력이 아니라 구조 문제.
 > **같은 실수 클래스가 2번 나오면 "조심"이 아니라 가드레일 테스트로 승격**한다(CLAUDE.md 함정 #21).
@@ -186,7 +186,7 @@ public/css/src.css       Tailwind 소스. **Pretendard** 한글폰트 연결, **
 **③ 작성 팁**(`test/helpers-dom.js`): `mountDom(html)`이 fetch 스텁·폴리필 포함해 실제 app.js를 window.eval로 실행(app.js는 DOMContentLoaded 무의존 IIFE라 실브라우저와 동일 초기화). 드롭다운 하이라이트는 MutationObserver(비동기)라 타이핑→Enter 사이 `await tick()` 필요. IME는 `fire(win, el, "keydown", { key:"Enter", isComposing:true })`.
 
 ```bash
-npm test                                   # 전체 274개(단위+가드+상호작용+스모크)
+npm test                                   # 전체 275개(단위+가드+상호작용+스모크)
 node --test test/guardrails*.test.js       # 가드만 빠르게
 node --test test/ui-interactions.test.js   # 상호작용만
 node --test test/smoke.test.js             # 실서버 기동 스모크(주요 화면 22개 200 + owner/staff 권한 매트릭스 — '조용히 죽는' 회귀·권한 배선 드리프트 검출)
@@ -228,6 +228,7 @@ BACKUP_TOKEN=<t> CRON_TRIGGER_URL=http://localhost:3000/internal/cron/daily node
 7. ✅ (완료) **data.js 모듈 분리** — 2049→58줄 순수 재export 허브 + 14개 도메인 모듈(`src/data/*.js`). 공개 export 124개 분리 전후 동일(매 커밋 대조). 상호의존(invoices↔sessions)만 지연 require, 나머지는 형제 모듈 직접 require. CLAUDE.md TODO 9 참조.
 8. (보류) **content_type/billing_type UI 노출** — `content_type[Music|Video_Post]`·`billing_type` 현재 미노출/강제; 영상 구분·과금 유형 선택은 향후 확장 시 복원.
 
+> **완료(2026-07-15)**: **'등록 실패' 버그 수정** — 업체 등록 모달의 성공 핸들러가 죽은 변수(ownerIdEl·owner, 2026-07-10 공동대표 칩 전환 잔재)를 참조해 ReferenceError → catch로 빠져 '등록 실패' 표시. **서버는 이미 생성한 뒤**라 재시도할수록 중복 업체가 늘었다(뮤직팜 3중 등록의 진짜 원인). jsdom 회귀(모달 저장을 실제로 눌러 성공 처리 확인 — 기존 테스트는 payload만 봐서 놓침).
 > **완료(2026-07-15)**: **청구처 항상 직접 지정**(자동 파생 폐기) — 서버 폴백 제거(미선택=`PAYER_REQUIRED` 차단)·폼 기본값 제거·프로젝트 당사자 **추천 칩**(1클릭)·제출 가드. 배경=음악감독 턴키 결제(제작/운영≠결제자). **다음**: 사업자인 개인 청구처에 세금계산서 발행(현재 개인=현금영수증 고정).
 > **완료(2026-07-14)**: **날짜 콤보 앱 전면 적용**(사용자 요청) — `views.dateCombo` 공용 헬퍼 + app.js 전역 초기화(`__initDateCombos`). 세션(시작·종료)·프로젝트 작성일(자동제출 유지)·청구 발행일·자료 만료일(행·업로드)·외주 지급일·소속 이력(시작·종료) 8곳. 네이티브 `type=date` 0개. 274 테스트·E2E.
 > **완료(2026-07-14)**: **중복 업체('뮤직팜' 3개) 원인 규명·봉합**: 같은 '새 업체' 폼이 연달아 3번 저장된 것(id 183·184·185 연속, 183만 참조 보유). ①`POST /clients`(업체)에 이름 중복 검사 신설 — 기존 업체 재사용(빈 칸만 채움·역할 추가), 사업자번호가 다르면 새로 생성. `resolveCompanyByName`은 공백·대소문자 무시. ②전 폼 공통 **이중 제출 가드**(첫 제출만 통과·버튼 잠금·8초/bfcache 해제·새 탭 제출 예외). 274 테스트·E2E.

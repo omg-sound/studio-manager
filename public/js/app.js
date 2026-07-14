@@ -1840,7 +1840,20 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         cSave.disabled = true; err.classList.add("hidden");
         fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
           .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (!d || !d.ok) throw new Error("fail"); announceParty({ kind: "company", id: d.id, name: d.name }); if (ownerIdEl && ownerIdEl.value && owner) announceParty({ kind: "person", id: ownerIdEl.value, name: owner, company: d.name, job_title: "대표" }); input.value = d.name; closeModal(); fireInput(); if (hidPid) hidPid.value = d.id; hide(); if (window.__toast) window.__toast(d.name + " 등록됨"); }) // 회사 + 대표자 소속·직책(대표) 브로드캐스트 (새 회사 id를 party-id에도 — fireInput 뒤에)
+          // ⚠️ 2026-07-15 버그수정: 여기서 옛 단일 대표자 hidden(ownerIdEl·owner)을 참조하고 있었는데, 공동대표 칩 전환
+          // (2026-07-10)에서 그 변수들이 사라져 **정의되지 않은 식별자 참조 → ReferenceError**가 났다. 예외가 아래 catch로
+          // 빠지면서 서버는 업체를 정상 생성했는데도 화면엔 '등록 실패'가 떴고, 사용자가 다시 누를수록 같은 업체가 하나씩
+          // 더 생겼다(뮤직팜 3중 등록의 진짜 원인). 대표자 브로드캐스트는 대표자 미니콤보의 '새 연락처 등록'이 이미 담당한다.
+          .then(function (d) {
+            if (!d || !d.ok) throw new Error("fail");
+            announceParty({ kind: "company", id: d.id, name: d.name });
+            input.value = d.name;
+            closeModal();
+            fireInput();
+            if (hidPid) hidPid.value = d.id; // 새 회사 id를 party-id 필드에도(fireInput 뒤에 — 타이핑 해제로 지워지지 않게)
+            hide();
+            if (window.__toast) window.__toast(d.name + (d.existing ? " (기존 업체에 연결)" : " 등록됨"));
+          })
           .catch(function () { err.textContent = "등록 실패 — 다시 시도하세요."; err.classList.remove("hidden"); })
           .then(function () { cSave.disabled = false; });
       });
