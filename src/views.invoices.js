@@ -32,7 +32,10 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
   if (client.email) rows.push(cell("세금계산서 발행 이메일", copyable(client.email)));
   if (contacts && contacts.length) {
     const c = contacts[0];
-    const parts = [`<span class="font-medium">${esc(c.name)}</span>`];
+    // 담당자 이름도 클릭 복사 — 정렬 때문에도 필요하다(2026-07-15 사용자 리포트 '담당자만 밖으로 삐져나옴'):
+    // 다른 값은 모두 copyable이라 hover 아이콘(⧉) 자리를 오른쪽에 상시 확보하는데, 이름만 순수 텍스트라
+    // 그 여백이 없어 텍스트가 한 칸 더 오른쪽으로 나와 보였다.
+    const parts = [copyable(c.name, { cls: "font-medium" })];
     if (c.phone) parts.push(copyable(c.phone));
     if (c.email) parts.push(copyable(c.email));
     rows.push(cell("담당자", parts.join(" · "))); // 이름·전화 확인용(홈택스 밖 부가 정보라 맨 아래)

@@ -78,3 +78,16 @@ test("청구 목록 행: ?open=<id>면 그 행만 펼친 채 렌더", () => {
   const closed = invoiceRow(INV, { ...opts, openId: 99 });
   assert.doesNotMatch(closed, /<details id="inv-7"[^>]* open>/);
 });
+
+// ── 청구처 정보 카드: 값 열 정렬(2026-07-15 사용자 리포트 '담당자 황예지만 밖으로 삐져나옴') ──
+// 다른 값은 모두 copyable(클릭 복사)이라 hover 아이콘(⧉) 자리를 오른쪽에 상시 확보하는데, 담당자 이름만
+// 순수 텍스트라 그 여백이 없어 텍스트가 한 칸 더 오른쪽으로 나와 보였다 → 담당자 이름도 copyable로 통일.
+test("청구처 정보 카드: 담당자 이름도 클릭 복사(값 열 오른쪽 끝 정렬 일치)", () => {
+  const { payerInfoCard } = require("../src/views.invoices");
+  const html = payerInfoCard(
+    { id: 1, kind: "company", name: "(주)도너츠컬처", biz_no: "261-81-02922", owner_name: "고영조", address: "서울", email: "a@b.c" },
+    [{ name: "황예지", phone: "010-1111-2222" }]
+  );
+  assert.match(html, /담당자<\/span><span class="text-right text-sm font-medium"><button type="button" data-copy="황예지"/, "담당자 이름 = copyable");
+  assert.doesNotMatch(html, /<span class="font-medium">황예지<\/span>/, "순수 텍스트(정렬 어긋남)로 렌더되면 안 됨");
+});
