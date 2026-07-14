@@ -799,7 +799,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           <input class="shrink-0" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" ${done ? "checked" : "data-confirm-pending"} id="session-cb-${s.id}" />
           <label for="session-cb-${s.id}" class="min-w-0 flex-1 cursor-pointer">
             <span class="block text-sm font-medium">${esc(label)}${statusTag}</span>
-            <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}</span>
+            <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}${s.billing.fixed ? ` · <span class="text-success">확정 금액</span>` : ""}</span>
           </label>
           <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
           <div class="relative w-28 shrink-0">

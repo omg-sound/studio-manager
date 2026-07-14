@@ -247,7 +247,11 @@ router.get("/", requireAuth, (req, res) => {
     const isAdmin = canEdit(user); // 펼침 세션 완료 토글 노출(편집 권한자). 완료 후 ?open=로 그 카드 재펼침.
     const openId = Number(req.query.open) || null;
     // 카드 테두리 없이 구분선 목록(2026-07-14 사용자 결정) — 행 자체가 border-b(.proj-row).
-    const listQuery = `/projects?tab=${tab}${keepQ}`; // 상세 백링크 복귀 경로(보던 탭·검색·mine 유지)
+    // 상세 백링크 복귀 경로 — 보던 탭·검색·mine에 더해 **더 보기(limit)·펼친 카드(open)**까지 유지
+    // (안 실으면 200건 펼쳐 보던 사람이 돌아왔을 때 기본 100건·접힌 목록으로 리셋된다).
+    const limitQ = Number(req.query.limit) > 0 ? `&limit=${Number(req.query.limit)}` : "";
+    const openQ = openId ? `&open=${openId}` : "";
+    const listQuery = `/projects?tab=${tab}${keepQ}${limitQ}${openQ}`;
     list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine, listQuery })).join("")}</div>${cap.more}`;
   }
 

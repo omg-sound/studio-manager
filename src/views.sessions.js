@@ -307,9 +307,16 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
       : s.status === "완료"
         ? '<span class="whitespace-nowrap text-success">청구 가능</span>'
         : '<span class="whitespace-nowrap text-muted">완료 시 청구</span>';
+  // 확정 청구액(billing.fixed = 청구 폼에서 사람이 고쳐 저장한 값)은 '예상'과 구분해 표시한다 —
+  // 안 그러면 세션 시간·단가를 바꿔도 옛 확정액이 그대로 뜨는데 단가표 산정치로 오인한다(2026-07-14 점검).
+  const amountChunk = s.billing && s.billing.fixed
+    ? `<span class="whitespace-nowrap text-success">확정 청구액 ${formatKRW(s.billing.amount)}</span>`
+    : s.billing && s.billing.amount > 0
+      ? `<span class="whitespace-nowrap text-success">예상 청구액 ${formatKRW(s.billing.amount)}</span>`
+      : `<span class="whitespace-nowrap text-muted">청구액 미정 <span class="text-muted/70">(청구 시 입력)</span></span>`;
   const billLine = s.billing
     ? `<div class="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 break-keep text-xs tabular">
-         ${s.billing.amount > 0 ? `<span class="whitespace-nowrap text-success">예상 청구액 ${formatKRW(s.billing.amount)}</span>` : `<span class="whitespace-nowrap text-muted">청구액 미정 <span class="text-muted/70">(청구 시 입력)</span></span>`}
+         ${amountChunk}
          <span class="break-keep text-muted">${s.billing.allDay ? "종일" : `${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분`} · ${esc(s.billing.item.name)}</span>
          ${billStatusChunk}
        </div>`
@@ -500,7 +507,7 @@ function sessionCardModal(s, { canEdit = false } = {}) {
   if (directors.length) lines.push(`디렉터 ${directors.map((d) => esc(personLabel(d.name, d.activity_name))).join(", ")}`);
   if (s.memo) lines.push(esc(s.memo));
   const bill = s.billing
-    ? `${s.billing.amount > 0 ? `예상 청구액 ${formatKRW(s.billing.amount)}` : "청구액 미정"} · ${s.billing.allDay ? "종일" : `${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분`} · ${esc(s.billing.item.name)}`
+    ? `${s.billing.fixed ? `확정 청구액 ${formatKRW(s.billing.amount)}` : s.billing.amount > 0 ? `예상 청구액 ${formatKRW(s.billing.amount)}` : "청구액 미정"} · ${s.billing.allDay ? "종일" : `${Math.floor(s.billing.minutes / 60)}시간 ${s.billing.minutes % 60}분`} · ${esc(s.billing.item.name)}`
     : "";
   const isDone = s.status === "완료";
   const canToggle = canEdit && (s.status === "예정" || s.status === "완료");

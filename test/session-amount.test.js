@@ -70,6 +70,22 @@ test("세션 금액: 0원도 유효한 확정액(무료 협의) / 빈 값이면 
   assert.strictEqual(b.fixed, false);
 });
 
+test("세션 금액: 확정액은 '확정 청구액'으로 표시(단가표 산정치와 구분)", () => {
+  // 확정액은 세션 시간·단가를 바꿔도 유지되므로, 표시가 '예상 청구액'이면 단가표 산정치로 오인한다.
+  const { sessionProjectCard } = require("../src/views.sessions"); // sessionRow는 내부 전용 — 카드로 렌더
+  const { pid, sid } = seed();
+  // billing(산정·확정)은 목록 조회가 붙여준다(단건 getSession은 원본 행만).
+  const render = () => sessionProjectCard(D.listSessionsForProject(user, pid).rows, { isAdmin: false });
+
+  const before = render();
+  assert.match(before, /예상 청구액/);
+
+  D.setSessionAmount(user, sid, 250000);
+  const after = render();
+  assert.match(after, /확정 청구액[\s\S]*250,000/);
+  assert.doesNotMatch(after, /예상 청구액/);
+});
+
 test("세션 금액: 종일(all_day) 세션도 프로젝트 예산에 반영(확정액·기본 블록)", () => {
   // 회귀: 프로젝트 금액 합계 쿼리만 start/end 시간을 요구해, 종일 세션은 청구 후보엔 뜨는데 금액은 0으로 빠졌다.
   const d = db();
