@@ -504,6 +504,13 @@ function init() {
     d.exec("UPDATE projects SET project_type = 'task' WHERE project_type = 'mixing'");
     setState("project_type_rename_v1", "done");
   }
+  // 카카오 알림 폐기(2026-07-14 사용자 결정 — '나와의 채팅'은 푸시 인지가 약해 이메일 알림으로 전환).
+  // admin_state에 남은 카카오 토큰·상태 키를 1회 삭제(암호화 토큰 잔재 제거). 멱등.
+  if (!getState("kakao_state_drop_v1")) {
+    d.exec(`DELETE FROM admin_state WHERE key IN
+      ('kakao_refresh_token','kakao_access_token','kakao_access_expires_at','kakao_nickname','kakao_linked_at','kakao_expired')`);
+    setState("kakao_state_drop_v1", "done");
+  }
   // '진행중'(In_Progress) 상태 폐기 — 대기/완료 2단계로. 기존 진행중 작업은 대기(Pending)로 승계(멱등).
   if (!getState("task_status_drop_inprogress_v1")) {
     d.exec("UPDATE track_tasks SET status = 'Pending' WHERE status = 'In_Progress'");

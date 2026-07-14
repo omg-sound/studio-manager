@@ -8,7 +8,6 @@ const { todayYmd } = require("./date");
 const { listInvoices, balanceOf } = require("../data");
 const { notifyAsync } = require("../notify");
 const drive = require("../drive");
-const kakao = require("../kakao");
 
 // 백업 디렉터리: DB와 같은 (영속) 디스크. 프로덕션 /var/data/backups, 로컬 ./data/backups.
 function backupDir() {
@@ -162,10 +161,7 @@ async function runDailyMaintenance(opts = {}) {
   // 감사 로그 보존(180일·최대 2만 건) — 무한 증가로 DB·백업이 커지는 것 방지(2026-07-09 스케일 점검). fail-safe.
   let auditPruned = 0;
   try { auditPruned = require("./audit").pruneAudit().pruned; } catch (_e) { /* 비차단 */ }
-  // 카카오 토큰 keep-alive — 청구가 오래 없어도 리프레시 토큰이 2개월 안에 계속 연장되게(fail-safe·비차단).
-  let kakaoKeepAlive = null;
-  try { kakaoKeepAlive = await kakao.keepAlive(); } catch (_e) { kakaoKeepAlive = { ok: false }; }
-  return { ok: !backupError, ranAt, backup, backupError, driveBackup, uploadsBackup, uploadsBackupError, overdue, overdueError, auditPruned, kakaoKeepAlive };
+  return { ok: !backupError, ranAt, backup, backupError, driveBackup, uploadsBackup, uploadsBackupError, overdue, overdueError, auditPruned };
 }
 
 module.exports = {

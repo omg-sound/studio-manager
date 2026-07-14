@@ -41,7 +41,6 @@ const {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
-  kakaoAlertSection,
   googleContactsSection,
   systemTab,
   systemWarnings,
@@ -57,7 +56,6 @@ const { migrateLocalFilesToDrive, driveFileCount } = require("../lib/storage-mig
 const logoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 const calendar = require("../calendar");
 const alerts = require("../notify");
-const kakao = require("../kakao");
 const { eventInputForSession } = require("./sessions.routes"); // 캘린더 재동기화 버튼 — 세션 캘린더 이벤트 입력(제목·설명) 재사용
 
 const router = express.Router();
@@ -88,7 +86,7 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
       { id: "ops", label: "스튜디오 운영", html: roomsSection() + studioHoursSection() + defaultBookerSection() },
       { id: "google", label: "구글 연동", html: (await studioCalendarSection()) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
       { id: "docs", label: "문서 · 청구", html: studioInfoSection() },
-      { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) + kakaoAlertSection(isChief(req.user)) },
+      { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) },
     ];
     const anchorNav = `<nav class="mb-1 flex flex-wrap gap-1.5" aria-label="환경설정 바로가기">
         ${groups.map((g) => `<a href="#set-${g.id}" class="badge badge-neutral hover:text-fg">${esc(g.label)}</a>`).join("")}
@@ -252,25 +250,6 @@ router.post("/alert-webhook/test", requireChief, asyncHandler(async (req, res) =
   res.redirect("/settings?tab=settings&flash=tested");
 }));
 
-router.post("/kakao/disconnect", requireChief, (req, res) => {
-  kakao.disconnect();
-  res.redirect("/settings?tab=settings&notice=" + encodeURIComponent("카카오 알림 연동을 해제했습니다."));
-});
-
-router.post("/kakao/test", requireChief, asyncHandler(async (req, res) => {
-  const r = await kakao.sendToMe({ text: "🧾 테스트 알림\nOMG Studios 카카오 알림이 정상 연동되었습니다.", url: config.baseUrl || undefined, buttonTitle: config.baseUrl ? "열기" : undefined });
-  const msg = r.ok ? "테스트 알림을 보냈습니다 — 카카오톡을 확인하세요." : "테스트 알림 발송 실패(연동 상태를 확인하세요).";
-  res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(msg) + (r.ok ? "" : "&notice_warn=1"));
-}));
-
-// 로그인 계정(owner 포함) → 연락처 보장(+하우스 담당자 연결은 ensurePartyForUser가 자체 처리). 담당자 있으면 성·이름 보강.
-function ensureContactForHouseUser(userId) {
-  ensurePartyForUser(findUserById(userId)); // user_id 연결 연락처 생성/보장 + 담당자 연락처 연결(중복 방지)
-  const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ? AND active = 1").get(userId);
-  if (mgr) ensurePartyForManager(mgr.id); // 성·이름 자동 분리 보강
-}
-
-// ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
 router.post("/users", requireChief, (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const name = String(req.body.user_name != null ? req.body.user_name : req.body.name || "").trim(); // 폼 필드=user_name(자동완성 회피)

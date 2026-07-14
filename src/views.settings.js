@@ -21,7 +21,6 @@ const { esc, formatKRW, formatBytes, emptyState, detailsChevron, explain } = req
 const drive = require("./drive");
 const calendar = require("./calendar");
 const alerts = require("./notify");
-const kakao = require("./kakao");
 const { localFileCount, driveFileCount } = require("./lib/storage-migrate");
 const fs = require("fs");
 const path = require("path");
@@ -452,35 +451,6 @@ function alertWebhookSection(chief = true) {
     </div>`;
 }
 
-/** 카카오 알림(청구 발행) — '나에게 보내기' 연동. 스튜디오 전체 1개 수신자. 치프 전용 관리. */
-function kakaoAlertSection(chief = true) {
-  const st = kakao.getLinkStatus();
-  let controls;
-  if (!st.configured) {
-    controls = `<p class="text-sm text-muted">환경변수 <span class="text-fg">KAKAO_REST_API_KEY</span> 미설정 — 카카오 앱 등록 후 배포 설정에 추가하세요.</p>`;
-  } else if (!chief) {
-    controls = `<p class="text-sm text-muted">${st.linked ? `현재 수신: <span class="text-fg">${esc(st.nickname || "연결됨")}</span>` : "카카오 알림 미연동."} 변경은 <span class="text-fg">치프 엔지니어</span>만 가능합니다.</p>`;
-  } else if (st.linked) {
-    controls = `
-      <p class="text-sm">현재 수신: <span class="font-semibold text-fg">${esc(st.nickname || "연결됨")}</span> <span class="text-xs text-muted">(이 카카오 계정으로 청구 발행 알림이 옵니다)</span></p>
-      <div class="flex gap-2">
-        <form method="post" action="/settings/kakao/test"><button class="btn-ghost btn-sm" type="submit">테스트 알림 보내기</button></form>
-        <form method="post" action="/settings/kakao/disconnect" data-confirm="카카오 알림 연동을 해제할까요?"><button class="btn-ghost btn-sm text-danger" type="submit">연동 해제</button></form>
-      </div>`;
-  } else {
-    const expiredNote = st.expired ? `<p class="mb-1 text-xs text-warning">⚠️ 연동이 만료되었습니다 — 다시 연동해 주세요.</p>` : "";
-    controls = `${expiredNote}<a href="/auth/kakao" class="btn-primary btn-sm inline-block">카카오로 연동하기</a>`;
-  }
-  return `
-    <div class="${SETTING_BLOCK}">
-      <div>
-        <h2 class="text-sm font-semibold">카카오 알림 (청구 발행)</h2>
-        ${explain(`청구 탭에서 청구가 생성될 때, 연동한 카카오 계정으로 카카오톡 알림을 보냅니다("나에게 보내기"). 받을 사람이 직접 자기 카카오로 연동해야 합니다.`)}
-      </div>
-      ${controls}
-    </div>`;
-}
-
 /** last_login(ISO UTC) → '오늘/어제/N일 전/미로그인' 상대 표시(계정 위생, 2026-07-09 관리 개선). */
 function lastLoginLabel(iso) {
   if (!iso) return "";
@@ -686,9 +656,6 @@ function systemWarnings() {
   if (free != null && free < 500 * 1024 * 1024) warns.push(`디스크 여유 공간이 ${formatBytes(free)}뿐입니다 — 가득 차면 DB 저장이 실패합니다(백업 보존 축소·디스크 증설 검토).`);
   if (config.googleConfigured && !drive.isLinked()) warns.push("구글 Drive 미연동 — 첨부·백업 오프사이트가 로컬에만 저장됩니다.");
   if (!getState("studio_calendar_id")) warns.push("스튜디오 캘린더 미설정 — 세션의 구글 캘린더 자동 연동이 꺼져 있습니다.");
-  // 카카오 알림 만료(2026-07-13 점검): 갱신 실패·사용자 해제·TOKEN_ENC_KEY 불일치로 청구 발행 알림이
-  // 조용히 끊기는데 경고가 알림 섹션에만 묻혀 있었다 — Drive·캘린더와 동일 클래스(조용한 장애)라 여기서 가시화.
-  if (config.kakaoConfigured && kakao.getLinkStatus().expired) warns.push("카카오 알림 연동이 만료되었습니다 — 청구 발행 알림이 중단된 상태입니다. 환경설정 > 알림에서 다시 연동하세요.");
   return warns;
 }
 
@@ -720,7 +687,6 @@ function systemTab(chief) {
         <span>구글 Drive ${badge(linked, "연동됨", "미연동")}</span>
         <span>구글 연락처 ${badge(peopleOn, "푸시 가능", "미연동")}</span>
         <span>알림 웹훅 ${badge(alerts.isConfigured(), "설정됨", "미설정")}</span>
-        ${(() => { const kst = kakao.getLinkStatus(); return `<span>카카오 알림 ${badge(kst.linked, "연동됨", !kst.configured ? "미설정" : kst.expired ? "만료 — 재연동 필요" : "미연동")}</span>`; })()}
       </div>
       <p class="mt-2 text-xs text-muted">세부 설정·연결은 환경설정 탭에서.</p>
     </section>`;
@@ -799,7 +765,6 @@ module.exports = {
   defaultBookerSection,
   studioInfoSection,
   alertWebhookSection,
-  kakaoAlertSection,
   googleContactsSection,
   systemTab,
   systemWarnings,

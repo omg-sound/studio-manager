@@ -33,14 +33,6 @@ const config = {
     },
   },
 
-  kakao: {
-    restApiKey: process.env.KAKAO_REST_API_KEY || "",
-    clientSecret: process.env.KAKAO_CLIENT_SECRET || "", // 선택(카카오 앱에서 client secret 사용 시)
-    get redirectUri() {
-      return `${baseUrl.replace(/\/+$/, "")}/auth/kakao/callback`;
-    },
-  },
-
   dbPath: path.resolve(process.env.DB_PATH || "./data/app.db"),
   maxUploadMb: parseInt(process.env.MAX_UPLOAD_MB || "200", 10),
   // 로컬 스토리지 백엔드 디렉터리(DB와 같은 디스크에). Render는 영속 Disk(/var/data/uploads).
@@ -61,7 +53,6 @@ const config = {
 
 config.isProd = config.env === "production";
 config.googleConfigured = Boolean(config.google.clientId && config.google.clientSecret);
-config.kakaoConfigured = Boolean(config.kakao.restApiKey);
 
 function isWeakSecret(value, devDefault) {
   const v = String(value || "").trim();

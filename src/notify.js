@@ -15,7 +15,6 @@ const dns = require("dns");
 const { isIP } = require("net");
 const { getState, setState, encrypt, decrypt } = require("./db");
 const { config } = require("./config");
-const kakao = require("./kakao");
 
 // 사설·링크로컬·루프백 IP 패턴(IPv4 + IPv6)
 const PRIVATE_IP_PATTERNS = [
@@ -89,25 +88,12 @@ function buildPayload(event) {
   return { text, content: text, type: event.type || "alert" };
 }
 
-/** 카카오 채널 — invoice_issued 이벤트만. fail-safe(throw 없음·notify 흐름 비차단). */
-async function dispatchKakao(event) {
-  try {
-    if (!event || event.type !== "invoice_issued") return;
-    await kakao.sendToMe({ text: formatKakaoText(event), url: event.url, buttonTitle: "청구서 보기" });
-  } catch (e) {
-    console.warn("[notify] 카카오 전송 실패(무시):", e && e.message ? e.message : String(e));
-  }
-}
-
 /**
  * 알림 전송(fail-safe). 절대 throw하지 않음. 미설정이면 조용히 skip.
  * @returns {Promise<{ok:boolean, skipped?:string, status?:number, error?:string}>}
  */
 async function notify(event) {
   try {
-    // 카카오는 웹훅과 독립 채널 — 웹훅 분기(미설정·ssrf 차단·fetch throw)와 무관하게 먼저 발송한다(invoice_issued만, 자체 fail-safe).
-    // (웹훅 제어 흐름에 묶어두면 웹훅 설정·오류 시 카카오가 조용히 누락됨 — 최종 브랜치 리뷰 Important.)
-    await dispatchKakao(event);
     const url = getWebhookUrl();
     if (!url) return { ok: false, skipped: "not_configured" };
     // SSRF 방어: 사설/링크로컬 IP 대역이면 차단
@@ -131,7 +117,7 @@ async function notify(event) {
 }
 
 // in-flight 알림 추적(2026-07-13 점검) — main 커밋=자동배포라 재시작이 잦은데, fire-and-forget 전송이
-// SIGTERM 순간 그대로 죽으면 카카오(대표의 유일한 청구 알림 채널) 알림이 무음 유실된다. server.js의
+// SIGTERM 순간 그대로 죽으면 방금 발행한 청구의 알림이 무음 유실된다. server.js의
 // SIGTERM 핸들러가 drainNotifications()로 진행 중 전송을 짧게 기다린 뒤 종료한다.
 const inFlight = new Set();
 
@@ -153,18 +139,6 @@ async function drainNotifications(timeoutMs = 5000) {
     new Promise((r) => setTimeout(r, timeoutMs)),
   ]);
   return { drained: n };
-}
-
-/** notify 이벤트 → 카카오 텍스트. 200자 절단은 kakao.sendToMe가 처리.
- *  제목 "[분류] 나머지"를 "🧾 분류 ⏎ 나머지" 2줄 헤더로 변환 — 설계 문서 §5의 카카오 표시 형식
- *  (웹훅 title은 그대로 두고 카카오 표시만 변환. 테스트 발송 문구 '🧾 테스트 알림'과 모양 일치 — 2026-07-13 점검). */
-function formatKakaoText(event) {
-  const title = String(event.title || "");
-  const m = title.match(/^\[([^\]]+)\]\s*(.*)$/);
-  const lines = m ? [`🧾 ${m[1]}`, m[2]] : [title];
-  lines.push(event.text);
-  for (const f of event.fields || []) if (f && f.value) lines.push(`${f.label}: ${f.value}`);
-  return lines.filter(Boolean).join("\n");
 }
 
 /** 원화 표기(views.formatKRW와 동일 출력) — notify를 뷰 레이어에 의존시키지 않으려 인라인. */
@@ -198,7 +172,6 @@ module.exports = {
   notifyAsync,
   notifyInvoiceIssued,
   drainNotifications,
-  formatKakaoText,
   getWebhookUrl,
   getConfiguredWebhook,
   setWebhookUrl,
