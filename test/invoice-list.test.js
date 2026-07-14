@@ -54,14 +54,19 @@ test("청구 목록 행: 아티스트 여러 명은 '외 N', 프로젝트 없으
   assert.match(manual, /class="inv-payer">\(주\)도너츠컬처</, "청구처는 그대로");
 });
 
-test("청구 목록 행: 상태 pill 2개(권한자) — 켜짐/꺼짐 + 짧은·긴 라벨 모두 렌더(밀도 CSS 전환)", () => {
+test("청구 목록 행: 상태 버튼 — 좁게=아이콘(툴팁), 넓게=라벨. 두 표현 모두 렌더(CSS 전환)", () => {
   const html = invoiceRow(INV, opts); // tax_status='계산서 발행' → 계산서 켜짐, 입금 꺼짐
   assert.match(html, /data-row-action/, "행 액션 컨테이너(app.js가 펼침 토글을 막고 폼만 제출)");
   assert.match(html, /action="\/invoices\/7\/tax-status"/, "상태 토글 폼");
-  assert.match(html, /<span class="inv-narrow-only">계산서<\/span><span class="inv-comfy-only">계산서 발행 완료<\/span>/, "짧은·긴 라벨 둘 다 렌더");
-  assert.match(html, /<span class="inv-narrow-only">입금<\/span><span class="inv-comfy-only">입금완료<\/span>/);
-  assert.match(html, /bg-success\/10 text-success[^>]*>.*✓.*계산서/s, "발행됨 = 켜짐(불)");
-  // 넓게 전용(청구번호·발행일)은 항상 렌더 — CSS로만 숨긴다(전환에 서버 왕복 0)
+  // 좁게 = 아이콘만(라벨 없음) — 폭이 고정돼 금액 열이 안 밀린다
+  assert.match(html, /<span class="inv-icon inv-narrow-only"><svg/, "아이콘(좁게 전용)");
+  // 무엇인지는 툴팁·스크린리더 라벨로 (아이콘만 보여도 의미 전달)
+  assert.match(html, /title="계산서 발행 완료 \(누르면 되돌리기\)" aria-label="계산서 발행 완료 \(누르면 되돌리기\)"/, "켜진 계산서 툴팁");
+  assert.match(html, /title="입금완료로 표시" aria-label="입금완료로 표시"/, "꺼진 입금 툴팁");
+  // 넓게 = 글리프 + 긴 라벨(항상 렌더, CSS로만 표시 전환)
+  assert.match(html, /<span class="inv-comfy-only">.*✓.*계산서 발행 완료<\/span>/s, "넓게 라벨(켜짐 ✓)");
+  assert.match(html, /<span class="inv-comfy-only">.*−.*입금완료<\/span>/s, "넓게 라벨(꺼짐 −)");
+  assert.match(html, /bg-success\/10 text-success/, "발행됨 = 켜짐(불)");
   assert.match(html, /class="inv-doc inv-comfy-only">OMG-202607-014 · 2026-07-14/);
 });
 

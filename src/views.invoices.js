@@ -83,15 +83,22 @@ function taxToggleButtons(inv, retPath, { compact = false } = {}) {
   const taxDoc = taxDocOf(inv);
   const taxIssued = inv.tax_status === "계산서 발행" || inv.tax_status === "입금완료";
   const isPaid = inv.tax_status === "입금완료";
-  // compact(목록 한 줄 행) = 짧은 라벨('계산서'/'입금')로 자리를 줄인다. 넓게 모드에선 CSS가 긴 라벨로 교체
-  // (두 라벨 모두 렌더하고 .inv-narrow-only/.inv-comfy-only로 전환 — 밀도 전환에 서버 왕복 0).
-  const label = (short, long) =>
+  // compact(목록 한 줄 행, 2026-07-15 사용자 요청 '버튼이 뚱뚱해 보기 안 좋다'):
+  //  · 좁게 = **아이콘만**(정사각 버튼) + hover 툴팁(title)·스크린리더 라벨(aria-label)로 무엇인지 알림.
+  //  · 넓게 = 지금처럼 **글리프(✓/−) + 긴 라벨** 버튼.
+  // 두 표현을 모두 렌더하고 .inv-narrow-only/.inv-comfy-only로 CSS 전환한다(밀도 전환에 서버 왕복 0).
+  const DOC_ICON = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 17.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5z" /><path d="M11.5 2.5v4h4M7.5 10.5h5M7.5 13.5h5" /></svg>`;
+  const PAY_ICON = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><text x="10" y="13.5" text-anchor="middle" font-size="9" stroke="none" fill="currentColor">₩</text></svg>`;
+  const face = (icon, long, lit) =>
     compact
-      ? `<span class="inv-narrow-only">${esc(short)}</span><span class="inv-comfy-only">${esc(long)}</span>`
-      : esc(long);
-  const toggleBtn = (target, short, long, lit) =>
-    `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost ${compact ? "btn-xs" : "btn-sm"} ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit"><span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${label(short, long)}</button></form>`;
-  return `${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", taxDoc, `${taxDoc} 발행 완료`, taxIssued)}${toggleBtn(isPaid ? "계산서 발행" : "입금완료", "입금", "입금완료", isPaid)}`;
+      ? `<span class="inv-icon inv-narrow-only">${icon}</span><span class="inv-comfy-only"><span aria-hidden="true" class="mr-1 inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(long)}</span>`
+      : `<span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(long)}`;
+  const toggleBtn = (target, icon, long, lit) => {
+    // 툴팁·스크린리더: 현재 상태 + 누르면 무엇이 되는지(되돌리기 포함) — 아이콘만 보일 때도 의미가 전달되게.
+    const hint = lit ? `${long} (누르면 되돌리기)` : `${long}로 표시`;
+    return `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost ${compact ? "btn-xs" : "btn-sm"} ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" title="${esc(hint)}" aria-label="${esc(hint)}">${face(icon, long, lit)}</button></form>`;
+  };
+  return `${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", DOC_ICON, `${taxDoc} 발행 완료`, taxIssued)}${toggleBtn(isPaid ? "계산서 발행" : "입금완료", PAY_ICON, "입금완료", isPaid)}`;
 }
 
 /** 목록 행 첫 열 = 청구처(결제 주체). 미지정이면 청구 제목으로 폴백. */
