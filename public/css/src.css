@@ -204,13 +204,20 @@ input[data-datepick]::-webkit-calendar-picker-indicator { display: none; }
 }
 .proj-summary::-webkit-details-marker { display: none; }
 /* 링크(<a>)는 **텍스트 폭만** 차지한다 — flex:1로 늘리면 행 여백까지 링크가 먹어
-   '행 클릭=펼침 / 제목 클릭=상세' 규약이 깨진다(실브라우저에서 확인). 남는 공간은 summary(=펼침). */
+   '행 클릭=펼침 / 제목 클릭=상세' 규약이 깨진다(실브라우저에서 확인). 남는 공간은 summary(=펼침).
+   밑줄 = 링크 어포던스(행 전체가 클릭 가능하므로 '어디를 누르면 상세로 가는지'를 밑줄로 표시 — 2026-07-14 사용자 요청). */
 .proj-main {
   display: flex;
   min-width: 0;
   flex: 0 1 auto;
   align-items: baseline;
   gap: 0.75rem;
+  text-decoration: underline;
+  text-decoration-color: rgb(var(--color-border));
+  text-underline-offset: 3px;
+}
+.proj-main:hover {
+  text-decoration-color: currentColor;
 }
 .proj-artist {
   flex: none;

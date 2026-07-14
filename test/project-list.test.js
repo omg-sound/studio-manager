@@ -74,13 +74,18 @@ test("projectArtistLabel/SubLabel: 다중·중복·폴백", () => {
 test("projectListRow: 밀도 계약 — 넓게 전용 요소는 마크업에 있되 proj-comfy-only(좁게에선 CSS로 숨김)", () => {
   const p = pRow({ created_at: "2026-07-01 10:00:00", sess_scheduled: 2 });
   const html = views.projectListRow(p, emptySummary, { tab: "active" });
-  assert.match(html, /class="proj-created proj-comfy-only[^"]*">2026-07-01</, "작성일(진행 중=넓게 전용)");
   assert.match(html, /class="proj-pm proj-comfy-only[^"]*">PM 박수한</, "PM=넓게 전용");
   assert.match(html, /class="proj-counts proj-comfy-only[^"]*">예정 세션 2</, "카운트 요약=넓게 전용");
-  assert.doesNotMatch(html, /10:00:00/, "작성일 시각은 표시 안 함");
-  // 완료 탭에선 작성일이 좁게에도 보인다(그 탭의 정렬 근거).
+});
+
+test("projectListRow: 작성일은 완료 탭에서만(진행 중은 다음 세션 날짜와 섞이므로 미표시)", () => {
+  const p = pRow({ created_at: "2026-07-01 10:00:00", next_session_date: "2099-01-01" });
+  for (const tab of ["active", "billing"]) {
+    assert.doesNotMatch(views.projectListRow(p, emptySummary, { tab }), /2026-07-01/, `${tab} 탭엔 작성일 없음`);
+  }
   const doneHtml = views.projectListRow(p, emptySummary, { tab: "done" });
-  assert.match(doneHtml, /class="proj-created text-xs/, "완료 탭 작성일은 항상 표시");
+  assert.match(doneHtml, /class="proj-created text-xs[^"]*">2026-07-01</, "완료 탭에선 두 밀도 모두 표시");
+  assert.doesNotMatch(doneHtml, /10:00:00/, "시각은 표시 안 함");
 });
 
 test("projectListRow: 행=펼침(summary), 제목만 링크(details 구조)", () => {
@@ -110,10 +115,9 @@ test("projectRowHref: 청구 필요=청구 탭, 진행 중=세션(없고 곡만 
   assert.match(views.projectListRow(withSess, emptySummary, { tab: "billing" }), /href="\/projects\/7\?tab=invoice"/);
 });
 
-test("projectListRow: 우측 열 순서 = 작성일 → PM → 다음 세션(넓게 세로 스택)", () => {
-  const html = views.projectListRow(pRow({ created_at: "2026-07-01 10:00:00", next_session_date: "2099-01-01" }), emptySummary, { tab: "active" });
+test("projectListRow: 우측 열 순서 = PM → 다음 세션(넓게 세로 스택)", () => {
+  const html = views.projectListRow(pRow({ next_session_date: "2099-01-01" }), emptySummary, { tab: "active" });
   const meta = html.slice(html.indexOf('class="proj-meta"'));
-  assert.ok(meta.indexOf("2026-07-01") < meta.indexOf("PM 박수한"), "작성일이 PM보다 앞");
   assert.ok(meta.indexOf("PM 박수한") < meta.indexOf("proj-next"), "PM 다음이 다음 세션");
 });
 

@@ -134,9 +134,10 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   const artist = esc(projectArtistLabel(p));
   const sub = esc(projectSubLabel(p));
 
-  // 우측 열. 작성일은 완료 탭에서만 좁게에도 노출(그 탭의 정렬 근거), 그 외 탭에선 넓게 전용.
-  const created = p.created_at
-    ? `<span class="proj-created${isDone ? "" : " proj-comfy-only"} text-xs text-muted tabular">${esc(String(p.created_at).slice(0, 10))}</span>` : "";
+  // 작성일 = **완료 탭 전용**(2026-07-14 사용자 요청 — 진행 중에선 다가오는 세션 날짜와 섞여 헷갈린다).
+  // 완료 탭의 정렬 근거(작성일 최신순)라 그 탭에선 두 밀도 모두 표시.
+  const created = isDone && p.created_at
+    ? `<span class="proj-created text-xs text-muted tabular">${esc(String(p.created_at).slice(0, 10))}</span>` : "";
   const pm = p.manager_name ? `<span class="proj-pm proj-comfy-only text-xs text-muted">PM ${esc(p.manager_name)}</span>` : "";
   const next = nextSessionLine(p); // 진행 중에서만 값이 있다(완료·청구필요는 next_session_date=null)
   const amt = projectAmount(p);
