@@ -244,6 +244,10 @@ router.post("/studio-info", requireStaff, (req, res) => {
 // ── 알림 웹훅 설정/테스트 ──
 router.post("/alert-webhook", requireChief, (req, res) => {
   alerts.setWebhookUrl(req.body.webhook_url); // 암호화 저장(또는 비우면 해제)
+  const url = String(req.body.webhook_url || "").trim();
+  let host = "해제";
+  if (url) { try { host = new URL(url).host; } catch { host = "(형식 오류)"; } }
+  logAudit(req.user, "settings.alert_webhook", host); // 외부로 나가는 채널 — URL 전체는 비밀이라 host만
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
@@ -261,6 +265,9 @@ router.post("/alert-email", requireChief, (req, res) => {
     return res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(msg) + "&notice_warn=1");
   }
   mailer.setRecipients(raw);
+  const to = mailer.getRecipients();
+  // 청구 PII가 상시 나가는 채널이라 변경 이력을 남긴다(주소는 마스킹 — 감사 로그에 평문 금지).
+  logAudit(req.user, "settings.alert_email", to.length ? to.map(mailer.maskEmail).join(", ") : "해제");
   res.redirect("/settings?tab=settings&flash=saved");
 });
 
@@ -275,6 +282,13 @@ router.post("/alert-email/test", requireChief, asyncHandler(async (req, res) => 
   res.redirect("/settings?tab=settings&notice=" + encodeURIComponent(msg) + (r.ok ? "" : "&notice_warn=1"));
 }));
 
+function ensureContactForHouseUser(userId) {
+  ensurePartyForUser(findUserById(userId)); // user_id 연결 연락처 생성/보장 + 담당자 연락처 연결(중복 방지)
+  const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ? AND active = 1").get(userId);
+  if (mgr) ensurePartyForManager(mgr.id); // 성·이름 자동 분리 보강
+}
+
+// ── 하우스 엔지니어(로그인 화이트리스트) 관리 — 작업 담당자 자동 동기화 ──
 router.post("/users", requireChief, (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const name = String(req.body.user_name != null ? req.body.user_name : req.body.name || "").trim(); // 폼 필드=user_name(자동완성 회피)

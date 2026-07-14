@@ -48,14 +48,16 @@ function sessionAmountsByProject(projectIds) {
   // ② 미청구 녹음 세션 = 예상 청구액(단가표 자동 산정).
   const rows = db()
     .prepare(
-      `SELECT s.id, s.project_id, s.start_time, s.end_time, s.billing_amount,
+      // 종일(all_day) 세션은 시간이 없지만 청구 후보이고 확정액도 가질 수 있다(sessionRateAmount와 동일 규칙:
+      // 1 기준 블록으로 산정). 시간 필수 조건만 걸어 두면 종일 세션 금액이 프로젝트 예산에서 통째로 빠진다.
+      `SELECT s.id, s.project_id, s.all_day, s.start_time, s.end_time, s.billing_amount,
               ri.base_minutes, ri.base_price, ri.extra_minutes, ri.extra_price
        FROM sessions s
        JOIN rate_items ri ON ri.id = s.rate_item_id
        WHERE s.project_id IN (${placeholders})
          AND s.session_type IN (${RENTAL_IN})
          AND s.rate_item_id IS NOT NULL
-         AND s.start_time IS NOT NULL AND s.end_time IS NOT NULL
+         AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
          AND s.status <> '취소'
          AND s.waived = 0`
     )
@@ -67,8 +69,8 @@ function sessionAmountsByProject(projectIds) {
       sums[row.project_id] = (sums[row.project_id] || 0) + Math.round(row.billing_amount);
       continue;
     }
-    const mins = minutesBetween(row.start_time, row.end_time);
-    if (mins <= 0) continue;
+    const mins = row.all_day ? row.base_minutes || 0 : minutesBetween(row.start_time, row.end_time);
+    if (!row.all_day && mins <= 0) continue;
     sums[row.project_id] = (sums[row.project_id] || 0) + computeRatePrice(row, mins);
   }
   return sums;

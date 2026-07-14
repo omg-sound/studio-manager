@@ -74,3 +74,9 @@ test("전 목록: 행 링크가 현재 목록 주소를 return으로 넘긴다",
   assert.match(R("clients.routes.js"), /return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "clients: 행에 return");
   assert.match(R("workers.routes.js"), /\/workers\/\$\{w\.id\}\?return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "workers: 행에 return");
 });
+test("상세 탭 링크가 return을 잃지 않는다 — 탭 한 번 누르면 백링크가 기본 목록으로 떨어지던 사각", () => {
+  // 목록→상세 진입에 return을 실어도, 상세 안의 탭 링크가 그걸 버리면 탭을 한 번 누른 순간 백링크가 무효화된다
+  // (프로젝트에서 실제 발생). 탭바를 가진 상세 화면은 탭 href에 return을 이어 붙여야 한다.
+  assert.match(R("projects.routes.js"), /\?tab=\$\{t\.key\}\$\{keepRet\}/, "projects: 탭 링크가 return 보존");
+  assert.match(R("clients.routes.js"), /keepQ/, "clients: 탭 링크가 from·return 보존");
+});

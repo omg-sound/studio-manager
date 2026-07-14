@@ -70,6 +70,27 @@ test("세션 금액: 0원도 유효한 확정액(무료 협의) / 빈 값이면 
   assert.strictEqual(b.fixed, false);
 });
 
+test("세션 금액: 종일(all_day) 세션도 프로젝트 예산에 반영(확정액·기본 블록)", () => {
+  // 회귀: 프로젝트 금액 합계 쿼리만 start/end 시간을 요구해, 종일 세션은 청구 후보엔 뜨는데 금액은 0으로 빠졌다.
+  const d = db();
+  const rate = d
+    .prepare("INSERT INTO rate_items (name, category, base_minutes, base_price, extra_minutes, extra_price, active) VALUES (?,?,?,?,?,?,1)")
+    .run("종일녹음", "스튜디오 녹음", 210, 300000, 60, 100000).lastInsertRowid;
+  const pid = d.prepare("INSERT INTO projects (title) VALUES (?)").run("종일 세션 프로젝트").lastInsertRowid;
+  const sid = d
+    .prepare(`INSERT INTO sessions (project_id, session_type, session_date, all_day, status, rate_item_id) VALUES (?,?,?,1,?,?)`)
+    .run(pid, "녹음", "2026-07-20", "완료", rate).lastInsertRowid;
+
+  // 확정액 없으면 1 기준 블록(300,000)
+  let p = D.listProjects(user, {}).find((x) => x.id === pid);
+  assert.strictEqual(p.session_amount_total, 300000, "종일 세션 기본 산정 반영");
+
+  // 확정액을 넣으면 그 값으로
+  D.setSessionAmount(user, sid, 500000);
+  p = D.listProjects(user, {}).find((x) => x.id === pid);
+  assert.strictEqual(p.session_amount_total, 500000, "종일 세션 확정액 반영");
+});
+
 test("세션 금액: 이미 청구된 세션은 변경 거부(SESSION_INVOICED)", () => {
   const { pid, sid } = seed();
   const inv = db().prepare("INSERT INTO invoices (project_id, title, amount, status) VALUES (?,?,?,?)").run(pid, "청구", 330000, "발행").lastInsertRowid;

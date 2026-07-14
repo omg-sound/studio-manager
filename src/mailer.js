@@ -74,9 +74,14 @@ function maskEmail(addr) {
   return `${user.slice(0, 2)}***@${domain}`;
 }
 
+/** 헤더 값의 CRLF 제거(헤더 인젝션 차단 — 제목이 ASCII라 인코딩을 안 타는 경우 대비). */
+function headerSafe(v) {
+  return String(v || "").replace(/[\r\n]+/g, " ");
+}
+
 /** 한글 제목 → RFC 2047(base64) 인코딩. ASCII만이면 그대로. */
 function encodeSubject(subject) {
-  const s = String(subject || "");
+  const s = headerSafe(subject);
   // eslint-disable-next-line no-control-regex
   if (/^[\x00-\x7F]*$/.test(s)) return s;
   return `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
@@ -84,11 +89,11 @@ function encodeSubject(subject) {
 
 /** RFC822 MIME 문자열(순수 함수 — 테스트 대상). 본문은 HTML(UTF-8·base64). */
 function buildMime({ to, subject, html, from }) {
-  const sender = from || config.studioDriveEmail;
+  const sender = headerSafe(from || config.studioDriveEmail);
   const body = Buffer.from(String(html || ""), "utf8").toString("base64").replace(/(.{76})/g, "$1\r\n");
   return [
     `From: ${FROM_NAME} <${sender}>`,
-    `To: ${(to || []).join(", ")}`,
+    `To: ${(to || []).map(headerSafe).join(", ")}`,
     `Subject: ${encodeSubject(subject)}`,
     "MIME-Version: 1.0",
     "Content-Type: text/html; charset=UTF-8",
@@ -160,7 +165,12 @@ function invoiceMail(inv, { payer = null, items = [] } = {}) {
   ].filter(Boolean).join("");
 
   // ② 청구 항목 + 소계·할인·VAT·총액(청구 상세와 동일 구성).
-  const supply = Math.max(0, Number(inv.amount || 0) - Number(inv.tax_amount || 0));
+  // 소계 = **라인 합(할인 전)** — 청구 상세 화면과 같은 정의. `amount - tax_amount`는 이미 할인이 빠진
+  // 과세표준이라 그걸 소계로 쓰면 할인이 두 번 차감돼 보인다(라인 없는 레거시 청구서만 그 값으로 폴백).
+  const discount = Number(inv.discount_amount || 0);
+  const lineSum = (items || []).reduce((s, it) => s + Number(it.amount || 0), 0);
+  const hasLines = (items || []).length > 0;
+  const supply = hasLines ? lineSum : Math.max(0, Number(inv.amount || 0) - Number(inv.tax_amount || 0));
   const itemRows = (items || [])
     .map(
       (it) =>
@@ -184,7 +194,7 @@ function invoiceMail(inv, { payer = null, items = [] } = {}) {
     ${itemRows}
     <tr><td colspan="2" style="border-top:1px solid #E5E1D8;padding:0"></td></tr>
     ${totalRow("소계", supply)}
-    ${Number(inv.discount_amount) ? totalRow("할인", -Number(inv.discount_amount)) : ""}
+    ${discount && hasLines ? totalRow("할인", -discount) : ""}
     ${totalRow("VAT", inv.tax_amount || 0)}
     ${totalRow("총액", inv.amount, true)}
   </table>
@@ -200,14 +210,19 @@ async function sendInvoiceIssued(inv) {
   if (!inv) return { ok: false, skipped: "no_invoice" };
   let payer = null;
   let items = [];
+  // 스냅샷 파싱과 항목 조회는 **따로** 감싼다(한 try에 묶으면 스냅샷 깨진 청구서 하나 때문에 항목까지 통째로 빠진 메일이 나간다).
   try {
     // 발행 시점 스냅샷(payer_snapshot) 우선 — 이후 클라이언트 정보가 바뀌어도 메일은 발행 당시 값(회계 정합).
     if (inv.payer_snapshot) payer = JSON.parse(inv.payer_snapshot);
+  } catch (e) {
+    console.warn("[mailer] 청구처 스냅샷 파싱 실패(청구처 생략):", e && e.message ? e.message : String(e));
+  }
+  try {
     const { listInvoiceItemsForInvoice } = require("./data"); // 지연 require(순환 방지)
     const r = listInvoiceItemsForInvoice({ role: "chief" }, inv.id); // 반환 { invoice, rows }
     items = (r && r.rows) || [];
   } catch (e) {
-    console.warn("[mailer] 청구 상세 조회 실패(요약만 발송):", e && e.message ? e.message : String(e));
+    console.warn("[mailer] 청구 항목 조회 실패(합계만 발송):", e && e.message ? e.message : String(e));
   }
   const { subject, html } = invoiceMail(inv, { payer, items });
   return send({ subject, html });

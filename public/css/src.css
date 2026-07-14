@@ -257,7 +257,8 @@ input[data-datepick]::-webkit-calendar-picker-indicator { display: none; }
   flex: none;
   color: rgb(var(--color-muted));
 }
-/* 넓게 전용 요소(작성일[완료 탭 제외]·PM·카운트 요약)는 좁게에서 숨김 — 마크업은 항상 렌더(전환에 서버 왕복 없음). */
+/* 넓게 전용 요소(PM·카운트 요약)는 좁게에서 숨김 — 마크업은 항상 렌더(전환에 서버 왕복 없음).
+   작성일은 완료 탭에서만 렌더되고, 그 탭에선 두 밀도 모두 표시한다(정렬 근거라 좁게에서도 필요). */
 .proj-comfy-only { display: none; }
 @media (min-width: 640px) {
   .proj-artist { width: 10rem; } /* 지메일 '보낸사람' 고정 열 — 이름 정렬이 맞아 훑기 쉬움 */

@@ -393,8 +393,12 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
   const validKeys = tabs.map((t) => t.key);
   const defaultTab = "project";
   const tab = validKeys.includes(req.query.tab) ? req.query.tab : defaultTab;
+  // 상세 안에서 탭을 눌러도 '보던 목록으로 돌아가기'(?return=)를 잃지 않게 매 탭 링크에 실어 나른다.
+  // (누락 시 탭을 한 번만 눌러도 백링크가 기본 목록 = 진행 중 탭으로 떨어진다 — 청구 상세 selfRet과 동일 규약.)
+  const ret = safePath(req.query.return);
+  const keepRet = ret ? `&return=${encodeURIComponent(ret)}` : "";
   const tabBar = `<div class="mb-3 mt-3 flex gap-1 overflow-x-auto border-b border-border">
-      ${tabs.map((t) => `<a href="/projects/${p.id}?tab=${t.key}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
+      ${tabs.map((t) => `<a href="/projects/${p.id}?tab=${t.key}${keepRet}" class="shrink-0 border-b-2 px-4 py-2 text-sm ${t.key === tab ? "border-primary font-semibold text-fg" : "border-transparent text-muted hover:text-fg"}">${esc(t.label)}</a>`).join("")}
     </div>`;
 
   let tabContent = "";

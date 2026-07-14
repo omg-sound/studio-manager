@@ -489,7 +489,6 @@ function artistCombo(p = {}) {
             <script type="application/json" data-am-group-options>${JSON.stringify(groups.map((g) => ({ id: g.id, name: g.name }))).replace(/</g, "\\u003c")}</script>
           </div>
           <div><label class="label">소속사 <span class="text-xs font-normal text-muted">(선택)</span></label>
-            <input type="hidden" data-am-agency value="" />
             <div class="relative">
               <input class="input" data-am-agency-input autocomplete="off" placeholder="소속사 검색 또는 새로 등록" role="combobox" aria-expanded="false" aria-autocomplete="list" />
               <div class="absolute left-0 right-0 z-10 mt-1 hidden max-h-40 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-am-agency-pop role="listbox"></div>
@@ -804,7 +803,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           </label>
           <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
           <div class="relative w-28 shrink-0">
-            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="session_amount_${s.id}" value="${s.billing.amount || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
+            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="session_amount_${s.id}" value="${s.billing.amount == null ? "" : s.billing.amount}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
             <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
           </div>
         </div>`;

@@ -311,9 +311,7 @@ router.post("/sessions/:id/status", requireEditor, asyncHandler(async (req, res)
   res.redirect(back || `/projects/${r.project_id}?tab=sessions&flash=saved`);
 }));
 
-// ── 세션 '청구 안 함'(무료 처리) 토글(2026-07-06 사용자 요청 — 리허설 등 의도적 무료 세션) ──
-// 청구 생성 폼(청구 후보 목록)에서만 노출·되돌리기 가능.
-// 세션 확정 청구액 즉시 저장(2026-07-14) — 청구 폼의 세션 금액칸을 고치면 그 자리에서 DB에 반영된다.
+// ── 세션 확정 청구액 즉시 저장(2026-07-14) ── 청구 폼의 세션 금액칸을 고치면 그 자리에서 DB에 반영된다.
 // 작업 금액(POST /projects/tasks/:id/amount)과 대칭. 빈 값이면 NULL로 되돌려 단가표 자동 산정으로 복귀.
 // 청구된 세션은 거부(invoice_items 스냅샷이 잠금). app.js가 change 이벤트로 fetch 호출(응답은 JSON).
 router.post("/sessions/:id/amount", requireEditor, (req, res) => {
@@ -329,6 +327,8 @@ router.post("/sessions/:id/amount", requireEditor, (req, res) => {
   }
 });
 
+// ── 세션 '청구 안 함'(무료 처리) 토글(2026-07-06 사용자 요청 — 리허설 등 의도적 무료 세션) ──
+// 청구 생성 폼(청구 후보 목록)에서만 노출·되돌리기 가능.
 router.post("/sessions/:id/waive", requireEditor, (req, res) => {
   let r;
   try {

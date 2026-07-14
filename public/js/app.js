@@ -720,52 +720,36 @@
   updatePreview();
 })();
 
-// 청구 생성 폼([data-discount-form]) 항목 금액 드래프트 자동저장(localStorage) + 0원 항목 제출 확인.
-// 작성 중이던 금액을 새로고침/이탈 후에도 보존, 제출 성공 시 정리. 0원 항목이 체크돼 있으면 제출 직전 확인창.
+// 청구 생성 폼([data-discount-form]) 0원 항목 제출 확인.
+// ⚠️ 옛 localStorage 금액 초안(omgdraft:inv:*)은 폐기(2026-07-14): 작업·세션 금액이 이제 change 즉시 DB에 저장되므로
+// (아래 '청구 폼 금액 즉시 저장' IIFE) 초안 복원이 **서버 확정값을 옛 기기 값으로 덮어써** 옛 금액으로 청구될 수 있었다.
+// 진실원천은 DB 하나. 남아 있는 옛 초안 키는 첫 로드에서 정리한다.
 (function () {
   "use strict";
   var form = document.querySelector("[data-discount-form]");
   if (!form) return;
   var m = (form.getAttribute("action") || "").match(/\/projects\/(\d+)\//);
   var prefix = m ? "omgdraft:inv:" + m[1] + ":" : null;
-  var inputs = form.querySelectorAll("[data-line-input]");
+  if (prefix) {
+    try {
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(prefix) === 0) localStorage.removeItem(k);
+      }
+    } catch (_e) {}
+  }
   function lineVal(cb) {
     var row = cb.closest && cb.closest("[data-line-row]");
     var inp = row && row.querySelector("[data-line-input]");
     if (inp) return parseInt(String(inp.value).replace(/[^\d]/g, "") || "0", 10) || 0;
     return parseInt(cb.getAttribute("data-line-amount") || "0", 10) || 0;
   }
-  var TTL_MS = 7 * 24 * 60 * 60 * 1000; // 초안 7일 만료 — 오래 방치된 금액이 되살아나 잘못 청구되는 것 방지
-  function purgeDraft() {
-    if (!prefix) return;
-    Array.prototype.forEach.call(inputs, function (inp) { try { localStorage.removeItem(prefix + inp.name); } catch (_e) {} });
-    try { localStorage.removeItem(prefix + "__ts"); } catch (_e) {}
-  }
-  // 1) 드래프트 복원(+ input 디스패치로 콤마 포맷·미리보기 갱신). 단, TTL 지난 초안은 폐기하고 복원 생략.
-  if (prefix) {
-    var savedTs = 0;
-    try { savedTs = parseInt(localStorage.getItem(prefix + "__ts") || "0", 10) || 0; } catch (e) {}
-    if (savedTs && Date.now() - savedTs > TTL_MS) {
-      purgeDraft();
-    } else {
-      Array.prototype.forEach.call(inputs, function (inp) {
-        try { var v = localStorage.getItem(prefix + inp.name); if (v != null && v !== "") inp.value = v; } catch (e) {}
-      });
-      Array.prototype.forEach.call(inputs, function (inp) { inp.dispatchEvent(new Event("input", { bubbles: true })); });
-    }
-    // 2) 입력 시 저장(순수 숫자) + 타임스탬프 갱신
-    form.addEventListener("input", function (e) {
-      if (e.target && e.target.getAttribute && e.target.getAttribute("data-line-input") != null) {
-        try { localStorage.setItem(prefix + e.target.name, String(e.target.value).replace(/[^\d]/g, "")); localStorage.setItem(prefix + "__ts", String(Date.now())); } catch (e2) {}
-      }
-    });
-  }
-  // 3) 제출: 0원 항목 확인 → 통과 시 hidden confirm_zero_amount=1 세팅(서버가 이 값 없으면 여전히 차단) + 드래프트 정리.
+  // 제출: 0원 항목 확인 → 통과 시 hidden confirm_zero_amount=1 세팅(서버가 이 값 없으면 여전히 차단).
   // (2026-07-05 버그수정: 이전엔 확인창만 띄우고 서버에 알리지 않아 '확인'을 눌러도 서버가 그대로 TASK_AMOUNT_REQUIRED로 되돌리던 것.)
   var zeroFlag = form.querySelector("[data-confirm-zero-amount]");
   form.addEventListener("submit", function (e) {
-    if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return; // 미리보기 PDF 제출은 드래프트·확인 건너뜀(청구 생성만 정리)
-    if (e.submitter && e.submitter.hasAttribute("data-waive-btn")) return; // 청구 안 함/되돌리기 제출은 별도 라우트라 0원 확인·드래프트 정리 불필요(2026-07-06)
+    if (e.submitter && e.submitter.getAttribute("formtarget") === "_blank") return; // 미리보기 PDF 제출은 확인 건너뜀
+    if (e.submitter && e.submitter.hasAttribute("data-waive-btn")) return; // 청구 안 함/되돌리기는 별도 라우트(2026-07-06)
     var hasZero = false;
     Array.prototype.forEach.call(form.querySelectorAll('input[type="checkbox"][data-line-amount]'), function (cb) {
       if (cb.checked && !(lineVal(cb) > 0)) hasZero = true;
@@ -776,7 +760,6 @@
     } else if (zeroFlag) {
       zeroFlag.value = "0";
     }
-    purgeDraft();
   });
 })();
 
@@ -1375,13 +1358,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       if (!modal) { asNew(); return; }
       var mName = modal.querySelector("[data-am-name]"), mType = modal.querySelector("[data-am-type]"),
           mReal = modal.querySelector("[data-am-real]"),
-          mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
+          mPhone = modal.querySelector("[data-am-phone]"),
           mAgencyInput = modal.querySelector("[data-am-agency-input]"), mEmail = modal.querySelector("[data-am-email]"),
           mGroupId = modal.querySelector("[data-am-group-id]"), mGroupInput = modal.querySelector("[data-am-group-input]"),
           mErr = modal.querySelector("[data-am-err]");
       mName.value = input.value.trim(); // 타이핑한 검색어 프리필
       if (mType) mType.value = "artist"; // 기본 = 개인 아티스트
-      if (mReal) mReal.value = ""; if (mAgency) mAgency.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = ""; if (mEmail) mEmail.value = "";
+      if (mReal) mReal.value = ""; if (mAgencyInput) mAgencyInput.value = ""; if (mPhone) mPhone.value = ""; if (mEmail) mEmail.value = "";
       if (mGroupId) mGroupId.value = ""; if (mGroupInput) mGroupInput.value = "";
       mErr.classList.add("hidden");
       if (modal.__amApplyType) modal.__amApplyType(); // 유형별 필드 표시 초기화
@@ -1417,7 +1400,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       modal.addEventListener("click", function (e) { if (e.target === modal && mdOnBackdrop) closeModal(); }); // 배경 클릭 닫기
       mSave.addEventListener("click", function () {
         var mName = modal.querySelector("[data-am-name]"), mReal = modal.querySelector("[data-am-real]"),
-            mAgency = modal.querySelector("[data-am-agency]"), mPhone = modal.querySelector("[data-am-phone]"),
+            mPhone = modal.querySelector("[data-am-phone]"),
             mEmail = modal.querySelector("[data-am-email]"),
             mAgencyInput = modal.querySelector("[data-am-agency-input]"), mErr = modal.querySelector("[data-am-err]");
         var agName = mAgencyInput ? mAgencyInput.value.trim() : ""; // 모달에서 입력·선택한 소속사명 → 등록 후 프로젝트 소속사 필드에 반영
@@ -1450,12 +1433,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
           .then(function () { mSave.disabled = false; });
       });
 
-      // 소속사 미니 콤보(모달 내부): 타이핑 검색 + '＋ 새 소속사 등록'(fetch → data-am-agency hidden id 채움).
-      var agInput = modal.querySelector("[data-am-agency-input]"), agHid = modal.querySelector("[data-am-agency]"),
+      // 소속사 미니 콤보(모달 내부): 타이핑 검색 + '＋ 새 소속사 등록'(fetch POST /clients).
+      // 제출은 **이름**(agency_company) — POST /clients가 이름만 읽고 ensureCompanyParty로 재사용/생성한다(hidden id 없음).
+      var agInput = modal.querySelector("[data-am-agency-input]"),
           agPop = modal.querySelector("[data-am-agency-pop]"), agOptsEl = modal.querySelector("[data-am-agency-options]");
       var agOpts = []; try { agOpts = JSON.parse((agOptsEl && agOptsEl.textContent) || "[]"); } catch (e) { agOpts = []; }
       document.addEventListener("party-created", function (e) { var p = e.detail; if (!p || p.kind !== "company") return; if (!agOpts.some(function (o) { return String(o.id) === String(p.id); })) agOpts.push({ id: p.id, name: p.name }); }); // 새 회사 → 소속사 미니콤보 옵션에 추가
-      if (agInput && agHid && agPop) {
+      if (agInput && agPop) {
         var agRowCls = "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-elevated";
         var agView = [];
         function agHide() { agPop.classList.add("hidden"); }
@@ -1468,19 +1452,19 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         }
         agInput.addEventListener("focus", agRender);
         agInput.addEventListener("click", agRender);
-        agInput.addEventListener("input", function () { agHid.value = ""; agRender(); }); // 타이핑 중 id 해제(선택·등록으로만 확정)
+        agInput.addEventListener("input", agRender);
         agInput.addEventListener("blur", function () { setTimeout(agHide, 150); });
         agPop.addEventListener("mousedown", function (e) { e.preventDefault(); });
         agPop.addEventListener("click", function (e) {
           var b = e.target.closest("button"); if (!b) return;
-          if (b.hasAttribute("data-agidx")) { var o = agView[Number(b.getAttribute("data-agidx"))]; agInput.value = o.name; agHid.value = o.id; agHide(); }
+          if (b.hasAttribute("data-agidx")) { var o = agView[Number(b.getAttribute("data-agidx"))]; agInput.value = o.name; agHide(); }
           else if (b.hasAttribute("data-agnew")) {
             var nm = agInput.value.trim(); if (!nm) return;
             b.disabled = true;
             var body = new URLSearchParams(); body.append("type", "company"); body.append("name", nm);
             fetch("/clients", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }, body: body.toString() })
               .then(function (r) { return r.ok ? r.json() : null; })
-              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); agHid.value = d.id; agInput.value = d.name; announceParty({ kind: "company", id: d.id, name: d.name }); agHide(); })
+              .then(function (d) { if (!d || !d.ok) throw new Error("fail"); agInput.value = d.name; announceParty({ kind: "company", id: d.id, name: d.name }); agHide(); })
               .catch(function () { b.disabled = false; });
           }
         });
