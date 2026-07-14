@@ -80,6 +80,24 @@ function projectIdentity(p) {
 
 
 /**
+ * 목록 카드 → 상세 진입 탭(2026-07-14 사용자 요청 — "어차피 그거 보러 들어가는 것"):
+ *  - 청구 필요 탭  → 청구 탭 직행
+ *  - 진행 중 탭    → 세션 일정. 세션이 하나도 없고 곡·콘텐츠만 있으면 곡·콘텐츠 탭.
+ *  - 완료 탭·그 외 → 기본(정보 탭)
+ * 청구 탭은 canBill(치프·대표·스태프=전원)이라 권한으로 막히지 않는다.
+ */
+function projectRowHref(p, tab) {
+  const base = `/projects/${p.id}`;
+  if (tab === "billing") return `${base}?tab=invoice`;
+  if (tab === "active") {
+    if (Number(p.sess_cnt) > 0) return `${base}?tab=sessions`;
+    if (trackCount(p) > 0) return `${base}?tab=tracks`;
+  }
+  return base;
+}
+
+
+/**
  * 목록 행(2026-07-11 정체성 중심 재설계) — 두 클릭 영역:
  *  ① 상단 링크(<a>) → 프로젝트 상세: 좌측=정체성(아티스트·회사, 주) / 프로젝트명(부제) / '청구 필요' 배지,
  *     우측=PM + 그 밑에 다음 세션(진행 중, 디데이만 임박도 색 강조). 금액은 청구 필요 탭(tab==="billing")에서만.
@@ -96,12 +114,15 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   const nextLine = nextSessionLine(p);
 
   // PM(우측 유지). 금액은 청구 필요 탭에서만.
+  // 작성일은 PM 위(2026-07-14 사용자 요청 — 목록 정렬 근거[작성일 최신순]가 카드에서 보이게).
+  const createdLine = p.created_at
+    ? `<div class="text-xs text-muted tabular">${esc(String(p.created_at).slice(0, 10))}</div>` : "";
   const pmLine = p.manager_name ? `<div class="text-xs text-muted">PM ${esc(p.manager_name)}</div>` : "";
   const amt = projectAmount(p);
   const amountLine = isBilling && amt ? `<div class="text-sm font-medium tabular">${formatKRW(amt)}</div>` : "";
   // 다음 세션은 PM 밑(우측 열)으로 이동(2026-07-11 사용자 요청). 금액(청구 필요 탭)과는 공존하지 않음(완료엔 다음 세션 없음).
-  const rightCol = pmLine || amountLine || nextLine
-    ? `<div class="shrink-0 pl-2 text-right">${pmLine}${nextLine}${amountLine}</div>`
+  const rightCol = createdLine || pmLine || amountLine || nextLine
+    ? `<div class="shrink-0 pl-2 text-right">${createdLine}${pmLine}${nextLine}${amountLine}</div>`
     : "";
 
   // 청구 필요 배지(청구 필요 탭 전용).
@@ -124,7 +145,7 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
 
   return `
     <div class="overflow-hidden rounded-xl border border-border/60 bg-surface">
-      <a href="/projects/${p.id}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
+      <a href="${projectRowHref(p, tab)}" class="row-link flex items-start justify-between gap-3 px-4 py-3">
         <div class="min-w-0">
           <div class="truncate font-semibold">${mainLine}</div>
           ${subtitle}
@@ -838,6 +859,7 @@ module.exports = { artistCombo,
   newProjectMenu,
   projectListRow,
   projectIdentity,
+  projectRowHref,
   projectSummaryHtml,
   projectForm,
   projectMetaCard,

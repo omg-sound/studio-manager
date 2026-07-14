@@ -100,6 +100,8 @@ function listProjects(_user, { q } = {}) {
        WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS next_session_date,
       (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '예정') AS sess_scheduled,
       (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '완료') AS sess_done,
+      -- 세션 총수(취소 포함) — 목록 카드 진입 탭 결정용(세션 있으면 세션 일정, 없고 곡만 있으면 곡·콘텐츠).
+      (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id) AS sess_cnt,
       (SELECT COUNT(*) FROM track_tasks t
        JOIN project_tracks tr ON tr.id = t.track_id
        WHERE tr.project_id = p.id AND t.status <> 'Completed') AS open_tasks,

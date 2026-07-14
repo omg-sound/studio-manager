@@ -69,6 +69,28 @@ test("projectListRow 청구 필요: 배지 + 금액 노출", () => {
   assert.match(html, /₩/, "청구 필요 탭엔 금액 표시");
 });
 
+test("projectRowHref: 청구 필요=청구 탭, 진행 중=세션(없고 곡만 있으면 곡·콘텐츠), 완료=기본", () => {
+  const withSess = pRow({ sess_cnt: 2, track_titles: "월광" });
+  const trackOnly = pRow({ sess_cnt: 0, track_titles: "월광||야상곡" });
+  const empty = pRow({ sess_cnt: 0, track_titles: "" });
+  assert.strictEqual(views.projectRowHref(withSess, "billing"), "/projects/7?tab=invoice", "청구 필요는 세션 유무 무관 청구 탭");
+  assert.strictEqual(views.projectRowHref(withSess, "active"), "/projects/7?tab=sessions");
+  assert.strictEqual(views.projectRowHref(trackOnly, "active"), "/projects/7?tab=tracks", "세션 없고 곡만 있으면 곡·콘텐츠");
+  assert.strictEqual(views.projectRowHref(empty, "active"), "/projects/7", "세션·곡 둘 다 없으면 기본");
+  assert.strictEqual(views.projectRowHref(withSess, "done"), "/projects/7", "완료 탭은 기본(정보)");
+  // 카드 렌더에도 반영
+  assert.match(views.projectListRow(withSess, emptySummary, { tab: "active" }), /href="\/projects\/7\?tab=sessions"/);
+  assert.match(views.projectListRow(withSess, emptySummary, { tab: "billing" }), /href="\/projects\/7\?tab=invoice"/);
+});
+
+test("projectListRow: 작성일이 PM 위 우측 열에 표시", () => {
+  const html = views.projectListRow(pRow({ created_at: "2026-07-01 10:00:00" }), emptySummary, { tab: "active" });
+  const right = html.slice(html.indexOf('shrink-0 pl-2 text-right'));
+  assert.match(right, /2026-07-01/, "작성일 표시(시각 제외)");
+  assert.ok(right.indexOf("2026-07-01") < right.indexOf("PM 박수한"), "작성일이 PM보다 위");
+  assert.doesNotMatch(html, /10:00:00/, "시각은 표시 안 함");
+});
+
 test("projectListRow 다음 세션 없으면 줄 생략", () => {
   const html = views.projectListRow(pRow(), emptySummary, { tab: "active" });
   assert.doesNotMatch(html, /예정 세션 없음/);
