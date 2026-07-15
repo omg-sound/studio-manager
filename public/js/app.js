@@ -2715,11 +2715,12 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var rows = list.children, shown = 0;
     for (var i = 0; i < rows.length; i++) {
       var match = !q || (rows[i].textContent || "").toLowerCase().indexOf(q) >= 0;
-      rows[i].hidden = !match;
+      // ⚠️ 행은 class="flex ..."(display:flex)라 [hidden] 속성(display:none, UA 스타일)이 밀린다 → 인라인 style로 숨긴다(인라인이 클래스 규칙을 이김).
+      rows[i].style.display = match ? "" : "none";
       if (match) shown++;
     }
     var empty = document.querySelector("[data-filter-empty]");
-    if (empty) empty.hidden = !(q && shown === 0); // 매칭 0이고 검색어 있을 때만 '결과 없음'
+    if (empty) empty.hidden = !(q && shown === 0); // 빈 결과 안내는 display 유틸 클래스가 없어 [hidden]로 충분(매칭 0 + 검색어 있을 때만)
   });
 })();
 

@@ -1335,15 +1335,17 @@ test("목록 실시간 필터: 타이핑하면 매칭 행만 남고, 매칭 0이
   const rows = doc.querySelectorAll("[data-filter-list] > *");
   const empty = doc.querySelector("[data-filter-empty]");
   const type = (v) => { input.value = v; fire(win, input, "input"); };
+  // 숨김은 인라인 style.display로 한다(행 class="flex"라 [hidden] 속성이 밀림). jsdom은 CSS 미적용이라 style로 검증.
+  const vis = (r) => r.style.display !== "none";
   type("김");
-  assert.ok(!rows[0].hidden && rows[1].hidden && rows[2].hidden, "'김' → 김철수만 남음");
+  assert.ok(vis(rows[0]) && !vis(rows[1]) && !vis(rows[2]), "'김' → 김철수만 남음");
   assert.ok(empty.hidden, "매칭 있으면 '결과 없음' 숨김");
   type("2222");
-  assert.ok(rows[0].hidden && !rows[1].hidden && rows[2].hidden, "'2222' → 이영희만(전화 텍스트 매칭)");
+  assert.ok(!vis(rows[0]) && vis(rows[1]) && !vis(rows[2]), "'2222' → 이영희만(전화 텍스트 매칭)");
   type("없는이름");
-  assert.ok(rows[0].hidden && rows[1].hidden && rows[2].hidden && !empty.hidden, "매칭 0 → 전부 숨김 + '결과 없음'");
+  assert.ok(!vis(rows[0]) && !vis(rows[1]) && !vis(rows[2]) && !empty.hidden, "매칭 0 → 전부 숨김 + '결과 없음'");
   type("");
-  assert.ok(!rows[0].hidden && !rows[1].hidden && !rows[2].hidden && empty.hidden, "빈 검색 → 전부 표시");
+  assert.ok(vis(rows[0]) && vis(rows[1]) && vis(rows[2]) && empty.hidden, "빈 검색 → 전부 표시");
 });
 
 // ── 청구 할인 정액칸: 미리 채운 '0' 없이 placeholder만(빈칸=0, 타이핑 시 바로 입력) ──
