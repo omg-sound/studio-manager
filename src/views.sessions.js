@@ -377,7 +377,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
     <details class="group overflow-hidden rounded-lg border border-border bg-surface">
       <summary class="row-link flex cursor-pointer list-none items-start justify-between gap-2 p-3">
         ${header}
-        <span class="flex shrink-0 items-center gap-2">${completeToggle}${cancelToggle}${statusBadge}${detailsChevron()}</span>
+        <span class="flex shrink-0 items-center gap-2">${cancelToggle}${completeToggle}${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
         <form id="del-sess-${s.id}" method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?" class="hidden"></form>
