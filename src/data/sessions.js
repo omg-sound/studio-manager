@@ -535,14 +535,16 @@ function pastSessions(_user, { limit = 30 } = {}) {
     .map(withBilling());
 }
 
-/** 특정 월(YYYY-MM)의 세션(취소 제외) + 프로젝트명 — 캘린더 뷰용. */
+/** 특정 월(YYYY-MM)의 세션 + 프로젝트명 — 캘린더 뷰용. 취소 세션도 포함(monthCalendar 칩이 opacity-60로
+ *  흐리게 표시 — 취소=삭제하지 않고 기록으로 남기는 정책. 이전엔 '취소 제외'라 캘린더에서 아예 안 보여
+ *  흐리게 표시 코드가 죽어 있었음, 전수 점검 2026-07-15). */
 function sessionsForMonth(_user, ym) {
   if (!/^\d{4}-\d{2}$/.test(String(ym || ""))) return [];
   return db()
     .prepare(
       `SELECT s.*, p.title AS project_title, p.artist, p.artist_company, p.production_company FROM sessions s
        JOIN projects p ON p.id = s.project_id
-       WHERE s.session_date LIKE ? AND s.status <> '취소'
+       WHERE s.session_date LIKE ?
        ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
     )
     .all(String(ym) + "-%")

@@ -1038,6 +1038,7 @@
     }
     d = d.slice(0, 11); // 휴대폰/그 외(3자리 국번)
     if (d.length < 4) return d;
+    if (d.length === 8) return d.slice(0, 4) + "-" + d.slice(4); // 8자리: ####-#### 국번 없는 대표번호(1544-1234 등, 서버 formatPhone과 일치)
     if (d.length < 7) return d.slice(0, 3) + "-" + d.slice(3);
     if (d.length <= 10) return d.slice(0, 3) + "-" + d.slice(3, 6) + "-" + d.slice(6); // 10자리: 3-3-4
     return d.slice(0, 3) + "-" + d.slice(3, 7) + "-" + d.slice(7); // 11자리: 3-4-4
@@ -2440,6 +2441,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   var m = (form.getAttribute("action") || "").match(/\/projects\/(\d+)\//);
   if (!m) return;
   var KEY = "invdraft:" + m[1];
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function todayYmd() { var t = new Date(); return t.getFullYear() + "-" + pad2(t.getMonth() + 1) + "-" + pad2(t.getDate()); }
   var payer = form.querySelector("[data-picker-combo]");
   var discAmt = form.querySelector("[data-discount-amount]");
   var discPct = form.querySelector("[data-discount-pct]");
@@ -2474,7 +2477,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     if (discPct && s.dp != null) discPct.value = s.dp;
     if (vat) vat.checked = !!s.vat;
     if (title && s.t) title.value = s.t;
-    if (issuedCombo && issuedCombo.__dcSet && s.d) issuedCombo.__dcSet(s.d);
+    // 발행일: 서버 기본값이 '오늘'이라, 며칠 전 만든 초안의 옛 발행일(당시 '오늘'이 지금 과거가 된 것)은
+    // 복원하지 않는다 — 과거 일자로 조용히 청구가 발행되는 회계 사고 방지(전수 점검 2026-07-15).
+    // 오늘·미래로 사용자가 의도해 둔 발행일만 복원(사용자 요청 '발행일 임시저장'은 이 범위에서 유지).
+    if (issuedCombo && issuedCombo.__dcSet && s.d && s.d >= todayYmd()) issuedCombo.__dcSet(s.d);
     // 미리보기(공급가·할인·VAT·총액) 갱신
     if (discPct && s.dp) discPct.dispatchEvent(new Event("input", { bubbles: true }));
     else if (discAmt) discAmt.dispatchEvent(new Event("input", { bubbles: true }));

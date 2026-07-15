@@ -87,6 +87,10 @@ async function syncSessionEvent(user, session) {
   // 실제 세션 삭제(/delete)는 여전히 캘린더 일정도 삭제한다 — 취소(기록 유지) ≠ 삭제(제거).
   const st = calendar.syncStatus(); // 설정 수준 준비 상태(미연동/캘린더 미선택 등)
   if (!st.ok) return { synced: false, reason: st.reason };
+  // 캘린더에 한 번도 올라간 적 없는(gcal_event_id NULL) 세션을 '취소'하면 새로 만들지 않는다.
+  // updateEvent(null)이 createEvent로 폴백하므로, 미연동 중 만든 세션을 나중에 연동 후 취소하면
+  // 없던 '(취소)' 일정이 새로 생기던 것 차단(전수 점검 2026-07-15). 이미 있는 일정만 '(취소)' 제목 반영.
+  if (session.status === "취소" && !session.gcal_event_id) return { synced: true };
   try {
     const newId = await calendar.updateEvent(session.gcal_event_id || null, eventInputForSession(session, project));
     if (newId && newId !== session.gcal_event_id) setSessionEventId(session.id, newId);
@@ -364,3 +368,4 @@ router.post("/sessions/:id/delete", requireEditor, asyncHandler(async (req, res)
 
 module.exports = router;
 module.exports.eventInputForSession = eventInputForSession; // settings.routes.js 캘린더 재동기화 버튼에서 재사용(제목 포맷 통일)
+module.exports.syncSessionEvent = syncSessionEvent; // 회귀 테스트(취소+무id 유령 일정 가드) 재사용

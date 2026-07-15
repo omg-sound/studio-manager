@@ -1238,6 +1238,7 @@ test("전화칸: 숫자 입력 시 휴대전화 양식 하이픈 자동(name=pho
   assert.equal(type("p2", "0212345678"), "02-1234-5678", "studio_tel 02 지역번호");
   assert.equal(type("p3", "01055554444"), "010-5555-4444", "모달 data-pc-phone");
   assert.equal(type("p4", "01033332222"), "010-3333-2222", "모달 data-am-phone");
+  assert.equal(type("p2", "15441234"), "1544-1234", "8자리 대표번호 → ####-#### (서버 formatPhone과 일치)");
   assert.equal(type("other", "01012345678"), "01012345678", "비-전화 필드(email)는 서식 안 함");
 });
 
@@ -1264,14 +1265,25 @@ test("청구 초안: 폼 필드 localStorage 저장·복원·발행 시 삭제, 
   doc.querySelector("[data-discount-form]").dispatchEvent(ev);
   assert.equal(win.localStorage.getItem("invdraft:7"), null, "청구 생성(발행) 제출 시 초안 삭제");
 
-  // 복원(로드 시) — localStorage 시드 후 app.js 실행
-  const seed = { p: { cid: "42", pid: "", label: "복원청구처" }, da: "20000", dp: "", vat: false, t: "복원 제목", d: "2026-08-15" };
+  // 복원(로드 시) — localStorage 시드 후 app.js 실행. 발행일은 오늘·미래만 복원(먼 미래로 시간 취약성 회피).
+  const seed = { p: { cid: "42", pid: "", label: "복원청구처" }, da: "20000", dp: "", vat: false, t: "복원 제목", d: "2099-08-15" };
   const r = mountDom(formHtml, { storage: { "invdraft:7": JSON.stringify(seed) } });
   assert.equal(String(r.doc.querySelector("[data-discount-amount]").value).replace(/\D/g, ""), "20000", "복원: 할인");
   assert.equal(r.doc.querySelector("[data-pk-cid]").value, "42", "복원: 청구처 cid");
   assert.equal(r.doc.querySelector('input[name="title"]').value, "복원 제목", "복원: 제목");
   assert.equal(r.doc.querySelector("[data-vat-toggle]").checked, false, "복원: VAT 해제 상태");
-  assert.equal(r.doc.querySelector('[name="issued_date"]').value, "2026-08-15", "복원: 발행일 hidden");
+  assert.equal(r.doc.querySelector('[name="issued_date"]').value, "2099-08-15", "복원: 오늘·미래 발행일은 복원");
+});
+
+// 발행일 초안 staleness 가드: 며칠 전 만든 초안의 옛 발행일(이제 과거)은 복원하지 않는다(과거 일자 자동 발행 방지).
+// 사용자 요청 '발행일 임시저장'은 오늘·미래 범위에서 유지(위 테스트). 전수 점검 2026-07-15.
+test("청구 초안: 과거 발행일은 복원 안 함(서버 기본=오늘 유지), 미래는 복원", () => {
+  const project = { id: 7, title: "테스트 프로젝트" };
+  const tasks = [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }];
+  const formHtml = unbilledInvoiceForm(project, tasks, []);
+  const seed = { p: { cid: "42", pid: "", label: "x" }, da: "", dp: "", vat: true, t: "", d: "2000-01-01" };
+  const r = mountDom(formHtml, { storage: { "invdraft:7": JSON.stringify(seed) } });
+  assert.notEqual(r.doc.querySelector('[name="issued_date"]').value, "2000-01-01", "과거 발행일은 초안에서 복원하지 않음");
 });
 
 // ── 금액칸 포커스 시 전체선택(타이핑=새 금액). 단 이미 포커스된 칸 클릭(특정 숫자)·드래그 범위는 존중 ──
