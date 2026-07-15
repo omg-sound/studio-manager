@@ -1003,10 +1003,15 @@
   Array.prototype.forEach.call(document.querySelectorAll('input[name="biz_no"]'), function (el) { if (el.value) el.value = fmt(el.value); });
 })();
 
-// 휴대전화/전화 입력칸([name="phone"]): 숫자만 입력해도 010-####-#### 서식 자동 삽입(서버 formatPhone과 일치).
+// 전화 입력칸 자동 서식(휴대전화 양식): 숫자만 입력해도 010-####-#### 하이픈 자동 삽입(서버 formatPhone과 일치).
 // 02(서울) 지역번호는 02-###-####/02-####-####, 그 외 3자리 국번은 ###-###-####(10자리)·###-####-####(11자리).
+// 대상 = name="phone"(연락처·클라이언트·외주·하우스) + studio_tel(스튜디오 연락처) + 모달(data-pc-phone·data-am-phone).
 (function () {
   "use strict";
+  function isPhoneField(el) {
+    return el && el.tagName === "INPUT" && el.type !== "hidden" &&
+      (el.name === "phone" || el.name === "studio_tel" || el.hasAttribute("data-pc-phone") || el.hasAttribute("data-am-phone"));
+  }
   function fmtPhone(v) {
     var d = String(v).replace(/\D/g, "");
     if (d.indexOf("02") === 0) { // 서울 지역번호(2자리 국번)
@@ -1023,9 +1028,9 @@
     return d.slice(0, 3) + "-" + d.slice(3, 7) + "-" + d.slice(7); // 11자리: 3-4-4
   }
   document.addEventListener("input", function (e) {
-    if (e.target && e.target.name === "phone") e.target.value = fmtPhone(e.target.value);
+    if (isPhoneField(e.target)) e.target.value = fmtPhone(e.target.value);
   });
-  Array.prototype.forEach.call(document.querySelectorAll('input[name="phone"]'), function (el) { if (el.value) el.value = fmtPhone(el.value); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="phone"],input[name="studio_tel"],input[data-pc-phone],input[data-am-phone]'), function (el) { if (el.value) el.value = fmtPhone(el.value); });
 })();
 
 // 청구 폼 금액 즉시 저장(포커스 이탈=change 시 DB 반영 → 초안 아님. 새로고침·다른 기기·다른 사람에게도 그대로).

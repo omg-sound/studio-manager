@@ -143,7 +143,7 @@
 | 보안 | helmet(CSP, 인라인 스크립트 0) + express-rate-limit + 토큰 AES-256-GCM 암호화 |
 | 프론트 | 서버 렌더 HTML(`src/views.js`) + 클래식 폼 POST + 최소 JS(`public/js/app.js`), Tailwind CLI 빌드; **Pretendard** 한글폰트(jsdelivr CDN, CSP 허용); 크림·클레이 디자인 톤; 수동 라이트/다크 테마(`html[data-theme]`+localStorage) |
 | 배포 | Render Blueprint(`render.yaml`) + Disk — **라이브** |
-| 테스트 | Node 내장 `node:test` — 294개(**스모크 1**: `test/smoke.test.js` — 실서버 기동+치프 로그인 후 주요 화면 22개 200 확인[People API 무음 사망류 '조용히 죽는' 회귀를 CI가 검출, 2026-07-10] **+ 역할별 권한 배선 매트릭스**[owner/staff 로그인 후 requireInvoice(/revenue·/workers)·requireStaff(/settings·/deliverables) 차단·허용을 기계 검증 — 라우트↔미들웨어 드리프트(실제 발생 이력)를 잠금, 2026-07-11] + 단위 169: safePath/청구 3탭(nav)· 채번·VAT·Pro단가·세션겹침·권한·party·입금이력·대관세션·프로젝트 금액 할인 차감·세션 담당 엔지니어 다대다·세션 외주 정산(worker_rate 보존)·0원 항목 확인청구·청구 항목 날짜순 정렬·작업 완료 토글(task-status)·단가표 분류(rate-categories)·청구 안 함 무료 처리(waive)·프로젝트 목록 3탭(project-list)·**웹훅 SSRF 대역·매핑우회(ssrf)**·**공개링크 게이트 존재/철회/만료(token-gate)**·**전화·사업자번호 정규화(format)**·**캘린더 종일/다일/야간 KST 시간조립(calendar-event-times)**·외주 작업자 세션참여·첨부·정산정보암호화(worker-detail) + **가드레일 20**[백엔드 12+UI 계약 8] + **jsdom 상호작용 60**[네비게이션 가드·모달 드래그-아웃·날짜 콤보·이중 제출 가드·청구 금액칸 Tab 이동 포함]), `npm test`(격리 임시 DB 자가정리). 유일한 테스트 devDep=**jsdom**(2026-07-04 사용자 승인 — '의존성 0'의 명시적 예외): `test/helpers-dom.js`가 실제 views 렌더 위에서 실제 app.js를 window.eval로 실행(`test/ui-interactions.test.js` — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)/선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·dirty 폼). **`test/guardrails*.test.js` = 반복 실수 클래스의 기계 가드**(아래 함정 #21) |
+| 테스트 | Node 내장 `node:test` — 295개(**스모크 1**: `test/smoke.test.js` — 실서버 기동+치프 로그인 후 주요 화면 22개 200 확인[People API 무음 사망류 '조용히 죽는' 회귀를 CI가 검출, 2026-07-10] **+ 역할별 권한 배선 매트릭스**[owner/staff 로그인 후 requireInvoice(/revenue·/workers)·requireStaff(/settings·/deliverables) 차단·허용을 기계 검증 — 라우트↔미들웨어 드리프트(실제 발생 이력)를 잠금, 2026-07-11] + 단위 169: safePath/청구 3탭(nav)· 채번·VAT·Pro단가·세션겹침·권한·party·입금이력·대관세션·프로젝트 금액 할인 차감·세션 담당 엔지니어 다대다·세션 외주 정산(worker_rate 보존)·0원 항목 확인청구·청구 항목 날짜순 정렬·작업 완료 토글(task-status)·단가표 분류(rate-categories)·청구 안 함 무료 처리(waive)·프로젝트 목록 3탭(project-list)·**웹훅 SSRF 대역·매핑우회(ssrf)**·**공개링크 게이트 존재/철회/만료(token-gate)**·**전화·사업자번호 정규화(format)**·**캘린더 종일/다일/야간 KST 시간조립(calendar-event-times)**·외주 작업자 세션참여·첨부·정산정보암호화(worker-detail) + **가드레일 20**[백엔드 12+UI 계약 8] + **jsdom 상호작용 61**[네비게이션 가드·모달 드래그-아웃·날짜 콤보·이중 제출 가드·청구 금액칸 Tab 이동 포함]), `npm test`(격리 임시 DB 자가정리). 유일한 테스트 devDep=**jsdom**(2026-07-04 사용자 승인 — '의존성 0'의 명시적 예외): `test/helpers-dom.js`가 실제 views 렌더 위에서 실제 app.js를 window.eval로 실행(`test/ui-interactions.test.js` — 금액 캐럿 보존·콤보 검색(본명/활동명/회사)/선택/새등록 모달·IME 가드·세션 종류↔단가 옵션 스왑·dirty 폼). **`test/guardrails*.test.js` = 반복 실수 클래스의 기계 가드**(아래 함정 #21) |
 
 ## 아키텍처 핵심
 
@@ -305,7 +305,7 @@ Google OAuth 자격증명이 없거나 `DEV_LOGIN`이 켜져 있으면 서버가
 
 - **구글 캘린더 자동 연동**: 실제 동작은 사용자 사전작업 필요 — GCP Calendar API 활성화 + 치프 재로그인(scope `calendar`) + `/settings`에서 캘린더 선택 + 기본 장소 입력.
 - **Drive 저장**: 최소 권한 `drive.file`로 앱 전용 폴더에만 저장(연동 시 storage.put=drive, 미연동=local). **폴더 구조**: 루트 `omg-studios-manager` 아래 `사업자등록증`·`통장사본`(클라이언트 첨부 kind별)·`deliverables`(자료 전달) — `drive.ensureSubfolder`/`storage.put({folder})`. `/settings`에 연동 상태 + 로컬→Drive 이관 버튼(`/settings/migrate-drive`·`storage-migrate.js`).
-- 기능 검증은 `node:test` 294개·브라우저 E2E·CI(Node 20/22)가 상시 담당(각 세션 검증 이력=git·`HISTORY.md`).
+- 기능 검증은 `node:test` 295개·브라우저 E2E·CI(Node 20/22)가 상시 담당(각 세션 검증 이력=git·`HISTORY.md`).
 
 ## 다음 단계 TODO
 
