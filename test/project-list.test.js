@@ -8,7 +8,7 @@ const assert = require("node:assert");
 const { db, init } = require("../src/db");
 init();
 after(() => cleanupDb(process.env.DB_PATH, db()));
-const { splitProjectTabs } = require("../src/data/projects");
+const { splitProjectTabs, listProjects } = require("../src/data/projects");
 
 const row = (o) => ({ is_completed: false, unbilled_cnt: 0, next_session_date: null, created_at: "2026-07-01 10:00:00", ...o });
 
@@ -276,4 +276,30 @@ test("projectSummaryHtml: mine=true면 완료 복귀 경로에 &mine=1 보존", 
   assert.match(withMine, /name="return" value="\/projects\?tab=active&mine=1&open=7"/, "mine 보존");
   const noMine = views.projectSummaryHtml(summary, { isAdmin: true, projectId: 7, tab: "active" });
   assert.doesNotMatch(noMine, /mine=1/, "mine 미지정이면 없음");
+});
+
+// ── 완료 판정: 오늘 날짜 세션의 상태 반영(2026-07-15 사용자 리포트) ──
+// 오늘 녹음하고 '완료'로 눌러도 세션 날짜가 오늘이라 '다가오는 세션'으로 잡혀 진행 중에 남던 버그.
+// '다가오는 세션' = 예정 상태만 세야 한다(완료·취소는 끝난 활동이라 완료 판정을 막지 않음).
+test("listProjects: 오늘 날짜라도 '완료' 세션은 다가오는 세션에서 제외 → 완료 판정(청구 필요)", () => {
+  const d = db();
+  const today = todayYmd();
+  const pid = Number(d.prepare("INSERT INTO projects (title, project_type) VALUES ('오늘완료세션','session')").run().lastInsertRowid);
+  d.prepare("INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, status) VALUES (?, '녹음', ?, '14:00', '18:00', '완료')")
+    .run(pid, today);
+  const p = listProjects(null, {}).find((x) => x.id === pid);
+  assert.strictEqual(p.upcoming_cnt, 0, "완료 세션은 다가오는 세션 아님");
+  assert.strictEqual(p.next_session_date, null, "완료 세션은 '다음 세션'으로 잡히지 않음");
+  assert.strictEqual(p.is_completed, true, "오늘 완료 세션만 있으면 진행 중이 아니라 완료(청구 필요)");
+});
+
+test("listProjects: 오늘 날짜 '예정' 세션은 여전히 다가오는 세션(진행 중)", () => {
+  const d = db();
+  const today = todayYmd();
+  const pid = Number(d.prepare("INSERT INTO projects (title, project_type) VALUES ('오늘예정세션','session')").run().lastInsertRowid);
+  d.prepare("INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, status) VALUES (?, '녹음', ?, '14:00', '18:00', '예정')")
+    .run(pid, today);
+  const p = listProjects(null, {}).find((x) => x.id === pid);
+  assert.strictEqual(p.upcoming_cnt, 1, "예정 세션은 다가오는 세션");
+  assert.strictEqual(p.is_completed, false, "예정 세션이 남아있으면 진행 중");
 });

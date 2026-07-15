@@ -90,7 +90,10 @@ function listProjects(_user, { q } = {}) {
   }
 
   // 완료/진행 판정 신호:
-  //  has_upcoming = 다가오는 세션(오늘 이후, 취소 제외) 존재
+  //  upcoming_cnt = 다가오는 세션(오늘 이후, **예정 상태만**) 존재.
+  //    ⚠️ '완료'·'취소' 세션은 제외한다 — 오늘 녹음하고 완료로 눌러도 세션 날짜가 오늘이면
+  //    '다가오는 세션'으로 잡혀 진행 중에 남던 버그(2026-07-15 사용자 리포트). 완료·취소는 끝난
+  //    활동이므로 완료 판정을 막지 않는다. 지난 날짜의 예정 세션(오늘 이전)은 애초에 안 잡힘.
   //  open_tasks   = 미완료 작업(status <> 'Completed') 수 = 대기
   //  content_cnt  = 세션+작업 총량(0이면 아직 아무 내용 없는 빈 프로젝트) → 진행 중으로 취급
   const sql = `
@@ -102,9 +105,9 @@ function listProjects(_user, { q } = {}) {
        LEFT JOIN task_types tt ON tt.key = t.task_type
        WHERE tr.project_id = p.id AND t.waived = 0) AS task_total,
       (SELECT COUNT(*) FROM sessions s
-       WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS upcoming_cnt,
+       WHERE s.project_id = p.id AND s.session_date >= @today AND s.status = '예정') AS upcoming_cnt,
       (SELECT MIN(s.session_date) FROM sessions s
-       WHERE s.project_id = p.id AND s.session_date >= @today AND s.status <> '취소') AS next_session_date,
+       WHERE s.project_id = p.id AND s.session_date >= @today AND s.status = '예정') AS next_session_date,
       (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '예정') AS sess_scheduled,
       (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id AND s.status = '완료') AS sess_done,
       -- 세션 총수(취소 포함) — 목록 카드 진입 탭 결정용(세션 있으면 세션 일정, 없고 곡만 있으면 곡·콘텐츠).
