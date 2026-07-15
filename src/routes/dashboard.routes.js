@@ -29,12 +29,16 @@ router.get("/", requireAuth, (req, res) => {
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
     </div>`;
 
-  const moneyCard = (label, amount, danger = false, sub = "") => `
-    <div class="card border-l-2 ${danger ? "[border-left-color:rgb(var(--color-danger))]" : "[border-left-color:rgb(var(--color-success))]"}">
+  const moneyCard = (label, amount, danger = false, sub = "", href = "") => {
+    const tag = href ? "a" : "div";
+    const attrs = href ? ` href="${esc(href)}" class="card row-link block` : ` class="card`;
+    return `
+    <${tag}${attrs} border-l-2 ${danger ? "[border-left-color:rgb(var(--color-danger))]" : "[border-left-color:rgb(var(--color-success))]"}">
       <div class="text-sm text-muted">${esc(label)}</div>
       <div class="mt-1 font-display text-lg font-bold tabular ${danger && amount > 0 ? "text-danger" : ""}">${formatKRW(amount)}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
-    </div>`;
+    </${tag}>`;
+  };
 
   const inv = s.invoices; // 청구권자(치프/대표)만 존재, staff는 null
   const overdueBanner =
@@ -47,7 +51,7 @@ router.get("/", requireAuth, (req, res) => {
 
   const cardItems = [];
   if (s.canInvoice) {
-    cardItems.push(moneyCard("미수금", inv.receivable, true, "발행·미입금 잔금"));
+    cardItems.push(moneyCard("미수금", inv.receivable, true, "발행·미입금 잔금", "/invoices?tab=done"));
     cardItems.push(moneyCard("이번 달 발행", inv.thisMonthIssued));
   }
   cardItems.push(statCard("프로젝트", s.total));
