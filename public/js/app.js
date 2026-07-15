@@ -204,6 +204,7 @@
   //  복사 2회 실행 + 토스트/'복사됨' 이중 피드백을 내던 중복 등록이라 제거.)
 
   document.addEventListener("submit", function (e) {
+    if (e.defaultPrevented) return; // 이미 다른 리스너(예: 날짜 콤보 required 빈 값)가 막은 제출엔 확인창을 띄우지 않는다
     var msg = e.target.getAttribute && e.target.getAttribute("data-confirm");
     if (msg && !window.confirm(msg)) e.preventDefault();
   });

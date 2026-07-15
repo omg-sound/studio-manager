@@ -1151,3 +1151,25 @@ test("청구처 추천 칩: 콤보 옵션에 없는 당사자도 id가 유지된
   assert.equal(doc.querySelector("[data-pk-cid]").value, "77", "옵션 밖 당사자 id 유지");
   assert.equal(doc.querySelector("[data-pk-input]").value, "김감독", "이름 표시");
 });
+
+// [5] data-confirm: 이미 막힌 제출엔 확인창을 띄우지 않는다(2026-07-15 검증 워크플로 잠복 엣지).
+// 날짜 콤보 required 빈 값 등이 먼저 preventDefault한 폼에 data-confirm까지 있으면, 진행 불가한 액션에 confirm이 떠서는 안 된다.
+test("data-confirm: 이미 preventDefault된 제출엔 확인창 미표시", () => {
+  const { win, doc } = mountDom(`<form data-confirm="지울까요?" action="/x" method="post"><button type="submit">삭제</button></form>`);
+  let confirmCalls = 0;
+  win.confirm = () => { confirmCalls++; return true; };
+  const form = doc.querySelector("form");
+  // 앞선 리스너가 먼저 막았다고 가정(다른 콤보 가드 흉내)
+  form.addEventListener("submit", (e) => e.preventDefault(), true);
+  form.dispatchEvent(new win.Event("submit", { bubbles: true, cancelable: true }));
+  assert.equal(confirmCalls, 0, "이미 막힌 제출엔 confirm을 띄우지 않는다");
+
+  // 막히지 않은 정상 폼은 여전히 확인창(회귀 아님)
+  const { win: w2, doc: d2 } = mountDom(`<form data-confirm="지울까요?" action="/y" method="post"><button type="submit">삭제</button></form>`);
+  let calls2 = 0;
+  w2.confirm = () => { calls2++; return false; };
+  const e2 = new w2.Event("submit", { bubbles: true, cancelable: true });
+  d2.querySelector("form").dispatchEvent(e2);
+  assert.equal(calls2, 1, "정상 폼은 확인창 표시");
+  assert.equal(e2.defaultPrevented, true, "취소 시 제출 차단");
+});
