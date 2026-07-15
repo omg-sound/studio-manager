@@ -20,7 +20,7 @@ const APP_SRC = fs.readFileSync(path.join(__dirname, "..", "public", "js", "app.
  * - fetch: 기본 스텁(호출 기록만, ok/json:{}) — app.js의 모든 fetch 소비부는 null/무형 가드가 있어 안전.
  * - scrollIntoView·confirm 등 jsdom 미구현/차단 API 폴리필.
  */
-function mountDom(bodyHtml, { url = "http://localhost/", fetchImpl } = {}) {
+function mountDom(bodyHtml, { url = "http://localhost/", fetchImpl, storage } = {}) {
   const dom = new JSDOM(`<!doctype html><html><head></head><body>${bodyHtml}</body></html>`, {
     url,
     runScripts: "outside-only",
@@ -28,6 +28,8 @@ function mountDom(bodyHtml, { url = "http://localhost/", fetchImpl } = {}) {
   });
   const win = dom.window;
   if (!win.Element.prototype.scrollIntoView) win.Element.prototype.scrollIntoView = function () {};
+  // localStorage 시드(app.js 실행 전) — 로드 시 복원 로직(초안 등) 테스트용.
+  if (storage) Object.keys(storage).forEach((k) => { try { win.localStorage.setItem(k, storage[k]); } catch (e) {} });
   const fetchCalls = [];
   win.fetch = function (input, init) {
     fetchCalls.push({ url: String(input), init: init || {} });

@@ -373,6 +373,7 @@
       }
       if (b.hasAttribute("data-dc-day")) commit(b.getAttribute("data-dc-day"));
     });
+    wrap.__dcSet = function (v) { commit(v); }; // 프로그램적 날짜 세팅(초안 복원 등) — hidden+표시 동기
     sync();
   });
   }
@@ -2362,6 +2363,14 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       show();
     }
     function pick(it) { if (!it) return; input.value = labelFull(it); cid.value = it.cid || ""; pid.value = it.pid || ""; applyDoc(it); fireInput(); hide(); }
+    // 초안 복원: 저장된 {cid,pid,label}로 청구처 세팅(옵션에 있으면 pick, 없으면 id+라벨 직접 — 추천 칩과 동일 패턴).
+    root.__pkSet = function (s) {
+      if (!s || (!s.cid && !s.pid)) return;
+      var it = items.filter(function (x) { return (s.cid && String(x.cid) === String(s.cid)) || (s.pid && String(x.pid) === String(s.pid)); })[0];
+      if (it) { pick(it); return; }
+      input.value = s.label || ""; cid.value = s.cid || ""; pid.value = s.pid || ""; applyDoc(null);
+      cid.dispatchEvent(new Event("change", { bubbles: true })); // fireInput 금지(정확 일치 아니면 비움 방지) — dirty 통지만
+    };
     input.addEventListener("focus", render);
     input.addEventListener("click", render);
     input.addEventListener("input", function () {
@@ -2405,6 +2414,71 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 
     // 초기 문서 라벨·경고(선택값이 있을 때만 — 새 폼은 비어 있음)
     applyDoc(items.filter(function (it) { return (cid.value && String(it.cid) === String(cid.value)) || (pid.value && String(it.pid) === String(pid.value)); })[0]);
+  });
+})();
+
+// 청구 생성 폼 임시저장(초안): 금액을 제외한 폼 필드(청구처·할인·발행일·VAT·제목)를 localStorage에 보관 → 로드 시 복원, 발행 시 삭제.
+// ⚠️ 금액(task_amount/session_amount)·항목 체크는 초안에 넣지 않는다: 금액은 즉시 DB 저장(진실원천)이라 옛 초안이 확정 금액을 덮던 버그를 회피(2026-07-14 폐기 사유). 초안은 '발행 직전 결정' 필드만 담는다.
+(function () {
+  "use strict";
+  var form = document.querySelector("[data-discount-form]");
+  if (!form) return;
+  var m = (form.getAttribute("action") || "").match(/\/projects\/(\d+)\//);
+  if (!m) return;
+  var KEY = "invdraft:" + m[1];
+  var payer = form.querySelector("[data-picker-combo]");
+  var discAmt = form.querySelector("[data-discount-amount]");
+  var discPct = form.querySelector("[data-discount-pct]");
+  var vat = form.querySelector("[data-vat-toggle]");
+  var title = form.querySelector('input[name="title"]');
+  var issued = form.querySelector('[name="issued_date"]');
+  var issuedCombo = issued && issued.closest ? issued.closest("[data-date-combo]") : null;
+  function pget() {
+    if (!payer) return null;
+    var c = payer.querySelector("[data-pk-cid]"), p = payer.querySelector("[data-pk-pid]"), i = payer.querySelector("[data-pk-input]");
+    return { cid: c ? c.value : "", pid: p ? p.value : "", label: i ? i.value : "" };
+  }
+  function read() {
+    return {
+      p: pget(),
+      da: discAmt ? discAmt.value : "",
+      dp: discPct ? discPct.value : "",
+      vat: vat ? !!vat.checked : true,
+      t: title ? title.value : "",
+      d: issued ? issued.value : ""
+    };
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(read())); } catch (e) {} }
+  function clear() { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+  // 복원(로드 시) — __pkSet/__dcSet는 payerCombo·dateCombo 초기화 IIFE가 먼저 노출.
+  var raw = null; try { raw = localStorage.getItem(KEY); } catch (e) {}
+  var s = null; if (raw) { try { s = JSON.parse(raw); } catch (e) { s = null; } }
+  if (s) {
+    if (s.p && payer && payer.__pkSet) payer.__pkSet(s.p);
+    if (discAmt && s.da != null) discAmt.value = s.da;
+    if (discPct && s.dp != null) discPct.value = s.dp;
+    if (vat) vat.checked = !!s.vat;
+    if (title && s.t) title.value = s.t;
+    if (issuedCombo && issuedCombo.__dcSet && s.d) issuedCombo.__dcSet(s.d);
+    // 미리보기(공급가·할인·VAT·총액) 갱신
+    if (discPct && s.dp) discPct.dispatchEvent(new Event("input", { bubbles: true }));
+    else if (discAmt) discAmt.dispatchEvent(new Event("input", { bubbles: true }));
+    if (vat) vat.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  // 저장(초안 대상 필드가 바뀔 때만 — 금액칸·항목 체크박스는 초안 아님)
+  function onChange(e) {
+    var t = e.target; if (!t) return;
+    if (t.name === "title" || t === discAmt || t === discPct || t === vat || t === issued || (payer && payer.contains && payer.contains(t))) save();
+  }
+  form.addEventListener("input", onChange);
+  form.addEventListener("change", onChange);
+
+  // 청구 생성(발행) 제출 시 초안 삭제 — 막힌 제출(청구처 미선택·발행정보 없음·0원 취소)은 유지, PDF 프리뷰는 대상 아님.
+  form.addEventListener("submit", function (e) {
+    if (e.defaultPrevented) return;
+    if (e.submitter && e.submitter.hasAttribute && e.submitter.hasAttribute("data-invoice-submit")) clear();
   });
 })();
 

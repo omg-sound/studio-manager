@@ -14,6 +14,7 @@ init();
 const { createCompany } = require("../src/data");
 const { personCombo, companyCombo } = require("../src/views");
 const { sessionBookingFields } = require("../src/views.sessions");
+const { unbilledInvoiceForm } = require("../src/views.projects");
 
 /**
  * UI 상호작용 테스트(jsdom) — 실제 views 렌더 + 실제 app.js 실행.
@@ -1238,4 +1239,37 @@ test("전화칸: 숫자 입력 시 휴대전화 양식 하이픈 자동(name=pho
   assert.equal(type("p3", "01055554444"), "010-5555-4444", "모달 data-pc-phone");
   assert.equal(type("p4", "01033332222"), "010-3333-2222", "모달 data-am-phone");
   assert.equal(type("other", "01012345678"), "01012345678", "비-전화 필드(email)는 서식 안 함");
+});
+
+// ── 청구 생성 폼 임시저장(초안): 금액 제외 폼 필드(청구처·할인·발행일·VAT·제목) localStorage 저장/복원/삭제 ──
+test("청구 초안: 폼 필드 localStorage 저장·복원·발행 시 삭제, 금액(즉시DB)은 초안 제외", () => {
+  const project = { id: 7, title: "테스트 프로젝트" };
+  const tasks = [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }];
+  const formHtml = unbilledInvoiceForm(project, tasks, []);
+
+  // 저장 + 금액 제외 + 발행 시 삭제
+  const { win, doc } = mountDom(formHtml);
+  const disc = doc.querySelector("[data-discount-amount]");
+  disc.value = "10000"; fire(win, disc, "input");
+  let draft = JSON.parse(win.localStorage.getItem("invdraft:7") || "null");
+  assert.ok(draft && String(draft.da).replace(/\D/g, "") === "10000", "할인 변경 → 초안 저장");
+  assert.equal(Object.keys(draft).sort().join(","), "d,da,dp,p,t,vat", "초안 키 = 금액 없는 폼 필드만(p·da·dp·vat·t·d)");
+  const amt = doc.querySelector('[name="task_amount_1"]');
+  amt.value = "55555"; fire(win, amt, "input");
+  draft = JSON.parse(win.localStorage.getItem("invdraft:7") || "null");
+  assert.ok(!JSON.stringify(draft).includes("55555"), "금액칸 변경은 초안에 안 들어감(금액=DB 진실원천)");
+  doc.querySelector("[data-picker-combo]").__pkSet({ cid: "999", label: "테스트 청구처" }); // 청구처 세팅(미선택 제출 차단 방지)
+  const ev = new win.Event("submit", { bubbles: true, cancelable: true });
+  Object.defineProperty(ev, "submitter", { value: doc.querySelector("[data-invoice-submit]") });
+  doc.querySelector("[data-discount-form]").dispatchEvent(ev);
+  assert.equal(win.localStorage.getItem("invdraft:7"), null, "청구 생성(발행) 제출 시 초안 삭제");
+
+  // 복원(로드 시) — localStorage 시드 후 app.js 실행
+  const seed = { p: { cid: "42", pid: "", label: "복원청구처" }, da: "20000", dp: "", vat: false, t: "복원 제목", d: "2026-08-15" };
+  const r = mountDom(formHtml, { storage: { "invdraft:7": JSON.stringify(seed) } });
+  assert.equal(String(r.doc.querySelector("[data-discount-amount]").value).replace(/\D/g, ""), "20000", "복원: 할인");
+  assert.equal(r.doc.querySelector("[data-pk-cid]").value, "42", "복원: 청구처 cid");
+  assert.equal(r.doc.querySelector('input[name="title"]').value, "복원 제목", "복원: 제목");
+  assert.equal(r.doc.querySelector("[data-vat-toggle]").checked, false, "복원: VAT 해제 상태");
+  assert.equal(r.doc.querySelector('[name="issued_date"]').value, "2026-08-15", "복원: 발행일 hidden");
 });
