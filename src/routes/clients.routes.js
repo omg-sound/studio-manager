@@ -281,8 +281,15 @@ router.post("/", (req, res) => {
       if (!existing.memo && b.memo) fill.memo = b.memo;
       if (Object.keys(fill).length) updateParty(id, fill);
       for (const role of String(companyRolesFrom(b) || "").split(",").map((r) => r.trim()).filter(Boolean)) addCompanyRole(id, role);
-      if (ownerIds.length) setCompanyOwners(id, ownerIds);
-      linkClientContact(id, b);
+      // 대표자는 **병합**(기존 공동대표 유지 + 새 대표 추가) — setCompanyOwners는 통째 교체라 그대로 부르면
+      // 기존 공동대표가 해제되고 owner_name(세금계산서 '성명(대표자)' 원천)까지 덮인다(2026-07-15 점검).
+      if (ownerIds.length) {
+        const merged = [...new Set([...listCompanyOwners(id).map((o) => Number(o.id)), ...ownerIds.map(Number)])];
+        setCompanyOwners(id, merged);
+      }
+      // 담당자 연동은 **폼에 담당자 필드가 있을 때만** — 간이 등록 모달(담당자 칸 없음)이 이 분기를 타면
+      // linkClientContact가 빈 목록으로 setOrgContacts를 불러 기존 담당자 지정(is_contact)을 전원 해제한다(2026-07-15 점검).
+      if (b.contact_id != null || b.contact_name != null) linkClientContact(id, b);
       if (req.get("X-Requested-With") === "fetch") {
         const pp = getParty(id);
         return res.json({ ok: true, id, name: pp.name, kind: pp.kind, existing: true });

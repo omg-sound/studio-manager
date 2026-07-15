@@ -835,10 +835,12 @@ function normalizeCompanyName(name) {
 function resolveCompanyByName(name) {
   const key = normalizeCompanyName(name);
   if (!key) return null;
-  const ex = db()
-    .prepare("SELECT id FROM parties WHERE kind = 'company' AND LOWER(REPLACE(REPLACE(REPLACE(name, ' ', ''), CHAR(9), ''), CHAR(10), '')) = ? ORDER BY id LIMIT 1")
-    .get(key);
-  return ex ? ex.id : null;
+  // 매칭은 JS 정규화 하나로 일원화(2026-07-15 점검) — 이전의 SQL REPLACE 체인은 JS(\s+ 전체·유니코드 소문자)보다
+  // 좁아서(전각 공백 U+3000·NBSP·CR 미제거, SQLite LOWER는 ASCII 전용) 그런 문자가 든 저장 이름은 자기 자신과도
+  // 매칭이 안 돼 중복 방지가 조용히 실패했다. 업체 수는 수십 개라 전량 로드 비교로 충분하다.
+  const rows = db().prepare("SELECT id, name FROM parties WHERE kind = 'company' ORDER BY id").all();
+  const hit = rows.find((r) => normalizeCompanyName(r.name) === key);
+  return hit ? hit.id : null;
 }
 
 /** 회사명 → 업체 party id(있으면 재사용, 없으면 생성). 빈 이름=null. companyCombo(이름 제출) 저장 경로 공용. */

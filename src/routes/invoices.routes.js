@@ -8,6 +8,7 @@ const {
   listInvoices,
   getInvoiceForUser,
   listInvoiceItemsForInvoice,
+  invoiceItemsByInvoiceIds,
   balanceOf,
   invoiceTaxTab,
   deleteInvoice,
@@ -102,13 +103,17 @@ router.get("/", requireBilling, (req, res) => {
   const cap = capList(rows, req.query, (n) => `${retPath}&limit=${n}`);
   // 밀도 토글(좁게/넓게) — 프로젝트 목록과 **같은 설정**(localStorage["density"])을 공유한다(app.js [data-density-toggle]).
   const densityPill = `<div class="mb-3 flex justify-end"><button type="button" data-density-toggle class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm text-muted hover:text-fg">
-      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
+      <svg class="h-3.5 w-3.5" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
       <span data-density-label>넓게</span>
     </button></div>`;
-  // 행 펼침 본문(청구 항목·소계·VAT·PDF)에 쓸 항목 — 표시분(기본 100건)만 조회(프로젝트 청구 탭과 동일 방식).
-  const shown = cap.shown.map((i) => ({ ...i, items: (listInvoiceItemsForInvoice(req.user, i.id) || {}).rows || [] }));
+  // 행 펼침 본문(청구 항목·소계·VAT·PDF)에 쓸 항목 — 표시분 전체를 **한 쿼리**로(행마다 조회하면 100행=200쿼리, 2026-07-15 점검).
+  const itemsBy = invoiceItemsByInvoiceIds(cap.shown.map((i) => i.id));
+  const shown = cap.shown.map((i) => ({ ...i, items: itemsBy[i.id] || [] }));
+  // 행의 복귀 경로엔 limit(더 보기 상태)을 보존 — 안 실으면 100번째 이후 행을 처리하고 돌아올 때 기본 100건으로
+  // 리셋된다(프로젝트 목록과 동일 클래스, 2026-07-15 점검). cap의 '더 보기' 링크는 자체 limit을 붙이므로 retPath 그대로.
+  const limitQ = Number(req.query.limit) > 0 ? `&limit=${Number(req.query.limit)}` : "";
   const list = shown.length
-    ? `${densityPill}<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${shown.map((i) => invoiceRow(i, { items: i.items, isAdmin: admin, isInvoicer: invoicer, ret: retPath, openId })).join("")}</div>${cap.more}`
+    ? `${densityPill}<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${shown.map((i) => invoiceRow(i, { items: i.items, isAdmin: admin, isInvoicer: invoicer, ret: retPath + limitQ, openId })).join("")}</div>${cap.more}`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });

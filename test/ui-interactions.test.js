@@ -1069,3 +1069,85 @@ test("청구 목록 행: 상태 pill 클릭 = 폼 제출만(행은 안 펼쳐짐
   assert.equal(click.defaultPrevented, true, "기본 동작(펼침·암묵 제출) 차단");
   assert.equal(submitted, "/invoices/7/tax-status", "폼은 직접 제출됨");
 });
+
+// ── 2026-07-15 전수 점검(4렌즈) 확정 결함 회귀 ──────────────────────────────
+
+// [1] 날짜 콤보 blur 120ms 지연 커밋 ↔ 폼 제출 경합: 타이핑 직후 저장을 누르면 옛 hidden 값으로 POST되던 것.
+// 제출 직전(capture) 동기 flush + required 빈 값 차단(hidden required는 브라우저가 검증하지 않음).
+test("날짜 콤보: 제출 직전 타이핑 값 동기 flush + required 빈 값 차단", () => {
+  const { dateCombo } = require("../src/views");
+  const html = `<form>${dateCombo("session_date", "2026-03-05", { label: "날짜", required: true })}<button type="submit">저장</button></form>`;
+  const { win, doc } = mountDom(html);
+  const form = doc.querySelector("form");
+  const inp = doc.querySelector("[data-date-input]");
+  const hid = doc.querySelector("[data-date-hidden]");
+
+  // 타이핑만 하고(blur 타이머 안 돎) 곧장 제출 → flush가 hidden을 갱신해야 한다
+  inp.focus();
+  inp.value = "0805";
+  fire(win, inp, "input");
+  const e1 = new win.Event("submit", { bubbles: true, cancelable: true });
+  form.dispatchEvent(e1);
+  assert.equal(hid.value, "2026-08-05", "제출 직전 flush로 타이핑 값 반영(경합 제거)");
+  assert.equal(e1.defaultPrevented, false, "값 있으면 제출 통과");
+
+  // 비우고 제출 → required 차단
+  inp.value = "";
+  fire(win, inp, "input");
+  const e2 = new win.Event("submit", { bubbles: true, cancelable: true });
+  form.dispatchEvent(e2);
+  assert.equal(e2.defaultPrevented, true, "required 빈 값이면 제출 차단(옛 native 검증 복원)");
+});
+
+// [2] commit 무변경 change 억제: 작성일(data-autosubmit) 칸을 포커스만 갔다 떼도 POST+리로드되던 것.
+test("날짜 콤보: 값이 안 바뀐 blur 커밋은 change를 쏘지 않는다(autosubmit 오발 방지)", async () => {
+  const { dateCombo } = require("../src/views");
+  const html = `<form>${dateCombo("created_at", "2026-07-01", { label: "작성일", marker: "data-autosubmit" })}</form>`;
+  const { win, doc } = mountDom(html);
+  const inp = doc.querySelector("[data-date-input]");
+  const hid = doc.querySelector("[data-date-hidden]");
+  let changes = 0;
+  hid.addEventListener("change", () => changes++);
+
+  // 포커스 → 아무 것도 안 바꾸고 Enter(=commit 같은 값)
+  inp.focus();
+  inp.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.equal(changes, 0, "무변경 커밋은 change 없음");
+  assert.equal(hid.value, "2026-07-01");
+
+  // 실제로 바꾸면 change 발화
+  inp.focus(); inp.value = "0715"; fire(win, inp, "input");
+  inp.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.equal(changes, 1, "변경 커밋만 change");
+  assert.equal(hid.value, "2026-07-15");
+});
+
+// [3] data-confirm 취소 ↔ 이중 제출 가드: 확인창에서 '취소'해도 폼이 8초 잠기고 버튼이 비활성화되던 것.
+test("이중 제출 가드: 뒤 리스너(data-confirm 취소)가 제출을 막으면 잠그지 않는다", async () => {
+  const { win, doc } = mountDom(`<form id="f" data-confirm="지울까요?" action="/x" method="post"><button type="submit" id="b">삭제</button></form>`);
+  win.confirm = () => false; // 취소
+  const form = doc.getElementById("f");
+  const btn = doc.getElementById("b");
+  const e = new win.Event("submit", { bubbles: true, cancelable: true });
+  form.dispatchEvent(e);
+  assert.equal(e.defaultPrevented, true, "confirm 취소 = 제출 차단");
+  await tick(); // 가드의 setTimeout(0) 이후
+  assert.equal(btn.disabled, false, "취소했으면 버튼이 잠기지 않는다");
+  // 바로 다시 제출(승인) 가능해야 한다
+  win.confirm = () => true;
+  const e2 = new win.Event("submit", { bubbles: true, cancelable: true });
+  form.dispatchEvent(e2);
+  assert.equal(e2.defaultPrevented, false, "재시도 제출 통과(8초 잠김 없음)");
+});
+
+// [4] 청구처 추천 칩 폴백(콤보 옵션에 없는 당사자): fireInput의 '정확 일치 아니면 비움' 동기화가
+// 방금 세팅한 id를 되지워 분기가 자기 파괴로 죽어 있던 것.
+test("청구처 추천 칩: 콤보 옵션에 없는 당사자도 id가 유지된다(폴백 자기 파괴 회귀)", () => {
+  const { payerCombo } = require("../src/views");
+  const combo = payerCombo({ selectedId: null, clientOptions: [{ id: 5, name: "다른회사", kind: "company" }], contactOptions: [] });
+  const chip = `<div class="mt-1.5"><button type="button" data-payer-suggest="77" data-payer-suggest-name="김감독">아티스트 김감독</button></div>`;
+  const { win, doc } = mountDom(`<form>${combo}${chip}</form>`);
+  doc.querySelector("[data-payer-suggest]").dispatchEvent(new win.MouseEvent("click", { bubbles: true }));
+  assert.equal(doc.querySelector("[data-pk-cid]").value, "77", "옵션 밖 당사자 id 유지");
+  assert.equal(doc.querySelector("[data-pk-input]").value, "김감독", "이름 표시");
+});

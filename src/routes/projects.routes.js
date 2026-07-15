@@ -225,7 +225,7 @@ router.get("/", requireAuth, (req, res) => {
     : "";
   // 밀도 토글(좁게/넓게) — 저장은 localStorage(기기별), CSS 전환이라 서버 왕복 없음(app.js [data-density-toggle]).
   const densityPill = `<button type="button" data-density-toggle class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm text-muted hover:text-fg">
-      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
+      <svg class="h-3.5 w-3.5" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
       <span data-density-label>넓게</span>
     </button>`;
   const mineToggle = `<div class="mb-3 flex items-center gap-2">${minePill}<span class="ml-auto">${densityPill}</span></div>`;

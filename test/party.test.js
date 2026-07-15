@@ -604,3 +604,13 @@ test("ensureCompanyParty: 공백·대소문자 차이는 같은 회사로 재사
   const cnt = require("../src/db").db().prepare("SELECT COUNT(*) AS n FROM parties WHERE kind='company' AND name LIKE '%뮤직%'").get().n;
   assert.equal(cnt, 1, "업체는 하나만 생성");
 });
+
+test("resolveCompanyByName: 전각 공백·NBSP·비ASCII 대문자가 든 저장 이름도 매칭(SQL/JS 정규화 일원화)", () => {
+  const D = require("../src/data");
+  // 전각 공백(U+3000)이 든 이름으로 저장 — 옛 SQL 정규화는 이 문자를 못 지워 자기 자신과도 매칭 실패했다
+  const a = D.createCompany({ name: "스타　뮤직" }); // U+3000
+  assert.equal(D.resolveCompanyByName("스타뮤직"), a, "전각 공백 무시 매칭");
+  assert.equal(D.ensureCompanyParty("스타 뮤직", null), a, "일반 공백 입력도 같은 회사");
+  const b = D.createCompany({ name: "ＣＪミュージック" }); // 전각 라틴 대문자
+  assert.equal(D.resolveCompanyByName("ｃｊミュージック"), b, "유니코드 소문자화 매칭");
+});

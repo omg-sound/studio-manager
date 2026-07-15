@@ -113,15 +113,19 @@ function invoicePayerLabel(inv) {
  */
 function invoiceSubLabel(inv) {
   const head = invoicePayerLabel(inv);
+  // 개인 청구처는 head가 "본명 (활동명)" 병기라 원문 비교(!==)로는 못 거른다 — 괄호를 분해한 이름 조각과 비교
+  // (예: 청구처 "조형우 (형우비트)" + 아티스트 "형우비트" → 같은 사람이 두 번 표시되던 것, 2026-07-15 점검).
+  // 분해는 **개인일 때만** — 회사 상호의 "(주)" 접두까지 분해하면 "(주)도너츠컬처"가 제작사 "도너츠컬처"를 잘못 억제한다.
+  const headNames = inv.payer_kind === "person" ? head.split(/[()]/).map((t) => t.trim()).filter(Boolean) : [head];
   const prod = String(inv.project_production || "").trim();
   const artists = String(inv.project_artist || "").split(",").map((s) => s.trim()).filter(Boolean);
   const artist = artists.length > 1 ? `${artists[0]} 외 ${artists.length - 1}` : artists[0] || "";
   const parts = [];
-  if (prod && prod !== head) parts.push(prod);
-  if (artist && artist !== head) parts.push(artist);
+  if (prod && !headNames.includes(prod)) parts.push(prod);
+  if (artist && !headNames.includes(artist)) parts.push(artist);
   if (parts.length) return parts.join(" · ");
   const title = String(inv.project_title || "").trim();
-  return title && title !== head ? title : "";
+  return title && !headNames.includes(title) ? title : ""; // 폴백(프로젝트명)도 청구처 이름 조각과 겹치면 생략
 }
 
 /**
@@ -133,7 +137,7 @@ function invoiceSubLabel(inv) {
 // (입금 이력·수동 입금 UI는 2026-07-05 폐기 — 분납 없는 워크플로: 입금 처리는 [입금완료] 토글 하나.
 //  payments 인프라(addPayment·deletePayment 등)는 토글의 자동 완납·되돌리기가 사용하므로 데이터 레이어에 잔존.)
 
-function invoiceExpandBody(inv, { items = [], payments = [], isAdmin = false, returnTo = "", inList = false } = {}) {
+function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "", inList = false } = {}) {
   const pdfTypes = DOC_TYPES; // 3종 모두 상태 무관 발행(미발행 초안도 견적서·내역서·거래명세서)
   const ret = esc(returnTo);
 
@@ -204,16 +208,11 @@ function payerName(inv) {
   return inv.client_name || "";
 }
 
-/** 목록 행(링크 카드). compact=프로젝트 상세 청구 탭용 — 클릭하면 그 자리에서 펼침(페이지 이동 없음). */
+/** 목록 행. 기본=지메일식 한 줄 행(/invoices 목록), compact=프로젝트 상세 청구 탭 — 둘 다 클릭하면 그 자리에서 펼침. */
 function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoicer = false, returnTo = "", openId = null, ret = "" } = {}) {
-  const bal = balanceOf(inv);
-  const pname = payerName(inv);
-  const sub = compact
-    ? esc(pname || "청구처 미지정")
-    : `${esc(inv.project_title || "프로젝트 없음")}${pname ? " · " + esc(pname) : ""}`;
   // 마감일·미수/완납 줄 제거(2026-07-05 사용자 결정) — 배지(발행/입금완료)가 상태를 대체, 미수는 목록 상단 합계만.
-
   if (compact) {
+    const sub = esc(payerName(inv) || "청구처 미지정");
     // 청구 탭 행: 클릭하면 그 자리에서 펼침(details). 처리 후 ?open=ID로 복귀하면 펼쳐진 채 유지.
     const isOpen = openId != null && Number(openId) === inv.id;
     return `
@@ -231,7 +230,7 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
           ${detailsChevron()}
         </div>
       </summary>
-      ${invoiceExpandBody(inv, { items, payments: inv.payments || [], isAdmin, returnTo })}
+      ${invoiceExpandBody(inv, { items, isAdmin, returnTo })}
     </details>`;
   }
 
@@ -264,9 +263,9 @@ function invoiceRow(inv, { compact = false, items = [], isAdmin = false, isInvoi
           <span class="inv-sub">${esc(subLabel)}</span>
         </a>
         ${meta}
-        <svg class="inv-chevron transition-transform group-open/inv:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        <svg class="inv-chevron transition-transform group-open/inv:rotate-180" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
       </summary>
-      ${invoiceExpandBody(inv, { items, payments: inv.payments || [], isAdmin, returnTo: retWithOpen, inList: true })}
+      ${invoiceExpandBody(inv, { items, isAdmin, returnTo: retWithOpen, inList: true })}
     </details>`;
 }
 

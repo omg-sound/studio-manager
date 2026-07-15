@@ -42,6 +42,9 @@
     if (f.__submitting) { e.preventDefault(); return; } // 두 번째 제출 차단
     f.__submitting = true;
     setTimeout(function () {
+      // confirm()은 같은 디스패치 안에서 동기 실행되므로, 여기(타이머) 시점엔 취소 여부가 확정돼 있다.
+      // 뒤에 등록된 리스너(data-confirm 등)가 제출을 막았으면 잠그지 않는다 — 안 그러면 취소해도 8초 잠김.
+      if (e.defaultPrevented) { unlock(f); return; }
       Array.prototype.forEach.call(buttons(f), function (b) {
         if (!b.disabled) { b.disabled = true; b.__lockedBySubmit = true; }
       });
@@ -249,7 +252,7 @@
     if (!s) return "";
     if (s === "오늘") return todayLocal();
     var base = ymdParts(baseYmd) || ymdParts(todayLocal());
-    if (s === "내일" || s === "모레") return addDays(baseYmd || todayLocal(), s === "내일" ? 1 : 2);
+    if (s === "내일" || s === "모레") return addDays(todayLocal(), s === "내일" ? 1 : 2); // 항상 오늘 기준('오늘'과 일관)
     var nums = s.match(/\d+/g);
     if (!nums) return null;
     var y, m, d;
@@ -284,11 +287,12 @@
 
     function commit(v, opts) { // v="" → 비움(종료 날짜는 선택 항목)
       if (v == null) return sync(); // 파싱 실패 → 되돌림
+      var changed = v !== hid.value; // 무변경 blur에도 change를 쏘면 data-autosubmit(작성일)이 포커스만 갔다 떼도 재제출·리로드된다
       hid.value = v;
       sync();
       cursor = v || todayLocal();
       view = ymdParts(cursor);
-      hid.dispatchEvent(new Event("change", { bubbles: true })); // 기존 리스너(겹침 조회·소요 역산) 재사용
+      if (changed) hid.dispatchEvent(new Event("change", { bubbles: true })); // 기존 리스너(겹침 조회·소요 역산) 재사용
       if (!opts || !opts.keepOpen) close();
     }
     function close() { pop.classList.add("hidden"); inp.setAttribute("aria-expanded", "false"); }
@@ -322,6 +326,19 @@
     inp.addEventListener("blur", function () {
       setTimeout(function () { commit(parseDateText(inp.value, hid.value)); }, 120); // 클릭 선택이 먼저 처리되게
     });
+    // blur의 120ms 지연 커밋은 폼 제출과 경합한다(타이핑 직후 저장을 누르면 옛 hidden 값으로 POST).
+    // 제출 직전(capture) 동기 flush — change는 안 쏜다(제출이므로 미리보기 리스너 불필요, autosubmit 재귀도 방지).
+    // required(세션 날짜)는 hidden이라 브라우저가 검증하지 않으므로 여기서 빈 값을 막는다(옛 native date의 필수 검증 복원).
+    var ownForm = inp.form || wrap.closest("form");
+    if (ownForm) ownForm.addEventListener("submit", function (e) {
+      var v = parseDateText(inp.value, hid.value);
+      if (v != null && v !== hid.value) hid.value = v;
+      if (hid.hasAttribute("required") && !hid.value) {
+        e.preventDefault();
+        if (window.__toast) window.__toast((inp.getAttribute("aria-label") || "날짜") + "를 입력하세요.");
+        inp.focus();
+      }
+    }, true);
     inp.addEventListener("input", function () {
       var v = parseDateText(inp.value, hid.value);
       if (v) { cursor = v; view = ymdParts(v); render(); } // 타이핑에 맞춰 달력이 따라감(확정은 Enter·blur)
@@ -2352,7 +2369,9 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
           if (it) pick(it);
           else { // 콤보 옵션에 없는 당사자(관계자 등) — id만 세팅하고 이름 표시
             input.value = chip.getAttribute("data-payer-suggest-name") || "";
-            cid.value = pidv; pid.value = ""; applyDoc(null); fireInput(); hide();
+            cid.value = pidv; pid.value = ""; applyDoc(null); hide();
+            // fireInput() 금지 — input 핸들러의 '정확 일치 아니면 비움' 동기화가 방금 세팅한 id를 되지운다.
+            cid.dispatchEvent(new Event("change", { bubbles: true })); // dirty 감시 통지만
           }
         });
       });

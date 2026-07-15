@@ -474,6 +474,23 @@ function deleteInvoice(user, id) {
 
 // ── 청구(invoices) 목록·통계 — 클라이언트 범위 강제 ──
 
+/**
+ * 여러 청구서의 항목을 **한 쿼리**로(청구 목록 페이지 — 표시 행마다 listInvoiceItemsForInvoice를 부르면
+ * 행당 2쿼리[내부 getInvoiceForUser 결과는 버려짐], 100행=200쿼리. 2026-07-15 점검). { [invoice_id]: rows[] }.
+ * 정렬은 listInvoiceItemsForInvoice와 동일(날짜순·값 없는 라인 뒤).
+ */
+function invoiceItemsByInvoiceIds(ids) {
+  const list = (ids || []).map(Number).filter(Boolean);
+  if (!list.length) return {};
+  const ph = list.map(() => "?").join(",");
+  const rows = db()
+    .prepare(`SELECT * FROM invoice_items WHERE invoice_id IN (${ph}) ORDER BY invoice_id, (item_date IS NULL), item_date ASC, id ASC`)
+    .all(...list);
+  const by = {};
+  for (const r of rows) (by[r.invoice_id] = by[r.invoice_id] || []).push(r);
+  return by;
+}
+
 /** 인보이스 목록(치프 전용 라우트에서 사용). 필터(status/overdue/clientId)는 옵션. */
 function listInvoices(_user, { status, overdue, clientId } = {}) {
   const where = [];
@@ -548,6 +565,7 @@ function listInvoicesForProject(user, projectId) {
 }
 
 module.exports = {
+  invoiceItemsByInvoiceIds,
   balanceOf,
   invoiceTaxTab,
   payStatusOf,
