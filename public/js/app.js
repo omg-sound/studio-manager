@@ -305,9 +305,9 @@
       var today = todayLocal();
       var head =
         '<div class="mb-1 flex items-center justify-between">' +
-        '<button type="button" class="btn-ghost btn-xs" data-dc-prev aria-label="이전 달">‹</button>' +
+        '<button type="button" tabindex="-1" class="btn-ghost btn-xs" data-dc-prev aria-label="이전 달">‹</button>' +
         '<span class="text-sm font-medium">' + y + "년 " + m + "월</span>" +
-        '<button type="button" class="btn-ghost btn-xs" data-dc-next aria-label="다음 달">›</button></div>';
+        '<button type="button" tabindex="-1" class="btn-ghost btn-xs" data-dc-next aria-label="다음 달">›</button></div>';
       var wd = '<div class="grid grid-cols-7 text-center text-[11px] text-muted">' + WD.map(function (w) { return "<span>" + w + "</span>"; }).join("") + "</div>";
       var cells = "";
       for (var i = 0; i < first; i++) cells += "<span></span>";
@@ -317,7 +317,7 @@
         if (v === hid.value) cls += " bg-primary text-primary-fg hover:bg-primary";
         else if (v === cursor) cls += " ring-1 ring-primary";
         else if (v === today) cls += " font-bold text-primary";
-        cells += '<button type="button" class="' + cls + '" data-dc-day="' + v + '">' + d + "</button>";
+        cells += '<button type="button" tabindex="-1" class="' + cls + '" data-dc-day="' + v + '">' + d + "</button>";
       }
       pop.innerHTML = head + wd + '<div class="mt-0.5 grid grid-cols-7 gap-0.5 text-center">' + cells + "</div>";
     }
@@ -652,7 +652,7 @@
       for (var ti = 0; ti < 48; ti++) {
         var th = Math.floor(ti / 2);
         var tt = (th < 10 ? "0" + th : "" + th) + ":" + (ti % 2 ? "30" : "00");
-        timeHtml += '<button type="button" class="block w-full px-3 py-1.5 text-center text-sm tabular hover:bg-elevated active:bg-elevated" data-time-opt="' + tt + '">' + tt + "</button>";
+        timeHtml += '<button type="button" tabindex="-1" class="block w-full px-3 py-1.5 text-center text-sm tabular hover:bg-elevated active:bg-elevated" data-time-opt="' + tt + '">' + tt + "</button>";
       }
       pop.innerHTML = timeHtml;
     }
