@@ -310,7 +310,8 @@ function projectMetaCard(p, err = "", { chief = false } = {}) {
     ? `<form method="post" action="/projects/${p.id}/created-at" class="mb-3 flex items-center gap-2 border-b border-border/40 pb-3">
          <input type="hidden" name="return" value="/projects/${p.id}?tab=project" />
          <label class="text-xs text-muted">작성일</label>
-         ${dateCombo("created_at", dateStr, { marker: "data-autosubmit", label: "작성일", inputCls: "w-[8.5rem] rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" })}
+         ${dateCombo("created_at", dateStr, { label: "작성일", inputCls: "w-[8.5rem] rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" })}
+         <button type="submit" class="btn-primary btn-xs shrink-0">저장</button>
        </form>`
     : "";
   return `

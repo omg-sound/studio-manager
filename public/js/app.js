@@ -288,7 +288,7 @@
 
     function commit(v, opts) { // v="" → 비움(종료 날짜는 선택 항목)
       if (v == null) return sync(); // 파싱 실패 → 되돌림
-      var changed = v !== hid.value; // 무변경 blur에도 change를 쏘면 data-autosubmit(작성일)이 포커스만 갔다 떼도 재제출·리로드된다
+      var changed = v !== hid.value; // 무변경 blur에도 change를 쏘면 hidden의 change 리스너(할인 미리보기·자동 제출 등)가 불필요하게 재발동한다
       hid.value = v;
       sync();
       cursor = v || todayLocal();
