@@ -56,7 +56,9 @@ function sessionTypeLabel(session) {
 
 function eventInputForSession(session, project) {
   const company = project.production_company || project.artist_company; // 제작사 우선, 없으면 레이블(레이블 자체 제작분)
-  const title = [project.artist, company].filter(Boolean).join(" · ") || project.title || "스튜디오 세션"; // 아티스트 먼저(2026-07-05 사용자 요청 — 이전엔 회사가 먼저)
+  const baseTitle = [project.artist, company].filter(Boolean).join(" · ") || project.title || "스튜디오 세션"; // 아티스트 먼저(2026-07-05 사용자 요청 — 이전엔 회사가 먼저)
+  // 취소된 세션은 캘린더에서 삭제하지 않고 제목에 '(취소)' prefix를 붙여 기록으로 남긴다(2026-07-15 사용자 요청).
+  const title = session.status === "취소" ? `(취소) ${baseTitle}` : baseTitle;
   // 담당 디렉터(다대다) 이름 — 본명 (활동명) 병기(전면 병기 통일, 2026-07-05). 캘린더 설명에 포함.
   const directors = session.id ? listSessionDirectors(session.id).map((d) => personLabel(d.name, d.activity_name)).filter(Boolean) : [];
   // 담당 엔지니어(다대다, 2026-07-05) — 배정된 전원을 콤마로 병기(레거시 engineer_name은 첫 명뿐이라 여러 명일 때 누락됨).
@@ -81,10 +83,8 @@ function eventInputForSession(session, project) {
 async function syncSessionEvent(user, session) {
   const project = getProjectForUser(user, session.project_id);
   if (!project) return { synced: false, reason: "프로젝트를 찾을 수 없음" };
-  if (session.status === "취소") {
-    try { if (session.gcal_event_id) { await calendar.deleteEvent(session.gcal_event_id); setSessionEventId(session.id, null); } } catch (e) { console.warn("[sessions] 취소 캘린더 삭제 동기화 실패 —", (e && e.message) || e); }
-    return { synced: true }; // 취소는 삭제 동기화(또는 원래 없었음)
-  }
+  // 취소된 세션도 삭제하지 않고 '(취소)' 제목으로 업데이트해 기록으로 남긴다(eventInputForSession이 prefix 처리, 2026-07-15 사용자 요청).
+  // 실제 세션 삭제(/delete)는 여전히 캘린더 일정도 삭제한다 — 취소(기록 유지) ≠ 삭제(제거).
   const st = calendar.syncStatus(); // 설정 수준 준비 상태(미연동/캘린더 미선택 등)
   if (!st.ok) return { synced: false, reason: st.reason };
   try {
@@ -306,7 +306,7 @@ router.post("/sessions/:id/status", requireEditor, asyncHandler(async (req, res)
     throw e;
   }
   if (!r) return res.status(404).send("세션을 찾을 수 없습니다.");
-  await syncSessionEvent(req.user, r); // 상태변경(취소→일정 삭제) 캘린더 동기화
+  await syncSessionEvent(req.user, r); // 상태변경 캘린더 동기화(취소→'(취소)' 제목 업데이트, 삭제 아님)
   const back = safePath(req.body.return); // 캘린더 팝오버에서 완료 시 캘린더로 복귀(내부 경로만)
   res.redirect(back || `/projects/${r.project_id}?tab=sessions&flash=saved`);
 }));

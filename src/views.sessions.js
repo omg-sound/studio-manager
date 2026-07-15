@@ -363,11 +363,21 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
             <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "−"}</span>완료</button>
           </form>`
     : "";
+  // '취소' 토글: 예정·완료면 '취소'(확인 후 status=취소), 취소면 '취소 해제'(→예정). 취소는 캘린더에서 삭제하지 않고 '(취소)' 제목으로 남는다(2026-07-15).
+  const cancelToggle = s.status === "취소"
+    ? `<form method="post" action="/sessions/${s.id}/status">
+            <input type="hidden" name="status" value="예정" />
+            <button class="btn-ghost btn-xs text-muted" type="submit">취소 해제</button>
+          </form>`
+    : `<form method="post" action="/sessions/${s.id}/status" data-confirm="이 세션을 취소할까요? 구글 캘린더에는 '(취소)' 표시로 남습니다.">
+            <input type="hidden" name="status" value="취소" />
+            <button class="btn-ghost btn-xs text-danger" type="submit">취소</button>
+          </form>`;
   return `
     <details class="group overflow-hidden rounded-lg border border-border bg-surface">
       <summary class="row-link flex cursor-pointer list-none items-start justify-between gap-2 p-3">
         ${header}
-        <span class="flex shrink-0 items-center gap-2">${completeToggle}${statusBadge}${detailsChevron()}</span>
+        <span class="flex shrink-0 items-center gap-2">${completeToggle}${cancelToggle}${statusBadge}${detailsChevron()}</span>
       </summary>
       <div class="border-t border-border p-3">
         <form id="del-sess-${s.id}" method="post" action="/sessions/${s.id}/delete" data-confirm="이 세션을 삭제할까요?" class="hidden"></form>
@@ -526,6 +536,12 @@ function sessionCardModal(s, { canEdit = false } = {}) {
          <button class="btn-ghost btn-sm ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "−"}</span>완료</button>
        </form>`
     : "";
+  // 취소/취소 해제(편집자만) — 취소는 캘린더에서 삭제하지 않고 '(취소)' 제목으로 남긴다(2026-07-15).
+  const cancelForm = !canEdit
+    ? ""
+    : s.status === "취소"
+    ? `<form method="post" action="/sessions/${s.id}/status"><input type="hidden" name="status" value="예정" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-muted" type="submit">취소 해제</button></form>`
+    : `<form method="post" action="/sessions/${s.id}/status" data-confirm="이 세션을 취소할까요? 구글 캘린더에는 '(취소)' 표시로 남습니다."><input type="hidden" name="status" value="취소" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-danger" type="submit">취소</button></form>`;
   // 모달 위치 = 전체 화면 가운데가 아니라 콘텐츠(캘린더) 영역 가운데(2026-07-11 사용자 요청):
   // 데스크톱은 사이드바(sm:w-56=14rem) 폭만큼 왼쪽을 비워(sm:left-64) 캘린더 열 안에서 중앙 정렬. 모바일(드로어)은 left-0 전폭.
   return `
@@ -545,7 +561,7 @@ function sessionCardModal(s, { canEdit = false } = {}) {
         ${bill ? `<div class="mt-2 text-sm tabular ${s.billing.amount > 0 ? "text-success" : "text-muted"}">${bill}</div>` : ""}
         <div class="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
           <a href="/projects/${s.project_id}?tab=sessions" class="btn-ghost btn-sm">프로젝트로 ↗</a>
-          ${completeForm || "<span></span>"}
+          <span class="flex items-center gap-2">${cancelForm}${completeForm}</span>
         </div>
       </div>
     </div>`;
