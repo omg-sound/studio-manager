@@ -3,7 +3,7 @@
 const express = require("express");
 const { requireAuth, canBill } = require("../auth");
 const { dashboardStats, upcomingSessions, listProjects } = require("../data");
-const { layout, pageHeader, esc, formatKRW, emptyState } = require("../views");
+const { layout, pageHeader, esc, formatKRW, emptyState, ddayPill } = require("../views");
 const { todayYmd, formatYmdShort } = require("../lib/date");
 
 const router = express.Router();
@@ -64,9 +64,9 @@ router.get("/", requireAuth, (req, res) => {
           <div class="truncate text-sm font-medium">${esc(ss.project_title)}</div>
           <div class="text-xs text-muted">${esc(ss.session_type)}${ss.engineer_name ? " · " + esc(ss.engineer_name) : ""}</div>
         </div>
-        <div class="shrink-0 text-right">
-          <div class="text-xs font-medium tabular">${esc(formatYmdShort(ss.session_date))}${ss.start_time ? " " + esc(ss.start_time) : ""}</div>
-          <div class="text-xs text-muted">${ss.session_date === today ? "오늘" : ""}</div>
+        <div class="flex shrink-0 items-center gap-2">
+          <div class="text-xs font-medium tabular text-muted">${esc(formatYmdShort(ss.session_date))}${ss.start_time ? " " + esc(ss.start_time) : ""}</div>
+          ${ddayPill(ss.session_date)}
         </div>
       </a>`
         )

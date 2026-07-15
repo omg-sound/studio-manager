@@ -377,6 +377,21 @@ function detailsChevron() {
 }
 
 /**
+ * 디데이 pill(공용) — 날짜까지 남은 일수를 색 단계로 강조(프로젝트 목록·대시보드 동일 표기).
+ * 오늘=오늘 / 미래=D-N / 과거=N일 지남. 3일 이내=빨강·2주 이내=주황·그 외=흐린 회색(옅은 보더 pill).
+ * @param {string} dateYmd "YYYY-MM-DD". 값 없으면 빈 문자열.
+ */
+function ddayPill(dateYmd) {
+  const { daysUntilYmd } = require("./lib/date"); // 지연 require(순환 회피)
+  if (!dateYmd) return "";
+  const d = daysUntilYmd(dateYmd);
+  if (d == null) return "";
+  const label = d === 0 ? "오늘" : d > 0 ? `D-${d}` : `${-d}일 지남`;
+  const cls = d <= 3 ? "text-danger" : d <= 14 ? "text-warning" : "text-muted";
+  return `<span class="inline-flex items-center rounded-md border border-border/70 px-1.5 py-0.5 text-sm font-bold ${cls}">${esc(label)}</span>`;
+}
+
+/**
  * 접이식 '설명' 블록 — 긴 안내/항목 설명을 기본 접힘으로(화면을 짧게). 네이티브 `<details>`(무JS·CSP 안전).
  * `content`는 이미 빌드된 HTML 조각(동적 값 포함 가능). 상태·오류·권한 문구가 아니라 '어떻게 동작하는지' 설명에만 쓴다.
  * @param {string} content HTML 조각. @param {{label?:string, cls?:string}} opts label=요약 라벨(기본 '설명').
@@ -900,4 +915,4 @@ function groupCombo(fieldName, selectedId, currentName, groups = []) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personListRow, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, dateCombo, fileViewerPage };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, ddayPill, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, personListRow, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, dateCombo, fileViewerPage };

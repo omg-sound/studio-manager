@@ -8,6 +8,7 @@ const {
   formatKRW,
   emptyState,
   detailsChevron,
+  ddayPill,
   explain,
   dirtyActionRow,
   personCombo,
@@ -16,7 +17,7 @@ const {
   dateCombo,
   pageHeader,
 } = require("./views");
-const { formatYmdShort, daysUntilYmd, todayYmd } = require("./lib/date");
+const { formatYmdShort, todayYmd } = require("./lib/date");
 const {
   clientOptions,
   contactOptions,
@@ -44,18 +45,11 @@ function newProjectMenu() {
  */
 function nextSessionLine(p) {
   if (!p.next_session_date) return "";
-  const d = daysUntilYmd(p.next_session_date);
-  const dday = d === 0 ? "오늘" : d > 0 ? `D-${d}` : `${-d}일 지남`;
-  // 디데이만 임박도 색 단계로 강조(2026-07-11 사용자 요청 — PM 밑, 디데이만 눈에 띄게):
-  // 3일 이내=빨강(진한색) / 2주 이내=주황(중간색) / 그 외=흐린 회색(멀리·뒤로 물러남). 옅은 보더 pill·크게(text-sm).
-  // 멀리를 검정(text-fg) 대신 muted로 — 검정과 주황이 헷갈린다는 리포트(2026-07-11)로 far를 recede시켜 색 구분 강화.
-  let ddayCls;
-  if (d != null && d <= 3) ddayCls = "text-danger";
-  else if (d != null && d <= 14) ddayCls = "text-warning";
-  else ddayCls = "text-muted";
+  // 디데이만 임박도 색 단계로 강조(2026-07-11 사용자 요청 — PM 밑, 디데이만 눈에 띄게): 공용 ddayPill(views.js).
+  // 3일 이내=빨강 / 2주 이내=주황 / 그 외=흐린 회색(멀리·뒤로 물러남). 옅은 보더 pill·크게(text-sm).
   return `<span class="proj-next inline-flex items-center gap-1.5 text-xs text-muted">
     <span>${esc(formatYmdShort(p.next_session_date))}</span>
-    <span class="inline-flex items-center rounded-md border border-border/70 px-1.5 py-0.5 text-sm font-bold ${ddayCls}">${esc(dday)}</span>
+    ${ddayPill(p.next_session_date)}
   </span>`;
 }
 
