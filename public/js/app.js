@@ -2432,8 +2432,8 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   });
 })();
 
-// 청구 생성 폼 임시저장(초안): 금액을 제외한 폼 필드(청구처·할인·발행일·VAT·제목)를 localStorage에 보관 → 로드 시 복원, 발행 시 삭제.
-// ⚠️ 금액(task_amount/session_amount)·항목 체크는 초안에 넣지 않는다: 금액은 즉시 DB 저장(진실원천)이라 옛 초안이 확정 금액을 덮던 버그를 회피(2026-07-14 폐기 사유). 초안은 '발행 직전 결정' 필드만 담는다.
+// 청구 생성 폼 임시저장(초안): '임시저장' 버튼을 누를 때만 폼 필드(청구처·할인·VAT·제목)를 localStorage에 보관 → 로드 시 복원, 발행 시 삭제.
+// ⚠️ 금액(task_amount/session_amount)·항목 체크·발행일은 초안에 넣지 않는다: 금액은 즉시 DB 저장(진실원천)이라 옛 초안이 확정 금액을 덮던 버그 회피(2026-07-14), 발행일은 '발행하는 날'이라 항상 오늘(옛 초안이 과거 일자로 발행시키던 위험 제거, 2026-07-15). 초안은 다시 타이핑하기 번거로운 '발행 직전 결정' 필드만 담는다.
 (function () {
   "use strict";
   var form = document.querySelector("[data-discount-form]");
@@ -2441,15 +2441,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   var m = (form.getAttribute("action") || "").match(/\/projects\/(\d+)\//);
   if (!m) return;
   var KEY = "invdraft:" + m[1];
-  function pad2(n) { return (n < 10 ? "0" : "") + n; }
-  function todayYmd() { var t = new Date(); return t.getFullYear() + "-" + pad2(t.getMonth() + 1) + "-" + pad2(t.getDate()); }
   var payer = form.querySelector("[data-picker-combo]");
   var discAmt = form.querySelector("[data-discount-amount]");
   var discPct = form.querySelector("[data-discount-pct]");
   var vat = form.querySelector("[data-vat-toggle]");
   var title = form.querySelector('input[name="title"]');
-  var issued = form.querySelector('[name="issued_date"]');
-  var issuedCombo = issued && issued.closest ? issued.closest("[data-date-combo]") : null;
+  // 발행일(issued_date)은 초안에 저장하지 않는다 — 발행일은 '발행하는 날'이라 항상 서버 기본값(오늘)이 맞고,
+  // 며칠 전 초안의 옛 '오늘'이 되살아나 과거 일자로 발행되던 위험만 있었다(사용자 결정 2026-07-15).
   function pget() {
     if (!payer) return null;
     var c = payer.querySelector("[data-pk-cid]"), p = payer.querySelector("[data-pk-pid]"), i = payer.querySelector("[data-pk-input]");
@@ -2461,14 +2459,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       da: discAmt ? discAmt.value : "",
       dp: discPct ? discPct.value : "",
       vat: vat ? !!vat.checked : true,
-      t: title ? title.value : "",
-      d: issued ? issued.value : ""
+      t: title ? title.value : ""
     };
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(read())); } catch (e) {} }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(read())); return true; } catch (e) { return false; } }
   function clear() { try { localStorage.removeItem(KEY); } catch (e) {} }
 
-  // 복원(로드 시) — __pkSet/__dcSet는 payerCombo·dateCombo 초기화 IIFE가 먼저 노출.
+  // 복원(로드 시) — __pkSet은 payerCombo 초기화 IIFE가 먼저 노출. 금액·항목 체크·발행일은 초안 아님.
   var raw = null; try { raw = localStorage.getItem(KEY); } catch (e) {}
   var s = null; if (raw) { try { s = JSON.parse(raw); } catch (e) { s = null; } }
   if (s) {
@@ -2477,23 +2474,24 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     if (discPct && s.dp != null) discPct.value = s.dp;
     if (vat) vat.checked = !!s.vat;
     if (title && s.t) title.value = s.t;
-    // 발행일: 서버 기본값이 '오늘'이라, 며칠 전 만든 초안의 옛 발행일(당시 '오늘'이 지금 과거가 된 것)은
-    // 복원하지 않는다 — 과거 일자로 조용히 청구가 발행되는 회계 사고 방지(전수 점검 2026-07-15).
-    // 오늘·미래로 사용자가 의도해 둔 발행일만 복원(사용자 요청 '발행일 임시저장'은 이 범위에서 유지).
-    if (issuedCombo && issuedCombo.__dcSet && s.d && s.d >= todayYmd()) issuedCombo.__dcSet(s.d);
     // 미리보기(공급가·할인·VAT·총액) 갱신
     if (discPct && s.dp) discPct.dispatchEvent(new Event("input", { bubbles: true }));
     else if (discAmt) discAmt.dispatchEvent(new Event("input", { bubbles: true }));
     if (vat) vat.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  // 저장(초안 대상 필드가 바뀔 때만 — 금액칸·항목 체크박스는 초안 아님)
-  function onChange(e) {
-    var t = e.target; if (!t) return;
-    if (t.name === "title" || t === discAmt || t === discPct || t === vat || t === issued || (payer && payer.contains && payer.contains(t))) save();
+  // 명시적 '임시저장' 버튼 — 누를 때만 저장(자동저장 폐지, 사용자 요청 2026-07-15 — 앱 전반의 명시적 저장 패턴과 통일).
+  // 조용히 저장돼 값이 나중에 되살아나던 놀람 클래스 제거. 저장 후 1.5초 '임시저장됨 ✓' 피드백.
+  var saveBtn = form.querySelector("[data-invoice-draft-save]");
+  if (saveBtn) {
+    var origLabel = saveBtn.textContent, revertT = null;
+    saveBtn.addEventListener("click", function () {
+      var ok = save();
+      if (revertT) clearTimeout(revertT);
+      saveBtn.textContent = ok ? "임시저장됨 ✓" : "저장 실패";
+      revertT = setTimeout(function () { saveBtn.textContent = origLabel; }, 1500);
+    });
   }
-  form.addEventListener("input", onChange);
-  form.addEventListener("change", onChange);
 
   // 청구 생성(발행) 제출 시 초안 삭제 — 막힌 제출(청구처 미선택·발행정보 없음·0원 취소)은 유지, PDF 프리뷰는 대상 아님.
   form.addEventListener("submit", function (e) {

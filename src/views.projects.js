@@ -910,7 +910,8 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           })()}
         </div>
         ${explain(`<span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).`, { cls: "mb-2" })}
-        <div class="flex justify-end">
+        <div class="flex items-center justify-end gap-2">
+          <button class="btn-ghost btn-sm" type="button" data-invoice-draft-save>임시저장</button>
           <button class="btn-primary btn-sm" type="submit" data-invoice-submit>선택 항목으로 청구 생성 <span data-inv-doc>(계산서 발행)</span></button>
         </div>
       </div>

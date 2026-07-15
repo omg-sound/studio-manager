@@ -1242,48 +1242,60 @@ test("전화칸: 숫자 입력 시 휴대전화 양식 하이픈 자동(name=pho
   assert.equal(type("other", "01012345678"), "01012345678", "비-전화 필드(email)는 서식 안 함");
 });
 
-// ── 청구 생성 폼 임시저장(초안): 금액 제외 폼 필드(청구처·할인·발행일·VAT·제목) localStorage 저장/복원/삭제 ──
-test("청구 초안: 폼 필드 localStorage 저장·복원·발행 시 삭제, 금액(즉시DB)은 초안 제외", () => {
+// ── 청구 생성 폼 임시저장(초안): '임시저장' 버튼을 눌러야 저장(자동저장 폐지). 금액·항목체크·발행일은 초안 제외. ──
+test("청구 초안: '임시저장' 버튼 클릭 시에만 저장(자동저장 아님), 금액·발행일 제외, 발행 시 삭제", () => {
   const project = { id: 7, title: "테스트 프로젝트" };
   const tasks = [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }];
   const formHtml = unbilledInvoiceForm(project, tasks, []);
 
-  // 저장 + 금액 제외 + 발행 시 삭제
   const { win, doc } = mountDom(formHtml);
   const disc = doc.querySelector("[data-discount-amount]");
   disc.value = "10000"; fire(win, disc, "input");
+  assert.equal(win.localStorage.getItem("invdraft:7"), null, "값만 바꾸고 버튼 안 누르면 저장 안 됨(자동저장 폐지)");
+
+  const saveBtn = doc.querySelector("[data-invoice-draft-save]");
+  assert.ok(saveBtn && saveBtn.type === "button", "'임시저장' 버튼 존재(type=button — 폼 제출 아님)");
+  saveBtn.click();
   let draft = JSON.parse(win.localStorage.getItem("invdraft:7") || "null");
-  assert.ok(draft && String(draft.da).replace(/\D/g, "") === "10000", "할인 변경 → 초안 저장");
-  assert.equal(Object.keys(draft).sort().join(","), "d,da,dp,p,t,vat", "초안 키 = 금액 없는 폼 필드만(p·da·dp·vat·t·d)");
+  assert.ok(draft && String(draft.da).replace(/\D/g, "") === "10000", "버튼 클릭 → 초안 저장(할인 반영)");
+  assert.equal(Object.keys(draft).sort().join(","), "da,dp,p,t,vat", "초안 키 = 금액·발행일 없는 폼 필드만(p·da·dp·vat·t)");
+  assert.ok(!("d" in draft), "발행일(d)은 초안에 저장하지 않음");
+  assert.match(saveBtn.textContent, /임시저장됨/, "저장 후 피드백 라벨");
+
   const amt = doc.querySelector('[name="task_amount_1"]');
   amt.value = "55555"; fire(win, amt, "input");
+  saveBtn.click();
   draft = JSON.parse(win.localStorage.getItem("invdraft:7") || "null");
-  assert.ok(!JSON.stringify(draft).includes("55555"), "금액칸 변경은 초안에 안 들어감(금액=DB 진실원천)");
+  assert.ok(!JSON.stringify(draft).includes("55555"), "금액칸은 초안에 안 들어감(금액=DB 진실원천)");
+
   doc.querySelector("[data-picker-combo]").__pkSet({ cid: "999", label: "테스트 청구처" }); // 청구처 세팅(미선택 제출 차단 방지)
   const ev = new win.Event("submit", { bubbles: true, cancelable: true });
   Object.defineProperty(ev, "submitter", { value: doc.querySelector("[data-invoice-submit]") });
   doc.querySelector("[data-discount-form]").dispatchEvent(ev);
   assert.equal(win.localStorage.getItem("invdraft:7"), null, "청구 생성(발행) 제출 시 초안 삭제");
 
-  // 복원(로드 시) — localStorage 시드 후 app.js 실행. 발행일은 오늘·미래만 복원(먼 미래로 시간 취약성 회피).
-  const seed = { p: { cid: "42", pid: "", label: "복원청구처" }, da: "20000", dp: "", vat: false, t: "복원 제목", d: "2099-08-15" };
+  // 복원(로드 시) — localStorage 시드 후 app.js 실행. 발행일은 초안에 없으므로 복원 대상 아님(항상 서버 기본=오늘).
+  const seed = { p: { cid: "42", pid: "", label: "복원청구처" }, da: "20000", dp: "", vat: false, t: "복원 제목" };
   const r = mountDom(formHtml, { storage: { "invdraft:7": JSON.stringify(seed) } });
   assert.equal(String(r.doc.querySelector("[data-discount-amount]").value).replace(/\D/g, ""), "20000", "복원: 할인");
   assert.equal(r.doc.querySelector("[data-pk-cid]").value, "42", "복원: 청구처 cid");
   assert.equal(r.doc.querySelector('input[name="title"]').value, "복원 제목", "복원: 제목");
   assert.equal(r.doc.querySelector("[data-vat-toggle]").checked, false, "복원: VAT 해제 상태");
-  assert.equal(r.doc.querySelector('[name="issued_date"]').value, "2099-08-15", "복원: 오늘·미래 발행일은 복원");
 });
 
-// 발행일 초안 staleness 가드: 며칠 전 만든 초안의 옛 발행일(이제 과거)은 복원하지 않는다(과거 일자 자동 발행 방지).
-// 사용자 요청 '발행일 임시저장'은 오늘·미래 범위에서 유지(위 테스트). 전수 점검 2026-07-15.
-test("청구 초안: 과거 발행일은 복원 안 함(서버 기본=오늘 유지), 미래는 복원", () => {
+// 발행일은 초안에 저장/복원되지 않는다 — 옛 초안이 과거 일자로 발행시키던 위험 원천 제거(발행일=항상 오늘).
+test("청구 초안: 발행일은 초안에 저장/복원 안 됨(레거시 초안의 옛 발행일 무시)", () => {
   const project = { id: 7, title: "테스트 프로젝트" };
   const tasks = [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }];
   const formHtml = unbilledInvoiceForm(project, tasks, []);
+  // 레거시(옛 자동저장) 초안에 d가 들어 있어도 복원하지 않는다.
   const seed = { p: { cid: "42", pid: "", label: "x" }, da: "", dp: "", vat: true, t: "", d: "2000-01-01" };
   const r = mountDom(formHtml, { storage: { "invdraft:7": JSON.stringify(seed) } });
-  assert.notEqual(r.doc.querySelector('[name="issued_date"]').value, "2000-01-01", "과거 발행일은 초안에서 복원하지 않음");
+  assert.notEqual(r.doc.querySelector('[name="issued_date"]').value, "2000-01-01", "초안의 옛 발행일은 무시(서버 기본=오늘 유지)");
+  // 새 저장에도 발행일은 안 담긴다.
+  r.doc.querySelector("[data-invoice-draft-save]").click();
+  const draft = JSON.parse(r.win.localStorage.getItem("invdraft:7") || "null");
+  assert.ok(draft && !("d" in draft), "새 임시저장에도 발행일 미포함");
 });
 
 // ── 금액칸 포커스 시 전체선택(타이핑=새 금액). 단 이미 포커스된 칸 클릭(특정 숫자)·드래그 범위는 존중 ──
