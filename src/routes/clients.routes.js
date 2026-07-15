@@ -90,7 +90,7 @@ router.get("/", (req, res) => {
   const kindChips = ""; // 2차 분류 필터 폐기(당사자 모델 — 조직 겸업은 roles 배지로 표시)
 
   const searchBar = searchBox({
-    action: "/clients", q, placeholder: "이름 검색", label: "클라이언트 검색", suggestUrl: "/clients/suggest",
+    action: "/clients", q, placeholder: "이름 검색(타이핑하면 목록 즉시 필터)", label: "클라이언트 검색", liveFilter: true,
     hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
   });
 
@@ -129,6 +129,7 @@ router.get("/", (req, res) => {
   }
   const list = displayed.length
     ? listGroup({
+        filterList: true, // 검색 입력(liveFilter) 타이핑 시 이 목록 행을 실시간 필터
         rows: displayed.map((c) => {
           // 우측 정보(사업자·전화·이메일)는 이름만 링크(listRowLinked)로 분리 → 드래그·복사해도 상세로 안 들어감.
           if (group === "associate") {

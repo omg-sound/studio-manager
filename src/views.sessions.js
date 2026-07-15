@@ -478,7 +478,7 @@ function monthCalendar(ym, sessions) {
         const label = esc(String(s.artist || s.production_company || s.artist_company || s.project_title || s.session_type).trim());
         const t = s.start_time ? esc(s.start_time) : "";
         // data-session-card: app.js가 클릭 가로채 GET .../card 조각을 중앙 모달로(서베이 흐름 유지). 무JS 폴백=프로젝트 세션 탭 링크.
-        return `<a href="/projects/${s.project_id}?tab=sessions" data-session-card="/sessions/${s.id}/card" class="block truncate rounded ${calendarChipColor(s.status)} px-1.5 py-0.5 text-[11px] font-medium leading-snug hover:opacity-80 sm:text-xs" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}">${t ? `<span class="hidden font-normal opacity-70 sm:inline">${t} </span>` : ""}${label}</a>`;
+        return `<a href="/projects/${s.project_id}?tab=sessions" data-session-card="/sessions/${s.id}/card" class="block truncate rounded ${calendarChipColor(s.status)} px-1.5 py-0.5 text-[11px] font-medium leading-snug hover:opacity-80 sm:text-xs${s.status === "취소" ? " opacity-60" : ""}" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}">${t ? `<span class="hidden font-normal opacity-70 sm:inline">${t} </span>` : ""}${label}</a>`;
       })
       .join("");
     cells += `<div class="${CELL} ${isToday ? "bg-primary/5" : ""}">

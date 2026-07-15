@@ -2702,6 +2702,27 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   });
 })();
 
+// 목록 실시간 필터([data-live-filter] 검색 입력 → [data-filter-list] 직접 자식 행을 textContent로 즉시 필터, 2026-07-15).
+// 검색 버튼(폼 제출=서버 ?q=)을 누르기 전에 이미 로드된 목록에서 검색어에 매칭되는 행만 남긴다(클라이언트 목록).
+(function () {
+  "use strict";
+  document.addEventListener("input", function (e) {
+    var input = e.target;
+    if (!input || !input.hasAttribute || !input.hasAttribute("data-live-filter")) return;
+    var list = document.querySelector("[data-filter-list]");
+    if (!list) return;
+    var q = String(input.value || "").trim().toLowerCase();
+    var rows = list.children, shown = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var match = !q || (rows[i].textContent || "").toLowerCase().indexOf(q) >= 0;
+      rows[i].hidden = !match;
+      if (match) shown++;
+    }
+    var empty = document.querySelector("[data-filter-empty]");
+    if (empty) empty.hidden = !(q && shown === 0); // 매칭 0이고 검색어 있을 때만 '결과 없음'
+  });
+})();
+
 // 장소 주소 자동완성([data-place-suggest], 2026-07-05): Google Places 백엔드 프록시(/sessions/place-suggest).
 // 검색 typeahead와 달리 '이동'이 아니라 선택 시 입력칸을 채운다(fill 모드). 미설정(키 없음)이면 서버가 []라 조용히 무동작.
 (function () {

@@ -12,7 +12,7 @@ const assert = require("node:assert");
 const { init } = require("../src/db");
 init();
 const { eventInputForSession } = require("../src/routes/sessions.routes");
-const { sessionCardModal, sessionProjectCard } = require("../src/views.sessions");
+const { sessionCardModal, sessionProjectCard, monthCalendar } = require("../src/views.sessions");
 
 const project = { title: "루나 1집", artist: "루나", production_company: "뮤직팜", project_id: 5 };
 const base = { id: 0, project_id: 5, session_type: "녹음", session_date: "2026-08-01", start_time: "14:00", end_time: "18:00" };
@@ -40,6 +40,12 @@ test("sessionProjectCard: 취소된 세션 행은 흐리게(opacity-60), 예정�
   const row = (status) => ({ id: 1, project_id: 5, status, session_date: "2026-08-01", session_type: "녹음", start_time: "14:00", end_time: "18:00", artist: "루나", production_company: "뮤직팜", billing: null });
   assert.match(sessionProjectCard([row("취소")], { isAdmin: true }), /bg-surface opacity-60/, "취소: 컨테이너 opacity-60");
   assert.doesNotMatch(sessionProjectCard([row("예정")], { isAdmin: true }), /bg-surface opacity-60/, "예정: 흐리지 않음");
+});
+
+test("monthCalendar: 취소된 세션 칩도 흐리게(opacity-60), 예정은 아님", () => {
+  const chip = (status) => ({ id: 1, project_id: 5, status, session_date: "2026-08-15", session_type: "녹음", project_title: "루나 1집", start_time: "14:00", artist: "루나" });
+  assert.match(monthCalendar("2026-08", [chip("취소")]), /sm:text-xs opacity-60/, "취소 칩: opacity-60");
+  assert.doesNotMatch(monthCalendar("2026-08", [chip("예정")]), /opacity-60/, "예정 칩: 흐리지 않음");
 });
 
 test.after(() => cleanupDb());
