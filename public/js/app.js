@@ -2748,7 +2748,15 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var open = !pop.classList.contains("hidden");
       if (e.key === "ArrowDown") { if (open) { e.preventDefault(); setHi(hi + 1); } }
       else if (e.key === "ArrowUp") { if (open) { e.preventDefault(); setHi(hi - 1); } }
-      else if (e.key === "Enter") { if (open && hi >= 0 && pop.children[hi]) { e.preventDefault(); pick(pop.children[hi].getAttribute("data-place-val")); } }
+      else if (e.key === "Enter") {
+        // 제안이 열려 있으면 Enter가 폼 제출(세션 추가)로 새지 않게 항상 막는다. 하이라이트가 있으면 그 제안 선택,
+        // 없으면 타이핑한 주소를 그대로 두고 목록만 닫는다(장소칸은 자유 입력 — 타이핑 텍스트 자체가 유효한 장소).
+        if (open) {
+          e.preventDefault();
+          if (hi >= 0 && pop.children[hi]) pick(pop.children[hi].getAttribute("data-place-val"));
+          else hide();
+        }
+      }
       else if (e.key === "Escape") { hide(); }
     });
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur 방지

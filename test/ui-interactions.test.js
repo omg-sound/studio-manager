@@ -1297,6 +1297,35 @@ test("금액칸: 포커스 전체선택 — Tab·클릭포커스는 전체선택
   assert.ok(a.selectionStart === 1 && a.selectionEnd === 4, "드래그 선택 → 범위 유지");
 });
 
+// ── 장소 자동완성: 제안 열린 채 Enter는 폼 제출(세션 추가)로 새지 않게 — 하이라이트 선택 or 목록만 닫음 ──
+test("장소 콤보: 제안 열림+Enter=폼 제출 차단(하이라이트 선택/없으면 텍스트 유지·닫힘), 닫힘+Enter=정상", () => {
+  const mount = () => {
+    const { win, doc } = mountDom(`<form action="/x" method="post"><div data-place-suggest data-place-url="/sessions/place-suggest"><input data-place-input value="강남" /><div data-place-pop class="hidden"></div></div></form>`);
+    const input = doc.querySelector("[data-place-input]");
+    const pop = doc.querySelector("[data-place-pop]");
+    pop.innerHTML = '<button type="button" data-place-val="서울 강남구 테헤란로 1">강남역</button><button type="button" data-place-val="서울 강남구 삼성로 2">삼성</button>';
+    pop.classList.remove("hidden");
+    return { win, input, pop };
+  };
+  // 제안 열림 + Enter(하이라이트 없음) → 제출 차단 + 목록 닫힘 + 타이핑 텍스트 유지(오선택 없음)
+  let s = mount();
+  let e = fire(s.win, s.input, "keydown", { key: "Enter" });
+  assert.ok(e.defaultPrevented, "제안 열림+Enter → 폼 제출(세션 추가) 차단");
+  assert.ok(s.pop.classList.contains("hidden"), "하이라이트 없음 → 목록 닫힘");
+  assert.equal(s.input.value, "강남", "타이핑 텍스트 유지");
+  // ArrowDown으로 하이라이트 후 Enter → 그 제안 선택
+  s = mount();
+  fire(s.win, s.input, "keydown", { key: "ArrowDown" });
+  e = fire(s.win, s.input, "keydown", { key: "Enter" });
+  assert.ok(e.defaultPrevented && s.input.value === "서울 강남구 테헤란로 1", "하이라이트+Enter → 제안 선택");
+  // 제안 닫힘 + Enter → 기본동작 유지(폼 제출 정상)
+  s = mount(); s.pop.classList.add("hidden");
+  assert.ok(!fire(s.win, s.input, "keydown", { key: "Enter" }).defaultPrevented, "제안 닫힘+Enter → 기본동작 유지");
+  // IME 조합 중 Enter 무시(함정 #18)
+  s = mount();
+  assert.ok(!fire(s.win, s.input, "keydown", { key: "Enter", isComposing: true }).defaultPrevented, "IME 조합 중 Enter 무시");
+});
+
 // ── 청구 할인 정액칸: 미리 채운 '0' 없이 placeholder만(빈칸=0, 타이핑 시 바로 입력) ──
 test("청구 할인 정액칸: value='0' 없이 placeholder만", () => {
   const html = unbilledInvoiceForm({ id: 7, title: "테스트" }, [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }], []);
