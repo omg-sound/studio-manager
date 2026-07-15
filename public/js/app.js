@@ -930,6 +930,17 @@
     inp.addEventListener("input", function () {
       if (parseFloat(pctInput.value) > 0) applyPct(); else updatePreview();
     });
+    // Tab/Shift+Tab = 금액칸끼리 이동(행 DOM 순서상 기본 Tab은 다음 행 체크박스로 가던 것). 처음/마지막은 기본 동작(할인/이전 버튼) 유지.
+    inp.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // 한글 조합 중 무시(함정 #18)
+      if (e.key !== "Tab") return;
+      var all = Array.prototype.slice.call(form.querySelectorAll("[data-line-input]"));
+      var target = all[all.indexOf(inp) + (e.shiftKey ? -1 : 1)];
+      if (!target) return;
+      e.preventDefault();
+      target.focus();
+      if (target.select) target.select(); // 전체 선택 → 타이핑만으로 교체
+    });
   });
   updatePreview();
 })();

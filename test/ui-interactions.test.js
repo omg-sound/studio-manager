@@ -1173,3 +1173,33 @@ test("data-confirm: 이미 preventDefault된 제출엔 확인창 미표시", () 
   assert.equal(calls2, 1, "정상 폼은 확인창 표시");
   assert.equal(e2.defaultPrevented, true, "취소 시 제출 차단");
 });
+
+// ── 청구 생성 폼: 금액칸 Tab = 다음 금액칸으로(행 DOM 순서상 기본 Tab은 다음 행 체크박스로 가던 것) ──
+test("청구 금액칸: Tab/Shift+Tab이 금액칸끼리 이동, 처음/마지막은 기본 동작·IME 무시", () => {
+  const row = (n, amt) =>
+    `<div data-line-row><input type="checkbox" name="task_id" value="${n}" data-line-amount="${amt}" checked /><button type="submit" data-waive-btn>청구 안 함</button><input type="text" name="task_amount_${n}" value="${amt}" data-line-input id="amt${n}" /></div>`;
+  const html = `<form data-discount-form data-supply="0" action="/projects/1/invoices/from-tasks">
+    ${row(1, 100)}${row(2, 200)}${row(3, 300)}
+    <input name="discount_amount" value="0" data-discount-amount /><input name="discount_pct" data-discount-pct />
+    <span data-amt-supply></span><span data-amt-discount-row hidden><span data-amt-discount></span></span><span data-amt-vat></span><span data-amt-total></span>
+    <input type="checkbox" data-vat-toggle checked /></form>`;
+  const { win, doc } = mountDom(html);
+  const [a1, a2, a3] = [1, 2, 3].map((n) => doc.getElementById("amt" + n));
+
+  a1.focus();
+  let e = fire(win, a1, "keydown", { key: "Tab" });
+  assert.equal(doc.activeElement, a2, "Tab: amt1 → amt2");
+  assert.equal(e.defaultPrevented, true, "Tab: 기본 동작(다음 체크박스) 차단");
+
+  a3.focus();
+  e = fire(win, a3, "keydown", { key: "Tab" });
+  assert.equal(e.defaultPrevented, false, "마지막 금액칸은 기본 Tab(할인으로) 유지");
+
+  a2.focus();
+  fire(win, a2, "keydown", { key: "Tab", shiftKey: true });
+  assert.equal(doc.activeElement, a1, "Shift+Tab: amt2 → amt1");
+
+  a1.focus();
+  fire(win, a1, "keydown", { key: "Tab", isComposing: true });
+  assert.equal(doc.activeElement, a1, "IME 조합 중 Tab 무시(함정 #18)");
+});
