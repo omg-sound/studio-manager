@@ -1273,3 +1273,33 @@ test("청구 초안: 폼 필드 localStorage 저장·복원·발행 시 삭제, 
   assert.equal(r.doc.querySelector("[data-vat-toggle]").checked, false, "복원: VAT 해제 상태");
   assert.equal(r.doc.querySelector('[name="issued_date"]').value, "2026-08-15", "복원: 발행일 hidden");
 });
+
+// ── 금액칸 포커스 시 전체선택(타이핑=새 금액). 단 이미 포커스된 칸 클릭(특정 숫자)·드래그 범위는 존중 ──
+test("금액칸: 포커스 전체선택 — Tab·클릭포커스는 전체선택, 이미 포커스+클릭·드래그는 캐럿/범위 유지", () => {
+  const { win, doc } = mountDom(`<form><input name="amount" id="a" value="100000" /></form>`);
+  const a = doc.getElementById("a");
+  assert.equal(a.value, "100,000", "초기 콤마 포맷");
+  const selAll = () => a.selectionStart === 0 && a.selectionEnd === a.value.length;
+  // (a) Tab 포커스 → 전체선택
+  a.blur(); a.focus();
+  assert.ok(selAll(), "Tab 포커스 → 전체선택");
+  // (b) 이미 포커스된 칸을 클릭(특정 숫자) → 캐럿 유지
+  a.setSelectionRange(3, 3);
+  fire(win, a, "mousedown"); fire(win, a, "mouseup");
+  assert.ok(a.selectionStart === 3 && a.selectionEnd === 3, "이미 포커스+클릭 → 캐럿 유지");
+  // (c) 클릭 포커스(unfocused→클릭, 드래그 없음) → 전체선택
+  a.blur();
+  fire(win, a, "mousedown"); a.focus(); a.setSelectionRange(2, 2); fire(win, a, "mouseup");
+  assert.ok(selAll(), "클릭 포커스(드래그 없음) → 전체선택");
+  // (d) 드래그로 범위 선택 → 유지
+  a.blur();
+  fire(win, a, "mousedown"); a.focus(); a.setSelectionRange(1, 4); fire(win, a, "mouseup");
+  assert.ok(a.selectionStart === 1 && a.selectionEnd === 4, "드래그 선택 → 범위 유지");
+});
+
+// ── 청구 할인 정액칸: 미리 채운 '0' 없이 placeholder만(빈칸=0, 타이핑 시 바로 입력) ──
+test("청구 할인 정액칸: value='0' 없이 placeholder만", () => {
+  const html = unbilledInvoiceForm({ id: 7, title: "테스트" }, [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }], []);
+  assert.match(html, /name="discount_amount" placeholder="0"/, "할인 정액=placeholder만");
+  assert.doesNotMatch(html, /name="discount_amount" value="0"/, "미리 채운 value='0' 없음");
+});

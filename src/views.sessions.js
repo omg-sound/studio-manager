@@ -346,7 +346,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
   // 비관리자: 단순 행(접기 없음).
   if (!isAdmin) {
     return `
-      <div class="row-link rounded-lg border border-border bg-surface p-3">
+      <div class="row-link rounded-lg border border-border bg-surface p-3${s.status === "취소" ? " opacity-60" : ""}">
         <div class="flex items-start justify-between gap-2">
           ${header}
           <div class="flex shrink-0 items-center gap-1">${statusBadge}</div>
@@ -374,7 +374,7 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
             <button class="btn-ghost btn-xs text-danger" type="submit">취소</button>
           </form>`;
   return `
-    <details class="group overflow-hidden rounded-lg border border-border bg-surface">
+    <details class="group overflow-hidden rounded-lg border border-border bg-surface${s.status === "취소" ? " opacity-60" : ""}">
       <summary class="row-link flex cursor-pointer list-none items-start justify-between gap-2 p-3">
         ${header}
         <span class="flex shrink-0 items-center gap-2">${cancelToggle}${completeToggle}${statusBadge}${detailsChevron()}</span>

@@ -801,6 +801,20 @@
       try { el.setSelectionRange(pos, pos); } catch (err) {}
     }
   });
+  // 금액칸 포커스 시 전체선택(타이핑=금액 새로 입력). 단 ①이미 포커스된 칸을 다시 클릭(특정 숫자 편집)하거나
+  // ②드래그로 범위를 고르면 존중한다 — 포커스를 '얻는' 클릭(드래그 없이)·키보드(Tab) 포커스에서만 전체선택.
+  var mdEl = null, mdFocusing = false;
+  document.addEventListener("mousedown", function (e) {
+    if (isMoney(e.target)) { mdEl = e.target; mdFocusing = document.activeElement !== e.target; }
+    else mdEl = null;
+  });
+  document.addEventListener("focusin", function (e) {
+    if (isMoney(e.target) && e.target !== mdEl) { try { e.target.select(); } catch (err) {} } // 키보드/Tab 포커스(직전 mousedown 없음)
+  });
+  document.addEventListener("mouseup", function (e) {
+    var el = mdEl, focusing = mdFocusing; mdEl = null; mdFocusing = false;
+    if (el && focusing && e.target === el && el.selectionStart === el.selectionEnd) { try { el.select(); } catch (err) {} } // 포커스용 클릭·드래그 없음 → 전체선택
+  });
   // 제출 직전 콤마 제거(capture 단계에서 먼저 정리; 서버 parseWon도 방어하지만 amount 등 안전).
   document.addEventListener("submit", function (e) {
     if (!e.target || !e.target.querySelectorAll) return;
