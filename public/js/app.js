@@ -148,22 +148,6 @@
   syncThemeLabel(document.documentElement.getAttribute("data-theme")); // 초기 로드 시 현재값 기준 1회 동기화
 })();
 
-// 행 안의 액션 버튼([data-row-action] 내부, 2026-07-15 청구 목록 한 줄 행):
-// <summary> 안에 있는 버튼은 클릭하면 **행 펼침(details 토글)이 함께 일어난다**(펼침이 summary 클릭의 기본 동작).
-// 기본 동작을 막으면 버튼의 폼 제출까지 함께 막히므로, 기본 동작을 막은 뒤 그 폼을 직접 제출한다
-// (requestSubmit(button) — 버튼의 name/value·폼 검증·다른 submit 리스너[스크롤 저장·이중 제출 가드]가 그대로 동작).
-(function () {
-  "use strict";
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest && e.target.closest("[data-row-action] button");
-    if (!btn || !btn.closest("summary")) return;
-    e.preventDefault(); // 펼침 토글 + 암묵 제출을 모두 막고
-    var f = btn.form;
-    if (!f) return;
-    if (f.requestSubmit) f.requestSubmit(btn); else f.submit(); // 상태 토글만 수행
-  });
-})();
-
 // 프로젝트 목록 밀도 토글([data-density-toggle]): 좁게(기본)↔넓게 + localStorage["density"] 저장.
 // CSS 분기는 :root[data-density="comfy"](src.css) — 기본(좁게)은 속성 없음이라 깜빡임 없음. 테마 토글과 동일 구조.
 (function () {
@@ -189,6 +173,52 @@
     syncLabel(next);
   });
   syncLabel(document.documentElement.getAttribute("data-density"));
+})();
+
+// 청구 목록 일괄 선택 + 일괄 처리(2026-07-16): 행 체크박스([data-inv-select])·전체선택([data-inv-select-all])
+// → 상단 바([data-inv-bulk-bar])에 선택 개수 표시, 선택 행 id를 hidden ids에 모아 제출(계산서 발행/입금완료).
+// CSP-safe(위임)·함정 #26(바 표시는 style.display, .flex 유틸을 확실히 이김).
+(function () {
+  "use strict";
+  function boxes() { return Array.prototype.slice.call(document.querySelectorAll("[data-inv-select]")); }
+  function selected() { return boxes().filter(function (b) { return b.checked; }); }
+  function sync() {
+    var all = boxes(), sel = selected();
+    var bar = document.querySelector("[data-inv-bulk-bar]");
+    var cnt = document.querySelector("[data-inv-bulk-count]");
+    if (cnt) cnt.textContent = String(sel.length);
+    if (bar) bar.style.display = sel.length ? "" : "none"; // ⚠️ hidden 속성 아님(함정 #26 — flex 유틸에 밀림)
+    var master = document.querySelector("[data-inv-select-all]");
+    if (master) {
+      master.checked = all.length > 0 && sel.length === all.length;
+      master.indeterminate = sel.length > 0 && sel.length < all.length;
+    }
+    all.forEach(function (b) { var tr = b.closest("tr"); if (tr) tr.classList.toggle("inv-selected", b.checked); });
+  }
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (!t || !t.matches) return;
+    if (t.matches("[data-inv-select-all]")) { var on = t.checked; boxes().forEach(function (b) { b.checked = on; }); sync(); }
+    else if (t.matches("[data-inv-select]")) { sync(); }
+  });
+  document.addEventListener("click", function (e) {
+    var clear = e.target.closest && e.target.closest("[data-inv-bulk-clear]");
+    if (clear) { e.preventDefault(); boxes().forEach(function (b) { b.checked = false; }); sync(); return; }
+    // 어느 액션인지(계산서 발행/입금완료)를 확인창 문구에 쓰려고 클릭 시 폼에 라벨을 심어둔다(submit 전에 발화).
+    var btn = e.target.closest && e.target.closest("[data-inv-bulk-form] button[data-bulk-label]");
+    if (btn && btn.form) btn.form.setAttribute("data-inv-bulk-pending", btn.getAttribute("data-bulk-label"));
+  });
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.matches || !form.matches("[data-inv-bulk-form]") || e.defaultPrevented) return;
+    var sel = selected();
+    if (!sel.length) { e.preventDefault(); return; }
+    var idsField = form.querySelector("[data-inv-bulk-ids]");
+    if (idsField) idsField.value = sel.map(function (b) { return b.value; }).join(",");
+    var label = form.getAttribute("data-inv-bulk-pending") || "처리";
+    if (!window.confirm(sel.length + "건을 " + label + " 처리할까요?")) e.preventDefault();
+  });
+  sync();
 })();
 
 // 복사 버튼([data-copy]) + 삭제 확인([data-confirm]) + 자동 제출([data-autosubmit]).

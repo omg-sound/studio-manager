@@ -1062,32 +1062,47 @@ test("업체 등록 모달: 저장 성공 시 콤보에 반영되고 '등록 실
   assert.ok(modal.classList.contains("hidden"), "모달 닫힘");
 });
 
-// ── 청구 목록 한 줄 행: 상태 pill 클릭이 행 펼침을 건드리지 않는다(2026-07-15) ──
-// <summary> 안의 버튼은 클릭하면 펼침이 함께 일어나는 게 기본 동작. app.js가 기본 동작을 막고 폼만 직접 제출한다.
-test("청구 목록 행: 상태 pill 클릭 = 폼 제출만(행은 안 펼쳐짐), 행 여백 클릭 = 펼침", () => {
-  const { invoiceRow } = require("../src/views.invoices");
-  const inv = {
-    id: 7, title: "청구", invoice_number: "OMG-1", issued_date: "2026-07-14",
+// ── 청구 목록 넓은 표: 일괄 선택 + 일괄 처리(2026-07-16) ──
+// 행 체크 → 상단 바 표시(개수)·전체선택·선택 해제, 제출 시 선택 id를 hidden ids에 수집.
+test("청구 목록 표: 체크 시 일괄 바 표시·개수, 전체선택, 제출 ids 수집, 선택 해제", () => {
+  const { invoiceTable, invoiceBulkBar } = require("../src/views.invoices");
+  const mk = (id) => ({
+    id, title: "청구" + id, invoice_number: "OMG-" + id, issued_date: "2026-07-14",
     amount: 220000, paid_amount: 0, status: "발행", tax_status: "계산서 발행",
     client_name: "(주)도너츠컬처", payer_kind: "company",
     project_title: "진혁", project_production: "도너츠컬처", project_artist: "진혁",
-  };
-  const { win, doc } = mountDom(invoiceRow(inv, { isInvoicer: true, ret: "/invoices?tab=done" }));
-  const details = doc.querySelector("details.inv-row");
-  const pill = doc.querySelector("[data-row-action] button");
-  assert.ok(pill, "상태 pill");
+  });
+  const html = invoiceBulkBar("/invoices?filter=done") + invoiceTable([mk(7), mk(8)], { isInvoicer: true, ret: "/invoices?filter=done" });
+  const { win, doc } = mountDom(html);
+  const bar = doc.querySelector("[data-inv-bulk-bar]");
+  const count = doc.querySelector("[data-inv-bulk-count]");
+  const boxes = () => Array.prototype.slice.call(doc.querySelectorAll("[data-inv-select]"));
+  assert.equal(bar.style.display, "none", "처음엔 숨김(선택 0)");
 
-  let submitted = null;
-  const form = pill.closest("form");
-  form.addEventListener("submit", (e) => { e.preventDefault(); submitted = form.getAttribute("action"); });
-  form.requestSubmit = form.requestSubmit || function (b) { this.dispatchEvent(new win.Event("submit", { bubbles: true, cancelable: true })); }; // jsdom 미구현 폴백
+  // 한 건 체크 → 바 표시 + 개수 1 + 행 하이라이트
+  boxes()[0].checked = true;
+  fire(win, boxes()[0], "change");
+  assert.notEqual(bar.style.display, "none", "체크 시 바 표시");
+  assert.equal(count.textContent, "1");
+  assert.ok(boxes()[0].closest("tr").classList.contains("inv-selected"), "선택 행 하이라이트");
 
-  assert.equal(details.open, false, "처음엔 접힘");
-  const click = new win.MouseEvent("click", { bubbles: true, cancelable: true });
-  pill.dispatchEvent(click);
-  assert.equal(details.open, false, "pill을 눌러도 행이 펼쳐지면 안 됨");
-  assert.equal(click.defaultPrevented, true, "기본 동작(펼침·암묵 제출) 차단");
-  assert.equal(submitted, "/invoices/7/tax-status", "폼은 직접 제출됨");
+  // 전체 선택
+  const all = doc.querySelector("[data-inv-select-all]");
+  all.checked = true;
+  fire(win, all, "change");
+  assert.ok(boxes().every((b) => b.checked), "전체 선택");
+  assert.equal(count.textContent, "2");
+
+  // 제출 → 선택 id 수집(confirm=true라 통과)
+  const form = doc.querySelector("[data-inv-bulk-form]");
+  const e = fire(win, form, "submit");
+  assert.equal(form.querySelector("[data-inv-bulk-ids]").value, "7,8", "선택 id 수집");
+  assert.equal(e.defaultPrevented, false, "confirm 통과(선택 있음)");
+
+  // 선택 해제 → 바 숨김
+  fire(win, doc.querySelector("[data-inv-bulk-clear]"), "click");
+  assert.ok(boxes().every((b) => !b.checked), "선택 해제");
+  assert.equal(bar.style.display, "none", "다시 숨김");
 });
 
 // ── 2026-07-15 전수 점검(4렌즈) 확정 결함 회귀 ──────────────────────────────

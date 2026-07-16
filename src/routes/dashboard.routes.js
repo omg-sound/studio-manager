@@ -51,7 +51,7 @@ router.get("/", requireAuth, (req, res) => {
 
   const cardItems = [];
   if (s.canInvoice) {
-    cardItems.push(moneyCard("미수금", inv.receivable, true, "발행·미입금 잔금", "/invoices?tab=done"));
+    cardItems.push(moneyCard("미수금", inv.receivable, true, "발행·미입금 잔금", "/invoices?filter=done"));
     cardItems.push(moneyCard("이번 달 발행", inv.thisMonthIssued));
   }
   cardItems.push(statCard("프로젝트", s.total));

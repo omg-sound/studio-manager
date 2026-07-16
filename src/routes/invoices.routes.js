@@ -8,7 +8,6 @@ const {
   listInvoices,
   getInvoiceForUser,
   listInvoiceItemsForInvoice,
-  invoiceItemsByInvoiceIds,
   balanceOf,
   invoiceTaxTab,
   deleteInvoice,
@@ -22,8 +21,8 @@ const {
   ensureInvoiceNumber,
   recomputePaid,
 } = require("../data");
-const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, capList, tabBar, copyable } = require("../views");
-const { invoiceRow, payerInfoCard, taxToggleButtons } = require("../views.invoices");
+const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, capList, filterChips, searchBox, copyable } = require("../views");
+const { invoiceTable, invoiceBulkBar, payerInfoCard, taxToggleButtons } = require("../views.invoices");
 const { formatYmdShort, todayYmd } = require("../lib/date"); // ddayLabel 미사용(마감일 개념 삭제, 2026-07-05)
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
@@ -54,14 +53,13 @@ router.get("/", requireBilling, (req, res) => {
   const admin = canBill(user);
   const invoicer = canInvoice(user); // 계산서·입금 처리(상태 토글) = 대표·치프만
   const q = (req.query.q || "").toString().trim();
-  // 계산서/현금영수증 '발행 필요'(미발행) / '발행 완료'(계산서만 발행, 입금 전) / '입금완료' 3탭 분리
-  // (2026-07-06 사용자 요청 — 이전엔 발행완료 탭이 입금완료까지 함께 묶여 있어 입금만 따로 볼 수 없었음).
-  const tab = ["done", "paid"].includes(req.query.tab) ? req.query.tab : "todo";
+  // 상태 필터(2026-07-16 사용자 요청 — 탭 → 상태 컬럼 + 필터칩): 전체(기본) / 발행 필요(계산서 미발행) /
+  // 발행 완료(계산서만 발행, 입금 전) / 입금완료. invoiceTaxTab이 각 인보이스의 상태 그룹(todo/done/paid)을 반환.
+  const filter = ["todo", "done", "paid"].includes(req.query.filter) ? req.query.filter : "all";
   const allRows = listInvoices(user, {});
-  const todoRows = allRows.filter((i) => invoiceTaxTab(i) === "todo");
-  const doneRows = allRows.filter((i) => invoiceTaxTab(i) === "done");
-  const paidRows = allRows.filter((i) => invoiceTaxTab(i) === "paid");
-  let rows = tab === "done" ? doneRows : tab === "paid" ? paidRows : todoRows;
+  const counts = { all: allRows.length, todo: 0, done: 0, paid: 0 };
+  for (const i of allRows) counts[invoiceTaxTab(i)]++;
+  let rows = filter === "all" ? allRows : allRows.filter((i) => invoiceTaxTab(i) === filter);
 
   // 라우트 레벨 q 필터(제목·채번·클라이언트명 부분일치, 소문자 비교). data.js 수정 없음.
   if (q) {
@@ -74,64 +72,57 @@ router.get("/", requireBilling, (req, res) => {
     );
   }
 
-  const totalDue = allRows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0); // 미수금 합계=전체 기준(탭 무관)
+  const totalDue = allRows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0); // 미수금 합계=전체 기준(필터 무관)
 
-  const tabs = tabBar({
-    tabs: [
-      { key: "todo", label: `발행 필요 ${todoRows.length}` },
-      { key: "done", label: `발행 완료 ${doneRows.length}` },
-      { key: "paid", label: `입금완료 ${paidRows.length}` },
+  const chips = filterChips({
+    chips: [
+      { key: "all", label: `전체 ${counts.all}` },
+      { key: "todo", label: `발행 필요 ${counts.todo}` },
+      { key: "done", label: `발행 완료 ${counts.done}` },
+      { key: "paid", label: `입금완료 ${counts.paid}` },
     ],
-    activeKey: tab,
-    hrefFn: (k) => `/invoices?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+    activeKey: filter,
+    hrefFn: (k) => `/invoices?filter=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
   });
 
-  // 검색바: GET form. 탭을 hidden으로 보존.
-  const searchBar = `
-    <form method="get" action="/invoices" class="mb-4 flex gap-2">
-      <input type="hidden" name="tab" value="${esc(tab)}" />
-      <input class="input min-w-0 flex-1" type="search" name="q" value="${esc(q)}" placeholder="제목 · 청구번호 · 클라이언트 검색" aria-label="청구 검색" />
-      <button class="btn-primary shrink-0" type="submit">검색</button>
-    </form>`;
+  const searchBar = searchBox({
+    action: "/invoices",
+    q,
+    placeholder: "제목 · 청구번호 · 클라이언트 검색",
+    label: "청구 검색",
+    hidden: `<input type="hidden" name="filter" value="${esc(filter)}" />`,
+  });
   const resultNote = q
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/invoices?tab=${tab}" class="text-primary hover:underline">검색 초기화</a></div>`
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/invoices?filter=${filter}" class="text-primary hover:underline">검색 초기화</a></div>`
     : "";
 
-  const retPath = `/invoices?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`;
-  const openId = req.query.open ? Number(req.query.open) : null; // 토글 처리 후 그 카드의 '상태 처리' 펼침 유지(+스크롤)
-  // 목록 상한(2026-07-09 스케일 점검) — 입금완료 탭은 해가 갈수록 누적되므로 기본 100건 + 더 보기.
+  const retPath = `/invoices?filter=${filter}${q ? "&q=" + encodeURIComponent(q) : ""}`;
+  // 목록 상한(2026-07-09 스케일 점검) — 입금완료가 해가 갈수록 누적되므로 기본 100건 + 더 보기.
   const cap = capList(rows, req.query, (n) => `${retPath}&limit=${n}`);
-  // 밀도 토글(좁게/넓게) — 프로젝트 목록과 **같은 설정**(localStorage["density"])을 공유한다(app.js [data-density-toggle]).
-  const densityPill = `<div class="mb-3 flex justify-end"><button type="button" data-density-toggle class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm text-muted hover:text-fg">
-      <svg class="h-3.5 w-3.5" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
-      <span data-density-label>넓게</span>
-    </button></div>`;
-  // 행 펼침 본문(청구 항목·소계·VAT·PDF)에 쓸 항목 — 표시분 전체를 **한 쿼리**로(행마다 조회하면 100행=200쿼리, 2026-07-15 점검).
-  const itemsBy = invoiceItemsByInvoiceIds(cap.shown.map((i) => i.id));
-  const shown = cap.shown.map((i) => ({ ...i, items: itemsBy[i.id] || [] }));
-  // 행의 복귀 경로엔 limit(더 보기 상태)을 보존 — 안 실으면 100번째 이후 행을 처리하고 돌아올 때 기본 100건으로
-  // 리셋된다(프로젝트 목록과 동일 클래스, 2026-07-15 점검). cap의 '더 보기' 링크는 자체 limit을 붙이므로 retPath 그대로.
+  const shown = cap.shown;
+  // 행의 복귀 경로엔 limit(더 보기 상태)을 보존 — 안 실으면 100번째 이후 행을 처리하고 돌아올 때 기본 100건으로 리셋.
   const limitQ = Number(req.query.limit) > 0 ? `&limit=${Number(req.query.limit)}` : "";
+  const ret = retPath + limitQ;
+  const bulkBar = invoicer ? invoiceBulkBar(ret) : ""; // 대표·치프만 일괄 처리
   const list = shown.length
-    ? `${densityPill}<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${shown.map((i) => invoiceRow(i, { items: i.items, isAdmin: admin, isInvoicer: invoicer, ret: retPath + limitQ, openId })).join("")}</div>${cap.more}`
+    ? `${invoicer ? bulkBar : ""}<div class="sm:overflow-hidden sm:rounded-lg sm:border sm:border-border/50 sm:bg-surface">${invoiceTable(shown, { isInvoicer: invoicer, ret })}</div>${cap.more}`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });
 
-  const action = ""; // '+ 새 청구'(수동 청구) 폐지(2026-07-08) — 청구 생성은 프로젝트 청구 탭에서만
   const dueNote = totalDue > 0
     ? `<div class="card mb-4 flex items-center justify-between"><span class="text-sm text-muted">미수금 합계</span><span class="tabular text-lg font-bold text-danger">${formatKRW(totalDue)}</span></div>`
     : "";
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "청구", desc: admin ? "발행·입금" : "내 청구 내역", action })}
+    ${pageHeader({ title: "청구", desc: admin ? "발행·입금" : "내 청구 내역" })}
     ${dueNote}
-    ${admin ? tabs : ""}
+    ${chips}
     ${searchBar}
     ${resultNote}
     ${list}`;
-  res.send(layout({ title: "청구", user, current: "/invoices", body }));
+  res.send(layout({ title: "청구", user, current: "/invoices", body, wide: true })); // 넓은 표 — 데스크톱 넓게(2026-07-16)
 });
 
 // (GET /new·POST / 수동 청구 라우트는 2026-07-08 폐지 — 청구 생성은 프로젝트 청구 탭 from-tasks 경로만.)
@@ -291,32 +282,34 @@ router.post("/:id/refresh-payer", requireBilling, (req, res) => {
   res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
 });
 
+// 한 인보이스의 계산서·입금 상태 전환을 **호출부의 트랜잭션 안에서** 적용(단건·일괄 공용, 2026-07-16 추출).
+// 입금완료 선택=완납(잔금만큼 자동 입금 1건), 입금완료 되돌리기=자동 완납 입금('입금완료 처리')만 제거해 잔금 복원
+// (사용자 직접 입금 이력은 memo가 달라 보존). addPayment/deletePayment는 자체 BEGIN이라 중첩 불가 → 같은 로직 인라인.
+function applyTaxStatusTx(d, inv, tax) {
+  if (tax === "입금완료") {
+    const bal = balanceOf(inv);
+    if (bal > 0) {
+      d.prepare("INSERT INTO payments (invoice_id, amount, paid_on, memo) VALUES (?, ?, ?, ?)").run(inv.id, bal, todayYmd(), "입금완료 처리");
+      recomputePaid(inv.id);
+    }
+  } else if (inv.tax_status === "입금완료") {
+    d.prepare("DELETE FROM payments WHERE invoice_id = ? AND memo = '입금완료 처리'").run(inv.id);
+    recomputePaid(inv.id);
+  }
+  d.prepare("UPDATE invoices SET tax_status=? WHERE id=?").run(tax, inv.id);
+  ensureInvoiceNumber({ ...inv, tax_status: tax }); // 계산서 발행/입금완료면 채번 보장(내부 트랜잭션 없음 — 호출부 트랜잭션에 참여)
+}
+
 // ── 계산서·입금 상태 변경(관리자) ── 계산서 미발행 → 계산서 발행 → 입금완료(자유 선택). 입금완료 선택=완납, 벗어나면 입금액 0.
 router.post("/:id/tax-status", requireInvoice, (req, res) => {
   const inv = db().prepare("SELECT * FROM invoices WHERE id = ?").get(Number(req.params.id));
   if (!inv) return res.status(404).send(errorPage({ code: 404, title: "청구를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const tax = normalizeTaxStatus(req.body.tax_status);
-  // 입금 이력 변경 + tax_status UPDATE + 채번을 **한 트랜잭션**으로(2026-07-09 감사 — 이전엔 addPayment/deletePayment가
-  // 각자 커밋된 뒤 상태 UPDATE가 별도 트랜잭션이라, UPDATE 실패 시 자동 완납 입금만 남는 불일치 틈이 있었음).
-  // addPayment/deletePayment 헬퍼는 자체 BEGIN IMMEDIATE라 중첩 불가 → 같은 로직(INSERT/DELETE + recomputePaid)을 인라인.
+  // 입금 이력 변경 + tax_status UPDATE + 채번을 **한 트랜잭션**으로(2026-07-09 감사 — 이전엔 UPDATE 실패 시 자동 완납 입금만 남는 틈).
   const d = db();
   d.exec("BEGIN IMMEDIATE");
   try {
-    // 입금완료 선택 → 완납. 잔금이 있으면 그만큼 자동 입금 1건(paid_amount는 SUM(payments) 재계산).
-    if (tax === "입금완료") {
-      const bal = balanceOf(inv);
-      if (bal > 0) {
-        d.prepare("INSERT INTO payments (invoice_id, amount, paid_on, memo) VALUES (?, ?, ?, ?)").run(inv.id, bal, todayYmd(), "입금완료 처리");
-        recomputePaid(inv.id);
-      }
-    }
-    // 입금완료 되돌리기 — 자동 완납 입금('입금완료 처리')만 제거해 잔금 복원(사용자 직접 입금 이력은 memo가 달라 보존).
-    else if (inv.tax_status === "입금완료") {
-      d.prepare("DELETE FROM payments WHERE invoice_id = ? AND memo = '입금완료 처리'").run(inv.id);
-      recomputePaid(inv.id);
-    }
-    d.prepare("UPDATE invoices SET tax_status=? WHERE id=?").run(tax, inv.id);
-    ensureInvoiceNumber({ ...inv, tax_status: tax }); // 계산서 발행/입금완료면 채번 보장(내부 트랜잭션 없음 — 여기 참여)
+    applyTaxStatusTx(d, inv, tax);
     d.exec("COMMIT");
   } catch (e) {
     try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
@@ -324,6 +317,33 @@ router.post("/:id/tax-status", requireInvoice, (req, res) => {
   }
   logAudit(req.user, "invoice.tax", `#${inv.id} ${inv.title || ""} → ${tax}`);
   res.redirect(returnTo(req, `/invoices/${inv.id}`, "saved"));
+});
+
+// ── 계산서·입금 상태 일괄 변경(2026-07-16 사용자 요청 — 청구 목록에서 체크 후 한 번에) ── 대표·치프만.
+// 선택 행 id(콤마 목록) + tax_status를 받아 한 트랜잭션으로 전부 적용. 없는 id는 건너뜀(중간 실패 없이 진행).
+router.post("/bulk-tax-status", requireInvoice, (req, res) => {
+  const ids = String(req.body.ids || "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  const tax = normalizeTaxStatus(req.body.tax_status);
+  if (ids.length) {
+    const d = db();
+    const sel = d.prepare("SELECT * FROM invoices WHERE id = ?");
+    d.exec("BEGIN IMMEDIATE");
+    try {
+      for (const id of ids) {
+        const inv = sel.get(id);
+        if (inv) applyTaxStatusTx(d, inv, tax);
+      }
+      d.exec("COMMIT");
+    } catch (e) {
+      try { d.exec("ROLLBACK"); } catch (_) { /* ignore */ }
+      throw e;
+    }
+    logAudit(req.user, "invoice.tax.bulk", `${ids.length}건 → ${tax}`);
+  }
+  res.redirect(returnTo(req, "/invoices", "saved"));
 });
 
 // ── 삭제(관리자) ── 연결 작업의 청구 잠금을 먼저 해제(좀비 작업 방지). data.js deleteInvoice 트랜잭션.
@@ -336,3 +356,4 @@ router.post("/:id/delete", requireBilling, (req, res) => {
 });
 
 module.exports = router;
+module.exports.applyTaxStatusTx = applyTaxStatusTx; // 단건·일괄 공용 상태전환(테스트용 노출)

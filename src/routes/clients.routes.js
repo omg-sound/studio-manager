@@ -539,7 +539,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
           <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
           <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
         </div>
-        <div class="space-y-2">${invoices.map((i) => invoiceRow(i, { compact: true })).join("")}</div>`;
+        <div class="space-y-2">${invoices.map((i) => invoiceRow(i)).join("")}</div>`;
     } else {
       content = emptyState("이 클라이언트가 청구처인 청구 내역이 없습니다.", { card: true });
     }
