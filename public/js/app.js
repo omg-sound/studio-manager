@@ -176,18 +176,25 @@
 })();
 
 // 청구 목록 일괄 선택 + 일괄 처리(2026-07-16): 행 체크박스([data-inv-select])·전체선택([data-inv-select-all])
-// → 상단 바([data-inv-bulk-bar])에 선택 개수 표시, 선택 행 id를 hidden ids에 모아 제출(계산서 발행/입금완료).
+// → 바([data-inv-bulk-bar])에 선택 개수 표시, 선택 행 id를 hidden ids에 모아 제출(계산서 발행/입금완료).
+// **데스크톱** = 체크박스·처리 열 상시 노출·상단 바. **모바일** = 평소 숨김, **카드를 꾹 눌러(long-press)**
+//   선택 모드 진입(:root.inv-selecting) → 체크박스 노출 + 하단 고정 바. 모드 중 탭=상세 대신 선택 토글.
 // CSP-safe(위임)·함정 #26(바 표시는 style.display, .flex 유틸을 확실히 이김).
 (function () {
   "use strict";
+  var root = document.documentElement;
   function boxes() { return Array.prototype.slice.call(document.querySelectorAll("[data-inv-select]")); }
   function selected() { return boxes().filter(function (b) { return b.checked; }); }
+  function inMode() { return root.classList.contains("inv-selecting"); }
+  function enterMode() { root.classList.add("inv-selecting"); }
+  function exitMode() { root.classList.remove("inv-selecting"); }
   function sync() {
     var all = boxes(), sel = selected();
     var bar = document.querySelector("[data-inv-bulk-bar]");
     var cnt = document.querySelector("[data-inv-bulk-count]");
     if (cnt) cnt.textContent = String(sel.length);
     if (bar) bar.style.display = sel.length ? "" : "none"; // ⚠️ hidden 속성 아님(함정 #26 — flex 유틸에 밀림)
+    if (!sel.length) exitMode(); // 선택 0이면 모바일 선택 모드 해제(데스크톱은 무영향)
     var master = document.querySelector("[data-inv-select-all]");
     if (master) {
       master.checked = all.length > 0 && sel.length === all.length;
@@ -208,6 +215,39 @@
     var btn = e.target.closest && e.target.closest("[data-inv-bulk-form] button[data-bulk-label]");
     if (btn && btn.form) btn.form.setAttribute("data-inv-bulk-pending", btn.getAttribute("data-bulk-label"));
   });
+
+  // ── 모바일: 카드 long-press = 선택 모드 진입 + 그 카드 선택. 모드 중 탭 = 상세 대신 선택 토글. ──
+  var lpTimer = null, lpFired = false;
+  function cancelLp() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }
+  document.addEventListener("touchstart", function (e) {
+    var tr = e.target.closest && e.target.closest(".inv-table tbody tr");
+    if (!tr || !tr.querySelector("[data-inv-select]")) return; // 체크박스 없는(스태프) 행은 선택 불가
+    lpFired = false;
+    cancelLp();
+    lpTimer = setTimeout(function () {
+      lpFired = true;
+      enterMode();
+      var cb = tr.querySelector("[data-inv-select]");
+      if (cb) cb.checked = true;
+      sync();
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_e) {} }
+    }, 450);
+  }, { passive: true });
+  document.addEventListener("touchend", cancelLp, { passive: true });
+  document.addEventListener("touchmove", cancelLp, { passive: true }); // 스크롤이면 long-press 취소
+  document.addEventListener("touchcancel", cancelLp, { passive: true });
+  // 캡처 단계: 선택 모드에선 셀 링크 탭이 상세로 가지 않고 선택을 토글. long-press 직후의 click은 삼킨다.
+  document.addEventListener("click", function (e) {
+    if (lpFired) { lpFired = false; e.preventDefault(); e.stopPropagation(); return; } // long-press가 만든 click 무시(토글 되돌림 방지)
+    if (!inMode()) return;
+    var link = e.target.closest && e.target.closest(".inv-cell-link");
+    var tr = e.target.closest && e.target.closest(".inv-table tbody tr");
+    if (link && tr) {
+      var cb = tr.querySelector("[data-inv-select]");
+      if (cb) { e.preventDefault(); cb.checked = !cb.checked; sync(); }
+    }
+  }, true);
+
   document.addEventListener("submit", function (e) {
     var form = e.target;
     if (!form.matches || !form.matches("[data-inv-bulk-form]") || e.defaultPrevented) return;

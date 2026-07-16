@@ -317,6 +317,9 @@
 .inv-cell-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
 .inv-cell-payer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-table td.inv-amt, .inv-table th.inv-amt-col { text-align: right; white-space: nowrap; }
+/* 식별자·날짜·상태는 줄바꿈 금지(짧은데 좁은 열로 찌부되며 3줄로 접히던 것 방지, 2026-07-16).
+   이름류(클라이언트·아티스트·프로젝트)만 유연하게 접힌다. */
+.inv-table .inv-c-num, .inv-table .inv-c-issued, .inv-table .inv-c-status { white-space: nowrap; }
 .inv-table .inv-check { width: 2.5rem; }
 .inv-table .inv-act-col { width: 1%; white-space: nowrap; }
 /* 처리 열 = 아이콘 정사각 토글(라벨 길이 무관·열 폭 고정). 의미는 hover 툴팁·aria-label. */
@@ -332,7 +335,8 @@
 
 @media (max-width: 639.98px) {
   /* 표 → 2열 카드(bookipi 참고): 왼쪽=청구번호/상태/발행, 오른쪽=클라이언트/금액.
-     아티스트·프로젝트는 숨김. 라벨(::before) 없이 값만. 체크박스=맨 앞·처리=오른쪽 하단. */
+     아티스트·프로젝트·체크박스·처리는 평소 숨김 — **카드를 꾹 누르면(long-press)** 선택 모드로 진입해
+     체크박스가 뜨고(:root.inv-selecting) 하단 고정 바(.inv-bulkbar)로 계산서 발행/입금완료 일괄 처리. */
   .inv-table thead { display: none; }
   .inv-table, .inv-table tbody { display: block; }
   .inv-table tbody tr {
@@ -341,7 +345,7 @@
     grid-template-areas:
       "check num    client"
       "check status amount"
-      "check issued actions";
+      "check issued .";
     align-items: center;
     column-gap: 0.75rem;
     row-gap: 0.125rem;
@@ -353,16 +357,26 @@
   }
   .inv-table tbody td { display: block; border: 0; padding: 0; }
   .inv-table tbody td::before { content: none; } /* 모바일 카드엔 라벨 없음 */
-  .inv-table .inv-check { grid-area: check; width: auto; align-self: center; }
+  .inv-table .inv-check { grid-area: check; width: auto; align-self: center; display: none; } /* 선택 모드에서만 노출 */
+  :root.inv-selecting .inv-table .inv-check { display: block; }
   .inv-table .inv-c-num { grid-area: num; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
   .inv-table .inv-c-status { grid-area: status; }
   .inv-table .inv-c-issued { grid-area: issued; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
   .inv-table .inv-c-client { grid-area: client; text-align: right; }
   .inv-table .inv-c-client .inv-cell-link { font-weight: 600; }
   .inv-table .inv-c-amt { grid-area: amount; text-align: right; font-size: 1rem; }
-  .inv-table .inv-act-col { grid-area: actions; text-align: right; }
+  .inv-table .inv-act-col { display: none; } /* 모바일: 행별 처리 대신 하단 일괄 바 */
   .inv-table .inv-c-artist, .inv-table .inv-c-project { display: none; }
   .inv-cell-link { display: block; }
+  /* 선택 모드에서 길게 눌러도 iOS가 텍스트/이미지 선택 메뉴를 안 띄우게. */
+  :root.inv-selecting .inv-table tbody tr { -webkit-user-select: none; user-select: none; }
+  /* 일괄 바 = 하단 고정(선택 모드 진입 시 style.display로 노출). */
+  .inv-bulkbar {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    margin: 0; border-radius: 0; z-index: 40;
+    box-shadow: 0 -2px 12px rgb(0 0 0 / 0.08);
+  }
+  :root.inv-selecting .inv-table { padding-bottom: 4.5rem; } /* 하단 바에 마지막 카드가 가리지 않게 */
 }
 
 @layer utilities {

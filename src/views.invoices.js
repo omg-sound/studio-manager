@@ -282,7 +282,7 @@ function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
  */
 function invoiceBulkBar(ret = "/invoices") {
   return `
-    <form data-inv-bulk-form data-inv-bulk-bar method="post" action="/invoices/bulk-tax-status" style="display:none" class="card sticky top-2 z-20 mb-3 flex flex-wrap items-center justify-between gap-3 border-primary/40 bg-primary/5">
+    <form data-inv-bulk-form data-inv-bulk-bar method="post" action="/invoices/bulk-tax-status" style="display:none" class="inv-bulkbar card sticky top-2 z-20 mb-3 flex flex-wrap items-center justify-between gap-3 border-primary/40 bg-primary/5">
       <input type="hidden" name="ids" data-inv-bulk-ids />
       <input type="hidden" name="return" value="${esc(ret)}" />
       <span class="text-sm"><b class="tabular" data-inv-bulk-count>0</b>건 선택됨</span>

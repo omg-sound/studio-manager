@@ -1105,6 +1105,56 @@ test("청구 목록 표: 체크 시 일괄 바 표시·개수, 전체선택, 제
   assert.equal(bar.style.display, "none", "다시 숨김");
 });
 
+// ── 모바일 청구 목록: long-press로 선택 모드 진입(2026-07-16) ──
+// 평소엔 체크박스·처리 숨김, 카드를 꾹 누르면 선택 모드(:root.inv-selecting) + 그 카드 선택 + 하단 바.
+// 모드 중 셀 링크 탭은 상세로 안 가고 선택 토글. touchmove(스크롤)면 long-press 취소.
+test("청구 목록 모바일: long-press = 선택 모드 진입 + 카드 선택, 모드 중 탭 = 선택 토글", async () => {
+  const { invoiceTable, invoiceBulkBar } = require("../src/views.invoices");
+  const mk = (id) => ({
+    id, title: "청구" + id, invoice_number: "OMG-" + id, issued_date: "2026-07-14",
+    amount: 220000, paid_amount: 0, status: "발행", tax_status: "계산서 발행",
+    client_name: "(주)도너츠컬처", payer_kind: "company", project_title: "진혁", project_production: "도너츠컬처", project_artist: "진혁",
+  });
+  const html = invoiceBulkBar("/invoices?filter=all") + invoiceTable([mk(7), mk(8)], { isInvoicer: true, ret: "/invoices?filter=all" });
+  const { win, doc } = mountDom(html);
+  const root = doc.documentElement;
+  const rows = Array.prototype.slice.call(doc.querySelectorAll(".inv-table tbody tr"));
+  const cb = (tr) => tr.querySelector("[data-inv-select]");
+  assert.ok(!root.classList.contains("inv-selecting"), "처음엔 선택 모드 아님");
+
+  // 첫 행 long-press(touchstart → 타이머 경과) → 선택 모드 + 그 카드 선택
+  fire(win, rows[0].querySelector(".inv-cell-link"), "touchstart");
+  await tick(520); // long-press 타이머(450ms) 경과
+  assert.ok(root.classList.contains("inv-selecting"), "long-press로 선택 모드 진입");
+  assert.equal(cb(rows[0]).checked, true, "꾹 누른 카드 선택됨");
+  assert.equal(doc.querySelector("[data-inv-bulk-bar]").style.display !== "none", true, "하단 바 노출");
+
+  // 모드 중 둘째 카드 탭(실제 탭 = touchstart→touchend→click) → 상세로 안 가고 선택 토글(선택됨)
+  const link1 = rows[1].querySelector(".inv-cell-link");
+  fire(win, link1, "touchstart"); // long-press 플래그 리셋 + 타이머 시작
+  fire(win, link1, "touchend"); // 짧은 탭이라 타이머 취소
+  const ev = fire(win, link1, "click");
+  assert.equal(ev.defaultPrevented, true, "모드 중 링크 탭은 네비게이션 차단");
+  assert.equal(cb(rows[1]).checked, true, "탭으로 둘째 카드도 선택");
+
+  // 전부 해제 → 선택 모드 자동 종료 + 바 숨김
+  fire(win, doc.querySelector("[data-inv-bulk-clear]"), "click");
+  assert.ok(!root.classList.contains("inv-selecting"), "선택 0이면 모드 종료");
+  assert.equal(doc.querySelector("[data-inv-bulk-bar]").style.display, "none", "바 숨김");
+});
+
+test("청구 목록 모바일: touchmove(스크롤)면 long-press 취소(선택 모드 안 뜸)", async () => {
+  const { invoiceTable } = require("../src/views.invoices");
+  const mk = (id) => ({ id, title: "청구" + id, invoice_number: "OMG-" + id, issued_date: "2026-07-14", amount: 220000, paid_amount: 0, status: "발행", tax_status: "계산서 발행", client_name: "(주)도너츠컬처", payer_kind: "company", project_title: "진혁", project_production: "도너츠컬처", project_artist: "진혁" });
+  const { win, doc } = mountDom(invoiceTable([mk(7)], { isInvoicer: true, ret: "/invoices?filter=all" }));
+  const tr = doc.querySelector(".inv-table tbody tr");
+  fire(win, tr.querySelector(".inv-cell-link"), "touchstart");
+  fire(win, tr, "touchmove"); // 스크롤 → 취소
+  await tick(520);
+  assert.ok(!doc.documentElement.classList.contains("inv-selecting"), "스크롤이면 선택 모드 안 뜸");
+  assert.equal(tr.querySelector("[data-inv-select]").checked, false, "선택 안 됨");
+});
+
 // ── 2026-07-15 전수 점검(4렌즈) 확정 결함 회귀 ──────────────────────────────
 
 // [1] 날짜 콤보 blur 120ms 지연 커밋 ↔ 폼 제출 경합: 타이핑 직후 저장을 누르면 옛 hidden 값으로 POST되던 것.
