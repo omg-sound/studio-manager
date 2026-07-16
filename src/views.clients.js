@@ -2,7 +2,7 @@
 
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
-const { COMPANY_ROLES } = require("./config");
+const { COMPANY_ROLES, ARTIST_ACTIVITY_FORMS } = require("./config");
 const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, groupCombo, projectTypeBadge } = require("./views");
 const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
 
@@ -152,6 +152,12 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         ${companyCombo("agency_company", c.agency_name || "", "소속사/레이블", "소속사")}
       </div>` : ""}
       ${type === "artist" ? `
+      <div>
+        <label class="label">활동 형태</label>
+        <select class="input" name="activity_form">
+          ${ARTIST_ACTIVITY_FORMS.map((f) => `<option value="${f.value}"${(c.activity_form || "solo") === f.value ? " selected" : ""}>${esc(f.label)}</option>`).join("")}
+        </select>
+      </div>
       <div>
         <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때 — 선택 시 소속사 자동 연동)</span></label>
         ${groupCombo("group_id", c.group_id || "", (groups.find((g) => Number(c.group_id) === g.id) || {}).name || "", groups)}

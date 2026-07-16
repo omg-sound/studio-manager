@@ -584,8 +584,8 @@ function dataTable(cols, rows, { filterList = false } = {}) {
   return `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface"><table class="dt${mCard ? " dt-mcard" : ""}">${cg}${thead}<tbody${filterList ? " data-filter-list" : ""}>${body}</tbody></table>${empty}</div>`;
 }
 
-/** 연락처(사람) 표 — 이름·역할·소속·직함·전화·이메일. /contacts 목록 + 클라이언트 '관계자' 탭 공용. */
-function contactTable(rows, { returnTo = "", fromParam = "", filterList = false } = {}) {
+/** 연락처(사람) 표 — 이름·역할·소속·(직함)·전화·이메일. /contacts 목록 + 클라이언트 '관계자' 탭 공용. hideTitle=직함 열 숨김(관계자 탭 — 이름에 호칭이 붙어 중복, 2026-07-16). */
+function contactTable(rows, { returnTo = "", fromParam = "", filterList = false, hideTitle = false } = {}) {
   const { currentAffiliation, classifyParty } = require("./data"); // 지연 require(순환 회피)
   const retQ = returnTo ? `${fromParam ? "&" : "?"}return=${encodeURIComponent(returnTo)}` : "";
   const dash = '<span class="text-muted">—</span>';
@@ -594,7 +594,7 @@ function contactTable(rows, { returnTo = "", fromParam = "", filterList = false 
     { label: "이름", primary: true },
     { label: "역할", w: "w-[10rem]", hide: "md" },
     { label: "소속", w: "w-[11rem]", hide: "sm" },
-    { label: "직함", w: "w-[7rem]", hide: "lg" },
+    ...(hideTitle ? [] : [{ label: "직함", w: "w-[7rem]", hide: "lg" }]),
     { label: "전화", w: "w-[9.5rem]" },
     { label: "이메일", hide: "sm" },
   ];
@@ -610,7 +610,7 @@ function contactTable(rows, { returnTo = "", fromParam = "", filterList = false 
       link(esc(personName(c)), "font-medium"),
       badges || dash,
       org,
-      cur && cur.title ? link(esc(cur.title), "text-muted") : dash,
+      ...(hideTitle ? [] : [cur && cur.title ? link(esc(cur.title), "text-muted") : dash]),
       c.phone ? copyable(c.phone) : dash,
       c.email ? copyable(c.email) : dash,
     ] };

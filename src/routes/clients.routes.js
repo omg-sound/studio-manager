@@ -4,7 +4,7 @@ const fs = require("fs");
 const express = require("express");
 const { db } = require("../db");
 const { requireEditor } = require("../auth");
-const { COMPANY_ROLES } = require("../config");
+const { COMPANY_ROLES, ARTIST_ACTIVITY_FORM_LABELS } = require("../config");
 const {
   listClients, getParty, listProjectsForParty,
   listInvoicesForParty,
@@ -146,8 +146,9 @@ router.get("/", (req, res) => {
       { label: "이메일", hide: "sm", mCard: "br" },
     ];
     orgRows = displayed.map((c) => {
-      const inGroup = !!groupNameByParty[c.id]; // 소속 그룹이 있으면 '그룹', 없으면 '솔로'(2026-07-16 사용자 요청 — 자동 판별)
-      const form = inGroup ? `<span class="badge-info">그룹</span>` : `<span class="badge-neutral">솔로</span>`;
+      // 활동 형태: 수동 필드(activity_form) 우선, 없으면 소속 그룹 유무로 자동 판별(레거시 폴백). solo=회색·group/both=파랑.
+      const af = c.activity_form || (groupNameByParty[c.id] ? "group" : "solo");
+      const form = `<span class="${af === "solo" ? "badge-neutral" : "badge-info"}">${esc(ARTIST_ACTIVITY_FORM_LABELS[af] || "솔로")}</span>`;
       const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
       return { cells: [
         link(c.id, esc(personLabel(c.activity_name || c.name, c.name)), "font-medium"),
@@ -196,7 +197,7 @@ router.get("/", (req, res) => {
   }
   const list = displayed.length
     ? (group === "associate"
-        ? contactTable(displayed, { fromParam, returnTo: req.originalUrl, filterList: true })
+        ? contactTable(displayed, { fromParam, returnTo: req.originalUrl, filterList: true, hideTitle: true })
         : dataTable(orgCols, orgRows, { filterList: true })) + capped.more
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
@@ -339,6 +340,7 @@ router.post("/", (req, res) => {
     id = createPerson({
       name: realName || name, phone: b.phone, email: b.email, memo: b.memo,
       activity_name: name, is_artist: 1, cash_receipt_no: b.cash_receipt_no,
+      activity_form: b.activity_form, // 활동 형태(솔로/그룹/솔로+그룹)
     });
     if (b.group_id) setPartyGroup(id, b.group_id); // 아티스트 생성 시 소속 그룹 선택했으면 연결
   }
@@ -380,6 +382,7 @@ router.post("/:id", (req, res) => {
     // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신)
     activity_name: c.activity_name, is_artist: c.is_artist,
     cash_receipt_no: c.kind === "group" ? c.cash_receipt_no : b.cash_receipt_no, // 그룹은 폼에 필드 없음 → 기존값 보존(개인 아티스트만 현금영수증)
+    activity_form: b.activity_form, // 활동 형태(아티스트 폼에만 있음 — 그룹·업체는 undefined로 보존)
     // 그룹 담당자(멤버/관계자) — 그룹일 때만 폼에서 전송(person은 undefined로 보존)
     contact_party_id: c.kind === "group" ? resolveContactPartyId(b) : undefined,
   });

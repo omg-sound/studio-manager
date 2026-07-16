@@ -85,9 +85,9 @@ function createPerson(b = {}) {
   }
   const info = db().prepare(
     `INSERT INTO parties (kind, name, activity_name, is_artist, phone, email, memo,
-       family_name, given_name, honorific, department, job_title, cash_receipt_no)
+       family_name, given_name, honorific, department, job_title, cash_receipt_no, activity_form)
      VALUES ('person', @name, @activity_name, @is_artist, @phone, @email, @memo,
-       @family_name, @given_name, @honorific, @department, @job_title, @cash_receipt_no)`
+       @family_name, @given_name, @honorific, @department, @job_title, @cash_receipt_no, @activity_form)`
   ).run({
     name,
     activity_name: blankToNull(b.activity_name),
@@ -97,6 +97,7 @@ function createPerson(b = {}) {
     family_name: fam, given_name: giv, honorific: blankToNull(b.honorific) || honorificFromTitle(b.job_title),
     department: blankToNull(b.department), job_title: blankToNull(b.job_title),
     cash_receipt_no: formatPhone(b.cash_receipt_no), // 전화형이면 하이픈 정규화(카드번호 등 형식 불명은 원본 보존)
+    activity_form: blankToNull(b.activity_form), // 아티스트 활동 형태(solo|group|both) — 비아티스트는 null
   });
   return info.lastInsertRowid;
 }
@@ -178,12 +179,12 @@ function updateParty(id, b = {}) {
   const honorific = pick("honorific") || honorificFromTitle(jobTitle);
   db().prepare(
     `UPDATE parties SET name=?, activity_name=?, is_artist=?, phone=?, email=?, memo=?,
-       family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=?, contact_party_id=? WHERE id=?`
+       family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=?, contact_party_id=?, activity_form=? WHERE id=?`
   ).run(
     name, activityName, isArtist,
     pick("phone", formatPhone), pick("email"), pick("memo"),
     pick("family_name"), pick("given_name"), honorific,
-    pick("department"), jobTitle, pick("cash_receipt_no", formatPhone), contactPartyId, Number(id)
+    pick("department"), jobTitle, pick("cash_receipt_no", formatPhone), contactPartyId, pick("activity_form"), Number(id)
   );
 }
 

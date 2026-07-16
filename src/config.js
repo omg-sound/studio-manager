@@ -195,6 +195,14 @@ const SESSION_STATUS_BADGE = {
   취소: "bg-muted/10 text-muted",
 };
 
+// 아티스트 활동 형태(2026-07-16 사용자 요청) — 솔로/그룹/솔로+그룹 3택. person 아티스트 수동 필드(parties.activity_form).
+const ARTIST_ACTIVITY_FORMS = [
+  { value: "solo", label: "솔로" },
+  { value: "group", label: "그룹" },
+  { value: "both", label: "솔로+그룹" },
+];
+const ARTIST_ACTIVITY_FORM_LABELS = Object.fromEntries(ARTIST_ACTIVITY_FORMS.map((f) => [f.value, f.label]));
+
 // 작업 상태 = 대기/완료 2단계('진행중' 개념 폐기 — 사용자 결정 2026-07-03). 레거시 In_Progress는 normalize·마이그레이션으로 Pending 처리.
 const TASK_STATUSES = ["Pending", "Completed"];
 const TASK_STATUS_LABELS = {
@@ -261,6 +269,8 @@ module.exports = {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_STATUS_BADGE,
+  ARTIST_ACTIVITY_FORMS,
+  ARTIST_ACTIVITY_FORM_LABELS,
   SESSION_TYPES,
   RENTAL_SESSION_TYPES,
   SESSION_STATUSES,
