@@ -24,7 +24,7 @@ const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, contactTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
-const { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
+const { FILE_KINDS, fileKindLabel, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
 
 const router = express.Router();
 
@@ -89,8 +89,10 @@ router.get("/", (req, res) => {
   });
   const kindChips = ""; // 2차 분류 필터 폐기(당사자 모델 — 조직 겸업은 roles 배지로 표시)
 
+  // 검색 문구는 탭별 명사(2026-07-16 사용자 요청 '이름 검색→업체명 검색').
+  const searchNoun = { company: "업체명", associate: "관계자", artist: "아티스트", group: "그룹" }[group] || "이름";
   const searchBar = searchBox({
-    action: "/clients", q, placeholder: "이름 검색(타이핑하면 목록 즉시 필터)", label: "클라이언트 검색", liveFilter: true,
+    action: "/clients", q, placeholder: `${searchNoun} 검색(타이핑하면 목록 즉시 필터)`, label: "클라이언트 검색", liveFilter: true,
     hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
   });
 
@@ -131,45 +133,67 @@ router.get("/", (req, res) => {
   const dash = '<span class="text-muted">—</span>';
   // 사업자등록증 미업로드 표시 아이콘(경고 삼각형) — 유형 배지 대신 사업자번호 뒤 작은 아이콘(2026-07-16 사용자 요청).
   const bizLicenseMissingIcon = ` <span title="사업자등록증 미등록" aria-label="사업자등록증 미등록" class="ml-0.5 inline-flex align-middle text-warning"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>`;
-  // 열 폭·숨김 우선순위(2026-07-16 사용자 요청): 이메일=유동 폭(고정 폭 잘림 해소) / 좁아지면 유형·전화 먼저 숨김(xl 미만)·대표·사업자·이메일은 유지 / 모바일 카드=이름·대표·사업자번호만(유형·전화·이메일 숨김).
-  // 모바일 카드(<640)=2열 그리드: 업체명(좌상)·대표(우상) / 사업자번호(좌하)·세금계산서 이메일(우하), 유형·전화 숨김(2026-07-16 사용자 요청).
-  // 폭 배분(청구 표처럼): 식별 열 **이름·이메일=유동**(w 미지정 → 남는 폭을 나눠 채움, 한 열에 여백 몰림 방지). 유형·대표·사업자·전화=고정 rem.
-  const orgCols = [
-    { label: "이름", primary: true, mCard: "tl" },
-    { label: "유형", w: "w-[9rem]", hide: "xl", mobileHide: true },
-    { label: group === "company" ? "대표" : "소속", w: "w-[11rem]", hide: "sm", mCard: "tr" },
-    { label: "사업자번호", w: "w-[9.5rem]", hide: "sm", mCard: "bl" },
-    { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
-    { label: "이메일", hide: "sm", mCard: "br" },
-  ];
-  const orgRows = displayed.map((c) => {
-    const href = `/clients/${c.id}${fromParam}${retParam}`;
-    const link = (inner, cls = "") => `<a href="${href}" class="dt-link ${cls}">${inner}</a>`;
-    let badges, mid, name, certMissing = false;
-    if (c.is_artist) {
-      badges = c.kind === "group" ? `<span class="badge-info">그룹</span>` : `<span class="badge-info">아티스트</span>`;
+  // 탭별 컬럼(2026-07-16 사용자 요청): 유형 열 폐기(전 탭) / 아티스트=솔로·그룹 형태 표시·사업자번호 없음 / 그룹=사업자번호 없음.
+  // 폭 배분(청구 표처럼): 식별 열 **이름·이메일=유동**(남는 폭 나눠 채움). 나머지=고정 rem. 좁아지면 전화 먼저 숨김(xl). 모바일 카드(<640)=2열 그리드(mCard 슬롯 tl/tr/bl/br).
+  const link = (id, inner, cls = "") => `<a href="/clients/${id}${fromParam}${retParam}" class="dt-link ${cls}">${inner}</a>`;
+  let orgCols, orgRows;
+  if (group === "artist") {
+    orgCols = [
+      { label: "이름", primary: true, mCard: "tl" },
+      { label: "형태", w: "w-[6.5rem]", hide: "sm", mCard: "tr" },
+      { label: "소속", w: "w-[13rem]", hide: "sm", mCard: "bl" },
+      { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
+      { label: "이메일", hide: "sm", mCard: "br" },
+    ];
+    orgRows = displayed.map((c) => {
+      const inGroup = !!groupNameByParty[c.id]; // 소속 그룹이 있으면 '그룹', 없으면 '솔로'(2026-07-16 사용자 요청 — 자동 판별)
+      const form = inGroup ? `<span class="badge-info">그룹</span>` : `<span class="badge-neutral">솔로</span>`;
       const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
-      mid = meta || dash; // 소속사 · 소속 그룹
-      name = personLabel(c.activity_name || c.name, c.name);
-    } else {
-      badges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
-      certMissing = !bizLicenseSet.has(c.id); // 사업자등록증 미업로드 → 사업자번호 뒤 경고 아이콘(2026-07-16 유형 배지에서 이동)
-      const ownerLabel = stripTrailingTitle(c.owner_name); // 대표(말미 호칭 제거)
-      mid = ownerLabel
-        ? (c.owner_party_id ? `<a href="/contacts/${c.owner_party_id}${fromParam}${retParam}" class="dt-link text-muted">${esc(ownerLabel)}</a>` : `<span class="text-muted">${esc(ownerLabel)}</span>`)
-        : dash;
-      name = c.name;
-    }
-    const bizCell = (c.biz_no ? copyable(c.biz_no) : dash) + (certMissing ? bizLicenseMissingIcon : "");
-    return { cells: [
-      link(esc(name), "font-medium"),
-      badges,
-      mid,
-      bizCell,
+      return { cells: [
+        link(c.id, esc(personLabel(c.activity_name || c.name, c.name)), "font-medium"),
+        form,
+        meta || dash,
+        c.phone ? copyable(c.phone) : dash,
+        c.email ? copyable(c.email) : dash,
+      ] };
+    });
+  } else if (group === "group") {
+    orgCols = [
+      { label: "이름", primary: true, mCard: "tl" },
+      { label: "소속", w: "w-[13rem]", hide: "sm", mCard: "tr" },
+      { label: "전화", w: "w-[9.5rem]", hide: "sm", mCard: "bl" },
+      { label: "이메일", hide: "sm", mCard: "br" },
+    ];
+    orgRows = displayed.map((c) => ({ cells: [
+      link(c.id, esc(personLabel(c.activity_name || c.name, c.name)), "font-medium"),
+      agencyByParty[c.id] ? esc(agencyByParty[c.id]) : dash, // 그룹 소속사
       c.phone ? copyable(c.phone) : dash,
       c.email ? copyable(c.email) : dash,
-    ] };
-  });
+    ] }));
+  } else {
+    // 업체(company)
+    orgCols = [
+      { label: "이름", primary: true, mCard: "tl" },
+      { label: "대표", w: "w-[11rem]", hide: "sm", mCard: "tr" },
+      { label: "사업자번호", w: "w-[9.5rem]", hide: "sm", mCard: "bl" },
+      { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
+      { label: "이메일", hide: "sm", mCard: "br" },
+    ];
+    orgRows = displayed.map((c) => {
+      const certMissing = !bizLicenseSet.has(c.id); // 사업자등록증 미업로드 → 사업자번호 뒤 경고 아이콘
+      const ownerLabel = stripTrailingTitle(c.owner_name); // 대표(말미 호칭 제거)
+      const ownerCell = ownerLabel
+        ? (c.owner_party_id ? `<a href="/contacts/${c.owner_party_id}${fromParam}${retParam}" class="dt-link text-muted">${esc(ownerLabel)}</a>` : `<span class="text-muted">${esc(ownerLabel)}</span>`)
+        : dash;
+      return { cells: [
+        link(c.id, esc(c.name), "font-medium"),
+        ownerCell,
+        (c.biz_no ? copyable(c.biz_no) : dash) + (certMissing ? bizLicenseMissingIcon : ""),
+        c.phone ? copyable(c.phone) : dash,
+        c.email ? copyable(c.email) : dash,
+      ] };
+    });
+  }
   const list = displayed.length
     ? (group === "associate"
         ? contactTable(displayed, { fromParam, returnTo: req.originalUrl, filterList: true })
@@ -199,7 +223,7 @@ router.get("/", (req, res) => {
     </details>`;
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "클라이언트", desc: "업체 · 관계자(대표·A&R·디렉터 등) · 아티스트(개인) · 그룹(밴드·아이돌). 청구처가 될 수 있습니다.", action: newMenu })}
+    ${pageHeader({ title: "클라이언트", action: newMenu })}
     ${groupChips}
     ${kindChips}
     ${searchBar}
