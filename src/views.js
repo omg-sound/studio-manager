@@ -564,8 +564,9 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
  * @param {{filterList?:boolean}} [opt]  filterList=실시간 검색 필터(tbody에 data-filter-list, app.js [data-live-filter]와 연동).
  */
 function dataTable(cols, rows, { filterList = false } = {}) {
-  const hideCls = { sm: "hidden sm:table-cell", md: "hidden md:table-cell", lg: "hidden lg:table-cell" };
-  const cellCls = (c, extra) => [c.hide ? hideCls[c.hide] : "", c.right ? "dt-right" : "", extra].filter(Boolean).join(" ");
+  const hideCls = { sm: "hidden sm:table-cell", md: "hidden md:table-cell", lg: "hidden lg:table-cell", xl: "hidden xl:table-cell" };
+  // mobileHide=<640 카드에서 그 셀 숨김(요약만 보이게 — 클라이언트 업체 카드는 이름·대표·사업자번호만).
+  const cellCls = (c, extra) => [c.hide ? hideCls[c.hide] : "", c.right ? "dt-right" : "", c.mobileHide ? "dt-m-hide" : "", extra].filter(Boolean).join(" ");
   const cg = `<colgroup>${cols.map((c) => `<col${c.w ? ` style="width:${c.w}"` : ""} />`).join("")}</colgroup>`;
   const thead = `<thead><tr>${cols.map((c) => { const k = cellCls(c); return `<th${k ? ` class="${k}"` : ""}>${esc(c.label)}</th>`; }).join("")}</tr></thead>`;
   const body = rows.map((r) => `<tr>${r.cells.map((cell, i) => {

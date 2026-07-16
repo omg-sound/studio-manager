@@ -404,6 +404,7 @@
   .dt tbody td.dt-primary { display: block; }
   .dt tbody td.dt-primary::before { content: none; }
   .dt tbody td.dt-primary .dt-link { font-weight: 600; font-size: 0.9375rem; }
+  .dt tbody td.dt-m-hide { display: none; } /* 모바일 카드 요약 — 상세 없이 보이는 셀 축소(클라이언트 업체=이름·대표·사업자번호만) */
   .dt-link { text-align: right; }
 }
 
