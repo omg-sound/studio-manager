@@ -237,7 +237,7 @@ function invoiceArtistLabel(inv) {
   return artists.length > 1 ? `${artists[0]} 외 ${artists.length - 1}` : artists[0];
 }
 
-function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
+function invoiceTable(rows, { isInvoicer = false, ret = "", filterList = false } = {}) {
   const retBase = ret || "/invoices";
   const cellLink = (inv, inner, cls = "") => `<a href="/invoices/${inv.id}?return=${encodeURIComponent(retBase)}" class="inv-cell-link ${cls}">${inner}</a>`;
   const dash = '<span class="text-muted">—</span>';
@@ -282,7 +282,9 @@ function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
       </tr>`;
     })
     .join("");
-  return `<table class="inv-table">${head}<tbody>${body}</tbody></table>`;
+  // filterList=실시간 타이핑 필터(검색 입력 [data-live-filter]와 연동, app.js가 tbody 직접 자식 <tr>을 textContent로 즉시 필터). 검색 버튼(서버 ?q=)은 캡 넘는 전체 검색용으로 유지.
+  const empty = filterList ? `<div data-filter-empty hidden class="px-4 py-6 text-center text-sm text-muted">검색 결과가 없습니다.</div>` : "";
+  return `<table class="inv-table">${head}<tbody${filterList ? " data-filter-list" : ""}>${body}</tbody></table>${empty}`;
 }
 
 /**

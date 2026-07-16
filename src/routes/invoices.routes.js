@@ -90,6 +90,7 @@ router.get("/", requireBilling, (req, res) => {
     q,
     placeholder: "제목 · 청구번호 · 클라이언트 검색",
     label: "청구 검색",
+    liveFilter: true, // 타이핑 시 로드된 표 행 즉시 필터(2026-07-16 사용자 요청). 검색 버튼=캡 넘는 서버 전체 검색.
     hidden: `<input type="hidden" name="filter" value="${esc(filter)}" />`,
   });
   const resultNote = q
@@ -105,7 +106,7 @@ router.get("/", requireBilling, (req, res) => {
   const ret = retPath + limitQ;
   const bulkBar = invoicer ? invoiceBulkBar(ret) : ""; // 대표·치프만 일괄 처리
   const list = shown.length
-    ? `${invoicer ? bulkBar : ""}<div class="overflow-hidden rounded-lg border border-border/50 bg-surface">${invoiceTable(shown, { isInvoicer: invoicer, ret })}</div>${cap.more}`
+    ? `${invoicer ? bulkBar : ""}<div class="overflow-hidden rounded-lg border border-border/50 bg-surface">${invoiceTable(shown, { isInvoicer: invoicer, ret, filterList: true })}</div>${cap.more}`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });

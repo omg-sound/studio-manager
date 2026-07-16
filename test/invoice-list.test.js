@@ -121,7 +121,7 @@ test("청구 목록 라우트: 필터·표·일괄 바·ret limit 보존(소스 
   const fs = require("fs");
   const src = fs.readFileSync(require("path").join(__dirname, "..", "src", "routes", "invoices.routes.js"), "utf8");
   assert.match(src, /const ret = retPath \+ limitQ/, "행 ret = retPath + limitQ(더 보기 상태 유지)");
-  assert.match(src, /invoiceTable\(shown, \{ isInvoicer: invoicer, ret \}\)/, "넓은 표 렌더");
+  assert.match(src, /invoiceTable\(shown, \{ isInvoicer: invoicer, ret[,)]/, "넓은 표 렌더");
   assert.match(src, /invoiceBulkBar\(ret\)/, "일괄 처리 바(대표·치프)");
   assert.match(src, /\["todo", "done", "paid"\]\.includes\(req\.query\.filter\)/, "상태 필터 파라미터");
 });
