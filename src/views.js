@@ -475,13 +475,15 @@ function capList(rows, query, moreHrefFn, { def = 100, step = 200 } = {}) {
  * 검색 박스(+ 타이핑 제안 typeahead). suggestUrl 지정 시 app.js가 타이핑하면 매칭 결과를 드롭다운으로 제안(클릭·엔터로 해당 상세로 이동).
  * hidden = 함께 제출할 hidden input HTML(탭·뷰 등 유지). suggestUrl JSON = [{label, sub?, href}].
  */
-function searchBox({ action, q = "", placeholder = "", label = "검색", suggestUrl = "", hidden = "", liveFilter = false }) {
+function searchBox({ action, q = "", placeholder = "", label = "검색", suggestUrl = "", hidden = "", liveFilter = false, noButton = false }) {
   const wrapAttrs = suggestUrl ? ` data-search-suggest data-suggest-url="${esc(suggestUrl)}"` : "";
   const combo = suggestUrl ? ' role="combobox" aria-expanded="false" aria-autocomplete="list"' : "";
   const live = liveFilter ? " data-live-filter" : ""; // 타이핑 시 [data-filter-list] 행을 실시간 필터(검색 누르기 전, app.js)
   const pop = suggestUrl
     ? `<div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-72 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-suggest-pop role="listbox"></div>`
     : "";
+  // noButton=검색 버튼 숨김(실시간 필터가 주 경험 — 2026-07-16). 폼은 단일 텍스트 입력이라 Enter로 서버 전체 검색(캡 초과분)은 유지.
+  const btn = noButton ? "" : `<button class="btn-primary shrink-0" type="submit">검색</button>`;
   return `
     <form method="get" action="${esc(action)}" class="mb-4 flex gap-2">
       ${hidden}
@@ -489,7 +491,7 @@ function searchBox({ action, q = "", placeholder = "", label = "검색", suggest
         <input class="input w-full" type="search" name="q" value="${esc(q)}" placeholder="${esc(placeholder)}" aria-label="${esc(label)}" autocomplete="off"${combo}${live} />
         ${pop}
       </div>
-      <button class="btn-primary shrink-0" type="submit">검색</button>
+      ${btn}
     </form>`;
 }
 

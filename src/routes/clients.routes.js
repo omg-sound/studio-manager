@@ -92,7 +92,7 @@ router.get("/", (req, res) => {
   // 검색 문구는 탭별 명사(2026-07-16 사용자 요청 '이름 검색→업체명 검색').
   const searchNoun = { company: "업체명", associate: "관계자", artist: "아티스트", group: "그룹" }[group] || "이름";
   const searchBar = searchBox({
-    action: "/clients", q, placeholder: `${searchNoun} 검색`, label: "클라이언트 검색", liveFilter: true,
+    action: "/clients", q, placeholder: `${searchNoun} 검색`, label: "클라이언트 검색", liveFilter: true, noButton: true,
     hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
   });
 
