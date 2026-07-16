@@ -188,7 +188,8 @@
    행은 <details>라 클릭하면 그 자리에서 세션·곡 요약이 펼쳐진다(아티스트·제작사·프로젝트 셀만 상세 링크). */
 .proj-thead, .proj-summary {
   display: grid;
-  grid-template-columns: 8rem 9rem minmax(0, 1fr) 7rem 10rem 8rem 6rem 1.25rem;
+  /* 아티스트·제작사·프로젝트 = 유연(넘치면 … 로 자름) / PM·다음세션·금액·작성일·⌄ = 고정 폭. */
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 6rem 1.25rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
@@ -207,7 +208,9 @@
 }
 .proj-summary::-webkit-details-marker { display: none; }
 .proj-summary:hover { background: rgb(var(--color-primary) / 0.04); }
-.proj-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ⚠️ 클래스명 = **pt-cell**(마크업과 일치). 이게 안 맞으면 nowrap이 안 먹어 셀이 글자 단위로 세로로 쪼개진다(2026-07-16 버그).
+   grid 아이템은 min-width:auto가 기본이라 min-width:0을 줘야 내용보다 좁게 줄어 … 로 잘린다. */
+.pt-cell, .pt-h { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .proj-link { color: inherit; text-underline-offset: 3px; }
 .proj-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
 .proj-chevron {
@@ -217,17 +220,33 @@
 }
 .proj-summary:hover .proj-chevron { color: rgb(var(--color-fg)); }
 
-/* 모바일(<640px): thead 숨기고 아티스트(굵게)·프로젝트 + 값 라벨줄(제작사·PM 숨김·빈 셀 생략). */
+/* 좁아지면 우측 열부터 숨긴다(2026-07-16 사용자 '줄어들때 PM·금액·작성일 숨기며 줄여도 됨'):
+   작성일 <1280 → 금액 <1024 → PM <820. 열을 숨기면 grid 열도 함께 줄여 남는 셀이 늘어난다. */
+@media (max-width: 1279.98px) {
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 1.25rem; }
+  .pt-created, .pt-h-created { display: none; }
+}
+@media (max-width: 1023.98px) {
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 1.25rem; }
+  .pt-amount, .pt-h-amount { display: none; }
+}
+@media (max-width: 819.98px) {
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 8.5rem 1.25rem; }
+  .pt-pm, .pt-h-pm { display: none; }
+}
+
+/* 모바일(<640px): thead 숨기고 아티스트(굵게)·프로젝트 + 값 라벨줄(제작사·PM 숨김·빈 셀 생략).
+   위 단계에서 숨긴 금액·작성일 셀은 카드에선 다시 표시(display:block이 뒤 소스라 이김). */
 @media (max-width: 639.98px) {
   .proj-thead { display: none; }
   .proj-summary {
     display: flex; flex-direction: column; align-items: stretch;
     gap: 0.125rem; position: relative;
   }
-  .proj-cell { white-space: normal; }
+  .pt-cell { display: block; white-space: normal; }
+  .pt-company, .pt-pm { display: none; } /* 제작사·PM만 숨김 */
   .pt-artist { font-weight: 600; font-size: 0.9375rem; padding-right: 1.5rem; }
   .pt-title { font-size: 0.8125rem; color: rgb(var(--color-muted)); }
-  .pt-company, .pt-pm { display: none; } /* 모바일은 제작사·PM 숨김 */
   .proj-summary .pt-cell:empty { display: none; } /* 값 없는 셀(빈 다음세션·금액) 생략 */
   .pt-next::before, .pt-amount::before, .pt-created::before {
     content: attr(data-label) " · "; color: rgb(var(--color-muted)); font-size: 0.75rem;

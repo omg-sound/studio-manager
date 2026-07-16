@@ -130,8 +130,9 @@ function projectArtistOnly(p) {
  * 컬럼: 아티스트 · 제작사 · 프로젝트 · PM · 다음 세션 · 금액 · 작성일 · [⌄].
  */
 function projectTableHead() {
-  const th = (label) => `<span class="pt-h">${esc(label)}</span>`;
-  return `<div class="proj-thead">${th("아티스트")}${th("제작사")}${th("프로젝트")}${th("PM")}${th("다음 세션")}${th("금액")}${th("작성일")}<span aria-hidden="true"></span></div>`;
+  const th = (label, cls = "") => `<span class="pt-h ${cls}">${esc(label)}</span>`;
+  // 헤더 클래스(pt-h-pm/amount/created)는 좁을 때 해당 열을 행 셀과 함께 CSS로 숨기기 위함.
+  return `<div class="proj-thead">${th("아티스트")}${th("제작사")}${th("프로젝트")}${th("PM", "pt-h-pm")}${th("다음 세션")}${th("금액", "pt-h-amount")}${th("작성일", "pt-h-created")}<span aria-hidden="true"></span></div>`;
 }
 
 /**

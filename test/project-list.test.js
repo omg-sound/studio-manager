@@ -83,7 +83,7 @@ test("projectListRow: 헤더 + 행 컬럼 정렬(같은 grid 열)", () => {
   const head = views.projectTableHead();
   assert.match(head, /class="proj-thead">/);
   for (const label of ["아티스트", "제작사", "프로젝트", "PM", "다음 세션", "금액", "작성일"]) {
-    assert.match(head, new RegExp(`<span class="pt-h">${label}</span>`), `헤더 항목명: ${label}`);
+    assert.match(head, new RegExp(`<span class="pt-h[^"]*">${label}</span>`), `헤더 항목명: ${label}`);
   }
   // 행 셀 순서 = 헤더 순서
   const html = views.projectListRow(pRow({ next_session_date: "2099-01-01" }), emptySummary, { tab: "active" });
