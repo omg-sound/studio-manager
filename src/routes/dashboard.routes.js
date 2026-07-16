@@ -56,8 +56,8 @@ router.get("/", requireAuth, (req, res) => {
   }
   cardItems.push(statCard("프로젝트", s.total));
   if (s.isChief) cardItems.push(statCard("클라이언트", s.clients));
-  const cols = cardItems.length >= 4 ? "lg:grid-cols-4" : cardItems.length === 3 ? "lg:grid-cols-3" : "";
-  const cards = `<div class="grid grid-cols-2 gap-3 ${cols}">${cardItems.join("")}</div>`;
+  // 읽기 폭(768)로 좁힌 뒤(2026-07-16 사용자 '폭 조절') 카드는 2열 고정 — 좁은 폭에 4열이면 금액이 찌부.
+  const cards = `<div class="grid grid-cols-2 gap-3">${cardItems.join("")}</div>`;
 
   const sessionList = weekSessions.length
     ? weekSessions
@@ -118,7 +118,7 @@ router.get("/", requireAuth, (req, res) => {
     </div>
     ${unbilledCard}`;
 
-  res.send(layout({ title: "대시보드", user, current: "/", body, wide: true }));
+  res.send(layout({ title: "대시보드", user, current: "/", body })); // 읽기 폭(2026-07-16 사용자 '폭 조절' — 카드 2열)
 });
 
 module.exports = router;

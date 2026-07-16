@@ -84,7 +84,7 @@ router.get("/deliverables", requireStaff, (req, res) => {
     ${pageHeader({ title: "자료 전달", desc: admin ? "최근 전달 기록" : "내게 전달된 자료" })}
     ${backendNote}
     <div class="card">${list}</div>`;
-  res.send(layout({ title: "자료 전달", user: req.user, current: "/deliverables", body, wide: true }));
+  res.send(layout({ title: "자료 전달", user: req.user, current: "/deliverables", body })); // 읽기 폭(2026-07-16)
 });
 
 // ── 업로드 폼(관리자) ──
