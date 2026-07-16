@@ -588,3 +588,19 @@
   --shadow-card: none;
 }
 :root[data-palette="linear"] .font-display { font-weight: 600; letter-spacing: -0.01em; }
+
+/* ─── 테마 선택 스와치 아이콘(2026-07-17 사용자 요청 — 드롭다운 대신 특징색 원형 버튼 클릭 선택) ───
+   색은 CSP(style-src 인라인 금지)상 인라인 style 불가라 클래스로. 활성 스와치=fg 링 강조(어느 배경에서도 보임). */
+.theme-swatch {
+  width: 1.375rem; height: 1.375rem; border-radius: 9999px;
+  border: 1px solid rgb(0 0 0 / 0.18);
+  cursor: pointer; padding: 0; flex: none;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.theme-swatch:hover { transform: scale(1.12); }
+.theme-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px rgb(var(--color-bg)), 0 0 0 3px rgb(var(--color-fg)); }
+.theme-swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(var(--color-bg)), 0 0 0 3px rgb(var(--color-primary)); }
+.theme-swatch-original { background: #C8795B; } /* 클레이 */
+.theme-swatch-apple { background: #007AFF; }    /* iOS 블루 */
+.theme-swatch-material { background: #6750A4; } /* M3 보라 */
+.theme-swatch-linear { background: #5E6AD2; }   /* Linear indigo */

@@ -274,15 +274,15 @@ function layout({ title, user, current = "", body, wide = false }) {
           </select>
         </form>`
           : ""}
-        <!-- 테마 선택 드롭다운(2026-07-17): 팔레트 4종. 값은 client(localStorage)라 서버는 original 렌더 후 app.js가 실제값으로 동기화. -->
+        <!-- 테마 선택: 특징색 스와치 아이콘(2026-07-17 사용자 요청 — 드롭다운 대신 색 아이콘 클릭 선택). 값은 client(localStorage)라 app.js가 활성 표시 동기화. 색은 CSS 클래스(CSP: 인라인 style 금지). -->
         <div class="mb-2 px-2">
-          <label class="mb-1 block text-[11px] text-muted" for="theme-select">테마 <span class="opacity-70">· 시각 스타일</span></label>
-          <select id="theme-select" data-theme-select class="input py-1 text-xs">
-            <option value="original">Original</option>
-            <option value="apple">Apple</option>
-            <option value="material">Material</option>
-            <option value="linear">Linear</option>
-          </select>
+          <div class="mb-1 text-[11px] text-muted">테마 <span class="opacity-70">· 시각 스타일</span></div>
+          <div class="flex items-center gap-2" role="group" aria-label="테마 선택">
+            <button type="button" data-theme-swatch="original" aria-label="Original" title="Original" class="theme-swatch theme-swatch-original"></button>
+            <button type="button" data-theme-swatch="apple" aria-label="Apple" title="Apple" class="theme-swatch theme-swatch-apple"></button>
+            <button type="button" data-theme-swatch="material" aria-label="Material" title="Material" class="theme-swatch theme-swatch-material"></button>
+            <button type="button" data-theme-swatch="linear" aria-label="Linear" title="Linear" class="theme-swatch theme-swatch-linear"></button>
+          </div>
         </div>
         <!-- 테마(라이트/다크) 토글: 마크업만(아이콘+라벨). 토글 로직=app.js([data-theme-toggle]), 다크 분기=src.css. CSP-safe(인라인 onclick 없음). -->
         <button type="button" data-theme-toggle aria-label="테마 전환" class="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 font-medium text-muted transition-colors hover:bg-surface hover:text-fg active:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
