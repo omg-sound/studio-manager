@@ -129,9 +129,11 @@ router.get("/", (req, res) => {
   }
   // 청구·프로젝트식 컬럼 표(2026-07-16 사용자 요청 '넓어진 화면에 정보 많이'). 관계자=연락처 표 공용, 나머지=업체/아티스트 표.
   const dash = '<span class="text-muted">—</span>';
+  // 사업자등록증 미업로드 표시 아이콘(경고 삼각형) — 유형 배지 대신 사업자번호 뒤 작은 아이콘(2026-07-16 사용자 요청).
+  const bizLicenseMissingIcon = ` <span title="사업자등록증 미등록" aria-label="사업자등록증 미등록" class="ml-0.5 inline-flex align-middle text-warning"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>`;
   const orgCols = [
     { label: "이름", primary: true },
-    { label: "유형", w: "13rem", hide: "md" },
+    { label: "유형", w: "9rem", hide: "md" },
     { label: group === "company" ? "대표" : "소속", w: "11rem", hide: "sm" },
     { label: "사업자번호", w: "9.5rem", hide: "lg" },
     { label: "전화", w: "9.5rem" },
@@ -140,27 +142,27 @@ router.get("/", (req, res) => {
   const orgRows = displayed.map((c) => {
     const href = `/clients/${c.id}${fromParam}${retParam}`;
     const link = (inner, cls = "") => `<a href="${href}" class="dt-link ${cls}">${inner}</a>`;
-    let badges, mid, name;
+    let badges, mid, name, certMissing = false;
     if (c.is_artist) {
       badges = c.kind === "group" ? `<span class="badge-info">그룹</span>` : `<span class="badge-info">아티스트</span>`;
       const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
       mid = meta || dash; // 소속사 · 소속 그룹
       name = personLabel(c.activity_name || c.name, c.name);
     } else {
-      const roles = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
-      const bizBadge = bizLicenseSet.has(c.id) ? "" : ` <span class="badge-warning">등록증 없음</span>`;
-      badges = roles + bizBadge;
+      badges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
+      certMissing = !bizLicenseSet.has(c.id); // 사업자등록증 미업로드 → 사업자번호 뒤 경고 아이콘(2026-07-16 유형 배지에서 이동)
       const ownerLabel = stripTrailingTitle(c.owner_name); // 대표(말미 호칭 제거)
       mid = ownerLabel
         ? (c.owner_party_id ? `<a href="/contacts/${c.owner_party_id}${fromParam}${retParam}" class="dt-link text-muted">${esc(ownerLabel)}</a>` : `<span class="text-muted">${esc(ownerLabel)}</span>`)
         : dash;
       name = c.name;
     }
+    const bizCell = (c.biz_no ? copyable(c.biz_no) : dash) + (certMissing ? bizLicenseMissingIcon : "");
     return { cells: [
       link(esc(name), "font-medium"),
       badges,
       mid,
-      c.biz_no ? copyable(c.biz_no) : dash,
+      bizCell,
       c.phone ? copyable(c.phone) : dash,
       c.email ? copyable(c.email) : dash,
     ] };
