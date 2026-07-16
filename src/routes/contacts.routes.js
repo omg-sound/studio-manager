@@ -31,7 +31,7 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, personListRow, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo, dateCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, contactTable, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo, dateCombo } = require("../views");
 
 const router = express.Router();
 
@@ -81,10 +81,7 @@ router.get("/", (req, res) => {
   // 목록 상한(2026-07-09 스케일 점검) — 연락처는 계속 누적되므로 기본 100건 + 더 보기(검색은 전체 대상).
   const cap = capList(rows, req.query, (n) => `/contacts?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   const list = rows.length
-    ? listGroup({
-        rows: cap.shown.map((c) => personListRow(c, { returnTo: req.originalUrl })), // 공용 헬퍼 + 복귀 경로(보던 탭·검색 유지)
-
-      }) + cap.more
+    ? contactTable(cap.shown, { returnTo: req.originalUrl }) + cap.more // 청구·프로젝트식 컬럼 표(이름·역할·소속·직함·전화·이메일)
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : tab === "staff"

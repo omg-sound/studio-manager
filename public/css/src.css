@@ -369,6 +369,44 @@
   }
 }
 
+/* ── 범용 정보 표(.dt) — 연락처·클라이언트 목록(넓은 화면에서 칸칸이 많은 정보, 2026-07-16). ──
+   table-layout:fixed(콜그룹 폭)이라 넘치면 셀이 … 로 잘림. 데스크톱=표, <640=카드(라벨줄). */
+.dt { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.dt thead th {
+  text-align: left; font-size: 0.75rem; font-weight: 600;
+  color: rgb(var(--color-muted)); padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgb(var(--color-border));
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dt tbody td {
+  padding: 0.5rem 0.75rem; font-size: 0.875rem; vertical-align: middle;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.6);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dt tbody tr:last-child td { border-bottom: 0; }
+.dt tbody tr:hover { background: rgb(var(--color-primary) / 0.04); }
+.dt .dt-right { text-align: right; }
+.dt-link { color: inherit; text-underline-offset: 3px; }
+.dt-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
+.dt .badge { vertical-align: middle; }
+@media (max-width: 639.98px) {
+  .dt thead { display: none; }
+  .dt, .dt tbody, .dt tr, .dt td { display: block; width: 100%; }
+  .dt tbody tr {
+    border: 1px solid rgb(var(--color-border)); border-radius: 0.5rem;
+    margin-bottom: 0.5rem; padding: 0.25rem 0.75rem; background: rgb(var(--color-surface));
+  }
+  .dt tbody td {
+    border: 0; padding: 0.375rem 0; white-space: normal;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  }
+  .dt tbody td::before { content: attr(data-label); flex: none; color: rgb(var(--color-muted)); font-size: 0.75rem; font-weight: 500; }
+  .dt tbody td.dt-primary { display: block; }
+  .dt tbody td.dt-primary::before { content: none; }
+  .dt tbody td.dt-primary .dt-link { font-weight: 600; font-size: 0.9375rem; }
+  .dt-link { text-align: right; }
+}
+
 @layer utilities {
   /* 금액·시간 세로정렬용 등폭 숫자(소비 레인이 금액·시간 셀에 적용). */
   .tabular {

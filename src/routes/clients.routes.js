@@ -22,7 +22,7 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, personListRow, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, contactTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 const { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
 
@@ -127,47 +127,48 @@ router.get("/", (req, res) => {
   if (companyIds.length) {
     for (const r of db().prepare(`SELECT DISTINCT client_id FROM client_files WHERE kind = 'biz_license' AND client_id IN (${companyIds.map(() => "?").join(",")})`).all(...companyIds)) bizLicenseSet.add(r.client_id);
   }
+  // 청구·프로젝트식 컬럼 표(2026-07-16 사용자 요청 '넓어진 화면에 정보 많이'). 관계자=연락처 표 공용, 나머지=업체/아티스트 표.
+  const dash = '<span class="text-muted">—</span>';
+  const orgCols = [
+    { label: "이름", primary: true },
+    { label: "유형", w: "13rem", hide: "md" },
+    { label: group === "company" ? "대표" : "소속", w: "11rem", hide: "sm" },
+    { label: "사업자번호", w: "9.5rem", hide: "lg" },
+    { label: "전화", w: "9.5rem" },
+    { label: "이메일", w: "13rem", hide: "sm" },
+  ];
+  const orgRows = displayed.map((c) => {
+    const href = `/clients/${c.id}${fromParam}${retParam}`;
+    const link = (inner, cls = "") => `<a href="${href}" class="dt-link ${cls}">${inner}</a>`;
+    let badges, mid, name;
+    if (c.is_artist) {
+      badges = c.kind === "group" ? `<span class="badge-info">그룹</span>` : `<span class="badge-info">아티스트</span>`;
+      const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
+      mid = meta || dash; // 소속사 · 소속 그룹
+      name = personLabel(c.activity_name || c.name, c.name);
+    } else {
+      const roles = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
+      const bizBadge = bizLicenseSet.has(c.id) ? "" : ` <span class="badge-warning">등록증 없음</span>`;
+      badges = roles + bizBadge;
+      const ownerLabel = stripTrailingTitle(c.owner_name); // 대표(말미 호칭 제거)
+      mid = ownerLabel
+        ? (c.owner_party_id ? `<a href="/contacts/${c.owner_party_id}${fromParam}${retParam}" class="dt-link text-muted">${esc(ownerLabel)}</a>` : `<span class="text-muted">${esc(ownerLabel)}</span>`)
+        : dash;
+      name = c.name;
+    }
+    return { cells: [
+      link(esc(name), "font-medium"),
+      badges,
+      mid,
+      c.biz_no ? copyable(c.biz_no) : dash,
+      c.phone ? copyable(c.phone) : dash,
+      c.email ? copyable(c.email) : dash,
+    ] };
+  });
   const list = displayed.length
-    ? listGroup({
-        filterList: true, // 검색 입력(liveFilter) 타이핑 시 이 목록 행을 실시간 필터
-        rows: displayed.map((c) => {
-          // 우측 정보(사업자·전화·이메일)는 이름만 링크(listRowLinked)로 분리 → 드래그·복사해도 상세로 안 들어감.
-          if (group === "associate") {
-            // 관계자(사람·비아티스트) = 연락처와 동일 대상 → 연락처 목록과 공용 헬퍼(from 복귀 쿼리만 추가).
-            return personListRow(c, { fromParam, returnTo: req.originalUrl });
-          }
-          if (c.is_artist) {
-            // 아티스트(개인) / 그룹(밴드·아이돌) — 배지로 구분. 이름 뒤에 소속사·소속 그룹, 오른쪽에 전화→이메일.
-            const badges = c.kind === "group" ? `<span class="badge-info">그룹</span>` : `<span class="badge-info">아티스트</span>`;
-            const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
-            const title = `${esc(personLabel(c.activity_name || c.name, c.name))}${meta ? ` <span class="text-xs font-normal text-muted">· ${meta}</span>` : ""}`;
-            const right = `<div class="text-sm text-muted space-y-0.5">${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}<div>${c.email ? copyable(c.email) : "이메일 없음"}</div></div>`;
-            return listRowLinked({ href: `/clients/${c.id}${fromParam}${retParam}`, title, badges, right });
-          }
-          // 업체(company): 회사명(→상세)·대표(→대표 연락처)를 각각 링크로 분리(밑줄도 각각). 등록증 여부 배지 + 오른쪽 사업자→전화→이메일.
-          const roleBadges = clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge-neutral">업체</span>`;
-          const bizBadge = bizLicenseSet.has(c.id) ? "" : `<span class="badge-warning">등록증 없음</span>`; // 없을 때만 표기(앰버로 눈에 띄게)
-          const ownerLabel = stripTrailingTitle(c.owner_name); // '대표' 접두가 이미 있으니 말미 호칭 제거("최인구 대표님"→"최인구")
-          const ownerHtml = ownerLabel
-            ? (c.owner_party_id
-                ? ` <span class="text-xs font-normal text-muted">· </span><a href="/contacts/${c.owner_party_id}${fromParam}${retParam}" class="text-xs font-normal text-muted hover:text-primary hover:underline">대표 ${esc(ownerLabel)}</a>` // '·'은 링크 밖
-                : ` <span class="text-xs font-normal text-muted">· 대표 ${esc(ownerLabel)}</span>`)
-            : "";
-          const nameHtml = `<a href="/clients/${c.id}${fromParam}${retParam}" class="rounded font-semibold text-fg hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${esc(c.name)}</a>${ownerHtml}`;
-          const right = `<div class="text-sm text-muted space-y-0.5">
-            ${c.biz_no ? `<div>사업자 ${copyable(c.biz_no)}</div>` : ""}
-            ${c.phone ? `<div>${copyable(c.phone)}</div>` : ""}
-            <div>${c.email ? copyable(c.email) : "이메일 없음"}</div>
-          </div>`;
-          return `<div class="flex items-start justify-between gap-4 px-4 py-3">
-            <div class="min-w-0">
-              <div class="truncate">${nameHtml}</div>
-              <div class="mt-1 flex flex-wrap gap-1">${roleBadges} ${bizBadge}</div>
-            </div>
-            <div class="shrink-0 text-right">${right}</div>
-          </div>`;
-        }),
-      }) + capped.more
+    ? (group === "associate"
+        ? contactTable(displayed, { fromParam, returnTo: req.originalUrl, filterList: true })
+        : dataTable(orgCols, orgRows, { filterList: true })) + capped.more
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "group" ? "그룹이 없습니다." : group === "associate" ? "관계자가 없습니다." : group === "company" ? "업체가 없습니다." : "클라이언트가 없습니다.", {

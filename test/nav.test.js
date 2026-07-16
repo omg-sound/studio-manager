@@ -70,7 +70,7 @@ test("전 목록: 상세 백링크가 return(safePath)으로 복귀 — 청구·
 test("전 목록: 행 링크가 현재 목록 주소를 return으로 넘긴다", () => {
   assert.match(R("invoices.routes.js"), /invoiceTable\(shown, \{ isInvoicer: invoicer, ret \}\)/, "invoices: 행(넓은 표)에 목록 주소(ret) 전달");
   assert.match(R("projects.routes.js"), /listQuery/, "projects: 행에 listQuery 전달");
-  assert.match(R("contacts.routes.js"), /personListRow\(c, \{ returnTo: req\.originalUrl \}\)/, "contacts: 행에 returnTo");
+  assert.match(R("contacts.routes.js"), /contactTable\(cap\.shown, \{ returnTo: req\.originalUrl \}\)/, "contacts: 표에 returnTo");
   assert.match(R("clients.routes.js"), /return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "clients: 행에 return");
   assert.match(R("workers.routes.js"), /\/workers\/\$\{w\.id\}\?return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "workers: 행에 return");
 });
