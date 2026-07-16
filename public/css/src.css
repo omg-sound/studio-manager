@@ -317,9 +317,17 @@
 .inv-cell-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
 .inv-cell-payer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-table td.inv-amt, .inv-table th.inv-amt-col { text-align: right; white-space: nowrap; }
-/* 식별자·날짜·상태는 줄바꿈 금지(짧은데 좁은 열로 찌부되며 3줄로 접히던 것 방지, 2026-07-16).
-   이름류(클라이언트·아티스트·프로젝트)만 유연하게 접힌다. */
+/* 식별자·날짜·상태는 줄바꿈 금지(짧은데 좁은 열로 찌부되며 3줄로 접히던 것 방지, 2026-07-16). */
 .inv-table .inv-c-num, .inv-table .inv-c-issued, .inv-table .inv-c-status { white-space: nowrap; }
+/* 이름 열(클라이언트·아티스트·프로젝트)은 max-width 상한 + … 로 잘라 한 줄 유지(2026-07-16 사용자 리포트):
+   긴 상호 하나('투엔드 플로어 레코드 (2nd Floor Record)')가 열을 넓혀 이웃(아티스트·프로젝트)을 찌부·2~3줄로
+   접던 것 방지. width:100% auto 테이블이라 공간이 빠듯하면 max-width 아래로도 줄어들며 잘린다. */
+.inv-table td.inv-c-client .inv-cell-link,
+.inv-table td.inv-c-artist .inv-cell-link,
+.inv-table td.inv-c-project .inv-cell-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-table td.inv-c-client .inv-cell-link { max-width: 16rem; }
+.inv-table td.inv-c-artist .inv-cell-link { max-width: 9rem; }
+.inv-table td.inv-c-project .inv-cell-link { max-width: 14rem; }
 .inv-table .inv-check { width: 2.5rem; }
 .inv-table .inv-act-col { width: 1%; white-space: nowrap; }
 /* 처리 열 = 아이콘 정사각 토글(라벨 길이 무관·열 폭 고정). 의미는 hover 툴팁·aria-label. */
@@ -341,7 +349,7 @@
   .inv-table, .inv-table tbody { display: block; }
   .inv-table tbody tr {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr);
     grid-template-areas:
       "check num    client"
       "check status amount"
@@ -362,8 +370,8 @@
   .inv-table .inv-c-num { grid-area: num; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
   .inv-table .inv-c-status { grid-area: status; }
   .inv-table .inv-c-issued { grid-area: issued; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
-  .inv-table .inv-c-client { grid-area: client; text-align: right; }
-  .inv-table .inv-c-client .inv-cell-link { font-weight: 600; }
+  .inv-table .inv-c-client { grid-area: client; text-align: right; min-width: 0; }
+  .inv-table .inv-c-client .inv-cell-link { font-weight: 600; max-width: none; } /* 폭은 그리드 열(1.2fr)이 제어, … 로 잘림 */
   .inv-table .inv-c-amt { grid-area: amount; text-align: right; font-size: 1rem; }
   .inv-table .inv-act-col { display: none; } /* 모바일: 행별 처리 대신 하단 일괄 바 */
   .inv-table .inv-c-artist, .inv-table .inv-c-project { display: none; }
