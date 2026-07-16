@@ -511,6 +511,12 @@ function init() {
     d.exec("UPDATE parties SET activity_form = CASE WHEN group_id IS NOT NULL THEN 'group' ELSE 'solo' END WHERE is_artist = 1 AND kind = 'person' AND activity_form IS NULL");
     setState("artist_activity_form_v1", "done");
   }
+  // 그룹 activity_name 동기화(2026-07-16) — 그룹은 그룹명=단일 정체성인데 수정 시 activity_name이 옛값으로 남아
+  // 목록·상세가 '옛이름 (새이름)'으로 표시되던 것 교정. name과 다른 그룹만(멱등). 이후 divergence는 라우트가 막음.
+  if (!getState("group_activity_name_sync_v1")) {
+    d.exec("UPDATE parties SET activity_name = name WHERE kind = 'group' AND (activity_name IS NULL OR activity_name <> name)");
+    setState("group_activity_name_sync_v1", "done");
+  }
   // 카카오 알림 폐기(2026-07-14 사용자 결정 — '나와의 채팅'은 푸시 인지가 약해 이메일 알림으로 전환).
   // admin_state에 남은 카카오 토큰·상태 키를 1회 삭제(암호화 토큰 잔재 제거). 멱등.
   if (!getState("kakao_state_drop_v1")) {

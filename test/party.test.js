@@ -629,3 +629,17 @@ test("활동 형태: createPerson/updateParty가 activity_form을 저장·부분
   const cid = D.createPerson({ name: "관계자김", job_title: "실장" });
   assert.equal(D.getParty(cid).activity_form, null, "활동 형태 미전송 관계자는 null");
 });
+
+// ── 그룹 정체성: 그룹명 수정 시 activity_name 동기화(2026-07-16 사용자 리포트 '옛이름 (새이름)'으로 표시됨) ──
+test("그룹명 수정 → activity_name 동기화(표시가 '옛이름 (새이름)' 안 됨)", () => {
+  const { personLabel } = require("../src/views");
+  const id = D.createGroup({ name: "cutthecrap" });
+  assert.equal(D.getParty(id).activity_name, "cutthecrap", "생성 시 activity_name=name");
+  // 라우트 계약: 그룹은 activity_name을 새 name과 동기화해 넘긴다(clients.routes POST /:id).
+  const newName = "컷더크랩(cutthecrap)";
+  D.updateParty(id, { name: newName, activity_name: newName, is_artist: 1 });
+  const g = D.getParty(id);
+  assert.equal(g.name, newName, "그룹명 갱신");
+  assert.equal(g.activity_name, newName, "activity_name도 새 이름으로 동기화");
+  assert.equal(personLabel(g.activity_name || g.name, g.name), newName, "표시=단일 이름(괄호 병기 없음)");
+});
