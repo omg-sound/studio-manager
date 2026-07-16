@@ -331,32 +331,38 @@
 .inv-icon > svg { height: 1rem; width: 1rem; }
 
 @media (max-width: 639.98px) {
-  /* 표 → 카드: thead 숨기고 각 행을 테두리 카드로, 각 셀을 '라벨: 값' 한 줄로. */
+  /* 표 → 2열 카드(bookipi 참고): 왼쪽=청구번호/상태/발행, 오른쪽=클라이언트/금액.
+     아티스트·프로젝트는 숨김. 라벨(::before) 없이 값만. 체크박스=맨 앞·처리=오른쪽 하단. */
   .inv-table thead { display: none; }
-  .inv-table, .inv-table tbody, .inv-table tr, .inv-table td { display: block; width: 100%; }
+  .inv-table, .inv-table tbody { display: block; }
   .inv-table tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check num    client"
+      "check status amount"
+      "check issued actions";
+    align-items: center;
+    column-gap: 0.75rem;
+    row-gap: 0.125rem;
     border: 1px solid rgb(var(--color-border));
     border-radius: 0.5rem;
     margin-bottom: 0.5rem;
-    padding: 0.25rem 0.75rem;
+    padding: 0.75rem;
     background: rgb(var(--color-surface));
   }
-  .inv-table tbody td {
-    border: 0;
-    padding: 0.375rem 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-  .inv-table tbody td::before {
-    content: attr(data-label);
-    flex: none;
-    color: rgb(var(--color-muted));
-    font-size: 0.75rem;
-    font-weight: 500;
-  }
-  .inv-cell-link { display: inline; text-align: right; }
+  .inv-table tbody td { display: block; border: 0; padding: 0; }
+  .inv-table tbody td::before { content: none; } /* 모바일 카드엔 라벨 없음 */
+  .inv-table .inv-check { grid-area: check; width: auto; align-self: center; }
+  .inv-table .inv-c-num { grid-area: num; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
+  .inv-table .inv-c-status { grid-area: status; }
+  .inv-table .inv-c-issued { grid-area: issued; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
+  .inv-table .inv-c-client { grid-area: client; text-align: right; }
+  .inv-table .inv-c-client .inv-cell-link { font-weight: 600; }
+  .inv-table .inv-c-amt { grid-area: amount; text-align: right; font-size: 1rem; }
+  .inv-table .inv-act-col { grid-area: actions; text-align: right; }
+  .inv-table .inv-c-artist, .inv-table .inv-c-project { display: none; }
+  .inv-cell-link { display: block; }
 }
 
 @layer utilities {

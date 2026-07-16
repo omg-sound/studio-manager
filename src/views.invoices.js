@@ -236,12 +236,12 @@ function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
       <tr>
         ${isInvoicer ? `<th class="inv-check"><input type="checkbox" data-inv-select-all aria-label="전체 선택" class="align-middle" /></th>` : ""}
         <th>상태</th>
-        <th class="hidden sm:table-cell">청구번호</th>
+        <th>청구번호</th>
         <th>클라이언트</th>
         <th class="hidden lg:table-cell">아티스트</th>
         <th class="hidden lg:table-cell">프로젝트</th>
         <th class="inv-amt-col">금액</th>
-        <th class="hidden md:table-cell">발행</th>
+        <th>발행</th>
         ${isInvoicer ? `<th class="inv-act-col">처리</th>` : ""}
       </tr>
     </thead>`;
@@ -261,13 +261,13 @@ function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
       return `
       <tr>
         ${check}
-        <td data-label="상태">${cellLink(inv, invoiceBadge(inv))}</td>
-        <td class="hidden sm:table-cell" data-label="청구번호">${cellLink(inv, num ? esc(num) : dash, "tabular text-muted")}</td>
-        <td data-label="클라이언트">${cellLink(inv, payer, "inv-cell-payer font-medium")}</td>
-        <td class="hidden lg:table-cell" data-label="아티스트">${cellLink(inv, artist ? esc(artist) : dash, "text-muted")}</td>
-        <td class="hidden lg:table-cell" data-label="프로젝트">${cellLink(inv, project ? esc(project) : dash, "text-muted")}</td>
-        <td class="inv-amt" data-label="금액">${cellLink(inv, formatKRW(inv.amount), "tabular font-semibold")}</td>
-        <td class="hidden md:table-cell" data-label="발행">${cellLink(inv, issued || dash, "tabular text-muted")}</td>
+        <td class="inv-c-status" data-label="상태">${cellLink(inv, invoiceBadge(inv))}</td>
+        <td class="inv-c-num" data-label="청구번호">${cellLink(inv, num ? esc(num) : dash, "tabular text-muted")}</td>
+        <td class="inv-c-client" data-label="클라이언트">${cellLink(inv, payer, "inv-cell-payer font-medium")}</td>
+        <td class="inv-c-artist hidden lg:table-cell" data-label="아티스트">${cellLink(inv, artist ? esc(artist) : dash, "text-muted")}</td>
+        <td class="inv-c-project hidden lg:table-cell" data-label="프로젝트">${cellLink(inv, project ? esc(project) : dash, "text-muted")}</td>
+        <td class="inv-amt inv-c-amt" data-label="금액">${cellLink(inv, formatKRW(inv.amount), "tabular font-semibold")}</td>
+        <td class="inv-c-issued" data-label="발행">${cellLink(inv, issued || dash, "tabular text-muted")}</td>
         ${act}
       </tr>`;
     })
