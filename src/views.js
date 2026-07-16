@@ -580,7 +580,8 @@ function dataTable(cols, rows, { filterList = false } = {}) {
     return `<td${k ? ` class="${k}"` : ""} data-label="${esc(c.label || "")}">${cell}</td>`;
   }).join("")}</tr>`).join("");
   const empty = filterList ? `<div data-filter-empty hidden class="px-4 py-6 text-center text-sm text-muted">검색 결과가 없습니다.</div>` : "";
-  return `<div class="sm:overflow-hidden sm:rounded-lg sm:border sm:border-border/50 sm:bg-surface"><table class="dt${mCard ? " dt-mcard" : ""}">${cg}${thead}<tbody${filterList ? " data-filter-list" : ""}>${body}</tbody></table>${empty}</div>`;
+  // 흰 바탕(surface 판)은 **전 폭 공통**(2026-07-16 사용자 요청 — 이전 `sm:` 한정자는 <640에서 흰 바탕이 사라져 크림 배경에 구분선만 남아 불일치).
+  return `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface"><table class="dt${mCard ? " dt-mcard" : ""}">${cg}${thead}<tbody${filterList ? " data-filter-list" : ""}>${body}</tbody></table>${empty}</div>`;
 }
 
 /** 연락처(사람) 표 — 이름·역할·소속·직함·전화·이메일. /contacts 목록 + 클라이언트 '관계자' 탭 공용. */
