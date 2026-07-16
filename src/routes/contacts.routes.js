@@ -93,7 +93,7 @@ router.get("/", (req, res) => {
 
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "연락처", desc: "레이블/제작사 직원 · 프리 매니저 · 아티스트 지인 등 사람 마스터(소속 이력 포함).", action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
+    ${pageHeader({ title: "연락처", action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
     ${tabs}
     ${searchBar}
     ${resultNote}
