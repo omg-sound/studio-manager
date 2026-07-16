@@ -386,6 +386,8 @@
 .dt tbody tr:last-child td { border-bottom: 0; }
 .dt tbody tr:hover { background: rgb(var(--color-primary) / 0.04); }
 .dt .dt-right { text-align: right; }
+/* 줄바꿈 허용 열(역할 배지 등) — …로 안 자르고 여러 배지를 다음 줄로 흘림. */
+.dt tbody td.dt-wrap { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.8; }
 .dt-link { color: inherit; text-underline-offset: 3px; }
 .dt-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
 .dt .badge { vertical-align: middle; }
