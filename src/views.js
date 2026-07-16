@@ -590,13 +590,14 @@ function contactTable(rows, { returnTo = "", fromParam = "", filterList = false,
   const retQ = returnTo ? `${fromParam ? "&" : "?"}return=${encodeURIComponent(returnTo)}` : "";
   const dash = '<span class="text-muted">—</span>';
   // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). 식별 열 **이름·이메일=유동**(남는 폭을 나눠 채움·한 열 여백 몰림 방지, 청구 표처럼). 역할·소속·직함·전화=고정.
+  // 모바일 카드(<640)=2열 그리드(mCard, 라벨 없이 값만): 이름(좌상)·전화(우상) / 소속(좌하)·이메일(우하), 역할·직함 숨김(2026-07-16 사용자 요청 '너무 많이 보여준다').
   const cols = [
-    { label: "이름", primary: true },
-    { label: "역할", w: "w-[12rem]", hide: "md", wrap: true }, // 배지 여러 개는 …로 안 줄이고 줄바꿈으로 전부 표시(2026-07-16 사용자 요청)
-    { label: "소속", w: "w-[11rem]", hide: "sm" },
-    ...(hideTitle ? [] : [{ label: "직함", w: "w-[7rem]", hide: "lg" }]),
-    { label: "전화", w: "w-[9.5rem]" },
-    { label: "이메일", hide: "sm" },
+    { label: "이름", primary: true, mCard: "tl" },
+    { label: "역할", w: "w-[12rem]", hide: "md", wrap: true, mobileHide: true }, // 배지 여러 개는 …로 안 줄이고 줄바꿈으로 전부 표시(데스크톱). 모바일 카드에선 숨김.
+    { label: "소속", w: "w-[11rem]", hide: "sm", mCard: "bl" },
+    ...(hideTitle ? [] : [{ label: "직함", w: "w-[7rem]", hide: "lg", mobileHide: true }]),
+    { label: "전화", w: "w-[9.5rem]", mCard: "tr" },
+    { label: "이메일", hide: "sm", mCard: "br" },
   ];
   const trows = rows.map((c) => {
     const cur = currentAffiliation(c.id);
