@@ -294,7 +294,14 @@
 /* ── 청구 목록 = 데스크톱 넓은 표(2026-07-16 사용자 요청, bookipi 참고) ──
    ≥640px = 진짜 표(컬럼 정렬), <640px = 각 행을 카드로 접음(td[data-label]→::before 라벨).
    행(데이터 셀)을 누르면 상세로 이동(.inv-cell-link). 체크박스·처리 열은 링크 아님. */
-.inv-table { width: 100%; border-collapse: collapse; }
+/* table-layout: fixed = 표를 컨테이너 폭(width:100%)에 정확히 맞춰 열이 절대 밖으로 안 넘침(처리 열 잘림 원천 차단).
+   고정 열(체크·상태·번호·금액·발행·처리)은 rem 폭 지정, 이름 열(클라이언트·아티스트·프로젝트)은 나머지 균등 분할·… 로 잘림.
+   (이전 auto 레이아웃은 셀 min-content가 컨테이너를 넘겨도 안 줄어들어 오른쪽이 클립됐다.) */
+.inv-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.inv-table th.inv-w-status { width: 4rem; }
+.inv-table th.inv-w-num { width: 7.5rem; }
+.inv-table th.inv-w-issued { width: 5rem; }
+.inv-table th.inv-amt-col { width: 7.5rem; }
 .inv-table thead th {
   text-align: left;
   font-size: 0.75rem;
@@ -320,18 +327,15 @@
 /* 식별자·날짜·상태는 줄바꿈 금지(짧은데 좁은 열로 찌부되며 3줄로 접히던 것 방지, 2026-07-16). */
 .inv-table .inv-c-num, .inv-table .inv-c-issued, .inv-table .inv-c-status { white-space: nowrap; }
 .inv-table .inv-c-num { font-size: 0.75rem; } /* 청구번호 작게(2026-07-16 사용자 요청·열 폭 절약) */
-/* 이름 열(클라이언트·아티스트·프로젝트)은 max-width 상한 + … 로 잘라 한 줄 유지(2026-07-16 사용자 리포트):
-   긴 상호 하나('투엔드 플로어 레코드 (2nd Floor Record)')가 열을 넓혀 이웃을 찌부·금액/발행을 오른쪽 밖으로
-   밀어내던 것 방지. 상한은 '투엔드 플로어 레코드'는 보이고 그보다 길면 …(width:100% auto 테이블이라
-   공간 빠듯하면 상한 아래로도 줄며 잘린다 → 어떤 긴 이름도 금액/발행 열을 안 밀어냄). */
+/* 이름 열(클라이언트·아티스트·프로젝트)은 table-layout:fixed가 폭을 정해주므로 넘치면 … 로 자른다(2026-07-16):
+   고정 열을 뺀 나머지 폭을 균등 분할 → 긴 상호도 열 폭 안에서 잘려 금액/발행/처리를 오른쪽 밖으로 안 밀어냄.
+   창이 넓을수록 이름 열이 넓어져 잘림이 덜하다(max-w-wide 상향과 함께). */
+.inv-table td.inv-c-client, .inv-table td.inv-c-artist, .inv-table td.inv-c-project { overflow: hidden; }
 .inv-table td.inv-c-client .inv-cell-link,
 .inv-table td.inv-c-artist .inv-cell-link,
-.inv-table td.inv-c-project .inv-cell-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.inv-table td.inv-c-client .inv-cell-link { max-width: 11rem; }
-.inv-table td.inv-c-artist .inv-cell-link { max-width: 7rem; }
-.inv-table td.inv-c-project .inv-cell-link { max-width: 11rem; }
+.inv-table td.inv-c-project .inv-cell-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .inv-table .inv-check { width: 2.5rem; }
-.inv-table .inv-act-col { width: 1%; white-space: nowrap; }
+.inv-table .inv-act-col { width: 6rem; }
 /* 처리 열 = 아이콘 정사각 토글(라벨 길이 무관·열 폭 고정). 의미는 hover 툴팁·aria-label. */
 .inv-actions { display: inline-flex; align-items: center; gap: 0.25rem; }
 .inv-actions form > button {

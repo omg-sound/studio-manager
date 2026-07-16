@@ -245,13 +245,13 @@ function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
     <thead>
       <tr>
         ${isInvoicer ? `<th class="inv-check"><input type="checkbox" data-inv-select-all aria-label="전체 선택" class="align-middle" /></th>` : ""}
-        <th>상태</th>
-        <th>청구번호</th>
+        <th class="inv-w-status">상태</th>
+        <th class="inv-w-num">청구번호</th>
         <th>클라이언트</th>
         <th class="hidden xl:table-cell">아티스트</th>
         <th class="hidden xl:table-cell">프로젝트</th>
         <th class="inv-amt-col">금액</th>
-        <th>발행</th>
+        <th class="inv-w-issued">발행</th>
         ${isInvoicer ? `<th class="inv-act-col">처리</th>` : ""}
       </tr>
     </thead>`;
