@@ -133,8 +133,9 @@ router.get("/", (req, res) => {
   const bizLicenseMissingIcon = ` <span title="사업자등록증 미등록" aria-label="사업자등록증 미등록" class="ml-0.5 inline-flex align-middle text-warning"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>`;
   // 열 폭·숨김 우선순위(2026-07-16 사용자 요청): 이메일=유동 폭(고정 폭 잘림 해소) / 좁아지면 유형·전화 먼저 숨김(xl 미만)·대표·사업자·이메일은 유지 / 모바일 카드=이름·대표·사업자번호만(유형·전화·이메일 숨김).
   // 모바일 카드(<640)=2열 그리드: 업체명(좌상)·대표(우상) / 사업자번호(좌하)·세금계산서 이메일(우하), 유형·전화 숨김(2026-07-16 사용자 요청).
+  // 폭 배분(청구 표처럼): 식별 열 **이름·이메일=유동**(w 미지정 → 남는 폭을 나눠 채움, 한 열에 여백 몰림 방지). 유형·대표·사업자·전화=고정 rem.
   const orgCols = [
-    { label: "이름", primary: true, w: "w-[16rem]", mCard: "tl" },
+    { label: "이름", primary: true, mCard: "tl" },
     { label: "유형", w: "w-[9rem]", hide: "xl", mobileHide: true },
     { label: group === "company" ? "대표" : "소속", w: "w-[11rem]", hide: "sm", mCard: "tr" },
     { label: "사업자번호", w: "w-[9.5rem]", hide: "sm", mCard: "bl" },

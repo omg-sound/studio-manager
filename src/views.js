@@ -589,9 +589,9 @@ function contactTable(rows, { returnTo = "", fromParam = "", filterList = false 
   const { currentAffiliation, classifyParty } = require("./data"); // 지연 require(순환 회피)
   const retQ = returnTo ? `${fromParam ? "&" : "?"}return=${encodeURIComponent(returnTo)}` : "";
   const dash = '<span class="text-muted">—</span>';
-  // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). 이메일=유동 폭(남은 공간 흡수·잘림 방지).
+  // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). 식별 열 **이름·이메일=유동**(남는 폭을 나눠 채움·한 열 여백 몰림 방지, 청구 표처럼). 역할·소속·직함·전화=고정.
   const cols = [
-    { label: "이름", primary: true, w: "w-[14rem]" },
+    { label: "이름", primary: true },
     { label: "역할", w: "w-[10rem]", hide: "md" },
     { label: "소속", w: "w-[11rem]", hide: "sm" },
     { label: "직함", w: "w-[7rem]", hide: "lg" },
