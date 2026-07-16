@@ -176,7 +176,7 @@ router.get("/", (req, res) => {
     orgCols = [
       { label: "이름", primary: true, mCard: "tl" },
       { label: "대표", w: "w-[11rem]", hide: "sm", mCard: "tr" },
-      { label: "사업자번호", w: "w-[9.5rem]", hide: "sm", mCard: "bl" },
+      { label: "사업자번호", w: "w-[11.5rem]", hide: "sm", mCard: "bl", nowrap: true }, // 번호+복사·경고 아이콘이 다 들어가게 넓힘 + …로 안 자름(2026-07-16 사용자 요청)
       { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
       { label: "이메일", hide: "sm", mCard: "br" },
     ];

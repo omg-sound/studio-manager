@@ -583,7 +583,7 @@ function dataTable(cols, rows, { filterList = false } = {}) {
   // (col이 폭만 남기고 셀만 숨으면 남은 열이 밀리고 유동 열이 남은 폭을 못 받아 오른쪽에 빈 공간이 생김.)
   const colHideCls = { sm: "hidden sm:table-column", md: "hidden md:table-column", lg: "hidden lg:table-column", xl: "hidden xl:table-column" };
   // mobileHide=<640 카드에서 그 셀 숨김(요약만). mCard='tl'|'tr'|'bl'|'br'=<640 카드를 2열 그리드로 배치(좌상/우상/좌하/우하 — 슬롯 지정 시 라벨 없이 값만, dt-mcard).
-  const cellCls = (c, extra) => [c.hide ? hideCls[c.hide] : "", c.right ? "dt-right" : "", c.mobileHide ? "dt-m-hide" : "", c.mCard ? `dt-m-${c.mCard}` : "", c.wrap ? "dt-wrap" : "", extra].filter(Boolean).join(" ");
+  const cellCls = (c, extra) => [c.hide ? hideCls[c.hide] : "", c.right ? "dt-right" : "", c.mobileHide ? "dt-m-hide" : "", c.mCard ? `dt-m-${c.mCard}` : "", c.wrap ? "dt-wrap" : "", c.nowrap ? "dt-nowrap" : "", extra].filter(Boolean).join(" ");
   const mCard = cols.some((c) => c.mCard); // 하나라도 슬롯을 지정하면 카드=2열 그리드 모드
   // 열 폭은 **CSS 클래스**로(인라인 style은 CSP style-src에 막혀 무시됨 → 6열 균등 분배 버그). c.w=Tailwind 폭 클래스명(예 "w-[16rem]"), 콜러가 리터럴로 넘겨 Tailwind가 스캔·생성. 미지정=유동(남은 폭 흡수). hide면 col도 함께 숨겨(display:none) 폭 예약 제거.
   const cg = `<colgroup>${cols.map((c) => { const cc = [c.w || "", c.hide ? colHideCls[c.hide] : ""].filter(Boolean).join(" "); return `<col${cc ? ` class="${cc}"` : ""} />`; }).join("")}</colgroup>`;

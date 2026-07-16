@@ -404,6 +404,8 @@
 .dt .dt-right { text-align: right; }
 /* 줄바꿈 허용 열(역할 배지 등) — …로 안 자르고 여러 배지를 다음 줄로 흘림. */
 .dt tbody td.dt-wrap { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.8; }
+/* 한 줄 유지하되 …로 자르지 않음(사업자번호 등 고정 포맷 — 잘리면 안 됨). 열 폭을 넉넉히 준 전제. */
+.dt tbody td.dt-nowrap { white-space: nowrap; overflow: visible; text-overflow: clip; }
 .dt-link { color: inherit; text-underline-offset: 3px; }
 .dt-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
 .dt .badge { vertical-align: middle; }
