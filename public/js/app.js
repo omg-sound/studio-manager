@@ -148,32 +148,7 @@
   syncThemeLabel(document.documentElement.getAttribute("data-theme")); // 초기 로드 시 현재값 기준 1회 동기화
 })();
 
-// 프로젝트 목록 밀도 토글([data-density-toggle]): 좁게(기본)↔넓게 + localStorage["density"] 저장.
-// CSS 분기는 :root[data-density="comfy"](src.css) — 기본(좁게)은 속성 없음이라 깜빡임 없음. 테마 토글과 동일 구조.
-(function () {
-  "use strict";
-  var saved = "";
-  try { saved = localStorage.getItem("density") || ""; } catch (e) {}
-  if (saved === "comfy") document.documentElement.setAttribute("data-density", saved);
-  // 라벨은 '누르면 갈 방향': 현재 넓게면 "좁게", 아니면 "넓게".
-  function syncLabel(mode) {
-    var text = mode === "comfy" ? "좁게" : "넓게";
-    Array.prototype.forEach.call(document.querySelectorAll("[data-density-label]"), function (el) {
-      el.textContent = text;
-    });
-  }
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest && e.target.closest("[data-density-toggle]");
-    if (!btn) return;
-    e.preventDefault();
-    var next = document.documentElement.getAttribute("data-density") === "comfy" ? "compact" : "comfy";
-    if (next === "comfy") document.documentElement.setAttribute("data-density", "comfy");
-    else document.documentElement.removeAttribute("data-density");
-    try { localStorage.setItem("density", next); } catch (e) {}
-    syncLabel(next);
-  });
-  syncLabel(document.documentElement.getAttribute("data-density"));
-})();
+// (프로젝트 목록 밀도 토글 폐지 2026-07-16 — 목록이 청구식 컬럼 표로 통일되며 좁게/넓게 개념 제거.)
 
 // 청구 목록 일괄 선택 + 일괄 처리(2026-07-16): 행 체크박스([data-inv-select])·전체선택([data-inv-select-all])
 // → 바([data-inv-bulk-bar])에 선택 개수 표시, 선택 행 id를 hidden ids에 모아 제출(계산서 발행/입금완료).

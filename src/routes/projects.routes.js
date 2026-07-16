@@ -65,6 +65,7 @@ const { sessionsSection } = require("../views.sessions");
 const {
   newProjectMenu,
   projectListRow,
+  projectTableHead,
   projectForm,
   projectMetaCard,
   projectMetaReadonly,
@@ -223,12 +224,8 @@ router.get("/", requireAuth, (req, res) => {
   const minePill = mineAvailable
     ? `<a href="/projects?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}${mine ? "" : "&mine=1"}" class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm ${mine ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted hover:text-fg"}">${mine ? "✓ " : ""}내 프로젝트만</a>`
     : "";
-  // 밀도 토글(좁게/넓게) — 저장은 localStorage(기기별), CSS 전환이라 서버 왕복 없음(app.js [data-density-toggle]).
-  const densityPill = `<button type="button" data-density-toggle class="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm text-muted hover:text-fg">
-      <svg class="h-3.5 w-3.5" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12" /></svg>
-      <span data-density-label>넓게</span>
-    </button>`;
-  const mineToggle = `<div class="mb-3 flex items-center gap-2">${minePill}<span class="ml-auto">${densityPill}</span></div>`;
+  // (밀도 토글 폐지 2026-07-16 — 목록이 청구식 컬럼 표로 통일되면서 좁게/넓게 개념 제거.)
+  const mineToggle = minePill ? `<div class="mb-3 flex items-center gap-2">${minePill}</div>` : "";
   let list;
   if (!rows.length) {
     list = searched
@@ -252,7 +249,7 @@ router.get("/", requireAuth, (req, res) => {
     const limitQ = Number(req.query.limit) > 0 ? `&limit=${Number(req.query.limit)}` : "";
     const openQ = openId ? `&open=${openId}` : "";
     const listQuery = `/projects?tab=${tab}${keepQ}${limitQ}${openQ}`;
-    list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine, listQuery })).join("")}</div>${cap.more}`;
+    list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${projectTableHead()}${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine, listQuery })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";

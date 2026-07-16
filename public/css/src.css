@@ -183,112 +183,56 @@
   }
 }
 
-/* ── 프로젝트 목록 밀도(2026-07-14 지메일식 재설계) ──────────────────────────
-   DOM은 한 벌(서버 렌더 1종)이고 밀도는 CSS로만 전환한다.
-   기본 = 좁게(한 줄: 아티스트 / 제작사·프로젝트명 / 탭별 우측값 / ⌄).
-   넓게 = :root[data-density="comfy"] 오버라이드(아티스트·부제 2줄 + 작성일·PM + 카운트 요약).
-   기본값엔 속성이 없으므로 FOUC 없음(테마 토글과 동일 패턴 — app.js가 localStorage 값 복원). */
-.proj-row {
-  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
-}
-.proj-summary {
-  display: flex;
+/* ── 프로젝트 목록 = 청구 표식 컬럼 테이블(2026-07-16 사용자 요청 '청구처럼 항목명·칸칸이·작성일') ──
+   헤더(.proj-thead)와 각 행 summary(.proj-summary)가 같은 grid 열이라 칸이 정렬된다.
+   행은 <details>라 클릭하면 그 자리에서 세션·곡 요약이 펼쳐진다(아티스트·제작사·프로젝트 셀만 상세 링크). */
+.proj-thead, .proj-summary {
+  display: grid;
+  grid-template-columns: 8rem 9rem minmax(0, 1fr) 7rem 10rem 8rem 6rem 1.25rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
+}
+.proj-thead {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgb(var(--color-muted));
+  border-bottom: 1px solid rgb(var(--color-border));
+}
+.proj-row { border-bottom: 1px solid rgb(var(--color-border) / 0.6); }
+.proj-summary {
   cursor: pointer;
   list-style: none;
+  font-size: 0.875rem;
 }
 .proj-summary::-webkit-details-marker { display: none; }
-/* 링크(<a>)는 **텍스트 폭만** 차지한다 — flex:1로 늘리면 행 여백까지 링크가 먹어
-   '행 클릭=펼침 / 제목 클릭=상세' 규약이 깨진다(실브라우저에서 확인). 남는 공간은 summary(=펼침).
-   어포던스 분리(2026-07-14 사용자 요청 — '상세보기'와 '펼침'을 구분해서 보이게):
-     · 제목에 hover → **밑줄 + 브랜드색**(= 여기는 상세로 이동. 앱 관례: 밑줄은 링크 전용)
-     · 제목 밖 행에 hover → **행 배경 하이라이트 + ⌄ 진해짐**(= 여기는 펼침)
-   두 신호가 서로 다른 위치에서 뜨므로 같은 행 안에서도 동작이 구분된다. */
-.proj-main {
-  display: flex;
-  min-width: 0;
-  flex: 0 1 auto;
-  align-items: baseline;
-  gap: 0.75rem;
-  text-underline-offset: 3px;
-}
-.proj-main:hover {
-  color: rgb(var(--color-primary));
-  text-decoration: underline;
-}
-.proj-main:hover .proj-sub {
-  color: rgb(var(--color-primary));
-}
-.proj-summary:hover .proj-chevron {
-  color: rgb(var(--color-fg));
-}
-.proj-artist {
-  flex: none;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.proj-sub {
-  min-width: 0;
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.875rem;
-  color: rgb(var(--color-muted));
-}
-.proj-meta {
-  display: flex;
-  flex: none;
-  margin-left: auto; /* 링크가 텍스트 폭만 차지하므로 우측값은 auto 마진으로 끝에 붙인다(사이 여백=펼침 영역) */
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
+.proj-summary:hover { background: rgb(var(--color-primary) / 0.04); }
+.proj-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-link { color: inherit; text-underline-offset: 3px; }
+.proj-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
 .proj-chevron {
-  height: 0.875rem;
-  width: 0.875rem;
-  flex: none;
+  height: 0.875rem; width: 0.875rem;
   color: rgb(var(--color-muted));
+  justify-self: end;
 }
-/* 넓게 전용 요소(PM·카운트 요약)는 좁게에서 숨김 — 마크업은 항상 렌더(전환에 서버 왕복 없음).
-   작성일은 완료 탭에서만 렌더되고, 그 탭에선 두 밀도 모두 표시한다(정렬 근거라 좁게에서도 필요). */
-.proj-comfy-only { display: none; }
-@media (min-width: 640px) {
-  .proj-artist { width: 10rem; } /* 지메일 '보낸사람' 고정 열 — 이름 정렬이 맞아 훑기 쉬움 */
-}
-/* 모바일(<640px): 좁게도 2줄(1줄=아티스트+우측값 / 2줄=제작사·프로젝트명) */
+.proj-summary:hover .proj-chevron { color: rgb(var(--color-fg)); }
+
+/* 모바일(<640px): thead 숨기고 아티스트(굵게)·프로젝트 + 값 라벨줄(제작사·PM 숨김·빈 셀 생략). */
 @media (max-width: 639.98px) {
-  .proj-main { flex-wrap: wrap; }
-  .proj-sub { flex-basis: 100%; }
-}
-:root[data-density="comfy"] .proj-summary {
-  flex-wrap: wrap;
-  align-items: flex-start;
-  padding: 0.75rem 1rem;
-}
-/* 넓게에서도 링크는 내용 폭만(display:block이면 좌측 전체가 링크가 돼 여백 클릭=펼침이 깨진다). */
-:root[data-density="comfy"] .proj-main {
-  display: inline-block;
-  max-width: 100%;
-}
-:root[data-density="comfy"] .proj-artist { width: auto; }
-:root[data-density="comfy"] .proj-sub {
-  display: block;
-  margin-top: 0.125rem;
-}
-:root[data-density="comfy"] .proj-meta {
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.125rem;
-}
-:root[data-density="comfy"] .proj-comfy-only { display: inline-flex; }
-:root[data-density="comfy"] .proj-counts {
-  flex-basis: 100%;
-  margin-top: 0.375rem;
+  .proj-thead { display: none; }
+  .proj-summary {
+    display: flex; flex-direction: column; align-items: stretch;
+    gap: 0.125rem; position: relative;
+  }
+  .proj-cell { white-space: normal; }
+  .pt-artist { font-weight: 600; font-size: 0.9375rem; padding-right: 1.5rem; }
+  .pt-title { font-size: 0.8125rem; color: rgb(var(--color-muted)); }
+  .pt-company, .pt-pm { display: none; } /* 모바일은 제작사·PM 숨김 */
+  .proj-summary .pt-cell:empty { display: none; } /* 값 없는 셀(빈 다음세션·금액) 생략 */
+  .pt-next::before, .pt-amount::before, .pt-created::before {
+    content: attr(data-label) " · "; color: rgb(var(--color-muted)); font-size: 0.75rem;
+  }
+  .proj-chevron { position: absolute; top: 0.75rem; right: 0; }
 }
 
 /* ── 청구 목록 = 데스크톱 넓은 표(2026-07-16 사용자 요청, bookipi 참고) ──

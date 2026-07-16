@@ -119,60 +119,56 @@ function projectSubLabel(p) {
 }
 
 
+/** 아티스트만(폴백 없음) — 표의 아티스트 열용. 여러 명이면 "외 N", 없으면 빈 문자열(제작사·프로젝트명은 별도 열). */
+function projectArtistOnly(p) {
+  const a = String(p.artist || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return a.length > 1 ? `${a[0]} 외 ${a.length - 1}` : a[0] || "";
+}
+
 /**
- * 목록 행(2026-07-14 지메일식 재설계 — DOM 한 벌 + CSS 밀도 전환[좁게 기본 / 넓게 = :root[data-density="comfy"]]).
- *  - 클릭 규약: **행 어디를 눌러도 펼침**(<summary>), **제목(아티스트·부제) 링크만 상세로**(projectRowHref).
- *  - 좁게(기본): [아티스트][제작사 · 프로젝트명][탭별 우측값][⌄] 한 줄. PM·작성일·카운트 요약은 CSS로 숨김.
- *  - 넓게: 아티스트/부제 2줄 + 우측 작성일·PM·다음 세션(또는 금액) + 하단 카운트 요약(마크업은 동일).
- *  - 우측값(탭별): 진행 중=다음 세션·디데이 / 청구 필요=금액·'청구 필요 N' / 완료=작성일.
+ * 프로젝트 목록 표 헤더(2026-07-16 사용자 요청 — 청구 표처럼 항목명·칸칸이). 각 행 summary와 같은 grid 열.
+ * 컬럼: 아티스트 · 제작사 · 프로젝트 · PM · 다음 세션 · 금액 · 작성일 · [⌄].
+ */
+function projectTableHead() {
+  const th = (label) => `<span class="pt-h">${esc(label)}</span>`;
+  return `<div class="proj-thead">${th("아티스트")}${th("제작사")}${th("프로젝트")}${th("PM")}${th("다음 세션")}${th("금액")}${th("작성일")}<span aria-hidden="true"></span></div>`;
+}
+
+/**
+ * 목록 행(2026-07-16 청구 표식 재설계 — 컬럼 정렬 + 항목명 헤더 + 작성일 열, 밀도 토글 폐지).
+ *  - `<details>` 한 벌: summary=grid 셀(헤더와 같은 열), 클릭하면 그 자리에서 펼침(세션·곡 요약 + 완료 토글).
+ *  - **아티스트·제작사·프로젝트 셀은 상세 링크**(projectRowHref), PM·다음세션·금액·작성일·⌄ 셀은 펼침(토글).
+ *  - 다음 세션=진행 중 탭만(디데이 pill), 금액=프로젝트 버짓(청구 필요 탭은 '청구 필요 N' 배지 병기), 작성일=전 탭.
+ *  - 반응형: <640px면 thead 숨기고 아티스트·프로젝트 + 탭 값만 2줄 카드(제작사·PM·작성일 숨김).
  */
 function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null, mine = false, listQuery = "" } = {}) {
-  const isBilling = tab === "billing";
-  const isDone = tab === "done";
-
-  // 좌측 2요소(좁게=가로, 넓게=세로 — 배치는 CSS).
-  const artist = esc(projectArtistLabel(p));
-  const sub = esc(projectSubLabel(p));
-
-  // 작성일 = **완료 탭 전용**(2026-07-14 사용자 요청 — 진행 중에선 다가오는 세션 날짜와 섞여 헷갈린다).
-  // 완료 탭의 정렬 근거(작성일 최신순)라 그 탭에선 두 밀도 모두 표시.
-  const created = isDone && p.created_at
-    ? `<span class="proj-created text-xs text-muted tabular">${esc(String(p.created_at).slice(0, 10))}</span>` : "";
-  const pm = p.manager_name ? `<span class="proj-pm proj-comfy-only text-xs text-muted">PM ${esc(p.manager_name)}</span>` : "";
-  const next = nextSessionLine(p); // 진행 중에서만 값이 있다(완료·청구필요는 next_session_date=null)
+  const href = projectRowHref(p, tab, listQuery);
+  const dash = '<span class="text-muted">—</span>';
+  const cellLink = (val, cls, label) => `<a href="${href}" class="pt-cell proj-link ${cls}" data-label="${esc(label)}">${val}</a>`;
+  const artist = esc(projectArtistOnly(p));
+  const company = esc(String(p.client_name || "").trim());
+  const title = esc(String(p.title || "제목 없음").trim());
+  const pm = p.manager_name ? esc(p.manager_name) : "";
+  const next = tab === "active" ? nextSessionLine(p) : ""; // 다음 세션·디데이 = 진행 중 탭만(완료·청구필요는 next_session_date 없음)
   const amt = projectAmount(p);
-  const amount = isBilling && amt ? `<span class="proj-amount text-sm font-medium tabular">${formatKRW(amt)}</span>` : "";
-  const billingBadge = isBilling && Number(p.unbilled_cnt) > 0
-    ? `<span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span>` : "";
-
-  // 카운트 요약(넓게 전용) — 0·곡 없음은 생략. 전부 비면 렌더 안 함.
-  const n = trackCount(p);
-  const taskCnt = Number(p.task_cnt) || 0;
-  const taskStatus = [
-    Number(p.task_pending) ? `대기 ${p.task_pending}` : "",
-    Number(p.task_done) ? `완료 ${p.task_done}` : "",
-  ].filter(Boolean).join(" · ");
-  const trackPart = n ? `곡·콘텐츠 ${n}${taskCnt ? ` · 작업 ${taskCnt}${taskStatus ? ` (${taskStatus})` : ""}` : ""}` : "";
-  const countsText = [
-    Number(p.sess_scheduled) ? `예정 세션 ${p.sess_scheduled}` : "",
-    Number(p.sess_done) ? `완료 세션 ${p.sess_done}` : "",
-    trackPart,
-  ].filter(Boolean).join(" · ");
-  const counts = countsText
-    ? `<span class="proj-counts proj-comfy-only text-xs text-muted">${esc(countsText)}</span>` : "";
-
+  const amount = amt ? formatKRW(amt) : "";
+  const billingBadge = tab === "billing" && Number(p.unbilled_cnt) > 0
+    ? ` <span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span>` : "";
+  const created = p.created_at ? esc(String(p.created_at).slice(0, 10)) : "";
+  const isOpen = openId != null && Number(p.id) === Number(openId);
   return `
-    <details class="proj-row group/proj"${openId != null && Number(p.id) === Number(openId) ? " open" : ""} id="proj-${p.id}">
+    <details class="proj-row group/proj"${isOpen ? " open" : ""} id="proj-${p.id}">
       <summary class="proj-summary row-link">
-        <a href="${projectRowHref(p, tab, listQuery)}" class="proj-main">
-          <span class="proj-artist">${artist}</span>
-          <span class="proj-sub">${sub}</span>
-        </a>
-        <span class="proj-meta">${created}${pm}${next}${amount}${billingBadge}</span>
+        ${cellLink(artist || dash, "pt-artist font-medium", "아티스트")}
+        ${cellLink(company || dash, "pt-company text-muted", "제작사")}
+        ${cellLink(title, "pt-title", "프로젝트")}
+        <span class="pt-cell pt-pm text-muted" data-label="PM">${pm || dash}</span>
+        <span class="pt-cell pt-next" data-label="다음 세션">${next}</span>
+        <span class="pt-cell pt-amount tabular" data-label="금액">${amount}${billingBadge}</span>
+        <span class="pt-cell pt-created tabular text-muted" data-label="작성일">${created}</span>
         <svg class="proj-chevron transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
-        ${counts}
       </summary>
-      <div class="border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>
+      <div class="proj-expand border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>
     </details>`;
 }
 
@@ -915,6 +911,8 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
 module.exports = { artistCombo,
   newProjectMenu,
   projectListRow,
+  projectTableHead,
+  projectArtistOnly,
   projectIdentity,
   projectArtistLabel,
   projectSubLabel,
