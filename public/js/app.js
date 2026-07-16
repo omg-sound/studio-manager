@@ -236,6 +236,11 @@
   document.addEventListener("touchend", cancelLp, { passive: true });
   document.addEventListener("touchmove", cancelLp, { passive: true }); // 스크롤이면 long-press 취소
   document.addEventListener("touchcancel", cancelLp, { passive: true });
+  // 카드 long-press 중/직후의 네이티브 컨텍스트 메뉴(안드로이드) 억제 — 우리 선택 모드만 발동. iOS는 CSS -webkit-touch-callout이 담당.
+  // 데스크톱 우클릭(touchstart 없어 lpTimer/lpFired 모두 falsy)은 무영향.
+  document.addEventListener("contextmenu", function (e) {
+    if ((lpTimer || lpFired) && e.target.closest && e.target.closest(".inv-table tbody tr")) e.preventDefault();
+  });
   // 캡처 단계: 선택 모드에선 셀 링크 탭이 상세로 가지 않고 선택을 토글. long-press 직후의 click은 삼킨다.
   document.addEventListener("click", function (e) {
     if (lpFired) { lpFired = false; e.preventDefault(); e.stopPropagation(); return; } // long-press가 만든 click 무시(토글 되돌림 방지)

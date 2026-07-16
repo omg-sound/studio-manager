@@ -382,21 +382,29 @@
   .inv-table .inv-act-col { display: none; } /* 모바일: 행별 처리 대신 하단 일괄 바 */
   .inv-table .inv-c-artist, .inv-table .inv-c-project { display: none; }
   .inv-cell-link { display: block; }
-  /* 선택 모드에서 길게 눌러도 iOS가 텍스트/이미지 선택 메뉴를 안 띄우게. */
-  :root.inv-selecting .inv-table tbody tr { -webkit-user-select: none; user-select: none; }
-  /* 일괄 바 = 하단 고정(선택 모드 진입 시 style.display로 노출). */
+  /* 일괄 바 = 하단 고정(선택 모드 진입 시 style.display로 노출). **불투명 배경 필수** — bg-primary/5(반투명)면
+     뒤 카드가 비쳐 글자가 겹쳐 보인다(2026-07-16 사용자 리포트). elevated 불투명 + 상단 보더/그림자. */
   .inv-bulkbar {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto;
     margin: 0; border-radius: 0; z-index: 40;
-    box-shadow: 0 -2px 12px rgb(0 0 0 / 0.08);
+    background: rgb(var(--color-elevated));
+    border-top: 1px solid rgb(var(--color-border));
+    box-shadow: 0 -2px 12px rgb(0 0 0 / 0.12);
   }
   :root.inv-selecting .inv-table { padding-bottom: 4.5rem; } /* 하단 바에 마지막 카드가 가리지 않게 */
 }
 
-/* 터치(모바일)에서만 체크박스를 롱프레스 전까지 숨긴다 — 마우스(좁은 데스크톱 창)에선 롱프레스가 안 되므로 상시 노출. */
+/* 터치(모바일)에서만: ①체크박스를 롱프레스 전까지 숨김(마우스=상시 노출·롱프레스 불가) ②카드 long-press가
+   iOS의 링크 미리보기/컨텍스트 메뉴(열기·새 탭에서 열기…)를 안 띄우게 -webkit-touch-callout·user-select 차단
+   (2026-07-16 사용자 리포트 '꾹 눌렀더니 링크 메뉴가 뜸') → 롱프레스는 우리 선택 모드만 발동. */
 @media (max-width: 1023.98px) and (hover: none) and (pointer: coarse) {
   .inv-table .inv-check { display: none; }
   :root.inv-selecting .inv-table .inv-check { display: block; }
+  .inv-table tbody tr, .inv-table .inv-cell-link {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 @layer utilities {
