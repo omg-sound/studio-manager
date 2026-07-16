@@ -272,7 +272,7 @@ router.get("/", requireAuth, (req, res) => {
     ${mineToggle}
     ${projTabs}
     ${list}`;
-  res.send(layout({ title: "프로젝트", user, current: "/projects", body }));
+  res.send(layout({ title: "프로젝트", user, current: "/projects", body, wide: true }));
 });
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록 ──

@@ -154,7 +154,7 @@ router.get("/", requireInvoice, (req, res) => {
     ${pageHeader({ title: "외주 작업자", desc: "로그인 없이 작업 담당자로 쓰는 외부 인력. 작업 히스토리·정산 관리." })}
     ${list}
     ${isChief(req.user) ? addForm : ""}`;
-  res.send(layout({ title: "외주 작업자", user: req.user, current: "/workers", body }));
+  res.send(layout({ title: "외주 작업자", user: req.user, current: "/workers", body, wide: true }));
 });
 
 router.post("/", requireChief, (req, res) => {

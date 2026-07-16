@@ -118,7 +118,7 @@ router.get("/", requireAuth, (req, res) => {
     </div>
     ${unbilledCard}`;
 
-  res.send(layout({ title: "대시보드", user, current: "/", body }));
+  res.send(layout({ title: "대시보드", user, current: "/", body, wide: true }));
 });
 
 module.exports = router;

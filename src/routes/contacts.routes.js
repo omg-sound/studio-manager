@@ -100,7 +100,7 @@ router.get("/", (req, res) => {
     ${searchBar}
     ${resultNote}
     ${list}`;
-  res.send(layout({ title: "연락처", user: req.user, current: "/contacts", body }));
+  res.send(layout({ title: "연락처", user: req.user, current: "/contacts", body, wide: true }));
 });
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listContacts가 이름/활동명/전화 LIKE 필터 ──

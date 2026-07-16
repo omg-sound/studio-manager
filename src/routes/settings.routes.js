@@ -108,7 +108,7 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
     ${tabBar}
     <div class="space-y-3">${tabContent}</div>`;
 
-  res.send(layout({ title: "환경설정", user: req.user, current: "/settings", body, full: true }));
+  res.send(layout({ title: "환경설정", user: req.user, current: "/settings", body })); // 읽기 폭(max-w-content 1024) — 폼·설정 카드(2026-07-16 통일, 사용자 선택=읽기 폭)
 }));
 
 /** 파일 버퍼 매직바이트 검증(Content-Type 스푸핑 방어). */

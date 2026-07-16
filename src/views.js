@@ -214,9 +214,11 @@ const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" /
  * 전체 페이지 레이아웃.
  * @param {{title:string, user?:object, current?:string, body:string, full?:boolean}} opts
  */
-// full = 바깥 max-w-content(1024) 유지 + main max-w-3xl 제거(설정 등 넓은 폼) / wide = 바깥 max-w-wide(1760, 넓은 표)
-// bleed = 바깥 max-width 제거(브라우저 폭 꽉 채움 — 캘린더 월 그리드, 2026-07-16 사용자 요청)
-function layout({ title, user, current = "", body, full = false, wide = false, bleed = false }) {
+// 레이아웃 통일(2026-07-16 사용자 '구성안'): 바깥 컨테이너를 **항상 max-w-wide(1760, 중앙정렬)**로 고정 →
+// 페이지마다 사이드바 위치가 바뀌던 것(가변 max-w 중앙정렬의 부작용) 해소. main 폭만 페이지별로:
+//   wide=true → 목록·표·캘린더·대시보드: main 전체 폭 사용(적극적). / 기본(wide=false) → 폼·상세: main 안에서
+//   읽기 폭(max-w-content 1024) 좌측 정렬(입력칸이 화면 끝까지 늘어나 스캔 힘든 것 방지). 사이드바는 어느 쪽이든 고정.
+function layout({ title, user, current = "", body, wide = false }) {
   const roleLabel = user ? (ROLE_LABELS[user.role] || user.role) : "";
   const who = user ? `${esc(user.name || user.email)} · ${roleLabel}` : "";
   return `<!doctype html>
@@ -243,7 +245,7 @@ function layout({ title, user, current = "", body, full = false, wide = false, b
     <a href="/logout" class="text-sm text-muted hover:text-fg">로그아웃</a>
   </header>
 
-  <div class="mx-auto flex w-full ${bleed ? "" : wide ? "max-w-wide" : "max-w-content"} gap-8 px-4 py-6 sm:px-6">
+  <div class="mx-auto flex w-full max-w-wide gap-8 px-4 py-6 sm:px-6">
     <!-- 사이드바(데스크톱) / 드로어(모바일) -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-64 transform border-r border-border bg-elevated p-4 transition sm:static sm:z-0 sm:block sm:w-56 sm:translate-x-0 sm:border-0 sm:bg-transparent sm:p-0">
       <!-- 모바일 드로어 헤더: 로고 + 닫기(X) 버튼 -->
@@ -280,8 +282,8 @@ function layout({ title, user, current = "", body, full = false, wide = false, b
     </aside>
     <div id="backdrop" class="fixed inset-0 z-30 hidden bg-black/30 sm:hidden"></div>
 
-    <main class="min-w-0 flex-1 ${full || wide || bleed ? "" : "max-w-3xl"}">
-      ${body}
+    <main class="min-w-0 flex-1">
+      ${wide ? body : `<div class="max-w-content">${body}</div>`}
     </main>
   </div>
   <script src="/js/app.js?v=${ASSET_VERSION}" defer></script>

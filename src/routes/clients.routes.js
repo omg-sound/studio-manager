@@ -199,7 +199,7 @@ router.get("/", (req, res) => {
     ${searchBar}
     ${resultNote}
     ${list}`;
-  res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body }));
+  res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body, wide: true }));
 });
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listClients는 q 미지원이라 이름/활동명 인메모리 필터 ──

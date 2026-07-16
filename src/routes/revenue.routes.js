@@ -27,7 +27,7 @@ router.get("/", requireInvoice, (req, res) => {
   const body = `
     ${pageHeader({ title: "매출", desc: "담당 엔지니어별 작업·세션 고객 청구액 합계." })}
     ${listHtml}`;
-  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body }));
+  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: true }));
 });
 
 // ── 엔지니어 매출 상세 ──
@@ -83,7 +83,7 @@ router.get("/:id", requireInvoice, (req, res) => {
     ${taskSection}
     <h2 class="mb-2 mt-4 text-sm font-semibold text-muted">세션 내역 (${sessions.length}건)</h2>
     ${sessionSection}`;
-  res.send(layout({ title: manager.name, user: req.user, current: "/revenue", body }));
+  res.send(layout({ title: manager.name, user: req.user, current: "/revenue", body, wide: true }));
 });
 
 module.exports = router;
