@@ -379,9 +379,10 @@ router.post("/:id", (req, res) => {
     // company 필드
     biz_no: formatBizNo(b.biz_no), // owner_name/owner_party_id는 미전송(보존) — 아래 setCompanyOwners가 조인 테이블 기준으로 동기화
     address: b.biz_address != null ? b.biz_address : b.address, roles: c.kind === "company" ? companyRolesFrom(b) : null,
-    // person 필드(활동명·is_artist는 보존, 현금영수증만 갱신). 단 **그룹은 그룹명=단일 정체성**이라 activity_name을 새 name과 동기화
-    // (안 그러면 옛 activity_name이 남아 목록·상세가 '옛이름 (새이름)'으로 표시되던 버그 — 2026-07-16 사용자 리포트).
-    activity_name: c.kind === "group" ? name : c.activity_name, is_artist: c.is_artist,
+    // 정체성 단일화(2026-07-16): **그룹은 항상**, **솔로 아티스트도 편집 전 이름==활동명이었으면**(본명 따로 없는 흔한 경우)
+    // activity_name을 새 name과 동기화 → 옛 activity_name이 남아 '옛이름 (새이름)'으로 병기되던 버그 방지.
+    // 본명≠활동명(모달 등록 등)이면 activity_name 보존(이름 필드=본명 편집이므로 활동명 유지). 그 외 person도 보존.
+    activity_name: (c.kind === "group" || c.name === c.activity_name) ? name : c.activity_name, is_artist: c.is_artist,
     cash_receipt_no: c.kind === "group" ? c.cash_receipt_no : b.cash_receipt_no, // 그룹은 폼에 필드 없음 → 기존값 보존(개인 아티스트만 현금영수증)
     activity_form: b.activity_form, // 활동 형태(아티스트 폼에만 있음 — 그룹·업체는 undefined로 보존)
     // 그룹 담당자(멤버/관계자) — 그룹일 때만 폼에서 전송(person은 undefined로 보존)
