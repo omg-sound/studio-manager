@@ -72,6 +72,16 @@ function invoiceBadge(inv) {
   return taxBadge(inv);
 }
 
+/** 목록 표 상태 컬럼용 **짧은** 배지(2026-07-16 사용자 요청 '입금·발행으로 줄이자' — 좁은 열 폭 절약):
+ *  계산서/현금영수증 미발행→미발행 · 발행→발행 · 입금완료→입금(+연체·부분납은 그대로). 색은 full 기준 유지. */
+function taxBadgeShort(inv) {
+  const full = displayStatus(inv); // 계산서 미발행 / 계산서 발행 / 입금완료 / 연체 / 부분납
+  const short = full === "입금완료" ? "입금" : full.replace(/^계산서 /, "");
+  if (full === "계산서 발행") return `<span class="badge-info">${esc(short)}</span>`;
+  const cls = INVOICE_STATUS_BADGE[full] || "bg-muted/10 text-muted";
+  return `<span class="badge ${cls}">${esc(short)}</span>`;
+}
+
 /**
  * (계산서|현금영수증) 발행 완료 / 입금완료 토글 버튼 2개 — 청구 목록 카드·청구 상세 공용(2026-07-05 상세도 select→버튼 통일).
  * 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다.
@@ -238,8 +248,8 @@ function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
         <th>상태</th>
         <th>청구번호</th>
         <th>클라이언트</th>
-        <th class="hidden lg:table-cell">아티스트</th>
-        <th class="hidden lg:table-cell">프로젝트</th>
+        <th class="hidden xl:table-cell">아티스트</th>
+        <th class="hidden xl:table-cell">프로젝트</th>
         <th class="inv-amt-col">금액</th>
         <th>발행</th>
         ${isInvoicer ? `<th class="inv-act-col">처리</th>` : ""}
@@ -261,11 +271,11 @@ function invoiceTable(rows, { isInvoicer = false, ret = "" } = {}) {
       return `
       <tr>
         ${check}
-        <td class="inv-c-status" data-label="상태">${cellLink(inv, invoiceBadge(inv))}</td>
+        <td class="inv-c-status" data-label="상태">${cellLink(inv, taxBadgeShort(inv))}</td>
         <td class="inv-c-num" data-label="청구번호">${cellLink(inv, num ? esc(num) : dash, "tabular text-muted")}</td>
         <td class="inv-c-client" data-label="클라이언트">${cellLink(inv, payer, "inv-cell-payer font-medium")}</td>
-        <td class="inv-c-artist hidden lg:table-cell" data-label="아티스트">${cellLink(inv, artist ? esc(artist) : dash, "text-muted")}</td>
-        <td class="inv-c-project hidden lg:table-cell" data-label="프로젝트">${cellLink(inv, project ? esc(project) : dash, "text-muted")}</td>
+        <td class="inv-c-artist hidden xl:table-cell" data-label="아티스트">${cellLink(inv, artist ? esc(artist) : dash, "text-muted")}</td>
+        <td class="inv-c-project hidden xl:table-cell" data-label="프로젝트">${cellLink(inv, project ? esc(project) : dash, "text-muted")}</td>
         <td class="inv-amt inv-c-amt" data-label="금액">${cellLink(inv, formatKRW(inv.amount), "tabular font-semibold")}</td>
         <td class="inv-c-issued" data-label="발행">${cellLink(inv, issued || dash, "tabular text-muted")}</td>
         ${act}

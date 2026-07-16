@@ -319,15 +319,17 @@
 .inv-table td.inv-amt, .inv-table th.inv-amt-col { text-align: right; white-space: nowrap; }
 /* 식별자·날짜·상태는 줄바꿈 금지(짧은데 좁은 열로 찌부되며 3줄로 접히던 것 방지, 2026-07-16). */
 .inv-table .inv-c-num, .inv-table .inv-c-issued, .inv-table .inv-c-status { white-space: nowrap; }
+.inv-table .inv-c-num { font-size: 0.75rem; } /* 청구번호 작게(2026-07-16 사용자 요청·열 폭 절약) */
 /* 이름 열(클라이언트·아티스트·프로젝트)은 max-width 상한 + … 로 잘라 한 줄 유지(2026-07-16 사용자 리포트):
-   긴 상호 하나('투엔드 플로어 레코드 (2nd Floor Record)')가 열을 넓혀 이웃(아티스트·프로젝트)을 찌부·2~3줄로
-   접던 것 방지. width:100% auto 테이블이라 공간이 빠듯하면 max-width 아래로도 줄어들며 잘린다. */
+   긴 상호 하나('투엔드 플로어 레코드 (2nd Floor Record)')가 열을 넓혀 이웃을 찌부·금액/발행을 오른쪽 밖으로
+   밀어내던 것 방지. 상한은 '투엔드 플로어 레코드'는 보이고 그보다 길면 …(width:100% auto 테이블이라
+   공간 빠듯하면 상한 아래로도 줄며 잘린다 → 어떤 긴 이름도 금액/발행 열을 안 밀어냄). */
 .inv-table td.inv-c-client .inv-cell-link,
 .inv-table td.inv-c-artist .inv-cell-link,
 .inv-table td.inv-c-project .inv-cell-link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.inv-table td.inv-c-client .inv-cell-link { max-width: 16rem; }
-.inv-table td.inv-c-artist .inv-cell-link { max-width: 9rem; }
-.inv-table td.inv-c-project .inv-cell-link { max-width: 14rem; }
+.inv-table td.inv-c-client .inv-cell-link { max-width: 11rem; }
+.inv-table td.inv-c-artist .inv-cell-link { max-width: 7rem; }
+.inv-table td.inv-c-project .inv-cell-link { max-width: 11rem; }
 .inv-table .inv-check { width: 2.5rem; }
 .inv-table .inv-act-col { width: 1%; white-space: nowrap; }
 /* 처리 열 = 아이콘 정사각 토글(라벨 길이 무관·열 폭 고정). 의미는 hover 툴팁·aria-label. */
@@ -341,10 +343,11 @@
 .inv-icon { display: inline-flex; }
 .inv-icon > svg { height: 1rem; width: 1rem; }
 
-@media (max-width: 639.98px) {
-  /* 표 → 2열 카드(bookipi 참고): 왼쪽=청구번호/상태/발행, 오른쪽=클라이언트/금액.
-     아티스트·프로젝트·체크박스·처리는 평소 숨김 — **카드를 꾹 누르면(long-press)** 선택 모드로 진입해
-     체크박스가 뜨고(:root.inv-selecting) 하단 고정 바(.inv-bulkbar)로 계산서 발행/입금완료 일괄 처리. */
+/* <1024px(좁은 창) = 표를 2열 카드로 접어 '2줄'로(2026-07-16 사용자 요청 '창이 좁아지면 2줄로'):
+   넓은 표는 금액/발행이 오른쪽 밖으로 잘리므로 좁아지면 카드로 전환. 아티스트·프로젝트는 표에서도 xl(≥1280)에서만
+   보이므로 카드에서도 숨김. 모바일(터치)은 카드를 꾹 눌러(long-press) 선택 모드 진입, 좁은 데스크톱(마우스)은
+   체크박스 상시 노출(롱프레스 불가) — 체크박스 숨김은 아래 (hover:none) 블록에서만. */
+@media (max-width: 1023.98px) {
   .inv-table thead { display: none; }
   .inv-table, .inv-table tbody { display: block; }
   .inv-table tbody tr {
@@ -364,9 +367,8 @@
     background: rgb(var(--color-surface));
   }
   .inv-table tbody td { display: block; border: 0; padding: 0; }
-  .inv-table tbody td::before { content: none; } /* 모바일 카드엔 라벨 없음 */
-  .inv-table .inv-check { grid-area: check; width: auto; align-self: center; display: none; } /* 선택 모드에서만 노출 */
-  :root.inv-selecting .inv-table .inv-check { display: block; }
+  .inv-table tbody td::before { content: none; } /* 카드엔 라벨 없음 */
+  .inv-table .inv-check { grid-area: check; width: auto; align-self: center; } /* 마우스=상시 노출, 터치=아래 블록에서 숨김 */
   .inv-table .inv-c-num { grid-area: num; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
   .inv-table .inv-c-status { grid-area: status; }
   .inv-table .inv-c-issued { grid-area: issued; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
@@ -385,6 +387,12 @@
     box-shadow: 0 -2px 12px rgb(0 0 0 / 0.08);
   }
   :root.inv-selecting .inv-table { padding-bottom: 4.5rem; } /* 하단 바에 마지막 카드가 가리지 않게 */
+}
+
+/* 터치(모바일)에서만 체크박스를 롱프레스 전까지 숨긴다 — 마우스(좁은 데스크톱 창)에선 롱프레스가 안 되므로 상시 노출. */
+@media (max-width: 1023.98px) and (hover: none) and (pointer: coarse) {
+  .inv-table .inv-check { display: none; }
+  :root.inv-selecting .inv-table .inv-check { display: block; }
 }
 
 @layer utilities {
