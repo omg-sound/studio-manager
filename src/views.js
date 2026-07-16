@@ -559,7 +559,7 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
 
 /**
  * 범용 정보 표(2026-07-16 사용자 요청 '연락처·클라이언트도 넓어진 화면에 정보 많이') — 청구·프로젝트 표와 통일감.
- * @param {Array<{label,w?,hide?,right?,primary?,mobileHide?}>} cols  열 정의(w=콜 폭 **Tailwind 클래스명**[예 "w-[16rem]"] — 인라인 style은 CSP에 막히니 클래스로·미지정=유동, hide='sm'|'md'|'lg'|'xl' 그 미만 숨김[col도 함께 숨겨 폭 예약 제거], mobileHide=<640 카드에서 셀 숨김, primary=모바일 카드 헤더 셀).
+ * @param {Array<{label,w?,hide?,right?,primary?,mobileHide?,mCard?}>} cols  열 정의(w=콜 폭 **Tailwind 클래스명**[예 "w-[16rem]"] — 인라인 style은 CSP에 막히니 클래스로·미지정=유동, hide='sm'|'md'|'lg'|'xl' 그 미만 숨김[col도 함께 숨겨 폭 예약 제거], mobileHide=<640 카드에서 셀 숨김, mCard='tl'|'tr'|'bl'|'br'=<640 카드를 2열 그리드로 배치[좌상/우상/좌하/우하·라벨 없이 값만], primary=모바일 카드 헤더 셀).
  * @param {Array<{cells:string[]}>} rows  각 행 = 열 순서대로의 셀 HTML.
  * @param {{filterList?:boolean}} [opt]  filterList=실시간 검색 필터(tbody에 data-filter-list, app.js [data-live-filter]와 연동).
  */
@@ -568,8 +568,9 @@ function dataTable(cols, rows, { filterList = false } = {}) {
   // col 전용 hide(셀=table-cell, 콜럼=table-column) — 숨긴 col은 display:none이라야 그 폭을 예약하지 않는다.
   // (col이 폭만 남기고 셀만 숨으면 남은 열이 밀리고 유동 열이 남은 폭을 못 받아 오른쪽에 빈 공간이 생김.)
   const colHideCls = { sm: "hidden sm:table-column", md: "hidden md:table-column", lg: "hidden lg:table-column", xl: "hidden xl:table-column" };
-  // mobileHide=<640 카드에서 그 셀 숨김(요약만 보이게 — 클라이언트 업체 카드는 이름·대표·사업자번호만).
-  const cellCls = (c, extra) => [c.hide ? hideCls[c.hide] : "", c.right ? "dt-right" : "", c.mobileHide ? "dt-m-hide" : "", extra].filter(Boolean).join(" ");
+  // mobileHide=<640 카드에서 그 셀 숨김(요약만). mCard='tl'|'tr'|'bl'|'br'=<640 카드를 2열 그리드로 배치(좌상/우상/좌하/우하 — 슬롯 지정 시 라벨 없이 값만, dt-mcard).
+  const cellCls = (c, extra) => [c.hide ? hideCls[c.hide] : "", c.right ? "dt-right" : "", c.mobileHide ? "dt-m-hide" : "", c.mCard ? `dt-m-${c.mCard}` : "", extra].filter(Boolean).join(" ");
+  const mCard = cols.some((c) => c.mCard); // 하나라도 슬롯을 지정하면 카드=2열 그리드 모드
   // 열 폭은 **CSS 클래스**로(인라인 style은 CSP style-src에 막혀 무시됨 → 6열 균등 분배 버그). c.w=Tailwind 폭 클래스명(예 "w-[16rem]"), 콜러가 리터럴로 넘겨 Tailwind가 스캔·생성. 미지정=유동(남은 폭 흡수). hide면 col도 함께 숨겨(display:none) 폭 예약 제거.
   const cg = `<colgroup>${cols.map((c) => { const cc = [c.w || "", c.hide ? colHideCls[c.hide] : ""].filter(Boolean).join(" "); return `<col${cc ? ` class="${cc}"` : ""} />`; }).join("")}</colgroup>`;
   const thead = `<thead><tr>${cols.map((c) => { const k = cellCls(c); return `<th${k ? ` class="${k}"` : ""}>${esc(c.label)}</th>`; }).join("")}</tr></thead>`;
@@ -579,7 +580,7 @@ function dataTable(cols, rows, { filterList = false } = {}) {
     return `<td${k ? ` class="${k}"` : ""} data-label="${esc(c.label || "")}">${cell}</td>`;
   }).join("")}</tr>`).join("");
   const empty = filterList ? `<div data-filter-empty hidden class="px-4 py-6 text-center text-sm text-muted">검색 결과가 없습니다.</div>` : "";
-  return `<div class="sm:overflow-hidden sm:rounded-lg sm:border sm:border-border/50 sm:bg-surface"><table class="dt">${cg}${thead}<tbody${filterList ? " data-filter-list" : ""}>${body}</tbody></table>${empty}</div>`;
+  return `<div class="sm:overflow-hidden sm:rounded-lg sm:border sm:border-border/50 sm:bg-surface"><table class="dt${mCard ? " dt-mcard" : ""}">${cg}${thead}<tbody${filterList ? " data-filter-list" : ""}>${body}</tbody></table>${empty}</div>`;
 }
 
 /** 연락처(사람) 표 — 이름·역할·소속·직함·전화·이메일. /contacts 목록 + 클라이언트 '관계자' 탭 공용. */

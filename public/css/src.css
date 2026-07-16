@@ -406,6 +406,24 @@
   .dt tbody td.dt-primary .dt-link { font-weight: 600; font-size: 0.9375rem; }
   .dt tbody td.dt-m-hide { display: none; } /* 모바일 카드 요약 — 상세 없이 보이는 셀 축소(클라이언트 업체=이름·대표·사업자번호만) */
   .dt-link { text-align: right; }
+
+  /* ── 2열 카드 모드(dt-mcard) — 업체명(좌상)·대표(우상) / 사업자번호(좌하)·이메일(우하). 라벨 없이 값만. ── */
+  .dt-mcard tbody tr {
+    /* 두 열 모두 minmax(0,_fr) → 긴 값(이메일)이 옆 열(업체명)을 밀지 않고 각자 …로 잘림. 업체명 열에 약간 우선. */
+    display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: baseline; column-gap: 0.75rem; row-gap: 0.25rem;
+  }
+  .dt-mcard tbody td {
+    display: block; padding: 0.125rem 0; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .dt-mcard tbody td::before { content: none; } /* 카드 모드는 라벨 없이 값만 */
+  .dt-mcard tbody td.dt-m-tl { grid-column: 1; grid-row: 1; }
+  .dt-mcard tbody td.dt-m-tr { grid-column: 2; grid-row: 1; text-align: right; }
+  .dt-mcard tbody td.dt-m-bl { grid-column: 1; grid-row: 2; }
+  .dt-mcard tbody td.dt-m-br { grid-column: 2; grid-row: 2; text-align: right; }
+  .dt-mcard tbody td.dt-m-tl .dt-link { text-align: left; font-weight: 600; font-size: 0.9375rem; }
+  .dt-mcard tbody td.dt-m-tr, .dt-mcard tbody td.dt-m-br { color: rgb(var(--color-muted)); font-size: 0.8125rem; }
 }
 
 @layer utilities {
