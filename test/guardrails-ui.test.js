@@ -82,6 +82,24 @@ test("ui-guardrail: 인라인 이벤트 핸들러·javascript:·인라인 <scrip
   assert.deepEqual(offenders, [], offenders.join("\n"));
 });
 
+// ── ③-b 레이아웃 인라인 style 금지(함정 #27) ──
+// CSP style-src(unsafe-inline 없음)라 서버 렌더 `style="width:…"`는 **브라우저가 파싱조차 안 함** → 조용히 무시.
+// (dataTable <col style="width"> 가 안 먹어 6열 균등 분배로 렌더되던 사고, 2026-07-16.) 치수·레이아웃은 CSS 클래스로.
+// display:none(JS 토글용)만 예외로 허용 — 나머지 치수/그리드/플렉스 속성은 인라인 금지.
+test("ui-guardrail: 서버 렌더 인라인 style에 치수·레이아웃 속성 금지(CSP style-src)", () => {
+  const offenders = [];
+  const LAYOUT = /style="[^"]*(width|height|grid-template|grid-column|grid-row|flex-basis|max-width|min-width|max-height|min-height)\s*:/i;
+  // 예외: 이메일 HTML(mailer)·PDF SVG(invoice-pdf)는 브라우저 페이지가 아니라 CSP 무관 + 인라인 style 필수(이메일 클라이언트가 요구).
+  const EXEMPT = /(mailer|invoice-pdf)\.js$/;
+  for (const { f, s } of SRC_ALL) {
+    if (EXEMPT.test(f)) continue;
+    s.split("\n").forEach((line, i) => {
+      if (LAYOUT.test(line)) offenders.push(`${f}:${i + 1} ${line.match(/style="[^"]*"/)[0].slice(0, 70)}`);
+    });
+  }
+  assert.deepEqual(offenders, [], "인라인 style 치수 → CSS 클래스로(CSP에 막힘):\n" + offenders.join("\n"));
+});
+
 // ── ④ 한글 IME 가드(함정 #18의 기계화) ──
 // 사고 이력: 조합 중 엔터를 선택/등록/제출로 오인 → 모달 연쇄 오작동·글자 중복("김조한한").
 // Enter/방향키를 다루는 keydown 핸들러는 반드시 isComposing(=keyCode 229) 가드로 시작해야 한다.
