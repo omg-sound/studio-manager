@@ -182,7 +182,7 @@ router.get("/sessions", requireAuth, (req, res) => {
     ${flashBanner(req.query)}
     ${pageHeader({ title: "일정", desc: "스튜디오 세션(녹음 · 믹싱 · 마스터링)", action: viewToggle })}
     ${content}`;
-  res.send(layout({ title: "일정", user: req.user, current: "/sessions", body, full: view === "calendar" }));
+  res.send(layout({ title: "일정", user: req.user, current: "/sessions", body, bleed: view === "calendar" })); // 캘린더=브라우저 폭 꽉 채움(2026-07-16)
 });
 
 // ── 캘린더 세션 카드(팝오버 조각) — 칩 클릭 시 app.js가 fetch해 중앙 모달로 표시(2026-07-11) ──

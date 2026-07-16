@@ -214,7 +214,9 @@ const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" /
  * 전체 페이지 레이아웃.
  * @param {{title:string, user?:object, current?:string, body:string, full?:boolean}} opts
  */
-function layout({ title, user, current = "", body, full = false, wide = false }) {
+// full = 바깥 max-w-content(1024) 유지 + main max-w-3xl 제거(설정 등 넓은 폼) / wide = 바깥 max-w-wide(1760, 넓은 표)
+// bleed = 바깥 max-width 제거(브라우저 폭 꽉 채움 — 캘린더 월 그리드, 2026-07-16 사용자 요청)
+function layout({ title, user, current = "", body, full = false, wide = false, bleed = false }) {
   const roleLabel = user ? (ROLE_LABELS[user.role] || user.role) : "";
   const who = user ? `${esc(user.name || user.email)} · ${roleLabel}` : "";
   return `<!doctype html>
@@ -241,7 +243,7 @@ function layout({ title, user, current = "", body, full = false, wide = false })
     <a href="/logout" class="text-sm text-muted hover:text-fg">로그아웃</a>
   </header>
 
-  <div class="mx-auto flex w-full ${wide ? "max-w-wide" : "max-w-content"} gap-8 px-4 py-6 sm:px-6">
+  <div class="mx-auto flex w-full ${bleed ? "" : wide ? "max-w-wide" : "max-w-content"} gap-8 px-4 py-6 sm:px-6">
     <!-- 사이드바(데스크톱) / 드로어(모바일) -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-64 transform border-r border-border bg-elevated p-4 transition sm:static sm:z-0 sm:block sm:w-56 sm:translate-x-0 sm:border-0 sm:bg-transparent sm:p-0">
       <!-- 모바일 드로어 헤더: 로고 + 닫기(X) 버튼 -->
@@ -278,7 +280,7 @@ function layout({ title, user, current = "", body, full = false, wide = false })
     </aside>
     <div id="backdrop" class="fixed inset-0 z-30 hidden bg-black/30 sm:hidden"></div>
 
-    <main class="min-w-0 flex-1 ${full || wide ? "" : "max-w-3xl"}">
+    <main class="min-w-0 flex-1 ${full || wide || bleed ? "" : "max-w-3xl"}">
       ${body}
     </main>
   </div>
