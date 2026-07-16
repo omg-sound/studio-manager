@@ -27,7 +27,7 @@ module.exports = {
         serif: ['"Source Serif 4"', '"Noto Serif KR"', "ui-serif", "Georgia", "Cambria", "serif"],
       },
       maxWidth: {
-        content: "64rem", // 콘텐츠 최대폭 통일(플레이북2 §5-5)
+        content: "48rem", // 폼·상세 읽기 폭(2026-07-16 사용자 '폭이 넓어 부담·시선 분산' → 64→48rem[768px]로 좁혀 집중). 넓은 목록·표는 wide 사용.
         wide: "110rem", // 넓은 표(청구 목록 등) 전용 — 데이터가 많은 화면은 넓은 모니터 폭을 최대한 사용(2026-07-16, 80→110rem)
       },
       opacity: {

@@ -217,7 +217,7 @@ const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" /
 // 레이아웃 통일(2026-07-16 사용자 '구성안'): 바깥 컨테이너를 **항상 max-w-wide(1760, 중앙정렬)**로 고정 →
 // 페이지마다 사이드바 위치가 바뀌던 것(가변 max-w 중앙정렬의 부작용) 해소. main 폭만 페이지별로:
 //   wide=true → 목록·표·캘린더·대시보드: main 전체 폭 사용(적극적). / 기본(wide=false) → 폼·상세: main 안에서
-//   읽기 폭(max-w-content 1024) 좌측 정렬(입력칸이 화면 끝까지 늘어나 스캔 힘든 것 방지). 사이드바는 어느 쪽이든 고정.
+//   읽기 폭(max-w-content 768) 좌측 정렬(입력칸이 화면 끝까지 늘어나 스캔 힘든 것 방지·시선 분산 최소화, 2026-07-16 1024→768). 사이드바는 어느 쪽이든 고정.
 function layout({ title, user, current = "", body, wide = false }) {
   const roleLabel = user ? (ROLE_LABELS[user.role] || user.role) : "";
   const who = user ? `${esc(user.name || user.email)} · ${roleLabel}` : "";
