@@ -22,9 +22,11 @@ module.exports = {
         danger: "rgb(var(--color-danger) / <alpha-value>)",
         info: "rgb(var(--color-info) / <alpha-value>)",
       },
+      // 폰트 스택을 CSS 변수로(테마 선택 기능 2026-07-17) — 팔레트가 --font-sans/--font-serif만 바꾸면 전체 폰트 교체.
+      // 변수 기본값은 src.css :root에 정의(Original=Pretendard/Source Serif). 값 자체는 그대로라 렌더 불변.
       fontFamily: {
-        sans: ["Pretendard", "Inter", "system-ui", "-apple-system", "sans-serif"],
-        serif: ['"Source Serif 4"', '"Noto Serif KR"', "ui-serif", "Georgia", "Cambria", "serif"],
+        sans: ["var(--font-sans)"],
+        serif: ["var(--font-serif)"],
       },
       maxWidth: {
         content: "48rem", // 폼·상세 읽기 폭(2026-07-16 사용자 '폭이 넓어 부담·시선 분산' → 64→48rem[768px]로 좁혀 집중). 넓은 목록·표는 wide 사용.

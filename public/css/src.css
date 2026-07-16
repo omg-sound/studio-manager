@@ -17,6 +17,18 @@
   --color-warning: 143 92 42; /* #8F5C2A warm amber — WCAG AA: bg 5.34:1·surface 5.63:1·badge tint 4.80:1 (구 #B5793C는 3.46:1 미달, 2026-07-09 접근성 점검) */
   --color-danger: 188 75 60; /* #BC4B3C warm red */
   --color-info: 96 115 140; /* #60738C 쿨 블루그레이 — 정보/중립 강조 */
+
+  /* ── 테마 토큰(폰트·radius·shadow) — 요구사항 1: 현재 값들을 CSS 변수로 추출 = 'Original' 기본 테마. ──
+     팔레트(data-palette)가 이 변수만 덮어써 폰트·모서리·그림자를 통째로 교체. 값은 현재와 동일해 Original 렌더 불변. */
+  --font-sans: "Pretendard", "Inter", "system-ui", "-apple-system", sans-serif;
+  --font-serif: "Source Serif 4", "Noto Serif KR", ui-serif, Georgia, Cambria, serif;
+  --font-display: var(--font-serif); /* 제목 글꼴(팔레트별로 sans로 바꾸기도) */
+  --radius-btn: 0.5rem;    /* 현재 rounded-lg */
+  --radius-input: 0.5rem;  /* 현재 rounded-lg */
+  --radius-card: 0.75rem;  /* 현재 rounded-xl */
+  --radius-badge: 0.375rem;/* 현재 rounded-md */
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04); /* 현재 .card 그림자 */
+  --sidebar-blur: 0px;     /* Apple glass용(기본 0=효과 없음) */
 }
 
 /* 다크 토큰. data-theme 미지정 시에만 OS를 추종(html[data-theme] 있으면 강제 모드가 이긴다). */
@@ -76,9 +88,9 @@
     touch-action: manipulation; /* 더블탭 확대 차단 */
     -webkit-font-smoothing: antialiased;
   }
-  /* 제목은 세리프(Anthropic 에디토리얼 톤) */
+  /* 제목은 세리프(Anthropic 에디토리얼 톤) — 팔레트가 --font-display로 교체 가능. */
   .font-display {
-    font-family: theme("fontFamily.serif");
+    font-family: var(--font-display);
     letter-spacing: 0;
   }
   /* 키보드 포커스 표시: 내비·탭·필터 링크 공통(마우스는 :focus-visible로 숨김). */
@@ -112,7 +124,8 @@
     opacity: 1;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50;
+    border-radius: var(--radius-btn); /* Original=0.5rem(rounded-lg). 팔레트가 교체(Material=pill 등). */
   }
   .btn-primary {
     @apply btn bg-primary text-primary-fg hover:bg-primary/90 active:bg-primary/80;
@@ -128,7 +141,8 @@
     @apply px-3 py-1.5 text-xs min-h-[2.25rem]; /* 모바일 터치 타깃 최소 36px */
   }
   .input {
-    @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-fg placeholder:text-muted/70 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+    @apply w-full border border-border bg-surface px-3 py-2 text-fg placeholder:text-muted/70 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+    border-radius: var(--radius-input); /* Original=0.5rem(rounded-lg) */
   }
   .label {
     @apply mb-1 block text-sm font-medium text-fg/90;
@@ -138,11 +152,13 @@
     @apply mb-1 block text-xs font-medium text-fg/80;
   }
   .card {
-    @apply rounded-xl border border-border bg-surface p-5;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+    @apply border border-border bg-surface p-5;
+    border-radius: var(--radius-card); /* Original=0.75rem(rounded-xl) */
+    box-shadow: var(--shadow-card);    /* Original=현재 그림자. Apple=soft·Material=elevation·Linear=none */
   }
   .badge {
-    @apply inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex shrink-0 items-center whitespace-nowrap px-2 py-0.5 text-xs font-medium;
+    border-radius: var(--radius-badge); /* Original=0.375rem(rounded-md) */
   }
   /* badge 색 변형: .badge 베이스에 색만 얹는다. */
   .badge-neutral {
@@ -435,3 +451,140 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   테마 선택(data-palette) — 2026-07-17 사용자 요청. Original(기본)은 위 :root 그대로 보존.
+   각 팔레트는 --color-*·--font-*·--radius-*·--shadow-* 변수만 덮어써 시각 레이어를 통째로 교체
+   (컴포넌트 구조·마크업·로직 불변). data-theme(light/dark)와 직교. 색 채널은 "R G B"(Tailwind 소비).
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ─── A) Apple(HIG) — SF Pro / iOS 블루 액센트 / 넉넉한 radius / 부드러운 그림자 ─── */
+:root[data-palette="apple"] {
+  color-scheme: light;
+  --color-bg: 242 242 247;       /* systemGroupedBackground */
+  --color-surface: 255 255 255;
+  --color-elevated: 249 249 251;
+  --color-border: 209 209 214;   /* systemGray4 */
+  --color-muted: 128 128 133;    /* systemGray, AA */
+  --color-fg: 28 28 30;          /* label */
+  --color-primary: 0 122 255;    /* systemBlue */
+  --color-primary-fg: 255 255 255;
+  --color-success: 40 160 70;    /* systemGreen(어둡게 조정=AA) */
+  --color-warning: 181 105 0;    /* systemOrange(어둡게=AA) */
+  --color-danger: 215 45 42;     /* systemRed(어둡게=AA) */
+  --color-info: 0 133 189;       /* systemTeal(어둡게=AA) */
+  --font-sans: -apple-system, "SF Pro Text", "SF Pro Display", "Pretendard", system-ui, sans-serif;
+  --font-serif: var(--font-sans);
+  --font-display: -apple-system, "SF Pro Display", "Pretendard", system-ui, sans-serif;
+  --radius-btn: 0.75rem;
+  --radius-input: 0.75rem;
+  --radius-card: 1rem;           /* 16px */
+  --radius-badge: 0.5rem;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 20px rgb(0 0 0 / 0.06); /* 부드럽고 넓은 그림자 */
+}
+:root[data-palette="apple"][data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: 0 0 0;
+  --color-surface: 28 28 30;
+  --color-elevated: 44 44 46;
+  --color-border: 56 56 58;
+  --color-muted: 152 152 158;
+  --color-fg: 242 242 247;
+  --color-primary: 10 132 255;   /* systemBlue dark */
+  --color-primary-fg: 255 255 255;
+  --color-success: 48 209 88;
+  --color-warning: 255 159 10;
+  --color-danger: 255 69 58;
+  --color-info: 100 210 255;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+}
+/* Apple: 살짝 큰 제목·부드러운 헤어라인·모바일 상단바 글래스 강화 */
+:root[data-palette="apple"] .font-display { letter-spacing: -0.02em; font-weight: 700; }
+
+/* ─── B) Material Design 3 — Roboto / elevation / pill 버튼·뱃지 / M3 컬러 ─── */
+:root[data-palette="material"] {
+  color-scheme: light;
+  --color-bg: 254 247 255;       /* M3 surface */
+  --color-surface: 255 255 255;
+  --color-elevated: 243 237 247; /* surfaceContainer */
+  --color-border: 202 196 208;   /* outlineVariant */
+  --color-muted: 73 69 79;       /* onSurfaceVariant */
+  --color-fg: 29 27 32;          /* onSurface */
+  --color-primary: 103 80 164;   /* M3 primary(보라) */
+  --color-primary-fg: 255 255 255;
+  --color-success: 20 108 46;
+  --color-warning: 140 80 0;
+  --color-danger: 179 38 30;     /* M3 error */
+  --color-info: 0 99 155;
+  --font-sans: "Roboto", "Pretendard", system-ui, sans-serif;
+  --font-serif: var(--font-sans);
+  --font-display: "Roboto", "Pretendard", system-ui, sans-serif;
+  --radius-btn: 624.9375rem;     /* pill(둥근 버튼) */
+  --radius-input: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-badge: 624.9375rem;   /* pill 뱃지 */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15); /* M3 elevation 1 */
+}
+:root[data-palette="material"][data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: 20 18 24;
+  --color-surface: 33 31 38;
+  --color-elevated: 43 41 48;
+  --color-border: 73 69 79;
+  --color-muted: 202 196 208;
+  --color-fg: 230 224 233;
+  --color-primary: 208 188 255;  /* M3 primary dark */
+  --color-primary-fg: 56 30 114;
+  --color-success: 109 213 140;
+  --color-warning: 245 190 72;
+  --color-danger: 242 184 181;
+  --color-info: 127 207 255;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 1px 3px 1px rgb(0 0 0 / 0.4);
+}
+:root[data-palette="material"] .font-display { font-weight: 500; letter-spacing: 0; }
+/* Material: contained 버튼 elevation + 눌림(state layer 근사, JS 리플 없이 CSS만) */
+:root[data-palette="material"] .btn-primary { box-shadow: 0 1px 2px rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15); }
+:root[data-palette="material"] .btn-primary:hover { box-shadow: 0 1px 2px rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15); }
+:root[data-palette="material"] .btn:active { transform: scale(0.98); }
+
+/* ─── C) Linear — 다크 기본·고대비·얇은 보더·미니멀(그림자 없음) ─── */
+:root[data-palette="linear"] {
+  color-scheme: light; /* 보조(라이트) — 기본은 app.js가 선택 시 dark로 */
+  --color-bg: 255 255 255;
+  --color-surface: 251 251 251;
+  --color-elevated: 244 245 248;
+  --color-border: 228 228 231;
+  --color-muted: 107 111 118;
+  --color-fg: 16 16 18;
+  --color-primary: 94 106 210;   /* Linear indigo */
+  --color-primary-fg: 255 255 255;
+  --color-success: 62 159 114;
+  --color-warning: 176 122 8;
+  --color-danger: 214 69 69;
+  --color-info: 94 106 210;
+  --font-sans: "Inter", "Pretendard", system-ui, sans-serif;
+  --font-serif: var(--font-sans);
+  --font-display: "Inter", "Pretendard", system-ui, sans-serif;
+  --radius-btn: 0.375rem;
+  --radius-input: 0.375rem;
+  --radius-card: 0.5rem;
+  --radius-badge: 0.25rem;
+  --shadow-card: none;           /* 미니멀 — 얇은 보더로 구분 */
+}
+:root[data-palette="linear"][data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: 8 9 10;            /* near-black */
+  --color-surface: 16 17 19;
+  --color-elevated: 24 25 27;
+  --color-border: 38 40 44;      /* 얇은 헤어라인 */
+  --color-muted: 138 143 152;
+  --color-fg: 247 248 248;       /* 고대비 */
+  --color-primary: 122 130 224;  /* 밝은 indigo */
+  --color-primary-fg: 255 255 255;
+  --color-success: 76 183 130;
+  --color-warning: 242 201 76;
+  --color-danger: 235 87 87;
+  --color-info: 122 130 224;
+  --shadow-card: none;
+}
+:root[data-palette="linear"] .font-display { font-weight: 600; letter-spacing: -0.01em; }

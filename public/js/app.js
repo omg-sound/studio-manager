@@ -136,16 +136,37 @@
       el.textContent = text;
     });
   }
+  function setTheme(mode) {
+    document.documentElement.setAttribute("data-theme", mode);
+    try { localStorage.setItem("theme", mode); } catch (e) {}
+    syncThemeLabel(mode);
+  }
   document.addEventListener("click", function (e) {
     var btn = e.target.closest && e.target.closest("[data-theme-toggle]");
     if (!btn) return;
     var current = document.documentElement.getAttribute("data-theme");
-    var next = current === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    try { localStorage.setItem("theme", next); } catch (e) {}
-    syncThemeLabel(next);
+    setTheme(current === "dark" ? "light" : "dark");
   });
   syncThemeLabel(document.documentElement.getAttribute("data-theme")); // 초기 로드 시 현재값 기준 1회 동기화
+
+  // 테마(팔레트) 선택 드롭다운([data-theme-select]): original/apple/material/linear + localStorage["palette"].
+  // theme-init.js가 <head>에서 조기 적용하므로 여기선 select 값 동기화 + 변경 처리만. Linear는 다크 기본.
+  var savedPalette = "original";
+  try { savedPalette = localStorage.getItem("palette") || "original"; } catch (e) {}
+  if (["apple", "material", "linear"].indexOf(savedPalette) === -1) savedPalette = "original";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-theme-select]"), function (sel) { sel.value = savedPalette; });
+  document.addEventListener("change", function (e) {
+    var sel = e.target;
+    if (!sel || !sel.hasAttribute || !sel.hasAttribute("data-theme-select")) return;
+    var p = sel.value;
+    if (p === "original") document.documentElement.removeAttribute("data-palette");
+    else document.documentElement.setAttribute("data-palette", p);
+    try { localStorage.setItem("palette", p); } catch (e) {}
+    // Linear = 다크 최적화 → 선택 시 다크가 기본(사용자가 이후 토글로 라이트 전환 가능).
+    if (p === "linear" && document.documentElement.getAttribute("data-theme") !== "dark") setTheme("dark");
+    // 다른 팔레트를 고르면서 아직 테마 미설정이면 라이트로 명시(Linear 다크에서 넘어올 때 자연스럽게).
+    Array.prototype.forEach.call(document.querySelectorAll("[data-theme-select]"), function (s) { s.value = p; });
+  });
 })();
 
 // (프로젝트 목록 밀도 토글 폐지 2026-07-16 — 목록이 청구식 컬럼 표로 통일되며 좁게/넓게 개념 제거.)

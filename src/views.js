@@ -206,7 +206,7 @@ const WORDMARK = `<span class="font-display text-[17px] font-semibold text-fg">O
 const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Noto+Serif+KR:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
   <!-- Pretendard: Inter에 없는 한글 글리프 담당(본문 한글). CSP style-src(cdn.jsdelivr.net) 허용은 server.js에서 처리. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />`;
 
@@ -229,6 +229,8 @@ function layout({ title, user, current = "", body, wide = false }) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#1e1d1b" media="(prefers-color-scheme: dark)" />
+  <!-- 테마 조기 적용(FOUC 방지): 저장된 data-theme·data-palette를 CSS보다 먼저 세팅(동기 로드, CSP-safe 외부 파일). -->
+  <script src="/js/theme-init.js?v=${ASSET_VERSION}"></script>
   ${FONT_LINKS}
   <link rel="stylesheet" href="/css/app.css?v=${ASSET_VERSION}" />
 </head>
@@ -272,7 +274,17 @@ function layout({ title, user, current = "", body, wide = false }) {
           </select>
         </form>`
           : ""}
-        <!-- 테마 토글: 마크업만(아이콘+라벨). 토글 로직=app.js([data-theme-toggle]), 다크 분기=src.css. CSP-safe(인라인 onclick 없음). -->
+        <!-- 테마 선택 드롭다운(2026-07-17): 팔레트 4종. 값은 client(localStorage)라 서버는 original 렌더 후 app.js가 실제값으로 동기화. -->
+        <div class="mb-2 px-2">
+          <label class="mb-1 block text-[11px] text-muted" for="theme-select">테마 <span class="opacity-70">· 시각 스타일</span></label>
+          <select id="theme-select" data-theme-select class="input py-1 text-xs">
+            <option value="original">Original</option>
+            <option value="apple">Apple</option>
+            <option value="material">Material</option>
+            <option value="linear">Linear</option>
+          </select>
+        </div>
+        <!-- 테마(라이트/다크) 토글: 마크업만(아이콘+라벨). 토글 로직=app.js([data-theme-toggle]), 다크 분기=src.css. CSP-safe(인라인 onclick 없음). -->
         <button type="button" data-theme-toggle aria-label="테마 전환" class="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 font-medium text-muted transition-colors hover:bg-surface hover:text-fg active:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
           <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor" stroke="none"/></svg>
           <span data-theme-label>테마</span>
