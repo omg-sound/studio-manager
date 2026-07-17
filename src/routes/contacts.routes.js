@@ -9,7 +9,6 @@ const {
   updateParty,
   deleteParty,
   setPartyGoogleRef,
-  currentAffiliation,
   listAffiliations,
   addAffiliation,
   ensureCompanyParty,
@@ -20,9 +19,7 @@ const {
   listProjectsForParty,
   listSessionsForParty,
   listClients,
-  orgsWithOwnerParty,
   getManagerByPartyId,
-  classifyParty,
   syncPartyToManager,
   listGroupsForPicker,
   setPartyGroup,
@@ -31,7 +28,8 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listRowLinked, contactTable, dataTable, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo, dateCombo } = require("../views");
+const { layout, pageHeader, esc, personName, flashBanner, emptyState, errorPage, tabBar, dirtyActionRow, searchBox, companyCombo, dateCombo, detailsChevron } = require("../views");
+const { contactPanes, contactNameList, contactReadView, contactExtras } = require("../views.contacts");
 
 const router = express.Router();
 
@@ -52,54 +50,9 @@ router.post("/sync", asyncHandler(async (req, res) => {
   res.redirect(`/contacts?notice=${encodeURIComponent(notice)}${warn ? "&notice_warn=1" : ""}`);
 }));
 
-// ── 목록(이름·현재소속·전화 + ?q= 검색) ──
+// ── 목록(2단: 왼쪽 이름 목록 + 오른쪽 빈 패널) ──
 router.get("/", (req, res) => {
-  const q = String(req.query.q || "").trim();
-  const TABS = ["external", "worker", "staff"];
-  const tab = TABS.includes(req.query.tab) ? req.query.tab : "external"; // 외부 연락처 / 외주 작업자 / 녹음실 스태프
-  const rows = listContacts({ q: q || undefined, tab });
-
-  const tabs = tabBar({
-    tabs: [
-      { key: "external", label: "외부 연락처" },
-      { key: "worker", label: "외주 작업자" },
-      { key: "staff", label: "녹음실 스태프" },
-    ],
-    activeKey: tab,
-    hrefFn: (k) => `/contacts?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
-  });
-
-  // 목록 상한(2026-07-09 스케일 점검) — 연락처는 계속 누적되므로 기본 100건 + 더 보기(검색은 전체 대상).
-  const cap = capList(rows, req.query, (n) => `/contacts?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
-  // 클라이언트 목록과 통일(2026-07-16 사용자 요청): 타이핑 즉시 실시간 필터 + 검색 버튼 없음(제안 드롭다운 대신 표 행 in-place 필터). Enter=서버 전체 검색(캡 초과분).
-  const searchBar = searchBox({
-    action: "/contacts", q, placeholder: "이름 · 전화 검색", label: "연락처 검색", liveFilter: true, noButton: true,
-    remote: !!cap.more, // 100+ 연락처면 타이핑 시 서버 전체 검색으로 보강(2026-07-17)
-    hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />`,
-  });
-
-  const resultNote = q
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts?tab=${tab}" class="text-primary hover:underline">전체 보기</a></div>`
-    : "";
-
-  const list = rows.length
-    ? contactTable(cap.shown, { returnTo: req.originalUrl, filterList: true }) + cap.more // 청구·프로젝트식 컬럼 표(이름·역할·소속·직함·전화·이메일) + 실시간 필터
-    : q
-      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
-      : tab === "staff"
-        ? emptyState("녹음실 스태프 연락처가 없습니다. 환경설정 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
-        : tab === "worker"
-          ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
-          : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
-
-  const body = `
-    ${flashBanner(req.query)}
-    ${pageHeader({ title: "연락처", action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
-    ${tabs}
-    ${searchBar}
-    ${resultNote}
-    ${list}`;
-  res.send(layout({ title: "연락처", user: req.user, current: "/contacts", body, wide: true }));
+  res.send(renderContacts(req, null)); // 선택 없음 = 빈 패널
 });
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listContacts가 이름/활동명/전화 LIKE 필터 ──
@@ -153,9 +106,13 @@ router.post("/", asyncHandler(async (req, res) => {
   }
 }));
 
-// ── 수정: 이제 상세(GET /:id)가 인라인 편집 화면이므로 옛 편집 경로는 상세로 리다이렉트(북마크 호환).
+// 편집(2026-07-17 마스터-디테일): 읽기 뷰의 [편집]이 여기로. 왼쪽 목록은 유지하고 오른쪽만 폼.
+// (옛 '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 바뀜 — 클라이언트 상세는 인라인 편집 유지.)
 router.get("/:id/edit", (req, res) => {
-  res.redirect(`/contacts/${Number(req.params.id)}`);
+  const c = getParty(Number(req.params.id));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const returnTo = safePath(req.query.return); // 백링크 규약(CLAUDE.md) — 내부 절대경로만(open-redirect 차단)
+  res.send(renderContacts(req, c, editPaneFor(c, returnTo)));
 });
 
 router.post("/:id", asyncHandler(async (req, res) => {
@@ -191,10 +148,12 @@ router.post("/:id", asyncHandler(async (req, res) => {
         if (ref) setPartyGoogleRef(id, ref.resourceName, ref.etag);
       }
     } catch (_e) {}
-    res.redirect(`/contacts/${id}?flash=saved`);
+    // 백링크 규약(CLAUDE.md): return이 있으면 그 화면(예: 클라이언트 관계자 탭)으로, 없으면 읽기 뷰로.
+    const ret = safePath(b.return);
+    res.redirect(ret || `/contacts/${id}?flash=saved`);
   } catch (e) {
     if (e.message !== "PARTY_NAME_REQUIRED") throw e; // 이름 누락만 폼 재렌더, 그 외(DB 오류 등)는 전역 핸들러(500+로깅)로
-    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker()) }));
+    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker(), safePath(b.return)) }));
   }
 }));
 
@@ -214,6 +173,13 @@ router.post("/:id/delete", asyncHandler(async (req, res) => {
 }));
 
 // ── 소속 이력: 추가/이직 · 종료 · 삭제 ──
+// 소속 이력 폼은 편집 패널(/contacts/:id/edit)에 있으므로 처리 후에도 **편집 화면에 머문다**(읽기 뷰로 튕기면 편집 흐름이 끊긴다).
+// 폼이 return(관계자 탭 등 외부 복귀 경로)을 실어왔으면 safePath 검증 후 그대로 이어붙여 백링크 체인을 보존한다.
+function editRedirect(id, body, flash) {
+  const ret = safePath(body && body.return);
+  return `/contacts/${id}/edit?flash=${flash}${ret ? `&return=${encodeURIComponent(ret)}` : ""}`;
+}
+
 router.post("/:id/affiliations", (req, res) => {
   const id = Number(req.params.id);
   if (!getParty(id)) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
@@ -225,12 +191,12 @@ router.post("/:id/affiliations", (req, res) => {
     memo: b.memo,
     closeCurrent: b.closeCurrent === "1",
   });
-  res.redirect(`/contacts/${id}?flash=added`);
+  res.redirect(editRedirect(id, b, "added"));
 });
 
 router.post("/:id/affiliations/:aid/end", (req, res) => {
   endAffiliation(Number(req.params.aid));
-  res.redirect(`/contacts/${Number(req.params.id)}?flash=saved`);
+  res.redirect(editRedirect(Number(req.params.id), req.body, "saved"));
 });
 
 // 소속 이력 행 수정(회사·직함·기간·메모). ended_on 비우면 현재 소속.
@@ -243,200 +209,29 @@ router.post("/:id/affiliations/:aid", (req, res) => {
     ended_on: b.ended_on,
     memo: b.memo,
   });
-  res.redirect(`/contacts/${Number(req.params.id)}?flash=saved`);
+  res.redirect(editRedirect(Number(req.params.id), b, "saved"));
 });
 
 router.post("/:id/affiliations/:aid/delete", (req, res) => {
   deleteAffiliation(Number(req.params.aid));
-  res.redirect(`/contacts/${Number(req.params.id)}?flash=deleted`);
+  res.redirect(editRedirect(Number(req.params.id), req.body, "deleted"));
 });
 
-// ── 상세(2탭: 상세 정보[연락처 정보 + 소속 이력] / 참여 내역[프로젝트 + 세션]) ──
+// ── 상세(2단: 왼쪽 이름 목록[선택 강조] + 오른쪽 읽기 뷰) ──
 // 주의: GET /:id 는 GET /new·GET /:id/edit 보다 뒤에 등록해 경로 충돌을 피한다.
+// 옛 2탭·인라인 편집 폼·소속 이력 폼은 편집 패널(/contacts/:id/edit)로 옮겨갔다.
 router.get("/:id", (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const tab = req.query.tab === "activity" ? "activity" : "info";
-  const affs = listAffiliations(c.id);
-  const projects = listProjectsForParty(c.id);
-  const sessions = listSessionsForParty(c.id);
-  const clients = listClients({});
-  const linkedManager = getManagerByPartyId(c.id);
-
-  const nameDetail = [`${String(c.family_name || "").trim()}${String(c.given_name || "").trim()}`, c.honorific].filter(Boolean).join(" "); // 한국식: 성+이름 붙이고 호칭 뒤
-  const managerBadge = linkedManager
-    ? `<div class="text-sm"><span class="text-muted">담당자 연동</span> ${
-        linkedManager.user_id != null
-          ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
-          : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
-      }</div>`
-    : "";
-  const ownerClients = orgsWithOwnerParty(c.id); // 이 연락처가 대표자인 클라이언트(양방향 링크)
-  const cur = currentAffiliation(c.id); // 현재 소속 — 회사칸 기본값(담당자로만 등록돼 company 텍스트가 비어 있던 경우 반영)
-  // 상세로 들어오면 바로 수정 가능한 화면 — 읽기전용 카드+'정보 수정' 버튼 대신 인라인 편집 폼(변경 시 하이라이트 저장).
-  const editCard = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker());
-  const derivedBits = [
-    nameDetail && nameDetail !== c.name ? `<div><span class="text-muted">성명</span> ${esc(nameDetail)}</div>` : "",
-    c.nickname ? `<div><span class="text-muted">아티스트명</span> ${esc(c.nickname)}${c.is_artist ? ` · <a href="/clients/${c.id}" class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
-    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : "",
-    managerBadge,
-  ].filter(Boolean).join("");
-  const infoCard = `
-    ${editCard}
-    ${derivedBits ? `<div class="mt-3 space-y-1 text-sm">${derivedBits}</div>` : ""}`;
-
-  const timeline = affs.length
-    ? `<div class="space-y-2">${affs
-        .map((a) => {
-          const isCurrent = !a.ended_on;
-          const badge = isCurrent ? `<span class="badge badge-success">현재</span>` : `<span class="badge badge-neutral">종료</span>`;
-          const company = a.client_name || "무소속";
-          const period = `${a.started_on ? esc(a.started_on) : "?"} ~ ${a.ended_on ? esc(a.ended_on) : "현재"}`;
-          // 각 소속 행을 펼치면(details) 회사·직함·기간·메모를 직접 수정(dirty 저장). 종료·삭제도 그 안에.
-          const editForm = `
-            <form method="post" action="/contacts/${c.id}/affiliations/${a.id}" class="mt-2 space-y-2 border-t border-border pt-2" data-dirty-form>
-              <div class="grid gap-2 sm:grid-cols-2">
-                <div>
-                  <label class="label mb-0.5 text-xs">소속 회사 <span class="font-normal text-muted">(검색 · 비우면 무소속)</span></label>
-                  ${companyCombo("affiliation_company", a.client_name || "", "소속사/레이블", "회사")}
-                </div>
-                <div><label class="label mb-0.5 text-xs">직함</label><input class="input py-1.5 text-sm" name="title" value="${esc(a.title || "")}" placeholder="예: A&amp;R · 매니저" /></div>
-                <div><label class="label mb-0.5 text-xs">시작일</label>${dateCombo("started_on", a.started_on || "", { label: "시작일", inputCls: "input w-full py-1.5 text-sm" })}</div>
-                <div><label class="label mb-0.5 text-xs">종료일 <span class="font-normal text-muted">(비우면 현재)</span></label>${dateCombo("ended_on", a.ended_on || "", { label: "종료일", inputCls: "input w-full py-1.5 text-sm" })}</div>
-              </div>
-              <div><label class="label mb-0.5 text-xs">메모</label><input class="input py-1.5 text-sm" name="memo" value="${esc(a.memo || "")}" /></div>
-              <div class="flex items-center gap-2">
-                <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>저장</button>
-                <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
-              </div>
-            </form>
-            <div class="mt-2 flex gap-1 border-t border-border pt-2">
-              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end"><button class="btn-ghost btn-xs" type="submit">종료 처리</button></form>` : ""}
-              <form method="post" action="/contacts/${c.id}/affiliations/${a.id}/delete" data-confirm="이 소속 이력을 삭제할까요?"><button class="btn-ghost btn-xs text-danger" type="submit">삭제</button></form>
-            </div>`;
-          return `<div class="card">
-            <details class="group">
-              <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">${badge}<span class="font-semibold">${esc(company)}</span>${a.title ? `<span class="text-sm text-muted">${esc(a.title)}</span>` : ""}</div>
-                  <div class="mt-0.5 text-xs text-muted">${period}</div>
-                  ${a.memo ? `<div class="mt-1 text-sm">${esc(a.memo)}</div>` : ""}
-                </div>
-                <span class="shrink-0 text-xs text-muted hover:text-fg">${detailsChevron()}</span>
-              </summary>
-              ${editForm}
-            </details>
-          </div>`;
-        })
-        .join("")}</div>`
-    : emptyState("소속 이력이 없습니다.", { card: true });
-
-  const affForm = `
-    <form method="post" action="/contacts/${c.id}/affiliations" class="card mt-3 space-y-3">
-      <div class="font-semibold">소속 추가 / 이직</div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="label">소속 회사 <span class="font-normal text-muted text-xs">(검색 · 목록 외 이름은 새 업체 등록)</span></label>
-          ${companyCombo("affiliation_company", "", "소속사/레이블", "회사")}
-        </div>
-        <div><label class="label">직함</label><input class="input" name="title" placeholder="예: A&amp;R · 매니저" /></div>
-      </div>
-      <div><label class="label">시작일</label>${dateCombo("started_on", "", { label: "시작일", inputCls: "input w-full" })}</div>
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="closeCurrent" value="1" checked /> 기존 현재 소속 종료(이직)</label>
-      <button class="btn-primary" type="submit">소속 추가</button>
-    </form>`;
-
-  // 참여 내역 = 프로젝트·세션 표(다른 목록처럼 항목명 헤더 + 프로젝트 작성일 — 이름만으론 식별이 어려워서, 2026-07-17 사용자 요청).
-  // 열 순서는 프로젝트 목록(아티스트·제작사·프로젝트·작성일)과 통일. w=Tailwind 폭 클래스 리터럴(인라인 style은 CSP 차단, 함정 #27).
-  const dash = '<span class="text-muted">—</span>';
-  const projectList = projects.length
-    ? dataTable(
-        [
-          { label: "아티스트", w: "w-[10rem]", hide: "sm", mCard: "tl" },
-          { label: "제작사", w: "w-[10rem]", hide: "lg", mobileHide: true },
-          { label: "프로젝트", primary: true, mCard: "bl" },
-          { label: "작성일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
-        ],
-        projects.map((p) => {
-          const link = (inner, cls = "") => `<a href="/projects/${p.id}" class="dt-link ${cls}">${inner}</a>`;
-          const company = p.production_company || p.artist_company || "";
-          return { cells: [
-            p.artist ? link(esc(p.artist), "font-medium") : dash,
-            company ? link(esc(company), "text-muted") : dash,
-            link(esc(p.title), "font-medium"),
-            link(esc(String(p.created_at || "").slice(0, 10)), "text-muted"),
-          ] };
-        })
-      )
-    : emptyState("연결된 프로젝트가 없습니다.", { card: true });
-
-  const sessionList = sessions.length
-    ? dataTable(
-        [
-          { label: "날짜", w: "w-[7rem]", nowrap: true, mCard: "tl" },
-          { label: "시간", w: "w-[7.5rem]", hide: "md", nowrap: true, mobileHide: true },
-          { label: "종류", w: "w-[6rem]", hide: "sm", mCard: "tr" },
-          { label: "프로젝트", primary: true, mCard: "bl" },
-          { label: "상태", w: "w-[5rem]", mCard: "br" },
-        ],
-        sessions.map((s) => {
-          const link = (inner, cls = "") => `<a href="/projects/${s.project_id}?tab=sessions" class="dt-link ${cls}">${inner}</a>`;
-          const time = s.all_day ? "종일" : s.start_time ? `${s.start_time}${s.end_time ? `–${s.end_time}` : ""}` : "";
-          return { cells: [
-            link(esc(s.session_date), "font-medium"),
-            time ? link(esc(time), "text-muted") : dash,
-            link(esc(s.session_type), "text-muted"),
-            link(esc(s.project_title || ""), "font-medium"),
-            link(esc(s.status), "text-muted"),
-          ] };
-        })
-      )
-    : emptyState("담당 디렉터로 지정된 세션이 없습니다.", { card: true });
-
-  // 클라이언트 '관계자' 탭 등에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만). 아니면 연락처 목록.
-  // 청구·프로젝트 청구처 카드 → (관계자 리다이렉트) → 여기로 온 경우 ?return=(내부 절대경로만)으로 그 화면 복귀(2026-07-08).
-  const from = String(req.query.from || "");
-  const fromOk = Boolean(from) && /^[\w=&%.\-]*$/.test(from);
-  const retQ = String(req.query.return || "");
-  const ret = safePath(retQ);
-  const backHref = ret || (fromOk ? `/clients?${from}` : "/contacts");
-  const backLabel = ret
-    ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "클라이언트" : ret.startsWith("/contacts") ? "연락처" : "돌아가기"
-    : from ? "클라이언트" : "연락처";
-  // 탭 2구성(2026-07-17 사용자 요청): 상세 정보(편집 폼·소속 이력, 기본) / 참여 내역(프로젝트+세션)
-  // — 외주 작업자 상세의 '참여 내역' 탭과 같은 패턴. 탭 전환 시 복귀 경로(from·return) 유실 방지.
-  const keepQ = [from && fromOk ? `from=${from}` : "", ret ? `return=${encodeURIComponent(ret)}` : ""].filter(Boolean).join("&");
-  const tabBarHtml = tabBar({
-    tabs: [
-      { key: "info", label: "상세 정보" },
-      { key: "activity", label: `참여 내역 ${projects.length + sessions.length}` },
-    ],
-    activeKey: tab,
-    hrefFn: (key) => `/contacts/${c.id}?tab=${key}${keepQ ? `&${keepQ}` : ""}`,
-  });
-  const infoContent = `
-    ${infoCard}
-    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
-    ${timeline}
-    ${affForm}`;
-  const activityContent = `
-    <h2 class="mb-2 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2>
-    ${projectList}
-    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">세션 ${sessions.length}</h2>
-    ${sessionList}`;
-  const body = `
-    ${flashBanner(req.query)}
-    ${pageHeader({ title: personName(c), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}
-    ${tabBarHtml}
-    ${tab === "activity" ? activityContent : infoContent}`;
-  res.send(layout({ title: c.name, user: req.user, current: "/contacts", body }));
+  res.send(renderContacts(req, c));
 });
 
 // ── 폼(추가/수정 공용) ──
-function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false, groups = []) {
+// returnTo: 편집 진입 시 실어온 복귀 경로(safePath 검증된 값만) — 저장 시 그리로 돌아가기 위해 hidden으로 함께 제출.
+function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false, groups = [], returnTo = null) {
   const e = c._err || "";
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
-  const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
+  const cancelHref = isEdit ? (returnTo || `/contacts/${c.id}`) : "/contacts";
   const isHouseEngineer = manager && manager.user_id != null;
   // (구 '현재 소속' 블록 제거 — 2026-07-04 구식 필드 전수 정리: 아래 '회사' companyCombo + '직책'이
   //  syncCompanyAffiliation으로 첫 소속을 등록하므로 평면 select와 기능 중복. 무소속=회사 비움.)
@@ -452,6 +247,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
   return `
     ${embedded ? "" : pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
     <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
+      ${isEdit && returnTo ? `<input type="hidden" name="return" value="${esc(returnTo)}" />` : ""}
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       ${managerBanner}
       <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
@@ -498,6 +294,160 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         : dirtyActionRow({ cancelHref: cancelHref, saveLabel: "추가", dirty: false })}
     </form>
     ${isEdit ? `<form id="del-contact-${c.id}" method="post" action="/contacts/${c.id}/delete" data-confirm="${esc(c.name)} 연락처를 삭제할까요? 소속 이력도 함께 삭제됩니다." class="hidden"></form>` : ""}`;
+}
+
+/**
+ * 연락처 2단 렌더(2026-07-17) — 목록·읽기·편집이 같은 왼쪽 목록을 공유한다.
+ * @param {object} req
+ * @param {object|null} sel 선택된 party(없으면 빈 패널)
+ * @param {string} [rightHtml] 오른쪽 패널 HTML(미지정 시 읽기 뷰)
+ */
+function renderContacts(req, sel, rightHtml) {
+  const q = String(req.query.q || "").trim();
+  const TABS = ["external", "worker", "staff"];
+  const tab = TABS.includes(req.query.tab) ? req.query.tab : "external";
+  const rows = listContacts({ q: q || undefined, tab }); // 상한 없음(2026-07-17) — 이름만 렌더라 전 명단도 수십 KB
+  const keep = `?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`;
+
+  const tabs = tabBar({
+    tabs: [
+      { key: "external", label: "외부 연락처" },
+      { key: "worker", label: "외주 작업자" },
+      { key: "staff", label: "녹음실 스태프" },
+    ],
+    activeKey: tab,
+    hrefFn: (k) => `/contacts?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+  });
+  const searchBar = searchBox({
+    action: "/contacts", q, placeholder: "이름 검색", label: "연락처 검색", liveFilter: true, noButton: true,
+    hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />`,
+  });
+  // 검색 결과 건수 + 전체 보기(클라이언트 목록과 동일 문구·형식).
+  const resultNote = q
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts?tab=${tab}" class="text-primary hover:underline">전체 보기</a></div>`
+    : "";
+  const list = rows.length
+    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/contacts/${c.id}${keep}` })
+    : q
+      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
+      : tab === "staff"
+        ? emptyState("녹음실 스태프 연락처가 없습니다. 환경설정 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
+        : tab === "worker"
+          ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
+          : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
+
+  const left = `${searchBar}${resultNote}${list}`;
+  const right = rightHtml || (sel ? readPaneFor(sel) : emptyState("연락처를 선택하세요.", { card: true, icon: "clients" }));
+
+  // 백링크 규약(CLAUDE.md): 청구·프로젝트·클라이언트에서 ?return=(내부 절대경로)로 들어오면 그 화면으로 복귀.
+  // 목록 행 링크의 return은 2단이라 불필요해졌지만, **외부 유입 return은 유지**한다(스펙 '제거·정리' 표).
+  // ?from=(클라이언트 목록 필터 쿼리스트링·안전문자만)은 관계자 리다이렉트 경로가 아직 실어보내므로 폴백으로 유지.
+  const retQ = String(req.query.return || "");
+  const ret = safePath(retQ);
+  const from = String(req.query.from || "");
+  const fromOk = Boolean(from) && /^[\w=&%.\-]*$/.test(from);
+  const back = ret
+    ? { href: ret, label: ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "클라이언트" : "돌아가기" }
+    : fromOk
+      ? { href: `/clients?${from}`, label: "클라이언트" }
+      : undefined;
+  const body = `
+    ${flashBanner(req.query)}
+    ${pageHeader({ title: "연락처", back, action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
+    ${tabs}
+    ${contactPanes({ left, right, hasSelection: !!sel, backHref: `/contacts${keep}`, backLabel: "연락처" })}`;
+  return layout({ title: sel ? sel.name : "연락처", user: req.user, current: "/contacts", body, wide: true });
+}
+
+/** 읽기 패널 — 상세 데이터 조회 + 연동 정보(파생·contactExtras 공용) 조립. */
+function readPaneFor(c) {
+  const affs = listAffiliations(c.id);
+  const projects = listProjectsForParty(c.id);
+  const sessions = listSessionsForParty(c.id);
+  return contactReadView(c, { affs, projects, sessions, editHref: `/contacts/${c.id}/edit`, extras: contactExtras(c) });
+}
+
+/** 편집 패널 — 폼 + 소속 이력 인라인 편집 + 소속 추가/이직 + 삭제(옛 '상세 정보' 탭 내용을 그대로 이동). */
+function editPaneFor(c, returnTo = null) {
+  const affs = listAffiliations(c.id);
+  const clients = listClients({});
+  const linkedManager = getManagerByPartyId(c.id);
+  const cur = affs.find((a) => !a.ended_on);
+  // 취소 = 저장하지 않고 읽기 뷰(또는 return 경로)로. data-no-guard + app.js가 bypass도 세워 beforeunload까지 통과(함정 #24).
+  const cancelHref = returnTo || `/contacts/${c.id}`;
+  const cancel = `<a href="${esc(cancelHref)}" class="text-sm text-primary hover:underline" data-no-guard>← 취소</a>`;
+  // 소속 이력 폼도 복귀 경로를 함께 실어보낸다 — 처리 후 편집 화면으로 돌아올 때 백링크 체인이 끊기지 않게.
+  const retInput = returnTo ? `<input type="hidden" name="return" value="${esc(returnTo)}" />` : "";
+  const form = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker(), returnTo);
+
+  const timeline = affs.length
+    ? `<div class="space-y-2">${affs
+        .map((a) => {
+          const isCurrent = !a.ended_on;
+          const badge = isCurrent ? `<span class="badge badge-success">현재</span>` : `<span class="badge badge-neutral">종료</span>`;
+          const company = a.client_name || "무소속";
+          const period = `${a.started_on ? esc(a.started_on) : "?"} ~ ${a.ended_on ? esc(a.ended_on) : "현재"}`;
+          // 각 소속 행을 펼치면(details) 회사·직함·기간·메모를 직접 수정(dirty 저장). 종료·삭제도 그 안에.
+          const editForm = `
+            <form method="post" action="/contacts/${c.id}/affiliations/${a.id}" class="mt-2 space-y-2 border-t border-border pt-2" data-dirty-form>
+              ${retInput}
+              <div class="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label class="label mb-0.5 text-xs">소속 회사 <span class="font-normal text-muted">(검색 · 비우면 무소속)</span></label>
+                  ${companyCombo("affiliation_company", a.client_name || "", "소속사/레이블", "회사")}
+                </div>
+                <div><label class="label mb-0.5 text-xs">직함</label><input class="input py-1.5 text-sm" name="title" value="${esc(a.title || "")}" placeholder="예: A&amp;R · 매니저" /></div>
+                <div><label class="label mb-0.5 text-xs">시작일</label>${dateCombo("started_on", a.started_on || "", { label: "시작일", inputCls: "input w-full py-1.5 text-sm" })}</div>
+                <div><label class="label mb-0.5 text-xs">종료일 <span class="font-normal text-muted">(비우면 현재)</span></label>${dateCombo("ended_on", a.ended_on || "", { label: "종료일", inputCls: "input w-full py-1.5 text-sm" })}</div>
+              </div>
+              <div><label class="label mb-0.5 text-xs">메모</label><input class="input py-1.5 text-sm" name="memo" value="${esc(a.memo || "")}" /></div>
+              <div class="flex items-center gap-2">
+                <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>저장</button>
+                <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
+              </div>
+            </form>
+            <div class="mt-2 flex gap-1 border-t border-border pt-2">
+              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end">${retInput}<button class="btn-ghost btn-xs" type="submit">종료 처리</button></form>` : ""}
+              <form method="post" action="/contacts/${c.id}/affiliations/${a.id}/delete" data-confirm="이 소속 이력을 삭제할까요?">${retInput}<button class="btn-ghost btn-xs text-danger" type="submit">삭제</button></form>
+            </div>`;
+          return `<div class="card">
+            <details class="group">
+              <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">${badge}<span class="font-semibold">${esc(company)}</span>${a.title ? `<span class="text-sm text-muted">${esc(a.title)}</span>` : ""}</div>
+                  <div class="mt-0.5 text-xs text-muted">${period}</div>
+                  ${a.memo ? `<div class="mt-1 text-sm">${esc(a.memo)}</div>` : ""}
+                </div>
+                <span class="shrink-0 text-xs text-muted hover:text-fg">${detailsChevron()}</span>
+              </summary>
+              ${editForm}
+            </details>
+          </div>`;
+        })
+        .join("")}</div>`
+    : emptyState("소속 이력이 없습니다.", { card: true });
+
+  const affForm = `
+    <form method="post" action="/contacts/${c.id}/affiliations" class="card mt-3 space-y-3">
+      ${retInput}
+      <div class="font-semibold">소속 추가 / 이직</div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label">소속 회사 <span class="font-normal text-muted text-xs">(검색 · 목록 외 이름은 새 업체 등록)</span></label>
+          ${companyCombo("affiliation_company", "", "소속사/레이블", "회사")}
+        </div>
+        <div><label class="label">직함</label><input class="input" name="title" placeholder="예: A&amp;R · 매니저" /></div>
+      </div>
+      <div><label class="label">시작일</label>${dateCombo("started_on", "", { label: "시작일", inputCls: "input w-full" })}</div>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="closeCurrent" value="1" checked /> 기존 현재 소속 종료(이직)</label>
+      <button class="btn-primary" type="submit">소속 추가</button>
+    </form>`;
+
+  return `<div class="mb-3">${cancel}</div>
+    ${form}
+    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
+    ${timeline}
+    ${affForm}`;
 }
 
 module.exports = router;

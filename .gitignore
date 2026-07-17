@@ -30,3 +30,6 @@ tmp/
 
 # Claude Code 로컬 설정(개발자별 권한 오버라이드 — 공유하지 않음)
 .claude/settings.local.json
+
+# superpowers 진행 대장(스크래치)
+.superpowers/
