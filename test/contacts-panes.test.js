@@ -189,6 +189,47 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.match(bogus, /외부인001/, "모르는 탭은 전체");
   });
 
+  await t.test("업체·그룹: 2탭 + 옛 탭·사람 상세는 연락처로 리다이렉트", async () => {
+    const artistId = db().prepare("SELECT id FROM parties WHERE is_artist = 1 AND kind = 'person' LIMIT 1").get().id;
+    const raw = async (p) => { const r = await fetch(base + p, { headers: { cookie }, redirect: "manual" }); return { status: r.status, loc: r.headers.get("location") }; };
+
+    const { status, html } = await get("/clients");
+    assert.equal(status, 200);
+    assert.match(html, /업체 \d+/, "업체 탭");
+    assert.match(html, /그룹 \d+/, "그룹 탭");
+    assert.ok(!/관계자 \d+/.test(html), "관계자 탭 없음");
+    assert.ok(!/아티스트 \d+/.test(html), "아티스트 탭 없음");
+
+    // 옛 탭 → 연락처 필터로(검색어 보존)
+    assert.deepEqual(await raw("/clients?group=associate"), { status: 302, loc: "/contacts?tab=associate" });
+    assert.deepEqual(await raw("/clients?group=artist"), { status: 302, loc: "/contacts?tab=artist" });
+    assert.deepEqual(await raw("/clients?group=artist&q=%EA%B9%80"), { status: 302, loc: "/contacts?tab=artist&q=%EA%B9%80" });
+
+    // 사람 id → 연락처 상세(아티스트도 — 이전엔 아티스트만 클라이언트 상세에 남았다)
+    assert.deepEqual(await raw(`/clients/${artistId}`), { status: 302, loc: `/contacts/${artistId}` });
+
+    // '새 클라이언트' 드롭다운 = 업체·그룹만
+    assert.ok(!/\/clients\/new\?type=artist/.test(html), "아티스트 생성 폼 링크 없음");
+    assert.match(html, /\/clients\/new\?type=company/);
+    assert.match(html, /\/clients\/new\?type=group/);
+    // 아티스트 생성 폼 경로는 목록으로 되돌린다(사람 생성은 연락처)
+    assert.deepEqual(await raw("/clients/new?type=artist"), { status: 302, loc: "/contacts/new" });
+  });
+
+  await t.test("POST /clients type=artist는 유지 — 프로젝트 폼 '새 아티스트' 모달 계약", async () => {
+    const r = await fetch(base + "/clients", {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin", "X-Requested-With": "fetch" },
+      body: new URLSearchParams({ type: "artist", name: "모달신규아티스트" }).toString(),
+    });
+    assert.equal(r.status, 200, "fetch 간이 등록은 JSON 200");
+    const j = await r.json();
+    assert.ok(j.ok && j.id, "생성된 아티스트 id 반환");
+    const row = db().prepare("SELECT kind, is_artist FROM parties WHERE id = ?").get(j.id);
+    assert.equal(row.kind, "person");
+    assert.equal(row.is_artist, 1);
+  });
+
   server.close();
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });

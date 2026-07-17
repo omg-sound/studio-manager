@@ -43,28 +43,25 @@ function companyRolesFrom(b) {
 
 // ── 목록(서브메뉴 = 업체/아티스트 우선 분리 + 업체 내 분류 · 이름 검색) ──
 router.get("/", (req, res) => {
-  // 당사자 모델 분류(서로 섞이지 않음): 업체(company) / 관계자(사람·비아티스트: 대표·A&R·담당자·디렉터·작가) / 아티스트(개인 솔로) / 그룹(밴드·아이돌).
-  // '전체' 탭 폐기(2026-07-03). 기본 진입 = 업체. 관계자 상세는 연락처(/contacts/:id).
-  const group = ["company", "associate", "artist", "group"].includes(req.query.group) ? req.query.group : "company";
+  // 사람 탭(관계자·아티스트)은 연락처로 이관됨(2026-07-17 사람/조직 축 정리) — 옛 링크·북마크는 그 필터로 보낸다.
+  const legacyPeopleTab = { associate: "associate", artist: "artist" }[String(req.query.group || "")];
+  if (legacyPeopleTab) {
+    const q0 = String(req.query.q || "").trim();
+    return res.redirect(`/contacts?tab=${legacyPeopleTab}${q0 ? `&q=${encodeURIComponent(q0)}` : ""}`);
+  }
+  // 당사자 모델 분류(서로 섞이지 않음): 업체(company) / 그룹(밴드·아이돌). 사람(관계자·아티스트)은 연락처.
+  const group = ["company", "group"].includes(req.query.group) ? req.query.group : "company"; // 조직 명부 — 업체/그룹
   const activeKind = ""; // 레거시 2차 필터 제거(호환용 빈값 유지)
   const q = String(req.query.q || "").trim();
 
-  const isSoloArtist = (c) => c.is_artist && c.kind === "person";
   const allRows = listClients({});
-  const artistCount = allRows.filter(isSoloArtist).length;
   const groupCount = allRows.filter((c) => c.kind === "group").length;
   const companyCount = allRows.filter((c) => c.kind === "company").length;
-  const associateCount = listAssociates({}).length;
 
-  // 표시 행: 관계자 탭은 사람(비아티스트) 소스, 나머지는 클라이언트(업체/아티스트/그룹).
+  // 표시 행: 클라이언트(업체/그룹)만.
   let displayed;
-  if (group === "associate") {
-    displayed = listAssociates({ q }); // 이름/전화 검색 포함
-  } else {
-    let rows = allRows;
-    if (group === "artist") rows = allRows.filter(isSoloArtist);
-    else if (group === "group") rows = allRows.filter((c) => c.kind === "group");
-    else rows = allRows.filter((c) => c.kind === "company");
+  {
+    let rows = group === "group" ? allRows.filter((c) => c.kind === "group") : allRows.filter((c) => c.kind === "company");
     const ql = q.toLowerCase();
     displayed = q ? rows.filter((c) => c.name.toLowerCase().includes(ql)) : rows;
   }
@@ -81,12 +78,10 @@ router.get("/", (req, res) => {
     if (q) p.push("q=" + encodeURIComponent(q));
     return p.length ? "/clients?" + p.join("&") : "/clients";
   };
-  // 1차 서브메뉴(업체/관계자/아티스트/그룹) — 탭 스타일(연락처 탭과 통일). '전체' 폐기.
+  // 1차 서브메뉴(업체/그룹) — 조직 명부. 사람(관계자·아티스트)은 연락처로 이관(2026-07-17). '전체' 폐기.
   const groupChips = tabBar({
     tabs: [
       { key: "company", label: `업체 ${companyCount}` },
-      { key: "associate", label: `관계자 ${associateCount}` },
-      { key: "artist", label: `아티스트 ${artistCount}` },
       { key: "group", label: `그룹 ${groupCount}` },
     ],
     activeKey: group,
@@ -95,7 +90,7 @@ router.get("/", (req, res) => {
   const kindChips = ""; // 2차 분류 필터 폐기(당사자 모델 — 조직 겸업은 roles 배지로 표시)
 
   // 검색 문구는 탭별 명사(2026-07-16 사용자 요청 '이름 검색→업체명 검색').
-  const searchNoun = { company: "업체명", associate: "관계자", artist: "아티스트", group: "그룹" }[group] || "이름";
+  const searchNoun = { company: "업체명", group: "그룹" }[group] || "이름";
   const searchBar = searchBox({
     action: "/clients", q, placeholder: `${searchNoun} 검색`, label: "클라이언트 검색", liveFilter: true, noButton: true,
     remote: !!capped.more, // 목록이 상한으로 잘렸으면(100+ 업체) 타이핑 시 서버 전체 검색으로 보강(2026-07-17)
@@ -239,14 +234,12 @@ router.get("/", (req, res) => {
               : { href: "/clients/new?type=company", label: "+ 새 업체" },
           });
 
-  // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 관계자=연락처 생성.
+  // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 사람(관계자·아티스트)은 연락처 생성(2026-07-17).
   const newMenu = `
     <details class="relative inline-block" data-menu>
       <summary class="btn-primary cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">+ 새 클라이언트</summary>
       <div class="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-bg py-1 text-left shadow-lg">
         <a href="/clients/new?type=company" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">업체</span> <span class="text-xs text-muted">소속사·제작사</span></a>
-        <a href="/contacts/new" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">관계자</span> <span class="text-xs text-muted">대표·A&amp;R·디렉터 등</span></a>
-        <a href="/clients/new?type=artist" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">아티스트</span> <span class="text-xs text-muted">개인·솔로</span></a>
         <a href="/clients/new?type=group" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">그룹</span> <span class="text-xs text-muted">밴드·아이돌</span></a>
       </div>
     </details>`;
@@ -278,7 +271,8 @@ router.get("/suggest", (req, res) => {
 // ── 새 클라이언트 ── 유형(업체/아티스트/그룹)은 목록의 드롭다운(또는 탭별 빈 상태 CTA)에서만 선택 → 유형별 폼.
 const CLIENT_TYPES = ["company", "artist", "group"];
 router.get("/new", (req, res) => {
-  const type = CLIENT_TYPES.includes(req.query.type) ? req.query.type : null;
+  if (req.query.type === "artist") return res.redirect("/contacts/new"); // 사람 생성은 연락처(2026-07-17)
+  const type = ["company", "group"].includes(req.query.type) ? req.query.type : null;
   if (!type) return res.redirect("/clients"); // 유형 선택 페이지 폐기(드롭다운만) — 유형 없는 진입은 목록으로
   const companies = listClients({}).filter((x) => x.kind === "company");
   res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
@@ -548,9 +542,9 @@ router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, r
 router.get("/:id", asyncHandler(async (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  // 비아티스트 개인(관계자)은 클라이언트 화면이 아니라 연락처 상세가 정 화면(관계자 탭 링크와 동일 규칙) —
-  // 청구처 정보 카드 '클라이언트 ↗' 등이 관계자 청구처를 이 경로로 보낼 때 아티스트 편집 폼이 뜨던 어색함 제거(2026-07-05 전수점검).
-  if (c.kind === "person" && !c.is_artist) {
+  // 사람은 전부 연락처에서 본다(2026-07-17 사람/조직 축 정리 — 이전엔 비아티스트만 리다이렉트라
+  // 같은 사람이 아티스트면 클라이언트 상세, 아니면 연락처로 갈리고 편집 폼도 두 벌이었다).
+  if (c.kind === "person") {
     const from = String(req.query.from || "");
     const retQ = String(req.query.return || "");
     const qs = [
