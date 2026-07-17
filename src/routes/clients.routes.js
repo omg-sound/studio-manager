@@ -14,6 +14,7 @@ const {
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
   setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty, resolveCompanyByName, addCompanyRole,
+  listAffiliations, listSessionsForParty,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -22,9 +23,10 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, contactTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 const { FILE_KINDS, fileKindLabel, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
+const { contactPanes, contactNameList, contactReadView } = require("../views.contacts");
 
 const router = express.Router();
 
@@ -66,9 +68,12 @@ router.get("/", (req, res) => {
     const ql = q.toLowerCase();
     displayed = q ? rows.filter((c) => c.name.toLowerCase().includes(ql)) : rows;
   }
-  // 목록 상한(2026-07-09 스케일 점검) — 아티스트·관계자 탭이 계속 누적되므로 기본 100건 + 더 보기(검색·개수 라벨은 전체 기준).
+  // 목록 상한(2026-07-09 스케일 점검) — 아티스트 탭이 계속 누적되므로 기본 100건 + 더 보기(검색·개수 라벨은 전체 기준).
+  // 관계자 탭(2026-07-17 2단 전환)은 연락처와 같은 설계로 상한 없이 전 명단 노출.
   const capTotal = displayed.length;
-  const capped = capList(displayed, req.query, (n) => `/clients?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
+  const capped = group === "associate"
+    ? { shown: displayed, total: displayed.length, more: "" }
+    : capList(displayed, req.query, (n) => `/clients?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   displayed = capped.shown;
 
   const qs = (params) => {
@@ -196,21 +201,42 @@ router.get("/", (req, res) => {
       ] };
     });
   }
-  const list = displayed.length
-    ? (group === "associate"
-        ? contactTable(displayed, { fromParam, returnTo: req.originalUrl, filterList: true, hideTitle: true })
-        : dataTable(orgCols, orgRows, { filterList: true })) + capped.more
-    : q
-      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
-      : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "group" ? "그룹이 없습니다." : group === "associate" ? "관계자가 없습니다." : group === "company" ? "업체가 없습니다." : "클라이언트가 없습니다.", {
-          card: true,
-          icon: "clients",
-          // 유형 선택 페이지 폐기 — 빈 상태 CTA는 현재 탭 유형으로 바로 생성(탭=유형). 나머지 유형은 상단 드롭다운.
-          cta: group === "associate" ? { href: "/contacts/new", label: "+ 새 관계자" }
-            : group === "artist" ? { href: "/clients/new?type=artist", label: "+ 새 아티스트" }
-            : group === "group" ? { href: "/clients/new?type=group", label: "+ 새 그룹" }
-            : { href: "/clients/new?type=company", label: "+ 새 업체" },
-        });
+  // 관계자 탭 = 연락처와 같은 2단(2026-07-17). 선택은 ?sel=<party id> — 이 라우트는 탭 쿼리 기반이라 경로 파라미터를 못 쓴다.
+  // 행 링크는 폭과 무관하게 항상 ?sel= 하나(서버는 href를 하나만 렌더하므로 뷰포트별 목적지 분기는 불가).
+  let associatePanes = "";
+  if (group === "associate") {
+    const selId = Number(req.query.sel || 0) || null;
+    const sel = selId ? displayed.find((r) => Number(r.id) === selId) || null : null;
+    const keep = `group=associate${q ? "&q=" + encodeURIComponent(q) : ""}`;
+    const left = displayed.length
+      ? contactNameList({ rows: displayed, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients?${keep}&sel=${c.id}` })
+      : emptyState("관계자가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 관계자" } });
+    const right = sel
+      ? contactReadView(sel, {
+          affs: listAffiliations(sel.id),
+          projects: listProjectsForParty(sel.id),
+          sessions: listSessionsForParty(sel.id),
+          editHref: `/contacts/${sel.id}/edit?return=${encodeURIComponent(req.originalUrl)}`, // 편집 폼은 연락처 메뉴에 하나만
+          extras: "",
+        })
+      : emptyState("관계자를 선택하세요.", { card: true, icon: "clients" });
+    associatePanes = contactPanes({ left, right, hasSelection: !!sel });
+  }
+
+  const list = group === "associate"
+    ? associatePanes
+    : displayed.length
+      ? dataTable(orgCols, orgRows, { filterList: true }) + capped.more
+      : q
+        ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
+        : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "group" ? "그룹이 없습니다." : "업체가 없습니다.", {
+            card: true,
+            icon: "clients",
+            // 유형 선택 페이지 폐기 — 빈 상태 CTA는 현재 탭 유형으로 바로 생성(탭=유형). 나머지 유형은 상단 드롭다운.
+            cta: group === "artist" ? { href: "/clients/new?type=artist", label: "+ 새 아티스트" }
+              : group === "group" ? { href: "/clients/new?type=group", label: "+ 새 그룹" }
+              : { href: "/clients/new?type=company", label: "+ 새 업체" },
+          });
 
   // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 관계자=연락처 생성.
   const newMenu = `
