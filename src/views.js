@@ -605,16 +605,18 @@ function contactTable(rows, { returnTo = "", fromParam = "", filterList = false,
   const { currentAffiliation, classifyParty } = require("./data"); // 지연 require(순환 회피)
   const retQ = returnTo ? `${fromParam ? "&" : "?"}return=${encodeURIComponent(returnTo)}` : "";
   const dash = '<span class="text-muted">—</span>';
-  // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). **이름=고정**(2026-07-17 사용자 '이름이 과하게 넓다' — 사람 이름은 짧아 유동이면 남는 폭을 혼자 먹고 정작 회사명은 잘렸음),
-  // **소속·이메일=유동**(남는 폭을 나눠 채움 — 긴 회사명·주소가 …로 덜 잘리게). 역할·직함·전화=고정.
-  // 열 순서(2026-07-17 사용자 요청): 이름 · 소속 · 직함 · 역할 · 전화 · 이메일 — 이름 옆에 그 사람이 어디 누구인지(소속·직함)가 먼저, 역할 배지는 그 뒤.
+  // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). 열 순서(2026-07-17 사용자 요청): 이름 · 소속 · 직함 · 역할 · 전화 · 이메일 — 이름 옆에 그 사람이 어디 누구인지(소속·직함)가 먼저, 역할 배지는 그 뒤.
+  // **폭은 프로덕션 실측 최장값 기준**(2026-07-17 사용자 '김조한 이름이 다 나오게 · 언디파인드…는 한글까지만 · 역할은 넓으면 1줄, 좁히면 2줄'). 셀 좌우 패딩 12+12=24라 필요폭 = 텍스트폭+24:
+  //  - 이름 `xl:w-[13rem]`(208): 최장 `Kim George Han (김조한)`=183 → 안 잘림(11rem=176이라 잘렸음). 1280 미만은 9.5rem으로 좁혀 역할 자리를 내준다.
+  //  - 소속 `xl:w-[15rem]`(240): `언디파인드엔터테인먼트주식회사`(한글만)=208 → 한글은 다 보이고 뒤의 영문 `(Undefined…`만 …로 잘림(의도).
+  //  - 역할=**유동**(w 없음): 최장 3배지=195 → 넓은 화면(1512)에선 247px라 한 줄, 좁아지면 열이 줄며 배지가 2줄·3줄로 접힘(`wrap`) — 고정 폭이면 못 접히고, 숨기면 안 보여서 유동.
+  //    ⚠️이름·소속을 1280 미만에서도 full 폭으로 두면 남는 폭이 없어 역할이 59px까지 눌린다(실측) → 위 반응형 폭이 그 방어.
   // 모바일 카드(<640)=2열 그리드(mCard, 라벨 없이 값만): 이름(좌상)·전화(우상) / 소속(좌하)·이메일(우하), 역할·직함 숨김(2026-07-16 사용자 요청 '너무 많이 보여준다').
   const cols = [
-    { label: "이름", w: "w-[11rem]", primary: true, mCard: "tl" },
-    { label: "소속", hide: "sm", mCard: "bl" },
-    ...(hideTitle ? [] : [{ label: "직함", w: "w-[7rem]", hide: "lg", mobileHide: true }]),
-    // 역할=가장 먼저 숨김(hide:"xl"=1280 미만). 폭이 넓은 배지 열이라 md까지 남기면 900~1280에서 소속이 37px까지 찌부됐다(2026-07-17 실측).
-    { label: "역할", w: "w-[12rem]", hide: "xl", wrap: true, mobileHide: true }, // 배지 여러 개는 …로 안 줄이고 줄바꿈으로 전부 표시(데스크톱). 모바일 카드에선 숨김.
+    { label: "이름", w: "w-[9.5rem] xl:w-[13rem]", primary: true, mCard: "tl" },
+    { label: "소속", w: "w-[9rem] xl:w-[15rem]", hide: "sm", mCard: "bl" },
+    ...(hideTitle ? [] : [{ label: "직함", w: "w-[7rem]", hide: "xl", mobileHide: true }]),
+    { label: "역할", hide: "lg", wrap: true, mobileHide: true }, // 배지 여러 개는 …로 안 줄이고 줄바꿈으로 전부 표시(데스크톱). 모바일 카드에선 숨김.
     { label: "전화", w: "w-[9.5rem]", mCard: "tr" },
     { label: "이메일", hide: "sm", mCard: "br" },
   ];
