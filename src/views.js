@@ -605,13 +605,16 @@ function contactTable(rows, { returnTo = "", fromParam = "", filterList = false,
   const { currentAffiliation, classifyParty } = require("./data"); // 지연 require(순환 회피)
   const retQ = returnTo ? `${fromParam ? "&" : "?"}return=${encodeURIComponent(returnTo)}` : "";
   const dash = '<span class="text-muted">—</span>';
-  // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). 식별 열 **이름·이메일=유동**(남는 폭을 나눠 채움·한 열 여백 몰림 방지, 청구 표처럼). 역할·소속·직함·전화=고정.
+  // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). **이름=고정**(2026-07-17 사용자 '이름이 과하게 넓다' — 사람 이름은 짧아 유동이면 남는 폭을 혼자 먹고 정작 회사명은 잘렸음),
+  // **소속·이메일=유동**(남는 폭을 나눠 채움 — 긴 회사명·주소가 …로 덜 잘리게). 역할·직함·전화=고정.
+  // 열 순서(2026-07-17 사용자 요청): 이름 · 소속 · 직함 · 역할 · 전화 · 이메일 — 이름 옆에 그 사람이 어디 누구인지(소속·직함)가 먼저, 역할 배지는 그 뒤.
   // 모바일 카드(<640)=2열 그리드(mCard, 라벨 없이 값만): 이름(좌상)·전화(우상) / 소속(좌하)·이메일(우하), 역할·직함 숨김(2026-07-16 사용자 요청 '너무 많이 보여준다').
   const cols = [
-    { label: "이름", primary: true, mCard: "tl" },
-    { label: "역할", w: "w-[12rem]", hide: "md", wrap: true, mobileHide: true }, // 배지 여러 개는 …로 안 줄이고 줄바꿈으로 전부 표시(데스크톱). 모바일 카드에선 숨김.
-    { label: "소속", w: "w-[11rem]", hide: "sm", mCard: "bl" },
+    { label: "이름", w: "w-[11rem]", primary: true, mCard: "tl" },
+    { label: "소속", hide: "sm", mCard: "bl" },
     ...(hideTitle ? [] : [{ label: "직함", w: "w-[7rem]", hide: "lg", mobileHide: true }]),
+    // 역할=가장 먼저 숨김(hide:"xl"=1280 미만). 폭이 넓은 배지 열이라 md까지 남기면 900~1280에서 소속이 37px까지 찌부됐다(2026-07-17 실측).
+    { label: "역할", w: "w-[12rem]", hide: "xl", wrap: true, mobileHide: true }, // 배지 여러 개는 …로 안 줄이고 줄바꿈으로 전부 표시(데스크톱). 모바일 카드에선 숨김.
     { label: "전화", w: "w-[9.5rem]", mCard: "tr" },
     { label: "이메일", hide: "sm", mCard: "br" },
   ];
@@ -625,9 +628,9 @@ function contactTable(rows, { returnTo = "", fromParam = "", filterList = false,
       : dash;
     return { cells: [
       link(esc(personName(c)), "font-medium"),
-      badges || dash,
       org,
       ...(hideTitle ? [] : [cur && cur.title ? link(esc(cur.title), "text-muted") : dash]),
+      badges || dash,
       c.phone ? copyable(c.phone) : dash,
       c.email ? copyable(c.email) : dash,
     ] };
