@@ -169,10 +169,16 @@ test("contactReadView: [편집]은 같은 탭(연락처 안에 머무는 링크)
   assert.ok(!/target="_blank"/.test(html.slice(i, html.indexOf(">", i))), "편집은 새 탭이 아니다");
 });
 
-test("contactExtras: 아티스트로 보기·대표 업체·담당자 연동도 새 탭", () => {
-  const html = contactExtras({ id: 3, activity_name: "감성소녀", is_artist: 1 });
+test("contactExtras: 대표 업체·담당자 연동도 새 탭", () => {
+  // 파생 링크(orgsWithOwnerParty)가 실제로 걸리도록 temp DB에 대표자 관계를 심는다.
+  const { createPerson, createCompany, setCompanyOwners } = require("../src/data");
+  const pid = createPerson({ name: "감성소녀", activity_name: "감성소녀" });
+  const cid = createCompany({ name: "감성레코드" });
+  setCompanyOwners(cid, [pid]);
+  const html = contactExtras({ id: pid, activity_name: "감성소녀", is_artist: 1 });
+  assert.match(html, /대표 업체/, "대표 업체 파생 정보 렌더");
   // 파생 링크가 하나라도 있으면 전부 새 탭이어야 한다(연동 정보 블록 안에서 규칙이 갈리면 안 됨).
   const anchors = html.match(/<a [^>]*>/g) || [];
-  assert.ok(anchors.length > 0, "아티스트로 보기 링크 존재");
+  assert.ok(anchors.length > 0, "대표 업체 링크 존재");
   anchors.forEach((a) => assert.match(a, /target="_blank" rel="noopener"/, `새 탭: ${a}`));
 });
