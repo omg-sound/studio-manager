@@ -79,9 +79,9 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
   });
 
   await t.test("좁은 화면 뒤로가기: 선택 있으면 lg:hidden '← 연락처', 목록만이면 없음", async () => {
-    const sel = await get(`/contacts/${target}?tab=external&q=외부인001`);
-    assert.match(sel.html, /<a href="\/contacts\?tab=external&amp;q=[^"]*" class="[^"]*lg:hidden[^"]*">← 연락처<\/a>/, "탭·검색어 보존한 목록으로");
-    const list = await get("/contacts?tab=external");
+    const sel = await get(`/contacts/${target}?tab=worker&q=외부인001`);
+    assert.match(sel.html, /<a href="\/contacts\?tab=worker&amp;q=[^"]*" class="[^"]*lg:hidden[^"]*">← 연락처<\/a>/, "탭·검색어 보존한 목록으로");
+    const list = await get("/contacts?tab=worker");
     assert.ok(!/← 연락처/.test(list.html), "목록만 볼 땐 없음");
   });
 
@@ -168,6 +168,25 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
       assert.equal(r.status, 302);
       assert.match(r.headers.get("location"), new RegExp(`^/contacts/${target}\\?flash=saved`), `외부 return(${evil})은 폴백`);
     }
+  });
+
+  await t.test("연락처 5탭 — 전체 기본 + 개수 라벨 + 필터 동작", async () => {
+    // 아티스트 1명 시드(전체 121 중 1명)
+    db().prepare("INSERT INTO parties (kind, name, activity_name, is_artist) VALUES ('person','탭검증아티스트','탭활동명',1)").run();
+    const { status, html } = await get("/contacts");
+    assert.equal(status, 200);
+    ["전체", "아티스트", "관계자", "외주", "스태프"].forEach((label) => assert.match(html, new RegExp(label), `${label} 탭`));
+    assert.ok(!/외부 연락처/.test(html), "옛 '외부 연락처' 탭 없음");
+    // 기본 = 전체(aria-current가 전체 탭에)
+    const activeTab = html.match(/<a[^>]*aria-current="page"[^>]*>([^<]*)</);
+    assert.ok(activeTab && /전체/.test(activeTab[1]), `기본 탭이 전체여야 함(현재: ${activeTab && activeTab[1]})`);
+    // 아티스트 탭 = 그 1명만
+    const artistHtml = (await get("/contacts?tab=artist")).html;
+    assert.match(artistHtml, /탭검증아티스트/);
+    assert.ok(!/외부인001/.test(artistHtml), "비아티스트는 아티스트 탭에 없음");
+    // 모르는 탭 = 전체 폴백
+    const bogus = (await get("/contacts?tab=몰라")).html;
+    assert.match(bogus, /외부인001/, "모르는 탭은 전체");
   });
 
   server.close();
