@@ -151,3 +151,28 @@ test("contactReadView: 탭 없음(한 화면 스크롤)", () => {
   const html = read();
   assert.ok(!/\?tab=activity/.test(html), "옛 2탭 잔재 없음");
 });
+
+// 2026-07-17 사용자 요청: "연락처에서 프로젝트를 보다가 연락처 상세로 들어가니까 연락처로 돌아오기 번거롭다"
+// → 읽기 뷰에서 **연락처 밖으로 나가는 링크는 새 탭**, 안에 머무는 링크([편집])는 같은 탭.
+test("contactReadView: 회사·프로젝트·세션 링크는 새 탭(target=_blank rel=noopener)", () => {
+  const html = read();
+  const linkFor = (href) => { const i = html.indexOf(`href="${href}"`); return i < 0 ? "" : html.slice(i, html.indexOf(">", i)); };
+  assert.match(linkFor("/clients/5"), /target="_blank" rel="noopener"/, "회사(현재 소속)");
+  assert.match(linkFor("/projects/3"), /target="_blank" rel="noopener"/, "프로젝트 표");
+  assert.match(linkFor("/projects/3?tab=sessions"), /target="_blank" rel="noopener"/, "세션 표(→프로젝트)");
+});
+
+test("contactReadView: [편집]은 같은 탭(연락처 안에 머무는 링크)", () => {
+  const html = read();
+  const i = html.indexOf('href="/contacts/2/edit"');
+  assert.ok(i > 0);
+  assert.ok(!/target="_blank"/.test(html.slice(i, html.indexOf(">", i))), "편집은 새 탭이 아니다");
+});
+
+test("contactExtras: 아티스트로 보기·대표 클라이언트·담당자 연동도 새 탭", () => {
+  const html = contactExtras({ id: 3, activity_name: "감성소녀", is_artist: 1 });
+  // 파생 링크가 하나라도 있으면 전부 새 탭이어야 한다(연동 정보 블록 안에서 규칙이 갈리면 안 됨).
+  const anchors = html.match(/<a [^>]*>/g) || [];
+  assert.ok(anchors.length > 0, "아티스트로 보기 링크 존재");
+  anchors.forEach((a) => assert.match(a, /target="_blank" rel="noopener"/, `새 탭: ${a}`));
+});

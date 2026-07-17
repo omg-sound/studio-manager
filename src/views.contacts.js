@@ -39,6 +39,13 @@ function contactNameList({ rows, selectedId = null, hrefFn }) {
   return `<div data-contact-list class="lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>`;
 }
 
+/**
+ * 읽기 뷰에서 **연락처 밖으로 나가는 링크**(회사·프로젝트·외주·환경설정)는 새 탭으로 연다(2026-07-17 사용자 요청).
+ * 이유: 왼쪽 목록이 곧 작업 맥락인데, 같은 탭에서 프로젝트를 열면 그 화면의 백링크가 연락처가 아니라 프로젝트 목록이라
+ * 보던 사람으로 돌아오기 번거롭다. 연락처 안에 머무는 링크([편집]·이름 목록)는 같은 탭 유지.
+ */
+const OUT = ' target="_blank" rel="noopener"';
+
 /** 읽기 뷰 한 줄(라벨 + 값). 값은 이미 esc/copyable 처리된 HTML. */
 function readRow(label, valueHtml) {
   return `<div class="border-t border-border/60 px-4 py-3 first:border-t-0">
@@ -73,7 +80,7 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
     </div>`;
 
   const orgLine = cur && cur.client_id
-    ? `<a href="/clients/${cur.client_id}" class="text-primary hover:underline">${esc(cur.client_name || "")}</a>`
+    ? `<a href="/clients/${cur.client_id}"${OUT} class="text-primary hover:underline">${esc(cur.client_name || "")} ↗</a>`
     : dash;
   const timeline = affs.length
     ? `<div class="divide-y divide-border/60">${affs.map((a) => `
@@ -108,7 +115,7 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
           { label: "작성일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
         ],
         projects.map((pr) => {
-          const link = (inner, cls = "") => `<a href="/projects/${pr.id}" class="dt-link ${cls}">${inner}</a>`;
+          const link = (inner, cls = "") => `<a href="/projects/${pr.id}"${OUT} class="dt-link ${cls}">${inner}</a>`;
           const company = pr.production_company || pr.artist_company || "";
           return { cells: [
             pr.artist ? link(esc(pr.artist), "font-medium") : dash,
@@ -129,7 +136,7 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
           { label: "상태", w: "w-[5rem]", mCard: "br" },
         ],
         sessions.map((s) => {
-          const link = (inner, cls = "") => `<a href="/projects/${s.project_id}?tab=sessions" class="dt-link ${cls}">${inner}</a>`;
+          const link = (inner, cls = "") => `<a href="/projects/${s.project_id}?tab=sessions"${OUT} class="dt-link ${cls}">${inner}</a>`;
           const time = s.all_day ? "종일" : s.start_time ? `${s.start_time}${s.end_time ? `–${s.end_time}` : ""}` : "";
           return { cells: [
             link(esc(s.session_date), "font-medium"),
@@ -162,12 +169,12 @@ function contactExtras(p) {
   const linkedManager = getManagerByPartyId(p.id);
   const ownerClients = orgsWithOwnerParty(p.id);
   return [
-    p.activity_name ? `<div><span class="text-muted">아티스트명</span> ${esc(p.activity_name)}${p.is_artist ? ` · <a href="/clients/${p.id}" class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
-    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : "",
+    p.activity_name ? `<div><span class="text-muted">아티스트명</span> ${esc(p.activity_name)}${p.is_artist ? ` · <a href="/clients/${p.id}"${OUT} class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
+    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}"${OUT} class="text-primary hover:underline">${esc(oc.name)} ↗</a>`).join(", ")}</div>` : "",
     linkedManager
       ? `<div><span class="text-muted">담당자 연동</span> ${linkedManager.user_id != null
-          ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
-          : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`}</div>`
+          ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people"${OUT} class="text-primary hover:underline">${esc(linkedManager.name)} ↗</a>`
+          : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}"${OUT} class="text-primary hover:underline">${esc(linkedManager.name)} ↗</a>`}</div>`
       : "",
   ].filter(Boolean).join("");
 }
