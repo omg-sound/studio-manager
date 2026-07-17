@@ -1,7 +1,7 @@
 "use strict";
 // 연락처 전용 뷰(2026-07-17 마스터-디테일 전환) — 왼쪽 이름 목록 + 오른쪽 읽기/편집 패널.
-// 표(contactTable)를 걷어낸 이유: 연락처는 '비교'가 아니라 '찾기' 화면이라 열 폭 튜닝이 계속 실패했다(설계 문서 참조).
-const { esc, personName, personLabel, listGroup, copyable, emptyState, dataTable, icon } = require("./views");
+// 표(contactTable)는 이후 태스크에서 걷어낼 예정 — 연락처는 '비교'가 아니라 '찾기' 화면이라 열 폭 튜닝이 계속 실패했다(설계 문서 참조).
+const { esc, personName, listGroup, copyable, emptyState, dataTable } = require("./views");
 
 /**
  * 2단 골격. lg 이상 = [이름 목록 18rem | 상세]. 미만 = 한 단(선택 여부로 한쪽만).
@@ -43,11 +43,13 @@ function readRow(label, valueHtml) {
  * 읽기 뷰 — 탭 없이 한 화면 스크롤(2026-07-17 사용자 결정).
  * 순서: 헤더 → 연락 정보 → 소속(+이력) → 메모 → 참여 내역 → 연동 정보.
  * 편집은 별도 경로(editHref) — '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 뒤집었다(클라이언트 상세는 그대로).
+ * @param {string} [o.extras] 신뢰 HTML — esc 없이 그대로 삽입된다(호출부가 esc 책임). 사용자 입력을 그대로 흘려보내지 말 것.
  */
 function contactReadView(p, { affs = [], projects = [], sessions = [], editHref, extras = "" } = {}) {
   const { classifyParty } = require("./data"); // 지연 require(순환 회피)
   const dash = '<span class="text-muted">—</span>';
-  const badges = classifyParty(p.id).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
+  const cur = affs.find((a) => !a.ended_on);
+  const badges = classifyParty(p, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
   const header = `<div class="mb-4 flex items-start justify-between gap-3">
       <div class="min-w-0">
         <h1 class="truncate font-display text-2xl font-semibold text-fg">${esc(personName(p))}</h1>
@@ -62,10 +64,9 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
       ${p.cash_receipt_no ? readRow("현금영수증 정보", copyable(p.cash_receipt_no)) : ""}
     </div>`;
 
-  const cur = affs.find((a) => !a.ended_on);
   const orgLine = cur && cur.client_id
     ? `<a href="/clients/${cur.client_id}" class="text-primary hover:underline">${esc(cur.client_name || "")}</a>`
-    : (p.company ? esc(p.company) : dash);
+    : dash;
   const timeline = affs.length
     ? `<div class="divide-y divide-border/60">${affs.map((a) => `
         <div class="flex items-center justify-between gap-3 px-4 py-2 text-sm">

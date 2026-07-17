@@ -1,8 +1,15 @@
 "use strict";
 process.env.NODE_ENV = "test";
+const { tempDbPath, cleanupDb } = require("./helpers");
+process.env.DB_PATH = tempDbPath();
+
 const test = require("node:test");
 const assert = require("node:assert");
+const { init } = require("../src/db");
 const { contactPanes, contactNameList } = require("../src/views.contacts");
+
+init(); // 스키마/마이그레이션 보장(contactReadView가 classifyParty로 project_managers 등을 조회)
+test.after(() => cleanupDb(process.env.DB_PATH));
 
 const ROWS = [
   { id: 1, kind: "person", name: "Kim George Han", activity_name: "김조한", honorific: "" },
@@ -47,8 +54,8 @@ test("contactPanes: 인라인 style 없음(CSP — 함정 #27)", () => {
 const { contactReadView } = require("../src/views.contacts");
 
 const PARTY = { id: 2, kind: "person", name: "강병원", activity_name: "", honorific: "대표님",
-  phone: "010-8765-4321", email: "bw@undefined-ent.co.kr", cash_receipt_no: "010-8765-4321",
-  company: "언디파인드엔터테인먼트주식회사", job_title: "대표", department: "", memo: "야간 연락 가능" };
+  phone: "010-8765-4321", email: "bw@undefined-ent.co.kr", cash_receipt_no: "010-1111-2222",
+  job_title: "대표", department: "", memo: "야간 연락 가능" };
 const AFFS = [
   { id: 9, client_id: 5, client_name: "언디파인드엔터테인먼트주식회사", title: "대표", started_on: "2025-01-01", ended_on: null, memo: "" },
   { id: 8, client_id: 6, client_name: "옛회사", title: "팀장", started_on: "2020-01-01", ended_on: "2024-12-31", memo: "" },
@@ -65,8 +72,9 @@ test("contactReadView: 헤더 이름 + 편집 버튼", () => {
 
 test("contactReadView: 전화·이메일·현금영수증은 클릭 복사", () => {
   const html = read();
-  assert.match(html, /data-copy="010-8765-4321"/);
-  assert.match(html, /data-copy="bw@undefined-ent\.co\.kr"/);
+  assert.match(html, /data-copy="010-8765-4321"/, "전화");
+  assert.match(html, /data-copy="bw@undefined-ent\.co\.kr"/, "이메일");
+  assert.match(html, /data-copy="010-1111-2222"/, "현금영수증(전화와 다른 값이라야 실제 렌더 여부를 구분할 수 있다)");
 });
 
 test("contactReadView: 소속 이력은 읽기 전용(편집 폼·저장 버튼 없음)", () => {
