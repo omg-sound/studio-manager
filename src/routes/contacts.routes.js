@@ -258,11 +258,11 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
           <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
-          <div><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 아티스트로 등록·연동)</span></label>
+          <div><label class="label">아티스트명</label>
             <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
             <datalist id="contact-artist-clients">${clients.filter((cl) => cl.is_artist).map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
           </div>
-          <div><label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때)</span></label>
+          <div><label class="label">소속 그룹</label>
             <select name="group_id" class="input">
               <option value="">— 소속 그룹 없음 —</option>
               ${groups.map((g) => `<option value="${g.id}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
