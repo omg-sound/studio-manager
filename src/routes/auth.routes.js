@@ -39,7 +39,7 @@ router.get("/login", (req, res) => {
   const body = `
     <div class="mb-8 text-center">
       <h1 class="font-display text-3xl font-semibold">OMG Studios</h1>
-      <p class="mt-2 text-sm text-muted">녹음 · 믹싱 스튜디오 관리</p>
+      <p class="mt-2 text-sm text-muted">녹음 · 믹싱 스튜디오 ERP</p>
     </div>
     <div class="card">
       ${err}

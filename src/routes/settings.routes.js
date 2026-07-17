@@ -274,7 +274,7 @@ router.post("/alert-email", requireChief, (req, res) => {
 router.post("/alert-email/test", requireChief, asyncHandler(async (req, res) => {
   const r = await mailer.send({
     subject: "[테스트] OMG Studios 청구 알림",
-    html: `<p>청구 알림 메일이 정상 연결되었습니다.</p><p style="font-size:12px;color:#6E6A5F">OMG Studios 관리 시스템에서 자동 발송된 알림입니다.</p>`,
+    html: `<p>청구 알림 메일이 정상 연결되었습니다.</p><p style="font-size:12px;color:#6E6A5F">OMG Studios ERP에서 자동 발송된 알림입니다.</p>`,
   });
   const msg = r.ok
     ? `테스트 메일을 보냈습니다(${r.sent}명) — 수신함을 확인하세요.`

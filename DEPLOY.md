@@ -1,4 +1,4 @@
-# OMG Studios Manager — Render 배포 런북
+# OMG Studios ERP — Render 배포 런북
 
 > Render Blueprint(`render.yaml`)로 **web(SQLite on Disk) + 일일 백업/연체 cron**을 배포한다.
 > 코드·설정은 배포 준비 완료 상태다. 아래는 **사람이 직접 하는 단계**(계정·시크릿·OAuth)까지 포함한 절차다.

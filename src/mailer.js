@@ -200,7 +200,7 @@ function invoiceMail(inv, { payer = null, items = [] } = {}) {
   </table>
 
   ${url ? `<p style="margin:24px 0 0"><a href="${esc(url)}" style="display:inline-block;padding:9px 16px;background:#C08457;color:#fff;border-radius:8px;text-decoration:none;font-size:14px">청구서 열기</a></p>` : ""}
-  <p style="margin:20px 0 0;font-size:12px;color:#6E6A5F">OMG Studios 관리 시스템에서 자동 발송된 알림입니다. 계산서·입금 처리는 청구 화면에서 합니다.</p>
+  <p style="margin:20px 0 0;font-size:12px;color:#6E6A5F">OMG Studios ERP에서 자동 발송된 알림입니다. 계산서·입금 처리는 청구 화면에서 합니다.</p>
 </div>`;
   return { subject, html };
 }

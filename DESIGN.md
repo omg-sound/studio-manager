@@ -1,8 +1,8 @@
 ---
 version: 1
-name: OMG Studios Manager — Design System
+name: OMG Studios ERP — Design System
 description: >
-  녹음/믹싱 스튜디오 내부 관리 웹앱의 디자인 시스템. 따뜻한 크림 캔버스 +
+  녹음/믹싱 스튜디오 내부 ERP의 디자인 시스템. 따뜻한 크림 캔버스 +
   클레이(테라코타) 액센트 + 세이지 성공색의 휴머니스트 톤(Anthropic/Claude
   에디토리얼 계열과 독립적으로 동일 지점 도달). 서버 렌더 HTML + Tailwind
   빌드, CSP 인라인 스크립트 0, Pretendard 한글 본문. 마케팅 페이지가 아니라
@@ -64,7 +64,7 @@ components:
   helpers-js: "src/views.js: listGroup·listRow·emptyState·tabBar·searchBox(typeahead)·explain(접기)·pageHeader."
 ---
 
-# OMG Studios Manager — Design System
+# OMG Studios ERP — Design System
 
 > AI 에이전트/개발자가 UI를 만들 때 읽는 단일 명세. 색·정체성은 **현행 그대로**(위 프론트매터가 진실원천). 이 파일은 흩어진 규칙을 한 장으로 증류한 것. 토큰/클래스 변경 시 이 파일도 갱신.
 

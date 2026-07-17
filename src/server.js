@@ -162,7 +162,7 @@ app.use((err, req, res, _next) => {
 
 // 0.0.0.0 바인딩(플레이북 §3-5): 포트 즉시 감지로 무중단 재배포
 const server = app.listen(config.port, "0.0.0.0", () => {
-  console.log(`🎙️  OMG Studios Manager listening on ${config.baseUrl} (port ${config.port})`);
+  console.log(`🎙️  OMG Studios ERP listening on ${config.baseUrl} (port ${config.port})`);
   if (config.devLogin) console.log("⚠️  DEV_LOGIN 활성화 — /dev-login 사용 가능(프로덕션 금지)");
   if (!config.googleConfigured) console.log("ℹ️  Google OAuth 미설정 — 관리자 OAuth 로그인 비활성(DEV_LOGIN으로 검증)");
 });

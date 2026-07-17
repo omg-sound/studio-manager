@@ -1,6 +1,6 @@
-# OMG Studios Manager
+# OMG Studios ERP
 
-녹음/믹싱 스튜디오 **프로젝트 관리 · 자료 전달 · 청구** 내부 운영 웹앱.
+녹음/믹싱 스튜디오 **프로젝트 관리 · 자료 전달 · 청구** 내부 운영 ERP(웹 기반). 표준 호칭은 "ERP".
 
 - **스택**: Node 20 / Express 4(CommonJS) / SQLite(`better-sqlite3` ↔ `node:sqlite` 폴백) / Google OAuth·Drive·Calendar /
   서버 렌더 HTML + Tailwind / helmet CSP(인라인 스크립트 0).
