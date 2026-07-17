@@ -258,7 +258,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
           <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
-          <div><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 클라이언트로 등록·연동)</span></label>
+          <div><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 아티스트로 등록·연동)</span></label>
             <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
             <datalist id="contact-artist-clients">${clients.filter((cl) => cl.is_artist).map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
           </div>
@@ -355,9 +355,9 @@ function renderContacts(req, sel, rightHtml) {
   const from = String(req.query.from || "");
   const fromOk = Boolean(from) && /^[\w=&%.\-]*$/.test(from);
   const back = ret
-    ? { href: ret, label: ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "클라이언트" : "돌아가기" }
+    ? { href: ret, label: ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "업체·그룹" : "돌아가기" }
     : fromOk
-      ? { href: `/clients?${from}`, label: "클라이언트" }
+      ? { href: `/clients?${from}`, label: "업체·그룹" }
       : undefined;
   const body = `
     ${flashBanner(req.query)}

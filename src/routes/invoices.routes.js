@@ -88,7 +88,7 @@ router.get("/", requireBilling, (req, res) => {
   const searchBar = searchBox({
     action: "/invoices",
     q,
-    placeholder: "제목 · 청구번호 · 클라이언트 검색",
+    placeholder: "제목 · 청구번호 · 청구처 검색",
     label: "청구 검색",
     liveFilter: true, // 타이핑 시 로드된 표 행 즉시 필터(2026-07-16 사용자 요청). 검색 버튼=캡 넘는 서버 전체 검색.
     hidden: `<input type="hidden" name="filter" value="${esc(filter)}" />`,

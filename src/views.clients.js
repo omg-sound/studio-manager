@@ -100,7 +100,7 @@ function clientContactCombo(c, isEdit) {
   const cur = isEdit && c.id ? listOrgContacts(c.id) : [];
   return `
     <div>
-      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 여러 명 가능)</span></label>
+      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 업체 담당자 — 여러 명 가능)</span></label>
       ${personCombo({ idField: "contact_id", nameField: "contact_name", selected: cur, options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: cur.length ? "" : "담당자 — 검색 또는 새로 등록" })}
       ${explain(`이름을 검색해 고르면 배지로 담깁니다(여러 명 가능). 배지의 ✕ 또는 빈 칸에서 백스페이스로 한 명씩 뺍니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다. 뺀 사람은 담당자 지정만 풀립니다 — 이 회사 재직(소속)과 연락처는 그대로 남습니다. 담당자가 아닌 직원은 연락처의 회사·소속 이력에서 관리합니다.`)}
     </div>`;
@@ -119,7 +119,7 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
 
   // embedded=상세 페이지에 인라인으로 넣을 때 — 폼 자체 pageHeader 생략(상단 이름 헤더가 이미 있음).
   return `
-    ${embedded ? "" : pageHeader({ title: isEdit ? "클라이언트 수정" : `새 ${typeLabel}`, desc, back: isEdit && c.id ? { href: `/clients/${c.id}`, label: "클라이언트 상세" } : { href: "/clients", label: "클라이언트" } })}
+    ${embedded ? "" : pageHeader({ title: isEdit ? `${typeLabel} 수정` : `새 ${typeLabel}`, desc, back: isEdit && c.id ? { href: `/clients/${c.id}`, label: `${typeLabel} 상세` } : { href: "/clients", label: "업체·그룹" } })}
     <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <input type="hidden" name="type" value="${type}" />
@@ -159,11 +159,11 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       ${type === "company" ? clientContactCombo(c, isEdit) : ""}
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       ${isEdit
-        ? dirtyActionRow({ deleteFormId: `del-client-${c.id}`, deleteLabel: "클라이언트 삭제" })
+        ? dirtyActionRow({ deleteFormId: `del-client-${c.id}`, deleteLabel: `${typeLabel} 삭제` })
         : dirtyActionRow({ cancelHref: "/clients", saveLabel: "추가", dirty: false })}
     </form>
     ${withExtras && isEdit && canFiles && type === "company" ? `<div>${clientFileSection(c, fileMap, fileErr)}</div>` : ""}
-    ${isEdit ? `<form id="del-client-${c.id}" method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="hidden"></form>` : ""}`;
+    ${isEdit ? `<form id="del-client-${c.id}" method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || `이 ${typeLabel}`)}${c.name ? "를" : type === "company" ? "를" : "을"} 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="hidden"></form>` : ""}`;
 }
 
 /** 첨부 서류 카드(상세에서 분리 배치용). 업체(company)만 표시(아티스트·그룹은 첨부 없음). fileOk=실제 접근 가능 여부(깨진 링크 경고). */

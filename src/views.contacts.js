@@ -57,7 +57,7 @@ function readRow(label, valueHtml) {
 /**
  * 읽기 뷰 — 탭 없이 한 화면 스크롤(2026-07-17 사용자 결정).
  * 순서: 헤더 → 연락 정보 → 소속(+이력) → 메모 → 참여 내역 → 연동 정보.
- * 편집은 별도 경로(editHref) — '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 뒤집었다(클라이언트 상세는 그대로).
+ * 편집은 별도 경로(editHref) — 클라이언트 상세는 그대로이고, 연락처에서만 '상세=바로 편집'이 '읽기 후 편집'으로 뒤집혔다.
  * @param {string} [o.extras] 신뢰 HTML — esc 없이 그대로 삽입된다(호출부가 esc 책임). 사용자 입력을 그대로 흘려보내지 말 것.
  */
 function contactReadView(p, { affs = [], projects = [], sessions = [], editHref, extras = "" } = {}) {
@@ -159,7 +159,7 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
 }
 
 /**
- * 읽기 뷰 '연동 정보'(extras) 조립 — 아티스트로 보기 · 대표 클라이언트 · 담당자 연동 배지.
+ * 읽기 뷰 '연동 정보'(extras) 조립 — 아티스트로 보기 · 대표 업체 · 담당자 연동 배지.
  * 연락처 메뉴와 관계자 탭이 같은 읽기 뷰를 쓰므로(설계 §4) 이 파생 정보도 한곳에서 만든다.
  * extras는 contactReadView에 **esc 없이** 삽입되므로 사용자 데이터(이름 등)의 esc는 이 함수 책임이다.
  * @param {object} p 사람 party
@@ -170,7 +170,7 @@ function contactExtras(p) {
   const ownerClients = orgsWithOwnerParty(p.id);
   return [
     p.activity_name ? `<div><span class="text-muted">아티스트명</span> ${esc(p.activity_name)}${p.is_artist ? ` · <a href="/clients/${p.id}"${OUT} class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
-    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}"${OUT} class="text-primary hover:underline">${esc(oc.name)} ↗</a>`).join(", ")}</div>` : "",
+    ownerClients.length ? `<div><span class="text-muted">대표 업체</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}"${OUT} class="text-primary hover:underline">${esc(oc.name)} ↗</a>`).join(", ")}</div>` : "",
     linkedManager
       ? `<div><span class="text-muted">담당자 연동</span> ${linkedManager.user_id != null
           ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people"${OUT} class="text-primary hover:underline">${esc(linkedManager.name)} ↗</a>`

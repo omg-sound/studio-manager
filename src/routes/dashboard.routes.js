@@ -55,7 +55,7 @@ router.get("/", requireAuth, (req, res) => {
     cardItems.push(moneyCard("이번 달 발행", inv.thisMonthIssued));
   }
   cardItems.push(statCard("프로젝트", s.total));
-  if (s.isChief) cardItems.push(statCard("클라이언트", s.clients));
+  if (s.isChief) cardItems.push(statCard("업체·그룹", s.clients));
   // 읽기 폭(768)로 좁힌 뒤(2026-07-16 사용자 '폭 조절') 카드는 2열 고정 — 좁은 폭에 4열이면 금액이 찌부.
   const cards = `<div class="grid grid-cols-2 gap-3">${cardItems.join("")}</div>`;
 

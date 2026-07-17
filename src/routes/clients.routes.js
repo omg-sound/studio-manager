@@ -87,7 +87,7 @@ router.get("/", (req, res) => {
   // 검색 문구는 탭별 명사(2026-07-16 사용자 요청 '이름 검색→업체명 검색').
   const searchNoun = { company: "업체명", group: "그룹" }[group] || "이름";
   const searchBar = searchBox({
-    action: "/clients", q, placeholder: `${searchNoun} 검색`, label: "클라이언트 검색", liveFilter: true, noButton: true,
+    action: "/clients", q, placeholder: `${searchNoun} 검색`, label: `${searchNoun} 검색`, liveFilter: true, noButton: true,
     remote: !!capped.more, // 목록이 상한으로 잘렸으면(100+ 업체) 타이핑 시 서버 전체 검색으로 보강(2026-07-17)
     hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
   });
@@ -178,7 +178,7 @@ router.get("/", (req, res) => {
   // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 사람(관계자·아티스트)은 연락처 생성(2026-07-17).
   const newMenu = `
     <details class="relative inline-block" data-menu>
-      <summary class="btn-primary cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">+ 새 클라이언트</summary>
+      <summary class="btn-primary cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">+ 새 업체·그룹</summary>
       <div class="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-bg py-1 text-left shadow-lg">
         <a href="/clients/new?type=company" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">업체</span> <span class="text-xs text-muted">소속사·제작사</span></a>
         <a href="/clients/new?type=group" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">그룹</span> <span class="text-xs text-muted">밴드·아이돌</span></a>
@@ -186,13 +186,13 @@ router.get("/", (req, res) => {
     </details>`;
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "클라이언트", action: newMenu })}
+    ${pageHeader({ title: "업체·그룹", action: newMenu })}
     ${groupChips}
     ${kindChips}
     ${searchBar}
     ${resultNote}
     ${list}`;
-  res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body, wide: true }));
+  res.send(layout({ title: "업체·그룹", user: req.user, current: "/clients", body, wide: true }));
 });
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listClients는 q 미지원이라 이름/활동명 인메모리 필터 ──
@@ -215,8 +215,9 @@ router.get("/new", (req, res) => {
   if (req.query.type === "artist") return res.redirect("/contacts/new"); // 사람 생성은 연락처(2026-07-17)
   const type = ["company", "group"].includes(req.query.type) ? req.query.type : null;
   if (!type) return res.redirect("/clients"); // 유형 선택 페이지 폐기(드롭다운만) — 유형 없는 진입은 목록으로
+  const typeLabel = type === "company" ? "업체" : "그룹";
   const companies = listClients({}).filter((x) => x.kind === "company");
-  res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
+  res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
 });
 
 /**
@@ -246,10 +247,11 @@ function resolveContactPartyId(b) {
 router.post("/", (req, res) => {
   const b = req.body;
   const type = CLIENT_TYPES.includes(b.type) ? b.type : "artist"; // 업체/아티스트/그룹(폼 hidden)
+  const typeLabel = type === "company" ? "업체" : "그룹"; // 오류 재렌더용 표시 라벨(2026-07-17)
   const name = String(b.party_name != null ? b.party_name : b.name || "").trim(); // 폼 필드=party_name(Chrome name= 자동완성 회피 — 함정 #19·#21)
   if (!name) {
     const companies = listClients({}).filter((x) => x.kind === "company");
-    return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
+    return res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
   }
   let id;
   if (type === "group") {
@@ -326,14 +328,15 @@ router.get("/:id/edit", (req, res) => {
 router.post("/:id", (req, res) => {
   const id = Number(req.params.id);
   const c = getParty(id);
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const isFetch = req.get("X-Requested-With") === "fetch"; // 자동저장(AJAX)
   const b = req.body;
   const name = String(b.party_name != null ? b.party_name : b.name || "").trim(); // 폼 필드=party_name(Chrome name= 자동완성 회피 — 함정 #19·#21)
+  const typeLabel = c.kind === "group" ? "그룹" : "업체"; // 오류 재렌더용 표시 라벨(2026-07-17)
   if (!name) {
     if (isFetch) return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     const files = listClientFiles(id);
-    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({}), listClients({}).filter((x) => x.kind === "company"), false, true, listGroupsForPicker()) }));
+    return res.send(layout({ title: `${typeLabel} 수정`, user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({}), listClients({}).filter((x) => x.kind === "company"), false, true, listGroupsForPicker()) }));
   }
   // kind는 party 정체성이라 불변 — 폼 유형 고정, 현재 party.kind 기준으로 필드 갱신(updateParty가 분기).
   updateParty(id, {
@@ -398,7 +401,7 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
   const c = getParty(id);
   if (!c) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
-    return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "", user: req.user }));
+    return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "", user: req.user }));
   }
   if (!FILE_KINDS.find((k) => k.key === kind)) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
@@ -480,7 +483,7 @@ router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, r
 // ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리 + 첨부 서류 링크) ──
 router.get("/:id", asyncHandler(async (req, res) => {
   const c = getParty(Number(req.params.id));
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   // 사람은 전부 연락처에서 본다(2026-07-17 사람/조직 축 정리 — 이전엔 비아티스트만 리다이렉트라
   // 같은 사람이 아티스트면 클라이언트 상세, 아니면 연락처로 갈리고 편집 폼도 두 벌이었다).
   if (c.kind === "person") {
@@ -511,8 +514,8 @@ router.get("/:id", asyncHandler(async (req, res) => {
   const ret = safePath(retQ);
   const clientsBackHref = ret || (fromOk ? `/clients?${from}` : "/clients");
   const backLabel = ret
-    ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/contacts") ? "연락처" : ret.startsWith("/clients") ? "클라이언트" : "돌아가기"
-    : "클라이언트";
+    ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/contacts") ? "연락처" : ret.startsWith("/clients") ? "업체·그룹" : "돌아가기"
+    : "업체·그룹";
   const keepQ = [fromOk ? `from=${from}` : "", ret ? `return=${encodeURIComponent(ret)}` : ""].filter(Boolean).join("&"); // 탭 전환 시 복귀 경로 유실 방지
   const tabBarHtml = tabBar({
     tabs: [
@@ -537,7 +540,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
         </div>
         <div class="space-y-2">${invoices.map((i) => invoiceRow(i)).join("")}</div>`;
     } else {
-      content = emptyState("이 클라이언트가 청구처인 청구 내역이 없습니다.", { card: true });
+      content = emptyState(`이 ${c.kind === "group" ? "그룹이" : "업체가"} 청구처인 청구 내역이 없습니다.`, { card: true });
     }
   } else {
     content = projects.length

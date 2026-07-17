@@ -148,7 +148,7 @@ const NAV = [
   { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "staff", group: "ops" },
   { href: "/invoices", label: "청구", key: "invoices", access: "billing", group: "billing" },
   { href: "/contacts", label: "연락처", key: "contacts", access: "editor", group: "manage" },
-  { href: "/clients", label: "클라이언트", key: "clients", access: "editor", group: "manage" },
+  { href: "/clients", label: "업체·그룹", key: "clients", access: "editor", group: "manage" },
   { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
   { href: "/revenue", label: "매출", key: "revenue", access: "invoice", group: "billing" },
   { href: "/settings", label: "환경설정", key: "settings", access: "staff", group: "manage" },
@@ -574,7 +574,7 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
 }
 
 /**
- * 범용 정보 표(2026-07-16 사용자 요청 '연락처·클라이언트도 넓어진 화면에 정보 많이') — 청구·프로젝트 표와 통일감.
+ * 범용 정보 표(2026-07-16 사용자 요청: 클라이언트도 넓어진 화면에 정보 많이) — 연락처·청구·프로젝트 표와 통일감.
  * @param {Array<{label,w?,hide?,right?,primary?,mobileHide?,mCard?,wrap?}>} cols  열 정의(w=콜 폭 **Tailwind 클래스명**[예 "w-[16rem]"] — 인라인 style은 CSP에 막히니 클래스로·미지정=유동, hide='sm'|'md'|'lg'|'xl' 그 미만 숨김[col도 함께 숨겨 폭 예약 제거], mobileHide=<640 카드에서 셀 숨김, mCard='tl'|'tr'|'bl'|'br'=<640 카드를 2열 그리드로 배치[좌상/우상/좌하/우하·라벨 없이 값만], wrap=…로 안 자르고 줄바꿈 허용[배지 여러 개 열], primary=모바일 카드 헤더 셀).
  * @param {Array<{cells:string[]}>} rows  각 행 = 열 순서대로의 셀 HTML.
  * @param {{filterList?:boolean}} [opt]  filterList=실시간 검색 필터(tbody에 data-filter-list, app.js [data-live-filter]와 연동).
@@ -766,12 +766,12 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
       <input type="hidden" name="payer_contact_id" value="" data-pk-pid />
       <div class="relative">
         <input class="input pr-9" type="text" data-pk-input autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
-          placeholder="클라이언트·담당자 검색…" value="${esc(selLabel)}" aria-label="청구처 검색" />
+          placeholder="청구처 검색…" value="${esc(selLabel)}" aria-label="청구처 검색" />
         <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pk-pop role="listbox"></div>
       </div>
       <script type="application/json" data-pk-options>${json}</script>
-      ${explain(hint || `클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.`)}
+      ${explain(hint || `청구처 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.`)}
     </div>`;
 }
 
