@@ -1,7 +1,7 @@
 "use strict";
 // 연락처 전용 뷰(2026-07-17 마스터-디테일 전환) — 왼쪽 이름 목록 + 오른쪽 읽기/편집 패널.
 // 옛 표(contactTable)는 소비처가 0이 되어 제거됨 — 연락처는 '비교'가 아니라 '찾기' 화면이라 열 폭 튜닝이 계속 실패했다(설계 문서 참조).
-const { esc, personName, listGroup, copyable, emptyState, dataTable } = require("./views");
+const { esc, personName, listGroup, copyable, dataTable } = require("./views");
 
 /**
  * 2단 골격. lg 이상 = [이름 목록 18rem | 상세]. 미만 = 한 단(선택 여부로 한쪽만).
@@ -96,8 +96,11 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
   const memo = p.memo ? `<div class="card"><div class="text-xs text-muted">메모</div><div class="mt-0.5 whitespace-pre-wrap text-sm">${esc(p.memo)}</div></div>` : "";
 
   // 참여 내역 — 2026-07-17 만든 표를 그대로 재사용(열 순서·작성일 표기는 프로젝트 목록과 통일).
-  const projectTable = projects.length
-    ? dataTable(
+  // **참여가 0이면 그 섹션(헤딩·빈 안내)을 통째로 숨긴다**(2026-07-17 사용자 요청, 세션→프로젝트 순으로 확장):
+  // 관계자·연락처 대다수가 프로젝트·세션 참여가 없어 '0 + 빈 안내'가 매번 자리만 차지했다. 둘 다 0이면 참여 내역 영역 자체가 없다.
+  const projectTable = !projects.length
+    ? ""
+    : dataTable(
         [
           { label: "아티스트", w: "w-[10rem]", hide: "sm", mCard: "tl" },
           { label: "제작사", w: "w-[10rem]", hide: "lg", mobileHide: true },
@@ -114,9 +117,7 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
             link(esc(String(pr.created_at || "").slice(0, 10)), "text-muted"),
           ] };
         })
-      )
-    : emptyState("연결된 프로젝트가 없습니다.", { card: true });
-  // 세션 0이면 섹션 자체를 숨긴다(2026-07-17 사용자 요청 — 디렉터가 아닌 대다수 연락처에서 '세션 0 + 빈 안내'가 매번 자리만 차지).
+      );
   const sessionTable = !sessions.length
     ? ""
     : dataTable(
@@ -140,10 +141,9 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
         })
       );
 
-  const activity = `
-    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2>
-    ${projectTable}
-    ${sessionTable ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">세션 ${sessions.length}</h2>${sessionTable}` : ""}`;
+  const section = (label, count, table) =>
+    table ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">${label} ${count}</h2>${table}` : "";
+  const activity = `${section("프로젝트", projects.length, projectTable)}${section("세션", sessions.length, sessionTable)}`;
 
   return `${header}
     <div class="space-y-3">${contact}${org}${memo}</div>

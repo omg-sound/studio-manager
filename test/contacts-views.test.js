@@ -106,12 +106,22 @@ test("contactReadView: 참여 내역 = 프로젝트·세션 표(작성일 포함
   assert.match(html, /href="\/projects\/3\?tab=sessions"/);
 });
 
-test("contactReadView: 프로젝트 없으면 빈 안내", () => {
+// 2026-07-17 사용자 요청: 참여가 0인 섹션은 헤딩·빈 안내까지 통째로 숨긴다(관계자·연락처 대다수가 0이라 자리만 차지).
+test("contactReadView: 프로젝트·세션 둘 다 0이면 참여 내역 영역 자체가 없다", () => {
   const html = read({ projects: [], sessions: [] });
-  assert.match(html, /연결된 프로젝트가 없습니다/);
+  assert.ok(!/프로젝트 0/.test(html), "프로젝트 헤딩 없음");
+  assert.ok(!/연결된 프로젝트가 없습니다/.test(html), "프로젝트 빈 안내 없음");
+  assert.ok(!/세션 0/.test(html), "세션 헤딩 없음");
+  assert.ok(!/지정된 세션이 없습니다/.test(html), "세션 빈 안내 없음");
+  assert.match(html, /강병원 대표님/, "헤더·연락 정보는 그대로");
 });
 
-// 2026-07-17 사용자 요청: 디렉터가 아닌 대다수 연락처에서 '세션 0 + 빈 안내'가 자리만 차지한다.
+test("contactReadView: 프로젝트 0이면 프로젝트 섹션만 숨기고 세션은 남는다", () => {
+  const html = read({ projects: [] });
+  assert.ok(!/프로젝트 0/.test(html));
+  assert.match(html, /세션 1/, "세션 섹션은 유지");
+});
+
 test("contactReadView: 세션 0이면 세션 섹션 자체를 숨긴다(헤딩·빈 안내 없음)", () => {
   const html = read({ sessions: [] });
   assert.ok(!/세션 0/.test(html), "세션 헤딩 없음");
