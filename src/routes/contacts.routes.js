@@ -29,7 +29,7 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personName, flashBanner, emptyState, errorPage, tabBar, dirtyActionRow, searchBox, companyCombo } = require("../views");
+const { layout, pageHeader, esc, personName, flashBanner, emptyState, errorPage, tabBar, dirtyActionRow, searchBox, companyCombo, dateCombo, detailsChevron } = require("../views");
 const { contactPanes, contactNameList, contactReadView } = require("../views.contacts");
 
 const router = express.Router();
@@ -107,9 +107,12 @@ router.post("/", asyncHandler(async (req, res) => {
   }
 }));
 
-// ── 수정: 이제 상세(GET /:id)가 인라인 편집 화면이므로 옛 편집 경로는 상세로 리다이렉트(북마크 호환).
+// 편집(2026-07-17 마스터-디테일): 읽기 뷰의 [편집]이 여기로. 왼쪽 목록은 유지하고 오른쪽만 폼.
+// (옛 '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 바뀜 — 클라이언트 상세는 인라인 편집 유지.)
 router.get("/:id/edit", (req, res) => {
-  res.redirect(`/contacts/${Number(req.params.id)}`);
+  const c = getParty(Number(req.params.id));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  res.send(renderContacts(req, c, editPaneFor(req, c)));
 });
 
 router.post("/:id", asyncHandler(async (req, res) => {
@@ -352,6 +355,84 @@ function readPaneFor(req, c) {
       : "",
   ].filter(Boolean).join("");
   return contactReadView(c, { affs, projects, sessions, editHref: `/contacts/${c.id}/edit`, extras });
+}
+
+/** 편집 패널 — 폼 + 소속 이력 인라인 편집 + 소속 추가/이직 + 삭제(옛 '상세 정보' 탭 내용을 그대로 이동). */
+function editPaneFor(req, c) {
+  const affs = listAffiliations(c.id);
+  const clients = listClients({});
+  const linkedManager = getManagerByPartyId(c.id);
+  const cur = affs.find((a) => !a.ended_on);
+  // 취소 = 저장하지 않고 읽기 뷰로. data-no-guard + app.js가 bypass도 세워 beforeunload까지 통과(함정 #24).
+  const cancel = `<a href="/contacts/${c.id}" class="text-sm text-primary hover:underline" data-no-guard>← 취소</a>`;
+  const form = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker());
+
+  const timeline = affs.length
+    ? `<div class="space-y-2">${affs
+        .map((a) => {
+          const isCurrent = !a.ended_on;
+          const badge = isCurrent ? `<span class="badge badge-success">현재</span>` : `<span class="badge badge-neutral">종료</span>`;
+          const company = a.client_name || "무소속";
+          const period = `${a.started_on ? esc(a.started_on) : "?"} ~ ${a.ended_on ? esc(a.ended_on) : "현재"}`;
+          // 각 소속 행을 펼치면(details) 회사·직함·기간·메모를 직접 수정(dirty 저장). 종료·삭제도 그 안에.
+          const editForm = `
+            <form method="post" action="/contacts/${c.id}/affiliations/${a.id}" class="mt-2 space-y-2 border-t border-border pt-2" data-dirty-form>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label class="label mb-0.5 text-xs">소속 회사 <span class="font-normal text-muted">(검색 · 비우면 무소속)</span></label>
+                  ${companyCombo("affiliation_company", a.client_name || "", "소속사/레이블", "회사")}
+                </div>
+                <div><label class="label mb-0.5 text-xs">직함</label><input class="input py-1.5 text-sm" name="title" value="${esc(a.title || "")}" placeholder="예: A&amp;R · 매니저" /></div>
+                <div><label class="label mb-0.5 text-xs">시작일</label>${dateCombo("started_on", a.started_on || "", { label: "시작일", inputCls: "input w-full py-1.5 text-sm" })}</div>
+                <div><label class="label mb-0.5 text-xs">종료일 <span class="font-normal text-muted">(비우면 현재)</span></label>${dateCombo("ended_on", a.ended_on || "", { label: "종료일", inputCls: "input w-full py-1.5 text-sm" })}</div>
+              </div>
+              <div><label class="label mb-0.5 text-xs">메모</label><input class="input py-1.5 text-sm" name="memo" value="${esc(a.memo || "")}" /></div>
+              <div class="flex items-center gap-2">
+                <button class="btn-primary btn-xs transition" type="submit" data-dirty-save>저장</button>
+                <span class="text-xs text-warning" data-dirty-hint hidden>저장되지 않은 변경사항</span>
+              </div>
+            </form>
+            <div class="mt-2 flex gap-1 border-t border-border pt-2">
+              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end"><button class="btn-ghost btn-xs" type="submit">종료 처리</button></form>` : ""}
+              <form method="post" action="/contacts/${c.id}/affiliations/${a.id}/delete" data-confirm="이 소속 이력을 삭제할까요?"><button class="btn-ghost btn-xs text-danger" type="submit">삭제</button></form>
+            </div>`;
+          return `<div class="card">
+            <details class="group">
+              <summary class="flex cursor-pointer list-none items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">${badge}<span class="font-semibold">${esc(company)}</span>${a.title ? `<span class="text-sm text-muted">${esc(a.title)}</span>` : ""}</div>
+                  <div class="mt-0.5 text-xs text-muted">${period}</div>
+                  ${a.memo ? `<div class="mt-1 text-sm">${esc(a.memo)}</div>` : ""}
+                </div>
+                <span class="shrink-0 text-xs text-muted hover:text-fg">${detailsChevron()}</span>
+              </summary>
+              ${editForm}
+            </details>
+          </div>`;
+        })
+        .join("")}</div>`
+    : emptyState("소속 이력이 없습니다.", { card: true });
+
+  const affForm = `
+    <form method="post" action="/contacts/${c.id}/affiliations" class="card mt-3 space-y-3">
+      <div class="font-semibold">소속 추가 / 이직</div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label">소속 회사 <span class="font-normal text-muted text-xs">(검색 · 목록 외 이름은 새 업체 등록)</span></label>
+          ${companyCombo("affiliation_company", "", "소속사/레이블", "회사")}
+        </div>
+        <div><label class="label">직함</label><input class="input" name="title" placeholder="예: A&amp;R · 매니저" /></div>
+      </div>
+      <div><label class="label">시작일</label>${dateCombo("started_on", "", { label: "시작일", inputCls: "input w-full" })}</div>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="closeCurrent" value="1" checked /> 기존 현재 소속 종료(이직)</label>
+      <button class="btn-primary" type="submit">소속 추가</button>
+    </form>`;
+
+  return `<div class="mb-3">${cancel}</div>
+    ${form}
+    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
+    ${timeline}
+    ${affForm}`;
 }
 
 module.exports = router;

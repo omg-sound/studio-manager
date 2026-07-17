@@ -56,6 +56,26 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.equal(status, 404);
   });
 
+  await t.test("GET /contacts/:id/edit = 목록 + 편집 폼", async () => {
+    const { status, html } = await get(`/contacts/${target}/edit`);
+    assert.equal(status, 200);
+    assert.match(html, /data-filter-list/, "왼쪽 목록 유지");
+    assert.match(html, /data-dirty-form/, "편집 폼(dirty 저장)");
+    assert.match(html, /name="family_name"/, "이름 필드");
+    assert.match(html, /소속 추가 \/ 이직/, "소속 이력 관리");
+    assert.match(html, /연락처 삭제/, "삭제는 편집 화면에");
+  });
+
+  await t.test("저장하면 읽기 뷰로 복귀", async () => {
+    const r = await fetch(`${base}/contacts/${target}`, {
+      method: "POST", redirect: "manual",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin" },
+      body: new URLSearchParams({ family_name: "외", given_name: "부인001", name: "외부인001", phone: "010-0000-0001" }).toString(),
+    });
+    assert.equal(r.status, 302);
+    assert.match(r.headers.get("location"), new RegExp(`^/contacts/${target}\\?flash=saved`), "읽기 뷰로");
+  });
+
   server.close();
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });
