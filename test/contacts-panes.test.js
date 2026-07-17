@@ -95,30 +95,6 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.match(r.headers.get("location"), new RegExp(`^/contacts/${target}\\?flash=saved`), "읽기 뷰로");
   });
 
-  await t.test("관계자 탭: sel 없으면 목록만, 있으면 읽기 뷰", async () => {
-    // 관계자 = 프로젝트 고객측 담당자로 참조된 사람
-    const pid = db().prepare("INSERT INTO projects (title, contact_party_id) VALUES ('관계자검증', ?)").run(target).lastInsertRowid;
-    db().prepare("INSERT INTO project_contacts (project_id, party_id) VALUES (?, ?)").run(pid, target);
-
-    const none = await get("/clients?group=associate");
-    assert.equal(none.status, 200);
-    assert.match(none.html, /data-filter-list/, "이름 목록");
-    assert.match(none.html, /관계자를 선택하세요/, "오른쪽 안내");
-
-    const sel = await get(`/clients?group=associate&sel=${target}`);
-    assert.equal(sel.status, 200);
-    assert.match(sel.html, /aria-current="true"/, "선택 강조");
-    assert.match(sel.html, new RegExp(`href="/contacts/${target}/edit\\?return=`), "[편집]은 연락처 메뉴로(return 보존)");
-
-    const bad = await get("/clients?group=associate&sel=999999");
-    assert.equal(bad.status, 200, "없는 id여도 탭 자체는 유효(404 아님)");
-    assert.match(bad.html, /관계자를 선택하세요/);
-
-    // 좁은 화면: 왼쪽 목록이 숨겨지므로 '← 관계자'로 돌아간다(선택 없으면 목록이 이미 보이니 없음).
-    assert.match(sel.html, /<a href="\/clients\?group=associate" class="[^"]*lg:hidden[^"]*">← 관계자<\/a>/);
-    assert.ok(!/← 관계자/.test(none.html), "목록만 볼 땐 없음");
-  });
-
   await t.test("소속 이력 폼은 편집 화면에 머문다(읽기 뷰로 안 튕김)", async () => {
     const post = async (path, body) => fetch(base + path, {
       method: "POST", redirect: "manual",
