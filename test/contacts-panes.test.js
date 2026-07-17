@@ -57,5 +57,5 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
   });
 
   server.close();
-  cleanupDb();
+  t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });
