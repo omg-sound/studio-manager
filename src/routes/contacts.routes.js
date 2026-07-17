@@ -245,13 +245,13 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
     : "";
   // embedded=상세 페이지에 인라인으로 들어갈 때 — 페이지 헤더(연락처 수정/상세 back) 생략(상단 이름 헤더가 이미 있음).
   return `
-    ${embedded ? "" : pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
+    ${embedded ? "" : pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
     <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
       ${isEdit && returnTo ? `<input type="hidden" name="return" value="${esc(returnTo)}" />` : ""}
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       ${managerBanner}
       <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
-        <div class="text-sm font-medium">이름 <span class="font-normal text-muted">— 성·이름·호칭으로 표시됩니다</span></div>
+        <div class="text-sm font-medium">이름</div>
         <div class="grid gap-3 sm:grid-cols-3">
           <div><label class="label">성</label><input class="input" name="family_name" value="${esc(c.family_name || "")}" placeholder="예: 김" /></div>
           <div><label class="label">이름</label><input class="input" name="given_name" value="${esc(c.given_name || "")}" placeholder="예: 지훈" /></div>
@@ -271,7 +271,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
-        <div><label class="label">소속 <span class="font-normal text-muted text-xs">(회사·소속사 — 검색 · 목록 외 이름은 새 업체 등록)</span></label>${companyCombo("company", c.company || "", "소속사/레이블", "소속")}</div>
+        <div><label class="label">소속</label>${companyCombo("company", c.company || "", "소속사/레이블", "소속")}</div>
         <div><label class="label">직책</label><input class="input" name="job_title" value="${esc(c.job_title || "")}" placeholder="예: 대표 · 팀장" /></div>
         <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
       </div>
@@ -284,7 +284,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         </div>
       </div>
       <div>
-        <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(휴대폰 번호 또는 현금영수증 카드번호 — 개인을 청구처로 지정하려면 필요)</span></label>
+        <label class="label">현금영수증 정보</label>
         <input class="input" name="cash_receipt_no" autocomplete="off" value="${esc(c.cash_receipt_no || "")}" placeholder="예: 010-0000-0000" />
       </div>
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
