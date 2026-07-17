@@ -2,8 +2,8 @@
 
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
-const { COMPANY_ROLES, ARTIST_ACTIVITY_FORMS } = require("./config");
-const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, groupCombo, projectTypeBadge } = require("./views");
+const { COMPANY_ROLES } = require("./config");
+const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, projectTypeBadge } = require("./views");
 const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
@@ -109,11 +109,11 @@ function clientContactCombo(c, isEdit) {
 function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true, groups = [], formType = null) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
-  // 유형: 편집=party.kind 매핑, 생성=formType 인자(company/artist/group). 서로 섞이지 않는 3개념 — '기타' 없음.
-  const type = formType || (c.kind === "company" ? "company" : c.kind === "group" ? "group" : "artist");
-  const typeLabel = type === "company" ? "업체" : type === "group" ? "그룹" : "아티스트";
-  const nameLabel = type === "company" ? "상호(업체명)" : type === "group" ? "그룹명" : "이름 · 활동명";
-  const desc = type === "company" ? "업체 · 소속/레이블 · 제작/운영" : type === "group" ? "그룹 · 밴드·아이돌 그룹" : "아티스트 · 개인(솔로)";
+  // 유형: 편집=party.kind 매핑, 생성=formType 인자(company/group). 업체·그룹 2개념 — 아티스트는 연락처 폼으로 흡수됨.
+  const type = formType || (c.kind === "company" ? "company" : "group");
+  const typeLabel = type === "company" ? "업체" : "그룹";
+  const nameLabel = type === "company" ? "상호(업체명)" : "그룹명";
+  const desc = type === "company" ? "업체 · 소속/레이블 · 제작/운영" : "그룹 · 밴드·아이돌 그룹";
   const fileMap = {};
   files.forEach((f) => { fileMap[f.kind] = f; });
 
@@ -141,26 +141,10 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="biz_address" value="${esc(c.address || "")}" autocomplete="off" /></div>
       </div>` : ""}
-      ${type === "artist" ? `
-      <div>
-        <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(사업자등록증 없는 경우)</span></label>
-        <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
-      </div>` : ""}
-      ${type !== "company" ? `
+      ${type === "group" ? `
       <div>
         <label class="label">소속사 <span class="font-normal text-muted text-xs">(검색 · 없으면 비움 · 목록 외 이름은 새 업체 등록)</span></label>
         ${companyCombo("agency_company", c.agency_name || "", "소속사/레이블", "소속사")}
-      </div>` : ""}
-      ${type === "artist" ? `
-      <div>
-        <label class="label">활동 형태</label>
-        <select class="input" name="activity_form">
-          ${ARTIST_ACTIVITY_FORMS.map((f) => `<option value="${f.value}"${(c.activity_form || "solo") === f.value ? " selected" : ""}>${esc(f.label)}</option>`).join("")}
-        </select>
-      </div>
-      <div>
-        <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때 — 선택 시 소속사 자동 연동)</span></label>
-        ${groupCombo("group_id", c.group_id || "", (groups.find((g) => Number(c.group_id) === g.id) || {}).name || "", groups)}
       </div>` : ""}
       ${type === "group" ? `
       <div>

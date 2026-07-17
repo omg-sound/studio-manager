@@ -206,6 +206,13 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.equal(row.is_artist, 1);
   });
 
+  await t.test("연락처 편집 폼: '소속' 한 칸 + 활동 형태 없음", async () => {
+    const { html } = await get(`/contacts/${target}/edit`);
+    assert.match(html, /<label[^>]*>소속/, "'소속' 라벨");
+    assert.ok(!/>회사</.test(html), "옛 '회사' 라벨 없음");
+    assert.ok(!/activity_form/.test(html), "활동 형태 필드 폐기");
+  });
+
   server.close();
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });

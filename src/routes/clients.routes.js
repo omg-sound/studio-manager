@@ -303,7 +303,6 @@ router.post("/", (req, res) => {
     id = createPerson({
       name: realName || name, phone: b.phone, email: b.email, memo: b.memo,
       activity_name: name, is_artist: 1, cash_receipt_no: b.cash_receipt_no,
-      activity_form: b.activity_form, // 활동 형태(솔로/그룹/솔로+그룹)
     });
     if (b.group_id) setPartyGroup(id, b.group_id); // 아티스트 생성 시 소속 그룹 선택했으면 연결
   }
@@ -347,7 +346,6 @@ router.post("/:id", (req, res) => {
     // 본명≠활동명(모달 등록 등)이면 activity_name 보존(이름 필드=본명 편집이므로 활동명 유지). 그 외 person도 보존.
     activity_name: (c.kind === "group" || c.name === c.activity_name) ? name : c.activity_name, is_artist: c.is_artist,
     cash_receipt_no: c.kind === "group" ? c.cash_receipt_no : b.cash_receipt_no, // 그룹은 폼에 필드 없음 → 기존값 보존(개인 아티스트만 현금영수증)
-    activity_form: b.activity_form, // 활동 형태(아티스트 폼에만 있음 — 그룹·업체는 undefined로 보존)
     // 그룹 담당자(멤버/관계자) — 그룹일 때만 폼에서 전송(person은 undefined로 보존)
     contact_party_id: c.kind === "group" ? resolveContactPartyId(b) : undefined,
   });

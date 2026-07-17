@@ -271,7 +271,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
-        <div><label class="label">회사</label>${companyCombo("company", c.company || "", "소속사/레이블", "회사")}</div>
+        <div><label class="label">소속 <span class="font-normal text-muted text-xs">(회사·소속사 — 검색 · 목록 외 이름은 새 업체 등록)</span></label>${companyCombo("company", c.company || "", "소속사/레이블", "소속")}</div>
         <div><label class="label">직책</label><input class="input" name="job_title" value="${esc(c.job_title || "")}" placeholder="예: 대표 · 팀장" /></div>
         <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
       </div>

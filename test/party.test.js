@@ -731,3 +731,20 @@ test("listContacts({tab, q}): 검색어와 필터가 함께 걸린다", () => {
   const only = D.listContacts({ tab: "artist", q: "순수활동명" });
   assert.ok(only.length >= 1 && only.every((r) => r.is_artist), "아티스트 필터 + 활동명 검색");
 });
+
+// ── 2026-07-17: 아티스트 '소속사'와 연락처 '회사'는 같은 데이터(affiliations 현재 소속) ──
+// 폼을 '소속' 한 칸으로 합치기 전에 두 저장 경로의 결과 동등성을 고정한다.
+test("setPartyAgency와 syncCompanyAffiliation은 같은 현재 소속을 만든다", () => {
+  const co = Number(db().prepare("INSERT INTO parties (kind,name) VALUES ('company','소속통합상사')").run().lastInsertRowid);
+  const a = Number(db().prepare("INSERT INTO parties (kind,name,is_artist) VALUES ('person','소속아티스트',1)").run().lastInsertRowid);
+  const b = Number(db().prepare("INSERT INTO parties (kind,name) VALUES ('person','소속관계자')").run().lastInsertRowid);
+
+  D.setPartyAgency(a, co);                       // 아티스트 폼 경로
+  D.syncCompanyAffiliation(b, "소속통합상사", ""); // 연락처 폼 경로(회사명 텍스트)
+
+  const curA = D.currentAffiliation(a), curB = D.currentAffiliation(b);
+  assert.equal(curA.org_id ?? curA.client_id, co, "아티스트 경로 → 그 업체가 현재 소속");
+  assert.equal(curB.org_id ?? curB.client_id, co, "연락처 경로 → 같은 업체 재사용(새로 만들지 않음)");
+  assert.equal(D.listAffiliations(a).filter((x) => !x.ended_on).length, 1, "현재 소속 1건");
+  assert.equal(D.listAffiliations(b).filter((x) => !x.ended_on).length, 1, "현재 소속 1건");
+});
