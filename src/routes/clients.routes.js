@@ -12,7 +12,7 @@ const {
   setOrgContacts, setCompanyOwners, listCompanyOwners, listContacts, resolvePersonByName,
   listArtistsForAgency,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
-  listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
+  setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
   setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty, resolveCompanyByName, addCompanyRole,
 } = require("../data");
 const storage = require("../storage");
@@ -217,7 +217,7 @@ router.get("/new", (req, res) => {
   if (!type) return res.redirect("/clients"); // 유형 선택 페이지 폐기(드롭다운만) — 유형 없는 진입은 목록으로
   const typeLabel = type === "company" ? "업체" : "그룹";
   const companies = listClients({}).filter((x) => x.kind === "company");
-  res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
+  res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, type) }));
 });
 
 /**
@@ -251,7 +251,7 @@ router.post("/", (req, res) => {
   const name = String(b.party_name != null ? b.party_name : b.name || "").trim(); // 폼 필드=party_name(Chrome name= 자동완성 회피 — 함정 #19·#21)
   if (!name) {
     const companies = listClients({}).filter((x) => x.kind === "company");
-    return res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
+    return res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), companies, false, true, type) }));
   }
   let id;
   if (type === "group") {
@@ -336,7 +336,7 @@ router.post("/:id", (req, res) => {
   if (!name) {
     if (isFetch) return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     const files = listClientFiles(id);
-    return res.send(layout({ title: `${typeLabel} 수정`, user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({}), listClients({}).filter((x) => x.kind === "company"), false, true, listGroupsForPicker()) }));
+    return res.send(layout({ title: `${typeLabel} 수정`, user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({}), listClients({}).filter((x) => x.kind === "company"), false, true) }));
   }
   // kind는 party 정체성이라 불변 — 폼 유형 고정, 현재 party.kind 기준으로 필드 갱신(updateParty가 분기).
   updateParty(id, {
@@ -585,7 +585,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
   if (c.kind !== "company") { c.agency_id = currentAgencyId(c.id); c.agency_name = currentAgencyName(c.id); } // 아티스트·그룹: 소속사 콤보 기본값(이름)
   const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
   // 폼의 대표자/담당자 콤보는 전체 연락처(contactOptions)를 내부에서 조회(상세의 contacts는 이 클라이언트 소속만이라 별도).
-  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false, listGroupsForPicker()); // withExtras=false — 첨부·삭제 제외
+  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false); // withExtras=false — 첨부·삭제 제외
   const crossRefs = [
     // 아티스트(사람) party는 연락처와 동일 레코드 — '연락처로 보기' 링크(같은 party를 연락처 화면에서).
     c.kind === "person" ? `<div><span class="text-muted">연락처로 보기</span> <a href="/contacts/${c.id}" class="text-primary hover:underline">${esc(c.name)} ↗</a></div>` : "",

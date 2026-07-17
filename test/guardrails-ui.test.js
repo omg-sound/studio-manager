@@ -176,12 +176,11 @@ test("ui-guardrail: 시간 콤보 팝업은 scrollIntoView가 아니라 scrollTo
 
 // ── 2026-07-17 사람/조직 축 정리: 화면 문구에서 '클라이언트' 제거 ──
 // 코드 식별자·주석은 그대로 두므로(배포 안정성), **사용자 노출 문자열 리터럴**만 검사한다.
+// 파일 목록을 손으로 유지하면(옛 9개 하드코딩) 새 파일이 가드 밖으로 새므로 src/ 전체를 훑는다.
+const CLIENT_TERM_ALLOW = []; // 정당한 예외만(현재 없음). 레거시 DB 컬럼명(client_id 등)은 식별자라 애초에 안 걸린다.
 test("가드: 사용자 노출 문자열에 '클라이언트'가 없다", () => {
-  const files = ["views.js", "views.clients.js", "views.contacts.js", "views.invoices.js", "views.settings.js",
-    "routes/clients.routes.js", "routes/contacts.routes.js", "routes/invoices.routes.js", "routes/dashboard.routes.js"];
   const offenders = [];
-  files.forEach((f) => {
-    const raw = fs.readFileSync(path.join(__dirname, "..", "src", f), "utf8");
+  SRC_ALL.filter(({ f }) => !CLIENT_TERM_ALLOW.includes(f)).forEach(({ f, s: raw }) => {
     const src = raw.replace(/\/\*[\s\S]*?\*\//g, ""); // 블록 주석 제거(라인 분할 전 — //만 제거하면 /** */ 오탐)
     src.split("\n").forEach((line, i) => {
       const code = line.replace(/\/\/.*$/, ""); // 한 줄 주석 제외

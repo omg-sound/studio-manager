@@ -108,14 +108,14 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
 
     const aid = db().prepare("SELECT id FROM affiliations WHERE person_id = ? ORDER BY id DESC").get(target).id;
     // 삭제 → 편집 화면 복귀 + return(관계자 탭) 보존
-    const ret = `/clients?group=associate&sel=${target}`;
+    const ret = "/contacts?tab=associate";
     const del = await post(`/contacts/${target}/affiliations/${aid}/delete`, { return: ret });
     assert.equal(del.status, 302);
     assert.equal(del.headers.get("location"), `/contacts/${target}/edit?flash=deleted&return=${encodeURIComponent(ret)}`, "삭제 후 편집 화면 + return 보존");
   });
 
   await t.test("편집 진입 시 return= 실어오면 폼이 hidden으로 보존", async () => {
-    const ret = `/clients?group=associate&sel=${target}`;
+    const ret = "/contacts?tab=associate";
     const retHtml = ret.replace(/&/g, "&amp;"); // esc()가 & → &amp;로 렌더(HTML 속성값)
     const { status, html } = await get(`/contacts/${target}/edit?return=${encodeURIComponent(ret)}`);
     assert.equal(status, 200);
@@ -124,7 +124,7 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
   });
 
   await t.test("return을 실어 저장하면 그 관계자 탭으로 복귀", async () => {
-    const ret = `/clients?group=associate&sel=${target}`;
+    const ret = "/contacts?tab=associate";
     const r = await fetch(`${base}/contacts/${target}`, {
       method: "POST", redirect: "manual",
       headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin" },

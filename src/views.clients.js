@@ -106,7 +106,7 @@ function clientContactCombo(c, isEdit) {
     </div>`;
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true, groups = [], formType = null) {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true, formType = null) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
   // 유형: 편집=party.kind 매핑, 생성=formType 인자(company/group). 업체·그룹 2개념 — 아티스트는 연락처 폼으로 흡수됨.
