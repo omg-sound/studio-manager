@@ -43,3 +43,56 @@ test("contactPanes: 인라인 style 없음(CSP — 함정 #27)", () => {
   const html = contactPanes({ left: "L", right: "R", hasSelection: true });
   assert.ok(!/style="/.test(html));
 });
+
+const { contactReadView } = require("../src/views.contacts");
+
+const PARTY = { id: 2, kind: "person", name: "강병원", activity_name: "", honorific: "대표님",
+  phone: "010-8765-4321", email: "bw@undefined-ent.co.kr", cash_receipt_no: "010-8765-4321",
+  company: "언디파인드엔터테인먼트주식회사", job_title: "대표", department: "", memo: "야간 연락 가능" };
+const AFFS = [
+  { id: 9, client_id: 5, client_name: "언디파인드엔터테인먼트주식회사", title: "대표", started_on: "2025-01-01", ended_on: null, memo: "" },
+  { id: 8, client_id: 6, client_name: "옛회사", title: "팀장", started_on: "2020-01-01", ended_on: "2024-12-31", memo: "" },
+];
+const PROJECTS = [{ id: 3, title: "소울 4집", artist: "김조한", production_company: "소울패밀리", artist_company: "", created_at: "2026-07-02 11:20:00" }];
+const SESSIONS = [{ id: 4, project_id: 3, project_title: "소울 4집", session_date: "2026-07-09", start_time: "14:00", end_time: "17:30", all_day: 0, session_type: "녹음", status: "완료" }];
+const read = (o = {}) => contactReadView(PARTY, { affs: AFFS, projects: PROJECTS, sessions: SESSIONS, editHref: "/contacts/2/edit", extras: "", ...o });
+
+test("contactReadView: 헤더 이름 + 편집 버튼", () => {
+  const html = read();
+  assert.match(html, /강병원 대표님/);
+  assert.match(html, /href="\/contacts\/2\/edit"/, "[편집] 목적지는 호출부가 정함");
+});
+
+test("contactReadView: 전화·이메일·현금영수증은 클릭 복사", () => {
+  const html = read();
+  assert.match(html, /data-copy="010-8765-4321"/);
+  assert.match(html, /data-copy="bw@undefined-ent\.co\.kr"/);
+});
+
+test("contactReadView: 소속 이력은 읽기 전용(편집 폼·저장 버튼 없음)", () => {
+  const html = read();
+  assert.match(html, /언디파인드엔터테인먼트주식회사/);
+  assert.match(html, /옛회사/);
+  assert.ok(!/<form/.test(html), "읽기 뷰엔 폼이 없다");
+  assert.ok(!/data-dirty-form/.test(html));
+});
+
+test("contactReadView: 참여 내역 = 프로젝트·세션 표(작성일 포함)", () => {
+  const html = read();
+  assert.match(html, /프로젝트 1/);
+  assert.match(html, /세션 1/);
+  assert.match(html, /2026-07-02/, "프로젝트 작성일");
+  assert.match(html, /href="\/projects\/3"/);
+  assert.match(html, /href="\/projects\/3\?tab=sessions"/);
+});
+
+test("contactReadView: 참여 내역 없으면 빈 안내", () => {
+  const html = read({ projects: [], sessions: [] });
+  assert.match(html, /연결된 프로젝트가 없습니다/);
+  assert.match(html, /지정된 세션이 없습니다/);
+});
+
+test("contactReadView: 탭 없음(한 화면 스크롤)", () => {
+  const html = read();
+  assert.ok(!/\?tab=activity/.test(html), "옛 2탭 잔재 없음");
+});
