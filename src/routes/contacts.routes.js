@@ -18,7 +18,6 @@ const {
   deleteAffiliation,
   listProjectsForParty,
   listSessionsForParty,
-  listClients,
   getManagerByPartyId,
   syncPartyToManager,
   listGroupsForPicker,
@@ -28,7 +27,7 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personName, flashBanner, emptyState, errorPage, tabBar, dirtyActionRow, searchBox, companyCombo, dateCombo, detailsChevron } = require("../views");
+const { layout, pageHeader, esc, personName, flashBanner, emptyState, errorPage, tabBar, dirtyActionRow, searchBox, companyCombo, groupCombo, dateCombo, detailsChevron } = require("../views");
 const { contactPanes, contactNameList, contactReadView, contactExtras } = require("../views.contacts");
 
 const router = express.Router();
@@ -69,7 +68,7 @@ router.get("/suggest", (req, res) => {
 
 // ── 새 연락처 ──
 router.get("/new", (req, res) => {
-  res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}, false, listClients({}), null, false, listGroupsForPicker()) }));
+  res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({}, false, null, false, listGroupsForPicker()) }));
 });
 
 router.post("/", asyncHandler(async (req, res) => {
@@ -102,7 +101,7 @@ router.post("/", asyncHandler(async (req, res) => {
   } catch (e) {
     if (e.message !== "PARTY_NAME_REQUIRED") throw e; // 이름 누락만 폼 재렌더, 그 외(DB 오류 등)는 전역 핸들러(500+로깅)로
     if (req.get("X-Requested-With") === "fetch") return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
-    res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, listClients({}), null, false, listGroupsForPicker()) }));
+    res.send(layout({ title: "새 연락처", user: req.user, current: "/contacts", body: contactForm({ ...b, _err: "이름을 입력하세요." }, false, null, false, listGroupsForPicker()) }));
   }
 }));
 
@@ -153,7 +152,7 @@ router.post("/:id", asyncHandler(async (req, res) => {
     res.redirect(ret || `/contacts/${id}?flash=saved`);
   } catch (e) {
     if (e.message !== "PARTY_NAME_REQUIRED") throw e; // 이름 누락만 폼 재렌더, 그 외(DB 오류 등)는 전역 핸들러(500+로깅)로
-    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker(), safePath(b.return)) }));
+    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, linkedManager, false, listGroupsForPicker(), safePath(b.return)) }));
   }
 }));
 
@@ -228,7 +227,7 @@ router.get("/:id", (req, res) => {
 
 // ── 폼(추가/수정 공용) ──
 // returnTo: 편집 진입 시 실어온 복귀 경로(safePath 검증된 값만) — 저장 시 그리로 돌아가기 위해 hidden으로 함께 제출.
-function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false, groups = [], returnTo = null) {
+function contactForm(c = {}, isEdit = false, manager = null, embedded = false, groups = [], returnTo = null) {
   const e = c._err || "";
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
   const cancelHref = isEdit ? (returnTo || `/contacts/${c.id}`) : "/contacts";
@@ -259,14 +258,10 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <div><label class="label">아티스트명</label>
-            <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
-            <datalist id="contact-artist-clients">${clients.filter((cl) => cl.is_artist).map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
+            <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명" autocomplete="off" />
           </div>
           <div><label class="label">소속 그룹</label>
-            <select name="group_id" class="input">
-              <option value="">— 소속 그룹 없음 —</option>
-              ${groups.map((g) => `<option value="${g.id}"${Number(c.group_id) === g.id ? " selected" : ""}>${esc(g.name)}</option>`).join("")}
-            </select>
+            ${groupCombo("group_id", c.group_id || "", (groups.find((g) => Number(g.id) === Number(c.group_id)) || {}).name || "", groups)}
           </div>
         </div>
       </div>
@@ -378,7 +373,6 @@ function readPaneFor(c) {
 /** 편집 패널 — 폼 + 소속 이력 인라인 편집 + 소속 추가/이직 + 삭제(옛 '상세 정보' 탭 내용을 그대로 이동). */
 function editPaneFor(c, returnTo = null) {
   const affs = listAffiliations(c.id);
-  const clients = listClients({});
   const linkedManager = getManagerByPartyId(c.id);
   const cur = affs.find((a) => !a.ended_on);
   // 취소 = 저장하지 않고 읽기 뷰(또는 return 경로)로. data-no-guard + app.js가 bypass도 세워 beforeunload까지 통과(함정 #24).
@@ -386,7 +380,7 @@ function editPaneFor(c, returnTo = null) {
   const cancel = `<a href="${esc(cancelHref)}" class="text-sm text-primary hover:underline" data-no-guard>← 취소</a>`;
   // 소속 이력 폼도 복귀 경로를 함께 실어보낸다 — 처리 후 편집 화면으로 돌아올 때 백링크 체인이 끊기지 않게.
   const retInput = returnTo ? `<input type="hidden" name="return" value="${esc(returnTo)}" />` : "";
-  const form = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker(), returnTo);
+  const form = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, linkedManager, true, listGroupsForPicker(), returnTo);
 
   const timeline = affs.length
     ? `<div class="space-y-2">${affs

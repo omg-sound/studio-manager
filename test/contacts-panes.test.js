@@ -213,6 +213,20 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.ok(!/activity_form/.test(html), "활동 형태 필드 폐기");
   });
 
+  // 2026-07-18 사용자 요청: 아티스트명은 남의 활동명을 목록에서 고를 게 아니라 이 사람 활동명을 직접 입력.
+  await t.test("연락처 폼: 아티스트명은 자유 입력(datalist 없음), 소속 그룹은 검색+간이등록 콤보", async () => {
+    const { html } = await get("/contacts/new");
+    // 아티스트명 — 옛 datalist('목록에서 선택') 제거
+    assert.ok(!/contact-artist-clients/.test(html), "아티스트명 datalist 제거");
+    assert.ok(!/목록에서 선택/.test(html), "'목록에서 선택' 안내 없음");
+    assert.match(html, /name="nickname"[^>]*placeholder="예: 아티스트 활동명"/, "활동명 자유 입력 placeholder");
+    // 소속 그룹 — <select>가 아니라 groupCombo(검색 + 새 그룹 간이 등록)
+    assert.ok(!/<select name="group_id"/.test(html), "옛 select 제거");
+    assert.match(html, /data-group-combo/, "groupCombo 마커");
+    assert.match(html, /<input type="hidden" name="group_id"/, "group_id는 hidden으로 제출(계약 유지)");
+    assert.match(html, /새 그룹 등록/, "간이 등록 모달");
+  });
+
   server.close();
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });

@@ -2696,7 +2696,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 // 하나라도 열리면 <html>·<body> overflow:hidden(+스크롤바 폭만큼 padding으로 레이아웃 점프 방지). 전부 닫히면 복원.
 (function () {
   "use strict";
-  var SEL = "[data-pc-modal],[data-cc-modal],[data-artist-modal],[data-nav-guard],[data-modal]";
+  var SEL = "[data-pc-modal],[data-cc-modal],[data-gc-modal],[data-artist-modal],[data-nav-guard],[data-modal]";
   var locked = false, scheduled = false;
   function anyOpen() {
     var els = document.querySelectorAll(SEL);
