@@ -96,6 +96,38 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.match(bad.html, /관계자를 선택하세요/);
   });
 
+  await t.test("편집 진입 시 return= 실어오면 폼이 hidden으로 보존", async () => {
+    const ret = `/clients?group=associate&sel=${target}`;
+    const retHtml = ret.replace(/&/g, "&amp;"); // esc()가 & → &amp;로 렌더(HTML 속성값)
+    const { status, html } = await get(`/contacts/${target}/edit?return=${encodeURIComponent(ret)}`);
+    assert.equal(status, 200);
+    assert.ok(html.includes(`name="return" value="${retHtml}"`), "hidden return 보존");
+    assert.ok(html.includes(`href="${retHtml}" class="text-sm text-primary hover:underline" data-no-guard>← 취소`), "취소 링크도 return으로");
+  });
+
+  await t.test("return을 실어 저장하면 그 관계자 탭으로 복귀", async () => {
+    const ret = `/clients?group=associate&sel=${target}`;
+    const r = await fetch(`${base}/contacts/${target}`, {
+      method: "POST", redirect: "manual",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin" },
+      body: new URLSearchParams({ family_name: "외", given_name: "부인001", name: "외부인001", phone: "010-0000-0001", return: ret }).toString(),
+    });
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get("location"), ret, "관계자 탭으로 복귀(flash 없음)");
+  });
+
+  await t.test("open-redirect 차단: 외부 return은 무시하고 읽기 뷰로 폴백", async () => {
+    for (const evil of ["https://evil.example.com", "//evil.example.com"]) {
+      const r = await fetch(`${base}/contacts/${target}`, {
+        method: "POST", redirect: "manual",
+        headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin" },
+        body: new URLSearchParams({ family_name: "외", given_name: "부인001", name: "외부인001", phone: "010-0000-0001", return: evil }).toString(),
+      });
+      assert.equal(r.status, 302);
+      assert.match(r.headers.get("location"), new RegExp(`^/contacts/${target}\\?flash=saved`), `외부 return(${evil})은 폴백`);
+    }
+  });
+
   server.close();
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });

@@ -112,7 +112,8 @@ router.post("/", asyncHandler(async (req, res) => {
 router.get("/:id/edit", (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  res.send(renderContacts(req, c, editPaneFor(req, c)));
+  const returnTo = safePath(req.query.return); // 백링크 규약(CLAUDE.md) — 내부 절대경로만(open-redirect 차단)
+  res.send(renderContacts(req, c, editPaneFor(req, c, returnTo)));
 });
 
 router.post("/:id", asyncHandler(async (req, res) => {
@@ -148,10 +149,12 @@ router.post("/:id", asyncHandler(async (req, res) => {
         if (ref) setPartyGoogleRef(id, ref.resourceName, ref.etag);
       }
     } catch (_e) {}
-    res.redirect(`/contacts/${id}?flash=saved`);
+    // 백링크 규약(CLAUDE.md): return이 있으면 그 화면(예: 클라이언트 관계자 탭)으로, 없으면 읽기 뷰로.
+    const ret = safePath(b.return);
+    res.redirect(ret || `/contacts/${id}?flash=saved`);
   } catch (e) {
     if (e.message !== "PARTY_NAME_REQUIRED") throw e; // 이름 누락만 폼 재렌더, 그 외(DB 오류 등)는 전역 핸들러(500+로깅)로
-    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker()) }));
+    res.send(layout({ title: "연락처 수정", user: req.user, current: "/contacts", body: contactForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, listClients({}), linkedManager, false, listGroupsForPicker(), safePath(b.return)) }));
   }
 }));
 
@@ -218,10 +221,11 @@ router.get("/:id", (req, res) => {
 });
 
 // ── 폼(추가/수정 공용) ──
-function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false, groups = []) {
+// returnTo: 편집 진입 시 실어온 복귀 경로(safePath 검증된 값만) — 저장 시 그리로 돌아가기 위해 hidden으로 함께 제출.
+function contactForm(c = {}, isEdit = false, clients = [], manager = null, embedded = false, groups = [], returnTo = null) {
   const e = c._err || "";
   const action = isEdit ? `/contacts/${c.id}` : "/contacts";
-  const cancelHref = isEdit ? `/contacts/${c.id}` : "/contacts";
+  const cancelHref = isEdit ? (returnTo || `/contacts/${c.id}`) : "/contacts";
   const isHouseEngineer = manager && manager.user_id != null;
   // (구 '현재 소속' 블록 제거 — 2026-07-04 구식 필드 전수 정리: 아래 '회사' companyCombo + '직책'이
   //  syncCompanyAffiliation으로 첫 소속을 등록하므로 평면 select와 기능 중복. 무소속=회사 비움.)
@@ -237,6 +241,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
   return `
     ${embedded ? "" : pageHeader({ title: isEdit ? "연락처 수정" : "새 연락처", desc: "이름 · 연락처 · 소속", back: { href: cancelHref, label: isEdit ? "연락처 상세" : "연락처" } })}
     <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
+      ${isEdit && returnTo ? `<input type="hidden" name="return" value="${esc(returnTo)}" />` : ""}
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       ${managerBanner}
       <div class="rounded-lg border border-border bg-bg/40 p-3 space-y-3">
@@ -358,14 +363,15 @@ function readPaneFor(req, c) {
 }
 
 /** 편집 패널 — 폼 + 소속 이력 인라인 편집 + 소속 추가/이직 + 삭제(옛 '상세 정보' 탭 내용을 그대로 이동). */
-function editPaneFor(req, c) {
+function editPaneFor(req, c, returnTo = null) {
   const affs = listAffiliations(c.id);
   const clients = listClients({});
   const linkedManager = getManagerByPartyId(c.id);
   const cur = affs.find((a) => !a.ended_on);
-  // 취소 = 저장하지 않고 읽기 뷰로. data-no-guard + app.js가 bypass도 세워 beforeunload까지 통과(함정 #24).
-  const cancel = `<a href="/contacts/${c.id}" class="text-sm text-primary hover:underline" data-no-guard>← 취소</a>`;
-  const form = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker());
+  // 취소 = 저장하지 않고 읽기 뷰(또는 return 경로)로. data-no-guard + app.js가 bypass도 세워 beforeunload까지 통과(함정 #24).
+  const cancelHref = returnTo || `/contacts/${c.id}`;
+  const cancel = `<a href="${esc(cancelHref)}" class="text-sm text-primary hover:underline" data-no-guard>← 취소</a>`;
+  const form = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker(), returnTo);
 
   const timeline = affs.length
     ? `<div class="space-y-2">${affs
