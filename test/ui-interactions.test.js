@@ -1437,6 +1437,30 @@ test("목록 실시간 필터: 타이핑하면 매칭 행만 남고, 매칭 0이
   assert.ok(vis(rows[0]) && vis(rows[1]) && vis(rows[2]) && empty.hidden, "빈 검색 → 전부 표시");
 });
 
+// ── 실시간 필터 서버 보강([data-live-remote]): 상한(capList) 밖 항목도 타이핑하면 서버 전체 검색 결과로 교체(2026-07-17) ──
+test("실시간 필터 원격 보강: 상한 밖 항목도 타이핑하면 서버 결과로 채우고, 비우면 원본 복원", async () => {
+  const serverHtml = `<table><tbody data-filter-list><tr><td>차가을 · 010-9999</td></tr></tbody></table><div data-filter-empty hidden></div>`;
+  let fetchedUrl = null;
+  const fetchImpl = (input) => { fetchedUrl = String(input); return Promise.resolve({ ok: true, text: () => Promise.resolve(serverHtml) }); };
+  const html = searchBox({ action: "/clients", liveFilter: true, remote: true, hidden: '<input type="hidden" name="group" value="company" />' })
+    + listGroup({ filterList: true, rows: ["<div>김철수</div>", "<div>이영희</div>"] });
+  const { win, doc } = mountDom(html, { fetchImpl });
+  const input = doc.querySelector("[data-live-filter]");
+  assert.ok(input.hasAttribute("data-live-remote"), "remote=true면 data-live-remote 부여");
+  input.value = "차가을"; fire(win, input, "input");
+  await tick(320); // 디바운스(220ms) 경과 대기
+  assert.ok(/\/clients\?/.test(fetchedUrl) && /group=company/.test(fetchedUrl) && /q=/.test(fetchedUrl) && /limit=10000/.test(fetchedUrl), "서버 전체검색 URL(group·q·limit=10000)로 fetch");
+  assert.ok(/차가을/.test(doc.querySelector("[data-filter-list]").textContent), "서버 결과(상한 밖 항목)로 목록 교체됨");
+  input.value = ""; fire(win, input, "input"); // 검색어 비우면 원본(로드분) 복원
+  assert.ok(/김철수/.test(doc.querySelector("[data-filter-list]").textContent), "빈 검색 → 원본 로드분 복원");
+});
+
+// searchBox remote 계약: liveFilter 없이 remote만이면 data-live-remote 미부여(가드)
+test("searchBox remote 계약: liveFilter 있을 때만 data-live-remote 활성", () => {
+  assert.doesNotMatch(searchBox({ action: "/x", remote: true }), /data-live-remote/, "liveFilter 없으면 원격 비활성");
+  assert.match(searchBox({ action: "/x", liveFilter: true, remote: true }), /data-live-remote/, "liveFilter+remote면 활성");
+});
+
 // ── 청구 할인 정액칸: 미리 채운 '0' 없이 placeholder만(빈칸=0, 타이핑 시 바로 입력) ──
 test("청구 할인 정액칸: value='0' 없이 placeholder만", () => {
   const html = unbilledInvoiceForm({ id: 7, title: "테스트" }, [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }], []);

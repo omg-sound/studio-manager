@@ -2780,14 +2780,13 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 
 // 목록 실시간 필터([data-live-filter] 검색 입력 → [data-filter-list] 직접 자식 행을 textContent로 즉시 필터, 2026-07-15).
 // 검색 버튼(폼 제출=서버 ?q=)을 누르기 전에 이미 로드된 목록에서 검색어에 매칭되는 행만 남긴다(클라이언트 목록).
+// [data-live-remote](2026-07-17): 목록이 상한(capList, 기본 100건)으로 잘린 경우 — 로드된 행만 훑는 실시간 필터가
+//   100번째 뒤 항목을 못 찾던 문제 → 타이핑 시 디바운스 후 서버 전체 검색 결과로 [data-filter-list]를 교체한다.
+//   즉시 필터(로드분)로 빠른 피드백 + 서버 보강으로 전체 커버. 검색어 비우면 원본(로드분) 복원.
 (function () {
   "use strict";
-  document.addEventListener("input", function (e) {
-    var input = e.target;
-    if (!input || !input.hasAttribute || !input.hasAttribute("data-live-filter")) return;
-    var list = document.querySelector("[data-filter-list]");
-    if (!list) return;
-    var q = String(input.value || "").trim().toLowerCase();
+  var remoteTimer = null, remoteToken = 0;
+  function clientFilter(list, q) {
     var rows = list.children, shown = 0;
     for (var i = 0; i < rows.length; i++) {
       var match = !q || (rows[i].textContent || "").toLowerCase().indexOf(q) >= 0;
@@ -2797,6 +2796,44 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     }
     var empty = document.querySelector("[data-filter-empty]");
     if (empty) empty.hidden = !(q && shown === 0); // 빈 결과 안내는 display 유틸 클래스가 없어 [hidden]로 충분(매칭 0 + 검색어 있을 때만)
+  }
+  function scheduleRemote(input, list, q) {
+    clearTimeout(remoteTimer);
+    if (!q) { // 검색어 비면 원본(로드분) 복원 후 서버 왕복 생략
+      if (list.__origHTML != null) { list.innerHTML = list.__origHTML; list.__origHTML = null; }
+      clientFilter(list, "");
+      return;
+    }
+    remoteTimer = setTimeout(function () {
+      var form = input.form; if (!form) return;
+      var params = new URLSearchParams();
+      Array.prototype.forEach.call(form.querySelectorAll("input[name], select[name]"), function (el) {
+        if (el.name && el.name !== "q" && el.value) params.set(el.name, el.value); // 탭·필터(group/kind/tab) 유지
+      });
+      params.set("q", q);
+      params.set("limit", "10000"); // 상한 해제 — 서버가 매칭 전체 반환
+      var url = (form.getAttribute("action") || location.pathname) + "?" + params.toString();
+      var my = ++remoteToken;
+      fetch(url, { credentials: "same-origin" }).then(function (r) { if (!r.ok) throw 0; return r.text(); }).then(function (html) {
+        if (my !== remoteToken) return; // 최신 요청만 반영(경합 방지)
+        if (String(input.value || "").trim().toLowerCase() !== q) return; // 그 사이 타이핑이 바뀌었으면 폐기
+        var doc = new DOMParser().parseFromString(html, "text/html");
+        var nl = doc.querySelector("[data-filter-list]"); // 매칭 0건이면 서버가 emptyState를 내 nl 없음 → 목록 비움
+        if (list.__origHTML == null) list.__origHTML = list.innerHTML; // 최초 1회 원본(로드분) 보관
+        list.innerHTML = nl ? nl.innerHTML : "";
+        var empty = document.querySelector("[data-filter-empty]");
+        if (empty) empty.hidden = list.querySelector("*") != null; // 결과 없으면 안내 표시
+      }).catch(function () {}); // 네트워크·오류는 조용히(로드분 필터 결과 유지)
+    }, 220);
+  }
+  document.addEventListener("input", function (e) {
+    var input = e.target;
+    if (!input || !input.hasAttribute || !input.hasAttribute("data-live-filter")) return;
+    var list = document.querySelector("[data-filter-list]");
+    if (!list) return;
+    var q = String(input.value || "").trim().toLowerCase();
+    clientFilter(list, q); // 로드된 행 즉시 필터(빠른 피드백)
+    if (input.hasAttribute("data-live-remote")) scheduleRemote(input, list, q); // 상한 초과분은 서버 전체 검색으로 보강
   });
 })();
 

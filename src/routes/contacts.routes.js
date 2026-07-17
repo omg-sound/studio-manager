@@ -69,9 +69,12 @@ router.get("/", (req, res) => {
     hrefFn: (k) => `/contacts?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
   });
 
+  // 목록 상한(2026-07-09 스케일 점검) — 연락처는 계속 누적되므로 기본 100건 + 더 보기(검색은 전체 대상).
+  const cap = capList(rows, req.query, (n) => `/contacts?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   // 클라이언트 목록과 통일(2026-07-16 사용자 요청): 타이핑 즉시 실시간 필터 + 검색 버튼 없음(제안 드롭다운 대신 표 행 in-place 필터). Enter=서버 전체 검색(캡 초과분).
   const searchBar = searchBox({
     action: "/contacts", q, placeholder: "이름 · 전화 검색", label: "연락처 검색", liveFilter: true, noButton: true,
+    remote: !!cap.more, // 100+ 연락처면 타이핑 시 서버 전체 검색으로 보강(2026-07-17)
     hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />`,
   });
 
@@ -79,8 +82,6 @@ router.get("/", (req, res) => {
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts?tab=${tab}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
 
-  // 목록 상한(2026-07-09 스케일 점검) — 연락처는 계속 누적되므로 기본 100건 + 더 보기(검색은 전체 대상).
-  const cap = capList(rows, req.query, (n) => `/contacts?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   const list = rows.length
     ? contactTable(cap.shown, { returnTo: req.originalUrl, filterList: true }) + cap.more // 청구·프로젝트식 컬럼 표(이름·역할·소속·직함·전화·이메일) + 실시간 필터
     : q

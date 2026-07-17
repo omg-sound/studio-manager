@@ -93,6 +93,7 @@ router.get("/", (req, res) => {
   const searchNoun = { company: "업체명", associate: "관계자", artist: "아티스트", group: "그룹" }[group] || "이름";
   const searchBar = searchBox({
     action: "/clients", q, placeholder: `${searchNoun} 검색`, label: "클라이언트 검색", liveFilter: true, noButton: true,
+    remote: !!capped.more, // 목록이 상한으로 잘렸으면(100+ 업체) 타이핑 시 서버 전체 검색으로 보강(2026-07-17)
     hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
   });
 
