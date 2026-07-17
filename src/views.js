@@ -600,46 +600,6 @@ function dataTable(cols, rows, { filterList = false } = {}) {
   return `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface"><table class="dt${mCard ? " dt-mcard" : ""}">${cg}${thead}<tbody${filterList ? " data-filter-list" : ""}>${body}</tbody></table>${empty}</div>`;
 }
 
-/** 연락처(사람) 표 — 이름·역할·소속·(직함)·전화·이메일. /contacts 목록 + 클라이언트 '관계자' 탭 공용. hideTitle=직함 열 숨김(관계자 탭 — 이름에 호칭이 붙어 중복, 2026-07-16). */
-function contactTable(rows, { returnTo = "", fromParam = "", filterList = false, hideTitle = false } = {}) {
-  const { currentAffiliation, classifyParty } = require("./data"); // 지연 require(순환 회피)
-  const retQ = returnTo ? `${fromParam ? "&" : "?"}return=${encodeURIComponent(returnTo)}` : "";
-  const dash = '<span class="text-muted">—</span>';
-  // w=Tailwind 폭 클래스명(인라인 style CSP 차단 회피). 열 순서(2026-07-17 사용자 요청): 이름 · 소속 · 직함 · 역할 · 전화 · 이메일 — 이름 옆에 그 사람이 어디 누구인지(소속·직함)가 먼저, 역할 배지는 그 뒤.
-  // **폭은 프로덕션 실측 최장값 기준**(2026-07-17 사용자 '김조한 이름이 다 나오게 · 언디파인드…는 한글까지만 · 역할은 넓으면 1줄, 좁히면 2줄'). 셀 좌우 패딩 12+12=24라 필요폭 = 텍스트폭+24:
-  //  - 이름 `xl:w-[13rem]`(208): 최장 `Kim George Han (김조한)`=183 → 안 잘림(11rem=176이라 잘렸음). 1280 미만은 9.5rem으로 좁혀 역할 자리를 내준다.
-  //  - 소속 `xl:w-[15rem]`(240): `언디파인드엔터테인먼트주식회사`(한글만)=208 → 한글은 다 보이고 뒤의 영문 `(Undefined…`만 …로 잘림(의도).
-  //  - 역할=**유동**(w 없음): 최장 3배지=195 → 넓은 화면(1512)에선 247px라 한 줄, 좁아지면 열이 줄며 배지가 2줄·3줄로 접힘(`wrap`) — 고정 폭이면 못 접히고, 숨기면 안 보여서 유동.
-  //    ⚠️이름·소속을 1280 미만에서도 full 폭으로 두면 남는 폭이 없어 역할이 59px까지 눌린다(실측) → 위 반응형 폭이 그 방어.
-  // 모바일 카드(<640)=2열 그리드(mCard, 라벨 없이 값만): 이름(좌상)·전화(우상) / 소속(좌하)·이메일(우하), 역할·직함 숨김(2026-07-16 사용자 요청 '너무 많이 보여준다').
-  const cols = [
-    { label: "이름", w: "w-[9.5rem] xl:w-[13rem]", primary: true, mCard: "tl" },
-    { label: "소속", w: "w-[9rem] xl:w-[15rem]", hide: "sm", mCard: "bl" },
-    ...(hideTitle ? [] : [{ label: "직함", w: "w-[7rem]", hide: "xl", mobileHide: true }]),
-    { label: "역할", hide: "lg", wrap: true, mobileHide: true }, // 배지 여러 개는 …로 안 줄이고 줄바꿈으로 전부 표시(데스크톱). 모바일 카드에선 숨김.
-    { label: "전화", w: "w-[9.5rem]", mCard: "tr" },
-    { label: "이메일", hide: "sm", mCard: "br" },
-  ];
-  const trows = rows.map((c) => {
-    const cur = currentAffiliation(c.id);
-    const href = `/contacts/${c.id}${fromParam}${retQ}`;
-    const link = (inner, cls = "") => `<a href="${href}" class="dt-link ${cls}">${inner}</a>`;
-    const badges = classifyParty(c, cur).map((t) => `<span class="badge ${t.cls}">${esc(t.label)}</span>`).join(" ");
-    const org = cur && cur.client_id
-      ? `<a href="/clients/${cur.client_id}${fromParam}${retQ}" class="dt-link text-muted">${esc(cur.client_name || "")}</a>`
-      : dash;
-    return { cells: [
-      link(esc(personName(c)), "font-medium"),
-      org,
-      ...(hideTitle ? [] : [cur && cur.title ? link(esc(cur.title), "text-muted") : dash]),
-      badges || dash,
-      c.phone ? copyable(c.phone) : dash,
-      c.email ? copyable(c.email) : dash,
-    ] };
-  });
-  return dataTable(cols, trows, { filterList });
-}
-
 /**
  * 사람(연락처) 검색 콤보 — 통일 UX(검색 + 선택 시 닫힘 + 새로 등록 모달 + 선택 정보 표시).
  * 프로젝트 고객측 담당자·세션 디렉터(동적 다중 행)·클라이언트 담당자 공용. CSP-safe(app.js [data-person-combo]).
@@ -968,4 +928,4 @@ function groupCombo(fieldName, selectedId, currentName, groups = []) {
     </div>`;
 }
 
-module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, ddayPill, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, dataTable, contactTable, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, dateCombo, fileViewerPage };
+module.exports = { esc, formatKRW, personLabel, personName, formatBytes, projectServices, serviceBadges, icon, layout, pageHeader, emptyState, errorPage, flashBanner, navItemsFor, NAV, detailsChevron, ddayPill, explain, dirtyActionRow, projectTypeBadge, tabBar, filterChips, searchBox, capList, listGroup, listRow, listRowLinked, dataTable, personCombo, personComboOptionsScript, personComboCompanyScript, payerCombo, companyCombo, groupCombo, copyable, dateCombo, fileViewerPage };

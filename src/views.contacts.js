@@ -1,6 +1,6 @@
 "use strict";
 // 연락처 전용 뷰(2026-07-17 마스터-디테일 전환) — 왼쪽 이름 목록 + 오른쪽 읽기/편집 패널.
-// 표(contactTable)는 이후 태스크에서 걷어낼 예정 — 연락처는 '비교'가 아니라 '찾기' 화면이라 열 폭 튜닝이 계속 실패했다(설계 문서 참조).
+// 옛 표(contactTable)는 소비처가 0이 되어 제거됨 — 연락처는 '비교'가 아니라 '찾기' 화면이라 열 폭 튜닝이 계속 실패했다(설계 문서 참조).
 const { esc, personName, listGroup, copyable, emptyState, dataTable } = require("./views");
 
 /**

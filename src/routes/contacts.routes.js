@@ -213,7 +213,7 @@ router.post("/:id/affiliations/:aid/delete", (req, res) => {
 
 // ── 상세(2단: 왼쪽 이름 목록[선택 강조] + 오른쪽 읽기 뷰) ──
 // 주의: GET /:id 는 GET /new·GET /:id/edit 보다 뒤에 등록해 경로 충돌을 피한다.
-// 옛 2탭·인라인 편집 폼·소속 이력 폼은 편집 패널(/contacts/:id/edit, 다음 태스크)로 옮겨간다.
+// 옛 2탭·인라인 편집 폼·소속 이력 폼은 편집 패널(/contacts/:id/edit)로 옮겨갔다.
 router.get("/:id", (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
