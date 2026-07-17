@@ -326,7 +326,7 @@ function renderContacts(req, sel, rightHtml) {
           ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
           : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
 
-  const left = `${tabs}${searchBar}${list}`;
+  const left = `${searchBar}${list}`;
   const right = rightHtml || (sel ? readPaneFor(req, sel) : emptyState("연락처를 선택하세요.", { card: true, icon: "clients" }));
 
   // 백링크 규약(CLAUDE.md): 청구·프로젝트·클라이언트에서 ?return=(내부 절대경로)로 들어오면 그 화면으로 복귀.
@@ -339,6 +339,7 @@ function renderContacts(req, sel, rightHtml) {
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "연락처", back, action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
+    ${tabs}
     ${contactPanes({ left, right, hasSelection: !!sel })}`;
   return layout({ title: sel ? sel.name : "연락처", user: req.user, current: "/contacts", body, wide: true });
 }
