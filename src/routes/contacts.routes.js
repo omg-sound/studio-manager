@@ -31,7 +31,7 @@ const people = require("../people");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listGroup, listRow, listRowLinked, contactTable, projectTypeBadge, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo, dateCombo } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, listRowLinked, contactTable, dataTable, tabBar, detailsChevron, dirtyActionRow, searchBox, companyCombo, dateCombo } = require("../views");
 
 const router = express.Router();
 
@@ -251,11 +251,12 @@ router.post("/:id/affiliations/:aid/delete", (req, res) => {
   res.redirect(`/contacts/${Number(req.params.id)}?flash=deleted`);
 });
 
-// ── 상세(연락처 정보 + 소속 이력 타임라인 + 추가/이직 폼 + 연결 프로젝트) ──
+// ── 상세(2탭: 상세 정보[연락처 정보 + 소속 이력] / 참여 내역[프로젝트 + 세션]) ──
 // 주의: GET /:id 는 GET /new·GET /:id/edit 보다 뒤에 등록해 경로 충돌을 피한다.
 router.get("/:id", (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  const tab = req.query.tab === "activity" ? "activity" : "info";
   const affs = listAffiliations(c.id);
   const projects = listProjectsForParty(c.id);
   const sessions = listSessionsForParty(c.id);
@@ -345,47 +346,89 @@ router.get("/:id", (req, res) => {
       <button class="btn-primary" type="submit">소속 추가</button>
     </form>`;
 
+  // 참여 내역 = 프로젝트·세션 표(다른 목록처럼 항목명 헤더 + 프로젝트 작성일 — 이름만으론 식별이 어려워서, 2026-07-17 사용자 요청).
+  // 열 순서는 프로젝트 목록(아티스트·제작사·프로젝트·작성일)과 통일. w=Tailwind 폭 클래스 리터럴(인라인 style은 CSP 차단, 함정 #27).
+  const dash = '<span class="text-muted">—</span>';
   const projectList = projects.length
-    ? listGroup({
-        rows: projects.map((p) => {
-          const meta = [p.artist, p.artist_company, p.production_company].filter(Boolean).join(" · ");
-          const left = `<div class="flex items-center gap-2"><span class="font-semibold">${esc(p.title)}</span>${projectTypeBadge(p.project_type)}</div>${meta ? `<div class="mt-0.5 text-xs text-muted">${esc(meta)}</div>` : ""}`;
-          return listRow({ href: `/projects/${p.id}`, left, right: `<span class="text-xs text-muted">열기 ›</span>` });
-        }),
-      })
+    ? dataTable(
+        [
+          { label: "아티스트", w: "w-[10rem]", hide: "sm", mCard: "tl" },
+          { label: "제작사", w: "w-[10rem]", hide: "lg", mobileHide: true },
+          { label: "프로젝트", primary: true, mCard: "bl" },
+          { label: "작성일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
+        ],
+        projects.map((p) => {
+          const link = (inner, cls = "") => `<a href="/projects/${p.id}" class="dt-link ${cls}">${inner}</a>`;
+          const company = p.production_company || p.artist_company || "";
+          return { cells: [
+            p.artist ? link(esc(p.artist), "font-medium") : dash,
+            company ? link(esc(company), "text-muted") : dash,
+            link(esc(p.title), "font-medium"),
+            link(esc(String(p.created_at || "").slice(0, 10)), "text-muted"),
+          ] };
+        })
+      )
     : emptyState("연결된 프로젝트가 없습니다.", { card: true });
 
   const sessionList = sessions.length
-    ? listGroup({
-        rows: sessions.map((s) => {
-          const timeStr = s.start_time ? ` ${esc(s.start_time)}${s.end_time ? "–" + esc(s.end_time) : ""}` : "";
-          const left = `<div class="flex flex-wrap items-center gap-2"><span class="font-semibold">${esc(s.session_date)}${timeStr}</span><span class="badge bg-bg text-muted">${esc(s.session_type)}</span></div><div class="mt-0.5 text-xs text-muted">${esc(s.project_title || "")}</div>`;
-          const right = `<span class="text-xs text-muted">${esc(s.status)}</span>`;
-          return listRow({ href: `/projects/${s.project_id}?tab=sessions`, left, right });
-        }),
-      })
+    ? dataTable(
+        [
+          { label: "날짜", w: "w-[7rem]", nowrap: true, mCard: "tl" },
+          { label: "시간", w: "w-[7.5rem]", hide: "md", nowrap: true, mobileHide: true },
+          { label: "종류", w: "w-[6rem]", hide: "sm", mCard: "tr" },
+          { label: "프로젝트", primary: true, mCard: "bl" },
+          { label: "상태", w: "w-[5rem]", mCard: "br" },
+        ],
+        sessions.map((s) => {
+          const link = (inner, cls = "") => `<a href="/projects/${s.project_id}?tab=sessions" class="dt-link ${cls}">${inner}</a>`;
+          const time = s.all_day ? "종일" : s.start_time ? `${s.start_time}${s.end_time ? `–${s.end_time}` : ""}` : "";
+          return { cells: [
+            link(esc(s.session_date), "font-medium"),
+            time ? link(esc(time), "text-muted") : dash,
+            link(esc(s.session_type), "text-muted"),
+            link(esc(s.project_title || ""), "font-medium"),
+            link(esc(s.status), "text-muted"),
+          ] };
+        })
+      )
     : emptyState("담당 디렉터로 지정된 세션이 없습니다.", { card: true });
 
   // 클라이언트 '관계자' 탭 등에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만). 아니면 연락처 목록.
   // 청구·프로젝트 청구처 카드 → (관계자 리다이렉트) → 여기로 온 경우 ?return=(내부 절대경로만)으로 그 화면 복귀(2026-07-08).
   const from = String(req.query.from || "");
+  const fromOk = Boolean(from) && /^[\w=&%.\-]*$/.test(from);
   const retQ = String(req.query.return || "");
   const ret = safePath(retQ);
-  const backHref = ret || (from && /^[\w=&%.\-]*$/.test(from) ? `/clients?${from}` : "/contacts");
+  const backHref = ret || (fromOk ? `/clients?${from}` : "/contacts");
   const backLabel = ret
     ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "클라이언트" : ret.startsWith("/contacts") ? "연락처" : "돌아가기"
     : from ? "클라이언트" : "연락처";
-  const body = `
-    ${flashBanner(req.query)}
-    ${pageHeader({ title: personName(c), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}
+  // 탭 2구성(2026-07-17 사용자 요청): 상세 정보(편집 폼·소속 이력, 기본) / 참여 내역(프로젝트+세션)
+  // — 외주 작업자 상세의 '참여 내역' 탭과 같은 패턴. 탭 전환 시 복귀 경로(from·return) 유실 방지.
+  const keepQ = [from && fromOk ? `from=${from}` : "", ret ? `return=${encodeURIComponent(ret)}` : ""].filter(Boolean).join("&");
+  const tabBarHtml = tabBar({
+    tabs: [
+      { key: "info", label: "상세 정보" },
+      { key: "activity", label: `참여 내역 ${projects.length + sessions.length}` },
+    ],
+    activeKey: tab,
+    hrefFn: (key) => `/contacts/${c.id}?tab=${key}${keepQ ? `&${keepQ}` : ""}`,
+  });
+  const infoContent = `
     ${infoCard}
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 이력</h2>
     ${timeline}
-    ${affForm}
-    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">참여 세션</h2>
-    ${sessionList}
-    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">연결 프로젝트</h2>
-    ${projectList}`;
+    ${affForm}`;
+  const activityContent = `
+    <h2 class="mb-2 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2>
+    ${projectList}
+    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">세션 ${sessions.length}</h2>
+    ${sessionList}`;
+  const body = `
+    ${flashBanner(req.query)}
+    ${pageHeader({ title: personName(c), desc: `연락처 · ${classifyParty(c.id).map((t) => t.label).join(" · ")}`, back: { href: backHref, label: backLabel } })}
+    ${tabBarHtml}
+    ${tab === "activity" ? activityContent : infoContent}`;
   res.send(layout({ title: c.name, user: req.user, current: "/contacts", body }));
 });
 
