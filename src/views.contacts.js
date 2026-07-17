@@ -113,8 +113,10 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
         })
       )
     : emptyState("연결된 프로젝트가 없습니다.", { card: true });
-  const sessionTable = sessions.length
-    ? dataTable(
+  // 세션 0이면 섹션 자체를 숨긴다(2026-07-17 사용자 요청 — 디렉터가 아닌 대다수 연락처에서 '세션 0 + 빈 안내'가 매번 자리만 차지).
+  const sessionTable = !sessions.length
+    ? ""
+    : dataTable(
         [
           { label: "날짜", w: "w-[7rem]", nowrap: true, mCard: "tl" },
           { label: "시간", w: "w-[7.5rem]", hide: "md", nowrap: true, mobileHide: true },
@@ -133,14 +135,12 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
             link(esc(s.status), "text-muted"),
           ] };
         })
-      )
-    : emptyState("담당 디렉터로 지정된 세션이 없습니다.", { card: true });
+      );
 
   const activity = `
     <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2>
     ${projectTable}
-    <h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">세션 ${sessions.length}</h2>
-    ${sessionTable}`;
+    ${sessionTable ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">세션 ${sessions.length}</h2>${sessionTable}` : ""}`;
 
   return `${header}
     <div class="space-y-3">${contact}${org}${memo}</div>

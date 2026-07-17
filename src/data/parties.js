@@ -323,7 +323,13 @@ function orgsWithOwnerParty(personId) {
   ).all({ pid: Number(personId) });
 }
 
-/** 당사자가 관여한 프로젝트(아티스트/소속사/제작사/담당자). */
+/**
+ * 당사자가 관여한 프로젝트(아티스트/소속사/제작사/담당자/**세션 디렉터**).
+ * 세션 디렉터 포함(2026-07-17 사용자 리포트 '세션에 참여했으면 프로젝트에도 연관된 것'):
+ * 이전엔 프로젝트 단 역할만 봐서, 그 프로젝트의 고객측 담당자로는 등록 안 됐고 세션 디렉터로만 참여한 사람이
+ * 연락처 상세에서 '세션 1 · 프로젝트 0'으로 보였다. 관계자 탭(ASSOCIATE_ROLE_SUBQUERY)도 세션 디렉터를 역할로 인정한다.
+ * 레거시 단일 컬럼(sessions.director_party_id)과 다대다(session_directors) 둘 다 매칭.
+ */
 function listProjectsForParty(partyId) {
   const id = Number(partyId);
   return db().prepare(
@@ -331,6 +337,11 @@ function listProjectsForParty(partyId) {
       WHERE p.artist_id = @id OR p.agency_id = @id OR p.production_id = @id OR p.contact_party_id = @id
          OR p.id IN (SELECT project_id FROM project_artists WHERE party_id = @id)
          OR p.id IN (SELECT project_id FROM project_contacts WHERE party_id = @id)
+         OR p.id IN (
+              SELECT s.project_id FROM sessions s
+               WHERE s.director_party_id = @id
+                  OR EXISTS (SELECT 1 FROM session_directors sd WHERE sd.session_id = s.id AND sd.party_id = @id)
+            )
       ORDER BY p.created_at DESC, p.id DESC`
   ).all({ id });
 }

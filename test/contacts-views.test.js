@@ -106,10 +106,23 @@ test("contactReadView: 참여 내역 = 프로젝트·세션 표(작성일 포함
   assert.match(html, /href="\/projects\/3\?tab=sessions"/);
 });
 
-test("contactReadView: 참여 내역 없으면 빈 안내", () => {
+test("contactReadView: 프로젝트 없으면 빈 안내", () => {
   const html = read({ projects: [], sessions: [] });
   assert.match(html, /연결된 프로젝트가 없습니다/);
-  assert.match(html, /지정된 세션이 없습니다/);
+});
+
+// 2026-07-17 사용자 요청: 디렉터가 아닌 대다수 연락처에서 '세션 0 + 빈 안내'가 자리만 차지한다.
+test("contactReadView: 세션 0이면 세션 섹션 자체를 숨긴다(헤딩·빈 안내 없음)", () => {
+  const html = read({ sessions: [] });
+  assert.ok(!/세션 0/.test(html), "세션 헤딩 없음");
+  assert.ok(!/지정된 세션이 없습니다/.test(html), "빈 안내도 없음");
+  assert.match(html, /프로젝트 1/, "프로젝트 섹션은 그대로");
+});
+
+test("contactReadView: 세션이 있으면 세션 섹션 표시", () => {
+  const html = read();
+  assert.match(html, /세션 1/);
+  assert.match(html, /href="\/projects\/3\?tab=sessions"/);
 });
 
 test("extras = 신뢰 HTML 삽입점 — 그대로 통과하되 사용자 데이터 esc는 contactExtras 책임", () => {
