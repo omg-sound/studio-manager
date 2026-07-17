@@ -30,7 +30,9 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
 function contactNameList({ rows, selectedId = null, hrefFn }) {
   const items = rows.map((c) => {
     const active = Number(selectedId) === Number(c.id);
-    const cls = active ? "bg-primary/10 font-semibold text-fg" : "text-fg";
+    // bg-clip-padding: tint가 테두리 밑까지 안 칠해지게(기본 border-box면 선택 행 tint가 자기 위쪽 divide 선 밑에 깔려
+    // 위 선만 두껍고 색이 배어 보였다 — 아래 선은 tint 없는 다음 행 테두리라 멀쩡. 2026-07-18 사용자 리포트).
+    const cls = active ? "bg-primary/10 bg-clip-padding font-semibold text-fg" : "text-fg";
     return `<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${esc(personName(c))}</a>`;
   });
   // data-contact-list = app.js 키보드 이동 마커(선택 행 포커스 + ↑↓로 앞뒤 사람 이동, 2026-07-17 사용자 요청).
