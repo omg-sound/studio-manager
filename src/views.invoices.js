@@ -41,7 +41,7 @@ function payerInfoCard(client, contacts = [], hasBizFile = false, { compact = fa
     rows.push(cell("담당자", parts.join(" · "))); // 이름·전화 확인용(홈택스 밖 부가 정보라 맨 아래)
   }
   // ('분류' 행은 2026-07-08 사용자 요청으로 삭제 — 세금계산서 기입에 안 쓰는 부가 메타)
-  const head = `<div class="mb-1 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold">청구처 정보</h3><a href="${clientHref}" class="text-xs text-muted hover:text-fg hover:underline">클라이언트 ↗</a></div>`;
+  const head = `<div class="mb-1 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold">청구처 정보</h3><a href="${clientHref}" class="text-xs text-muted hover:text-fg hover:underline">청구처 ↗</a></div>`;
   const inner = `${head}${rows.join("")}${footer}`; // footer=우하단 부가 블록(스냅샷 변경 경고+새로고침 — 청구 상세만 전달)
   if (compact) return `<div class="rounded-lg border border-border bg-bg p-3 text-sm">${inner}</div>`;
   return `<div class="card mt-3"><div class="text-sm">${inner}</div></div>`;
@@ -247,7 +247,7 @@ function invoiceTable(rows, { isInvoicer = false, ret = "", filterList = false }
         ${isInvoicer ? `<th class="inv-check"><input type="checkbox" data-inv-select-all aria-label="전체 선택" class="align-middle" /></th>` : ""}
         <th class="inv-w-status">상태</th>
         <th class="inv-w-num">청구번호</th>
-        <th>클라이언트</th>
+        <th>청구처</th>
         <th class="hidden xl:table-cell">아티스트</th>
         <th class="hidden xl:table-cell">프로젝트</th>
         <th class="inv-amt-col">금액</th>
@@ -273,7 +273,7 @@ function invoiceTable(rows, { isInvoicer = false, ret = "", filterList = false }
         ${check}
         <td class="inv-c-status" data-label="상태">${cellLink(inv, taxBadgeShort(inv))}</td>
         <td class="inv-c-num" data-label="청구번호">${cellLink(inv, num ? esc(num) : dash, "tabular text-muted")}</td>
-        <td class="inv-c-client" data-label="클라이언트">${cellLink(inv, payer, "inv-cell-payer font-medium")}</td>
+        <td class="inv-c-client" data-label="청구처">${cellLink(inv, payer, "inv-cell-payer font-medium")}</td>
         <td class="inv-c-artist hidden xl:table-cell" data-label="아티스트">${cellLink(inv, artist ? esc(artist) : dash, "text-muted")}</td>
         <td class="inv-c-project hidden xl:table-cell" data-label="프로젝트">${cellLink(inv, project ? esc(project) : dash, "text-muted")}</td>
         <td class="inv-amt inv-c-amt" data-label="금액">${cellLink(inv, formatKRW(inv.amount), "tabular font-semibold")}</td>

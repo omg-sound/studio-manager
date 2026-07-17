@@ -2,8 +2,8 @@
 
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
-const { COMPANY_ROLES, ARTIST_ACTIVITY_FORMS } = require("./config");
-const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, groupCombo, projectTypeBadge } = require("./views");
+const { COMPANY_ROLES } = require("./config");
+const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, projectTypeBadge } = require("./views");
 const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
@@ -100,26 +100,26 @@ function clientContactCombo(c, isEdit) {
   const cur = isEdit && c.id ? listOrgContacts(c.id) : [];
   return `
     <div>
-      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 클라이언트 담당자 — 여러 명 가능)</span></label>
+      <label class="label">담당자 연락처 <span class="font-normal text-muted text-xs">(이 업체 담당자 — 여러 명 가능)</span></label>
       ${personCombo({ idField: "contact_id", nameField: "contact_name", selected: cur, options: contactOptions(), companyOptions: listClients({}).filter((x) => x.kind === "company"), multi: true, placeholder: cur.length ? "" : "담당자 — 검색 또는 새로 등록" })}
       ${explain(`이름을 검색해 고르면 배지로 담깁니다(여러 명 가능). 배지의 ✕ 또는 빈 칸에서 백스페이스로 한 명씩 뺍니다. 목록에 없는 이름은 저장 시 새 연락처로 등록됩니다. 뺀 사람은 담당자 지정만 풀립니다 — 이 회사 재직(소속)과 연락처는 그대로 남습니다. 담당자가 아닌 직원은 연락처의 회사·소속 이력에서 관리합니다.`)}
     </div>`;
 }
 
-function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true, groups = [], formType = null) {
+function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles = false, contacts = [], companies = [], embedded = false, withExtras = true, formType = null) {
   const e = c._err || "";
   const action = isEdit ? `/clients/${c.id}` : "/clients";
-  // 유형: 편집=party.kind 매핑, 생성=formType 인자(company/artist/group). 서로 섞이지 않는 3개념 — '기타' 없음.
-  const type = formType || (c.kind === "company" ? "company" : c.kind === "group" ? "group" : "artist");
-  const typeLabel = type === "company" ? "업체" : type === "group" ? "그룹" : "아티스트";
-  const nameLabel = type === "company" ? "상호(업체명)" : type === "group" ? "그룹명" : "이름 · 활동명";
-  const desc = type === "company" ? "업체 · 소속/레이블 · 제작/운영" : type === "group" ? "그룹 · 밴드·아이돌 그룹" : "아티스트 · 개인(솔로)";
+  // 유형: 편집=party.kind 매핑, 생성=formType 인자(company/group). 업체·그룹 2개념 — 아티스트는 연락처 폼으로 흡수됨.
+  const type = formType || (c.kind === "company" ? "company" : "group");
+  const typeLabel = type === "company" ? "업체" : "그룹";
+  const nameLabel = type === "company" ? "상호(업체명)" : "그룹명";
+  const desc = type === "company" ? "업체 · 소속/레이블 · 제작/운영" : "그룹 · 밴드·아이돌 그룹";
   const fileMap = {};
   files.forEach((f) => { fileMap[f.kind] = f; });
 
   // embedded=상세 페이지에 인라인으로 넣을 때 — 폼 자체 pageHeader 생략(상단 이름 헤더가 이미 있음).
   return `
-    ${embedded ? "" : pageHeader({ title: isEdit ? "클라이언트 수정" : `새 ${typeLabel}`, desc, back: isEdit && c.id ? { href: `/clients/${c.id}`, label: "클라이언트 상세" } : { href: "/clients", label: "클라이언트" } })}
+    ${embedded ? "" : pageHeader({ title: isEdit ? `${typeLabel} 수정` : `새 ${typeLabel}`, desc, back: isEdit && c.id ? { href: `/clients/${c.id}`, label: `${typeLabel} 상세` } : { href: "/clients", label: "업체·그룹" } })}
     <form method="post" action="${action}" class="card space-y-4"${isEdit ? " data-dirty-form" : ""}>
       ${e ? `<p class="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">${esc(e)}</p>` : ""}
       <input type="hidden" name="type" value="${type}" />
@@ -141,26 +141,10 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
         </div>
         <div><label class="label">사업장 주소</label><input class="input" name="biz_address" value="${esc(c.address || "")}" autocomplete="off" /></div>
       </div>` : ""}
-      ${type === "artist" ? `
-      <div>
-        <label class="label">현금영수증 정보 <span class="font-normal text-muted text-xs">(사업자등록증 없는 경우)</span></label>
-        <input class="input" name="cash_receipt_no" value="${esc(c.cash_receipt_no || "")}" placeholder="휴대폰 번호(010-0000-0000) 또는 현금영수증 카드번호" />
-      </div>` : ""}
-      ${type !== "company" ? `
+      ${type === "group" ? `
       <div>
         <label class="label">소속사 <span class="font-normal text-muted text-xs">(검색 · 없으면 비움 · 목록 외 이름은 새 업체 등록)</span></label>
         ${companyCombo("agency_company", c.agency_name || "", "소속사/레이블", "소속사")}
-      </div>` : ""}
-      ${type === "artist" ? `
-      <div>
-        <label class="label">활동 형태</label>
-        <select class="input" name="activity_form">
-          ${ARTIST_ACTIVITY_FORMS.map((f) => `<option value="${f.value}"${(c.activity_form || "solo") === f.value ? " selected" : ""}>${esc(f.label)}</option>`).join("")}
-        </select>
-      </div>
-      <div>
-        <label class="label">소속 그룹 <span class="font-normal text-muted text-xs">(밴드·아이돌 그룹 멤버일 때 — 선택 시 소속사 자동 연동)</span></label>
-        ${groupCombo("group_id", c.group_id || "", (groups.find((g) => Number(c.group_id) === g.id) || {}).name || "", groups)}
       </div>` : ""}
       ${type === "group" ? `
       <div>
@@ -175,11 +159,11 @@ function clientForm(c = {}, isEdit = false, files = [], fileErr = "", canFiles =
       ${type === "company" ? clientContactCombo(c, isEdit) : ""}
       <div><label class="label">메모</label><textarea class="input" name="memo" rows="2">${esc(c.memo || "")}</textarea></div>
       ${isEdit
-        ? dirtyActionRow({ deleteFormId: `del-client-${c.id}`, deleteLabel: "클라이언트 삭제" })
+        ? dirtyActionRow({ deleteFormId: `del-client-${c.id}`, deleteLabel: `${typeLabel} 삭제` })
         : dirtyActionRow({ cancelHref: "/clients", saveLabel: "추가", dirty: false })}
     </form>
     ${withExtras && isEdit && canFiles && type === "company" ? `<div>${clientFileSection(c, fileMap, fileErr)}</div>` : ""}
-    ${isEdit ? `<form id="del-client-${c.id}" method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || "이 클라이언트")}를 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="hidden"></form>` : ""}`;
+    ${isEdit ? `<form id="del-client-${c.id}" method="post" action="/clients/${c.id}/delete" data-confirm="${esc(c.name || `이 ${typeLabel}`)}${c.name ? "를" : type === "company" ? "를" : "을"} 삭제할까요? 연결된 프로젝트·청구서에서는 자동으로 '미지정' 처리됩니다." class="hidden"></form>` : ""}`;
 }
 
 /** 첨부 서류 카드(상세에서 분리 배치용). 업체(company)만 표시(아티스트·그룹은 첨부 없음). fileOk=실제 접근 가능 여부(깨진 링크 경고). */

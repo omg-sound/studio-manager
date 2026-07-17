@@ -79,9 +79,9 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
   });
 
   await t.test("좁은 화면 뒤로가기: 선택 있으면 lg:hidden '← 연락처', 목록만이면 없음", async () => {
-    const sel = await get(`/contacts/${target}?tab=external&q=외부인001`);
-    assert.match(sel.html, /<a href="\/contacts\?tab=external&amp;q=[^"]*" class="[^"]*lg:hidden[^"]*">← 연락처<\/a>/, "탭·검색어 보존한 목록으로");
-    const list = await get("/contacts?tab=external");
+    const sel = await get(`/contacts/${target}?tab=worker&q=외부인001`);
+    assert.match(sel.html, /<a href="\/contacts\?tab=worker&amp;q=[^"]*" class="[^"]*lg:hidden[^"]*">← 연락처<\/a>/, "탭·검색어 보존한 목록으로");
+    const list = await get("/contacts?tab=worker");
     assert.ok(!/← 연락처/.test(list.html), "목록만 볼 땐 없음");
   });
 
@@ -93,30 +93,6 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     });
     assert.equal(r.status, 302);
     assert.match(r.headers.get("location"), new RegExp(`^/contacts/${target}\\?flash=saved`), "읽기 뷰로");
-  });
-
-  await t.test("관계자 탭: sel 없으면 목록만, 있으면 읽기 뷰", async () => {
-    // 관계자 = 프로젝트 고객측 담당자로 참조된 사람
-    const pid = db().prepare("INSERT INTO projects (title, contact_party_id) VALUES ('관계자검증', ?)").run(target).lastInsertRowid;
-    db().prepare("INSERT INTO project_contacts (project_id, party_id) VALUES (?, ?)").run(pid, target);
-
-    const none = await get("/clients?group=associate");
-    assert.equal(none.status, 200);
-    assert.match(none.html, /data-filter-list/, "이름 목록");
-    assert.match(none.html, /관계자를 선택하세요/, "오른쪽 안내");
-
-    const sel = await get(`/clients?group=associate&sel=${target}`);
-    assert.equal(sel.status, 200);
-    assert.match(sel.html, /aria-current="true"/, "선택 강조");
-    assert.match(sel.html, new RegExp(`href="/contacts/${target}/edit\\?return=`), "[편집]은 연락처 메뉴로(return 보존)");
-
-    const bad = await get("/clients?group=associate&sel=999999");
-    assert.equal(bad.status, 200, "없는 id여도 탭 자체는 유효(404 아님)");
-    assert.match(bad.html, /관계자를 선택하세요/);
-
-    // 좁은 화면: 왼쪽 목록이 숨겨지므로 '← 관계자'로 돌아간다(선택 없으면 목록이 이미 보이니 없음).
-    assert.match(sel.html, /<a href="\/clients\?group=associate" class="[^"]*lg:hidden[^"]*">← 관계자<\/a>/);
-    assert.ok(!/← 관계자/.test(none.html), "목록만 볼 땐 없음");
   });
 
   await t.test("소속 이력 폼은 편집 화면에 머문다(읽기 뷰로 안 튕김)", async () => {
@@ -132,14 +108,14 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
 
     const aid = db().prepare("SELECT id FROM affiliations WHERE person_id = ? ORDER BY id DESC").get(target).id;
     // 삭제 → 편집 화면 복귀 + return(관계자 탭) 보존
-    const ret = `/clients?group=associate&sel=${target}`;
+    const ret = "/contacts?tab=associate";
     const del = await post(`/contacts/${target}/affiliations/${aid}/delete`, { return: ret });
     assert.equal(del.status, 302);
     assert.equal(del.headers.get("location"), `/contacts/${target}/edit?flash=deleted&return=${encodeURIComponent(ret)}`, "삭제 후 편집 화면 + return 보존");
   });
 
   await t.test("편집 진입 시 return= 실어오면 폼이 hidden으로 보존", async () => {
-    const ret = `/clients?group=associate&sel=${target}`;
+    const ret = "/contacts?tab=associate";
     const retHtml = ret.replace(/&/g, "&amp;"); // esc()가 & → &amp;로 렌더(HTML 속성값)
     const { status, html } = await get(`/contacts/${target}/edit?return=${encodeURIComponent(ret)}`);
     assert.equal(status, 200);
@@ -148,7 +124,7 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
   });
 
   await t.test("return을 실어 저장하면 그 관계자 탭으로 복귀", async () => {
-    const ret = `/clients?group=associate&sel=${target}`;
+    const ret = "/contacts?tab=associate";
     const r = await fetch(`${base}/contacts/${target}`, {
       method: "POST", redirect: "manual",
       headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin" },
@@ -168,6 +144,73 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
       assert.equal(r.status, 302);
       assert.match(r.headers.get("location"), new RegExp(`^/contacts/${target}\\?flash=saved`), `외부 return(${evil})은 폴백`);
     }
+  });
+
+  await t.test("연락처 5탭 — 전체 기본 + 개수 라벨 + 필터 동작", async () => {
+    // 아티스트 1명 시드(전체 121 중 1명)
+    db().prepare("INSERT INTO parties (kind, name, activity_name, is_artist) VALUES ('person','탭검증아티스트','탭활동명',1)").run();
+    const { status, html } = await get("/contacts");
+    assert.equal(status, 200);
+    ["전체", "아티스트", "관계자", "외주", "스태프"].forEach((label) => assert.match(html, new RegExp(label), `${label} 탭`));
+    assert.ok(!/외부 연락처/.test(html), "옛 '외부 연락처' 탭 없음");
+    // 기본 = 전체(aria-current가 전체 탭에)
+    const activeTab = html.match(/<a[^>]*aria-current="page"[^>]*>([^<]*)</);
+    assert.ok(activeTab && /전체/.test(activeTab[1]), `기본 탭이 전체여야 함(현재: ${activeTab && activeTab[1]})`);
+    // 아티스트 탭 = 그 1명만
+    const artistHtml = (await get("/contacts?tab=artist")).html;
+    assert.match(artistHtml, /탭검증아티스트/);
+    assert.ok(!/외부인001/.test(artistHtml), "비아티스트는 아티스트 탭에 없음");
+    // 모르는 탭 = 전체 폴백
+    const bogus = (await get("/contacts?tab=몰라")).html;
+    assert.match(bogus, /외부인001/, "모르는 탭은 전체");
+  });
+
+  await t.test("업체·그룹: 2탭 + 옛 탭·사람 상세는 연락처로 리다이렉트", async () => {
+    const artistId = db().prepare("SELECT id FROM parties WHERE is_artist = 1 AND kind = 'person' LIMIT 1").get().id;
+    const raw = async (p) => { const r = await fetch(base + p, { headers: { cookie }, redirect: "manual" }); return { status: r.status, loc: r.headers.get("location") }; };
+
+    const { status, html } = await get("/clients");
+    assert.equal(status, 200);
+    assert.match(html, /업체 \d+/, "업체 탭");
+    assert.match(html, /그룹 \d+/, "그룹 탭");
+    assert.ok(!/관계자 \d+/.test(html), "관계자 탭 없음");
+    assert.ok(!/아티스트 \d+/.test(html), "아티스트 탭 없음");
+
+    // 옛 탭 → 연락처 필터로(검색어 보존)
+    assert.deepEqual(await raw("/clients?group=associate"), { status: 302, loc: "/contacts?tab=associate" });
+    assert.deepEqual(await raw("/clients?group=artist"), { status: 302, loc: "/contacts?tab=artist" });
+    assert.deepEqual(await raw("/clients?group=artist&q=%EA%B9%80"), { status: 302, loc: "/contacts?tab=artist&q=%EA%B9%80" });
+
+    // 사람 id → 연락처 상세(아티스트도 — 이전엔 아티스트만 클라이언트 상세에 남았다)
+    assert.deepEqual(await raw(`/clients/${artistId}`), { status: 302, loc: `/contacts/${artistId}` });
+
+    // '새 클라이언트' 드롭다운 = 업체·그룹만
+    assert.ok(!/\/clients\/new\?type=artist/.test(html), "아티스트 생성 폼 링크 없음");
+    assert.match(html, /\/clients\/new\?type=company/);
+    assert.match(html, /\/clients\/new\?type=group/);
+    // 아티스트 생성 폼 경로는 목록으로 되돌린다(사람 생성은 연락처)
+    assert.deepEqual(await raw("/clients/new?type=artist"), { status: 302, loc: "/contacts/new" });
+  });
+
+  await t.test("POST /clients type=artist는 유지 — 프로젝트 폼 '새 아티스트' 모달 계약", async () => {
+    const r = await fetch(base + "/clients", {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin", "X-Requested-With": "fetch" },
+      body: new URLSearchParams({ type: "artist", name: "모달신규아티스트" }).toString(),
+    });
+    assert.equal(r.status, 200, "fetch 간이 등록은 JSON 200");
+    const j = await r.json();
+    assert.ok(j.ok && j.id, "생성된 아티스트 id 반환");
+    const row = db().prepare("SELECT kind, is_artist FROM parties WHERE id = ?").get(j.id);
+    assert.equal(row.kind, "person");
+    assert.equal(row.is_artist, 1);
+  });
+
+  await t.test("연락처 편집 폼: '소속' 한 칸 + 활동 형태 없음", async () => {
+    const { html } = await get(`/contacts/${target}/edit`);
+    assert.match(html, /<label[^>]*>소속/, "'소속' 라벨");
+    assert.ok(!/>회사</.test(html), "옛 '회사' 라벨 없음");
+    assert.ok(!/activity_form/.test(html), "활동 형태 필드 폐기");
   });
 
   server.close();

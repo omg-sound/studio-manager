@@ -751,7 +751,7 @@ function systemTab(chief) {
         ${diskFreeBytes() != null ? `<span>디스크 여유 <b class="${diskFreeBytes() < 500 * 1024 * 1024 ? "text-warning" : "text-fg"}">${formatBytes(diskFreeBytes())}</b></span>` : ""}
         <span>프로젝트 <b class="text-fg">${cnt("projects")}</b></span>
         <span>청구 <b class="text-fg">${cnt("invoices")}</b></span>
-        <span>클라이언트·연락처 <b class="text-fg">${cnt("parties")}</b></span>
+        <span>업체·그룹·연락처 <b class="text-fg">${cnt("parties")}</b></span>
         <span>세션 <b class="text-fg">${cnt("sessions")}</b></span>
         <span>로컬 저장 첨부 <b class="${localFileCount() ? "text-warning" : "text-fg"}">${localFileCount()}</b>개</span>
       </div>

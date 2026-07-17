@@ -258,7 +258,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
           <div><label class="label">호칭</label><input class="input" name="honorific" value="${esc(c.honorific || "")}" placeholder="예: 대표님 · 팀장님" /></div>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
-          <div><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 클라이언트로 등록·연동)</span></label>
+          <div><label class="label">아티스트명 <span class="font-normal text-muted text-xs">(활동명 · 아티스트로 등록·연동)</span></label>
             <input class="input" name="nickname" value="${esc(c.nickname || "")}" placeholder="예: 아티스트 활동명 · 목록에서 선택" list="contact-artist-clients" autocomplete="off" />
             <datalist id="contact-artist-clients">${clients.filter((cl) => cl.is_artist).map((cl) => `<option value="${esc(cl.name)}"></option>`).join("")}</datalist>
           </div>
@@ -271,7 +271,7 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
         </div>
       </div>
       <div class="grid gap-3 sm:grid-cols-3">
-        <div><label class="label">회사</label>${companyCombo("company", c.company || "", "소속사/레이블", "회사")}</div>
+        <div><label class="label">소속 <span class="font-normal text-muted text-xs">(회사·소속사 — 검색 · 목록 외 이름은 새 업체 등록)</span></label>${companyCombo("company", c.company || "", "소속사/레이블", "소속")}</div>
         <div><label class="label">직책</label><input class="input" name="job_title" value="${esc(c.job_title || "")}" placeholder="예: 대표 · 팀장" /></div>
         <div><label class="label">부서</label><input class="input" name="department" value="${esc(c.department || "")}" placeholder="예: A&R팀" /></div>
       </div>
@@ -304,16 +304,20 @@ function contactForm(c = {}, isEdit = false, clients = [], manager = null, embed
  */
 function renderContacts(req, sel, rightHtml) {
   const q = String(req.query.q || "").trim();
-  const TABS = ["external", "worker", "staff"];
-  const tab = TABS.includes(req.query.tab) ? req.query.tab : "external";
+  const TABS = ["all", "artist", "associate", "worker", "staff"];
+  const tab = TABS.includes(req.query.tab) ? req.query.tab : "all"; // 전체 기본 — 모르는 값(옛 external 포함)도 전체
   const rows = listContacts({ q: q || undefined, tab }); // 상한 없음(2026-07-17) — 이름만 렌더라 전 명단도 수십 KB
   const keep = `?tab=${tab}${q ? "&q=" + encodeURIComponent(q) : ""}`;
 
+  // 탭 = 역할 **필터**(상호배타 아님): 전체 ⊇ 아티스트·관계자, 아티스트 겸 디렉터는 양쪽에 나온다.
+  const count = (t) => listContacts({ q: q || undefined, tab: t }).length;
   const tabs = tabBar({
     tabs: [
-      { key: "external", label: "외부 연락처" },
-      { key: "worker", label: "외주 작업자" },
-      { key: "staff", label: "녹음실 스태프" },
+      { key: "all", label: `전체 ${count("all")}` },
+      { key: "artist", label: `아티스트 ${count("artist")}` },
+      { key: "associate", label: `관계자 ${count("associate")}` },
+      { key: "worker", label: `외주 ${count("worker")}` },
+      { key: "staff", label: `스태프 ${count("staff")}` },
     ],
     activeKey: tab,
     hrefFn: (k) => `/contacts?tab=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
@@ -331,10 +335,14 @@ function renderContacts(req, sel, rightHtml) {
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : tab === "staff"
-        ? emptyState("녹음실 스태프 연락처가 없습니다. 환경설정 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
+        ? emptyState("녹음실 스태프가 없습니다. 환경설정 > 담당자에서 계정을 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
         : tab === "worker"
           ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
-          : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
+          : tab === "artist"
+            ? emptyState("아티스트가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } })
+            : tab === "associate"
+              ? emptyState("관계자가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } })
+              : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
 
   const left = `${searchBar}${resultNote}${list}`;
   const right = rightHtml || (sel ? readPaneFor(sel) : emptyState("연락처를 선택하세요.", { card: true, icon: "clients" }));
@@ -347,9 +355,9 @@ function renderContacts(req, sel, rightHtml) {
   const from = String(req.query.from || "");
   const fromOk = Boolean(from) && /^[\w=&%.\-]*$/.test(from);
   const back = ret
-    ? { href: ret, label: ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "클라이언트" : "돌아가기" }
+    ? { href: ret, label: ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "업체·그룹" : "돌아가기" }
     : fromOk
-      ? { href: `/clients?${from}`, label: "클라이언트" }
+      ? { href: `/clients?${from}`, label: "업체·그룹" }
       : undefined;
   const body = `
     ${flashBanner(req.query)}

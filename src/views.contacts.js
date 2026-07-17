@@ -159,7 +159,7 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
 }
 
 /**
- * 읽기 뷰 '연동 정보'(extras) 조립 — 아티스트로 보기 · 대표 클라이언트 · 담당자 연동 배지.
+ * 읽기 뷰 '연동 정보'(extras) 조립 — 아티스트명 · 대표 업체 · 담당자 연동 배지.
  * 연락처 메뉴와 관계자 탭이 같은 읽기 뷰를 쓰므로(설계 §4) 이 파생 정보도 한곳에서 만든다.
  * extras는 contactReadView에 **esc 없이** 삽입되므로 사용자 데이터(이름 등)의 esc는 이 함수 책임이다.
  * @param {object} p 사람 party
@@ -169,8 +169,8 @@ function contactExtras(p) {
   const linkedManager = getManagerByPartyId(p.id);
   const ownerClients = orgsWithOwnerParty(p.id);
   return [
-    p.activity_name ? `<div><span class="text-muted">아티스트명</span> ${esc(p.activity_name)}${p.is_artist ? ` · <a href="/clients/${p.id}"${OUT} class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
-    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}"${OUT} class="text-primary hover:underline">${esc(oc.name)} ↗</a>`).join(", ")}</div>` : "",
+    p.activity_name ? `<div><span class="text-muted">아티스트명</span> ${esc(p.activity_name)}</div>` : "",
+    ownerClients.length ? `<div><span class="text-muted">대표 업체</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}"${OUT} class="text-primary hover:underline">${esc(oc.name)} ↗</a>`).join(", ")}</div>` : "",
     linkedManager
       ? `<div><span class="text-muted">담당자 연동</span> ${linkedManager.user_id != null
           ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people"${OUT} class="text-primary hover:underline">${esc(linkedManager.name)} ↗</a>`

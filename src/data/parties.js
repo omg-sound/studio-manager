@@ -732,15 +732,16 @@ function setTaskPayout(taskId, paid, paidOn) {
 // ── UI 편의 조회(연락처=사람 뷰, 클라이언트=업체·아티스트 뷰) ──
 
 /**
- * 연락처 목록 = 사람(person) party. tab:
- *  - 'staff'    → 녹음실 스태프(로그인 계정, user_id 연결)
- *  - 'worker'   → 외주 작업자(project_managers user_id NULL·party 연결, 스태프 아님)
- *  - 'external' → 외부 연락처(그 외 사람 — 스태프·외주 아님)
- *  - undefined  → 전체 사람. (레거시 staff:boolean도 허용)
+ * 사람(person) 목록 — 연락처 메뉴. tab = 역할 **필터**(상호배타 아님, 2026-07-17 사람/조직 축 정리):
+ *  - all(기본·모르는 값 폴백) = 사람 전부(외주·스태프 포함)
+ *  - artist    = is_artist(아티스트 역할)
+ *  - associate = 관계자(비스태프·비외주 + [비아티스트 or 관계자 역할 참조]) — listAssociates와 같은 규칙
+ *  - worker    = 외주 작업자 / staff = 로그인 스태프
+ * 아티스트이면서 디렉터인 사람은 artist·associate 양쪽에 나온다(겸업 — 설계 의도).
+ * 레거시 `staff:true/false`·`tab:"external"`은 폴백으로 흡수(external = 전체로 취급).
  */
 function listContacts({ q, tab, staff } = {}) {
   if (staff === true) tab = "staff";
-  else if (staff === false && !tab) tab = undefined; // 레거시 staff:false=외부(외주 포함)와 구분 위해 tab 우선
   const where = ["p.kind = 'person'"];
   const args = [];
   const term = String(q || "").trim();
@@ -748,7 +749,10 @@ function listContacts({ q, tab, staff } = {}) {
   const workerSub = "p.id IN (SELECT party_id FROM project_managers WHERE user_id IS NULL AND party_id IS NOT NULL)";
   if (tab === "staff") where.push("p.user_id IS NOT NULL");
   else if (tab === "worker") where.push("p.user_id IS NULL AND " + workerSub);
-  else if (tab === "external") where.push("p.user_id IS NULL AND NOT (" + workerSub + ")");
+  else if (tab === "artist") where.push("p.is_artist = 1");
+  else if (tab === "associate") {
+    where.push("p.user_id IS NULL", "NOT (" + workerSub + ")", `(p.is_artist = 0 OR p.id IN (${ASSOCIATE_ROLE_SUBQUERY}))`);
+  }
   const sql = "SELECT p.* FROM parties p WHERE " + where.join(" AND ") + " ORDER BY p.name COLLATE NOCASE";
   return db().prepare(sql).all(...args).map(withLegacy);
 }

@@ -107,7 +107,7 @@ const ROLE_LABELS = { owner: "대표", chief: "치프 엔지니어", staff: "스
 //  task    = 예약 없이 항목만 존재하는 업무흐름(세션 일정 탭 숨김, 곡·콘텐츠 중심).
 const PROJECT_TYPES = [
   // label = 배지·제목용, menuLabel = '+ 새 프로젝트' 드롭다운 표기(액션형).
-  { key: "session", label: "세션", menuLabel: "세션 프로젝트 만들기", hint: "클라이언트 방문 · 예약 · 실시간 작업" },
+  { key: "session", label: "세션", menuLabel: "세션 프로젝트 만들기", hint: "고객 방문 · 예약 · 실시간 작업" },
   { key: "task", label: "작업", menuLabel: "작업 프로젝트 만들기", hint: "예약 없이 항목 단위로 진행" },
 ];
 const PROJECT_TYPE_LABELS = Object.fromEntries(PROJECT_TYPES.map((t) => [t.key, t.label]));

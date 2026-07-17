@@ -4,17 +4,16 @@ const fs = require("fs");
 const express = require("express");
 const { db } = require("../db");
 const { requireEditor } = require("../auth");
-const { COMPANY_ROLES, ARTIST_ACTIVITY_FORM_LABELS } = require("../config");
+const { COMPANY_ROLES } = require("../config");
 const {
   listClients, getParty, listProjectsForParty,
   listInvoicesForParty,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  setOrgContacts, setCompanyOwners, listCompanyOwners, listContacts, listAssociates, resolvePersonByName,
+  setOrgContacts, setCompanyOwners, listCompanyOwners, listContacts, resolvePersonByName,
   listArtistsForAgency,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
-  listGroupsForPicker, setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
+  setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
   setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty, resolveCompanyByName, addCompanyRole,
-  listAffiliations, listSessionsForParty,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -26,7 +25,6 @@ const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 const { FILE_KINDS, fileKindLabel, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
-const { contactPanes, contactNameList, contactReadView, contactExtras } = require("../views.contacts");
 
 const router = express.Router();
 
@@ -43,37 +41,31 @@ function companyRolesFrom(b) {
 
 // ── 목록(서브메뉴 = 업체/아티스트 우선 분리 + 업체 내 분류 · 이름 검색) ──
 router.get("/", (req, res) => {
-  // 당사자 모델 분류(서로 섞이지 않음): 업체(company) / 관계자(사람·비아티스트: 대표·A&R·담당자·디렉터·작가) / 아티스트(개인 솔로) / 그룹(밴드·아이돌).
-  // '전체' 탭 폐기(2026-07-03). 기본 진입 = 업체. 관계자 상세는 연락처(/contacts/:id).
-  const group = ["company", "associate", "artist", "group"].includes(req.query.group) ? req.query.group : "company";
+  // 사람 탭(관계자·아티스트)은 연락처로 이관됨(2026-07-17 사람/조직 축 정리) — 옛 링크·북마크는 그 필터로 보낸다.
+  const legacyPeopleTab = { associate: "associate", artist: "artist" }[String(req.query.group || "")];
+  if (legacyPeopleTab) {
+    const q0 = String(req.query.q || "").trim();
+    return res.redirect(`/contacts?tab=${legacyPeopleTab}${q0 ? `&q=${encodeURIComponent(q0)}` : ""}`);
+  }
+  // 당사자 모델 분류(서로 섞이지 않음): 업체(company) / 그룹(밴드·아이돌). 사람(관계자·아티스트)은 연락처.
+  const group = ["company", "group"].includes(req.query.group) ? req.query.group : "company"; // 조직 명부 — 업체/그룹
   const activeKind = ""; // 레거시 2차 필터 제거(호환용 빈값 유지)
   const q = String(req.query.q || "").trim();
 
-  const isSoloArtist = (c) => c.is_artist && c.kind === "person";
   const allRows = listClients({});
-  const artistCount = allRows.filter(isSoloArtist).length;
   const groupCount = allRows.filter((c) => c.kind === "group").length;
   const companyCount = allRows.filter((c) => c.kind === "company").length;
-  const associateCount = listAssociates({}).length;
 
-  // 표시 행: 관계자 탭은 사람(비아티스트) 소스, 나머지는 클라이언트(업체/아티스트/그룹).
+  // 표시 행: 클라이언트(업체/그룹)만.
   let displayed;
-  if (group === "associate") {
-    displayed = listAssociates({ q }); // 이름/전화 검색 포함
-  } else {
-    let rows = allRows;
-    if (group === "artist") rows = allRows.filter(isSoloArtist);
-    else if (group === "group") rows = allRows.filter((c) => c.kind === "group");
-    else rows = allRows.filter((c) => c.kind === "company");
+  {
+    let rows = group === "group" ? allRows.filter((c) => c.kind === "group") : allRows.filter((c) => c.kind === "company");
     const ql = q.toLowerCase();
     displayed = q ? rows.filter((c) => c.name.toLowerCase().includes(ql)) : rows;
   }
-  // 목록 상한(2026-07-09 스케일 점검) — 아티스트 탭이 계속 누적되므로 기본 100건 + 더 보기(검색·개수 라벨은 전체 기준).
-  // 관계자 탭(2026-07-17 2단 전환)은 연락처와 같은 설계로 상한 없이 전 명단 노출.
+  // 목록 상한(2026-07-09 스케일 점검) — 업체·그룹이 계속 누적되므로 기본 100건 + 더 보기(검색·개수 라벨은 전체 기준).
   const capTotal = displayed.length;
-  const capped = group === "associate"
-    ? { shown: displayed, total: displayed.length, more: "" }
-    : capList(displayed, req.query, (n) => `/clients?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
+  const capped = capList(displayed, req.query, (n) => `/clients?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
   displayed = capped.shown;
 
   const qs = (params) => {
@@ -81,12 +73,10 @@ router.get("/", (req, res) => {
     if (q) p.push("q=" + encodeURIComponent(q));
     return p.length ? "/clients?" + p.join("&") : "/clients";
   };
-  // 1차 서브메뉴(업체/관계자/아티스트/그룹) — 탭 스타일(연락처 탭과 통일). '전체' 폐기.
+  // 1차 서브메뉴(업체/그룹) — 조직 명부. 사람(관계자·아티스트)은 연락처로 이관(2026-07-17). '전체' 폐기.
   const groupChips = tabBar({
     tabs: [
       { key: "company", label: `업체 ${companyCount}` },
-      { key: "associate", label: `관계자 ${associateCount}` },
-      { key: "artist", label: `아티스트 ${artistCount}` },
       { key: "group", label: `그룹 ${groupCount}` },
     ],
     activeKey: group,
@@ -95,9 +85,9 @@ router.get("/", (req, res) => {
   const kindChips = ""; // 2차 분류 필터 폐기(당사자 모델 — 조직 겸업은 roles 배지로 표시)
 
   // 검색 문구는 탭별 명사(2026-07-16 사용자 요청 '이름 검색→업체명 검색').
-  const searchNoun = { company: "업체명", associate: "관계자", artist: "아티스트", group: "그룹" }[group] || "이름";
+  const searchNoun = { company: "업체명", group: "그룹" }[group] || "이름";
   const searchBar = searchBox({
-    action: "/clients", q, placeholder: `${searchNoun} 검색`, label: "클라이언트 검색", liveFilter: true, noButton: true,
+    action: "/clients", q, placeholder: `${searchNoun} 검색`, label: `${searchNoun} 검색`, liveFilter: true, noButton: true,
     remote: !!capped.more, // 목록이 상한으로 잘렸으면(100+ 업체) 타이핑 시 서버 전체 검색으로 보강(2026-07-17)
     hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
   });
@@ -112,21 +102,14 @@ router.get("/", (req, res) => {
   const fromParam = fromQ ? `?from=${encodeURIComponent(fromQ)}` : "";
   // 복귀 경로(2026-07-14 — 상세 백링크가 보던 탭·검색으로 돌아오게. 전 목록 공통 방식).
   const retParam = `${fromParam ? "&" : "?"}return=${encodeURIComponent(req.originalUrl)}`;
-  // 아티스트/그룹 행: 이름 뒤에 소속사·소속 그룹 표시(업체 '대표'와 동일 톤). 배치 조회로 N+1 회피.
+  // 그룹 행: 이름 뒤에 소속사 표시(업체 '대표'와 동일 톤). 배치 조회로 N+1 회피.
   const artistRows = displayed.filter((c) => c.is_artist);
   const agencyByParty = {};
-  const groupNameByParty = {};
   if (artistRows.length) {
     const ids = artistRows.map((c) => c.id);
     const ph = ids.map(() => "?").join(",");
     for (const r of db().prepare(`SELECT a.person_id AS pid, o.name AS agency FROM affiliations a JOIN parties o ON o.id = a.org_id WHERE a.ended_on IS NULL AND o.kind = 'company' AND a.person_id IN (${ph}) ORDER BY a.started_on DESC, a.id DESC`).all(...ids)) {
       if (!agencyByParty[r.pid]) agencyByParty[r.pid] = r.agency; // 현재(최근) 소속사
-    }
-    const gids = [...new Set(artistRows.filter((c) => c.group_id).map((c) => Number(c.group_id)))];
-    if (gids.length) {
-      const gmap = {};
-      for (const g of db().prepare(`SELECT id, COALESCE(NULLIF(activity_name,''), name) AS name FROM parties WHERE id IN (${gids.map(() => "?").join(",")})`).all(...gids)) gmap[g.id] = g.name;
-      for (const c of artistRows) if (c.group_id && gmap[c.group_id]) groupNameByParty[c.id] = gmap[c.group_id];
     }
   }
   // 업체 행: 사업자등록증(client_files kind='biz_license') 업로드 여부 배치 조회(있음/없음 배지). 목록은 기록 존재만 확인(파일 실제 접근은 상세에서).
@@ -135,36 +118,15 @@ router.get("/", (req, res) => {
   if (companyIds.length) {
     for (const r of db().prepare(`SELECT DISTINCT client_id FROM client_files WHERE kind = 'biz_license' AND client_id IN (${companyIds.map(() => "?").join(",")})`).all(...companyIds)) bizLicenseSet.add(r.client_id);
   }
-  // 청구·프로젝트식 컬럼 표(2026-07-16 사용자 요청 '넓어진 화면에 정보 많이'). 관계자=연락처 표 공용, 나머지=업체/아티스트 표.
+  // 청구·프로젝트식 컬럼 표(2026-07-16 사용자 요청 '넓어진 화면에 정보 많이').
   const dash = '<span class="text-muted">—</span>';
   // 사업자등록증 미업로드 표시 아이콘(경고 삼각형) — 유형 배지 대신 사업자번호 뒤 작은 아이콘(2026-07-16 사용자 요청).
   const bizLicenseMissingIcon = ` <span title="사업자등록증 미등록" aria-label="사업자등록증 미등록" class="ml-0.5 inline-flex align-middle text-warning"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>`;
-  // 탭별 컬럼(2026-07-16 사용자 요청): 유형 열 폐기(전 탭) / 아티스트=솔로·그룹 형태 표시·사업자번호 없음 / 그룹=사업자번호 없음.
+  // 탭별 컬럼(2026-07-16 사용자 요청): 유형 열 폐기(전 탭) / 그룹=사업자번호 없음.
   // 폭 배분(청구 표처럼): 식별 열 **이름·이메일=유동**(남는 폭 나눠 채움). 나머지=고정 rem. 좁아지면 전화 먼저 숨김(xl). 모바일 카드(<640)=2열 그리드(mCard 슬롯 tl/tr/bl/br).
   const link = (id, inner, cls = "") => `<a href="/clients/${id}${fromParam}${retParam}" class="dt-link ${cls}">${inner}</a>`;
   let orgCols, orgRows;
-  if (group === "artist") {
-    orgCols = [
-      { label: "이름", primary: true, mCard: "tl" },
-      { label: "형태", w: "w-[6.5rem]", hide: "sm", mCard: "tr" },
-      { label: "소속", w: "w-[13rem]", hide: "sm", mCard: "bl" },
-      { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
-      { label: "이메일", hide: "sm", mCard: "br" },
-    ];
-    orgRows = displayed.map((c) => {
-      // 활동 형태: 수동 필드(activity_form) 우선, 없으면 소속 그룹 유무로 자동 판별(레거시 폴백). solo=회색·group/both=파랑.
-      const af = c.activity_form || (groupNameByParty[c.id] ? "group" : "solo");
-      const form = `<span class="${af === "solo" ? "badge-neutral" : "badge-info"}">${esc(ARTIST_ACTIVITY_FORM_LABELS[af] || "솔로")}</span>`;
-      const meta = [agencyByParty[c.id], groupNameByParty[c.id]].filter(Boolean).map((x) => esc(x)).join(" · ");
-      return { cells: [
-        link(c.id, esc(personLabel(c.activity_name || c.name, c.name)), "font-medium"),
-        form,
-        meta || dash,
-        c.phone ? copyable(c.phone) : dash,
-        c.email ? copyable(c.email) : dash,
-      ] };
-    });
-  } else if (group === "group") {
+  if (group === "group") {
     orgCols = [
       { label: "이름", primary: true, mCard: "tl" },
       { label: "소속", w: "w-[13rem]", hide: "sm", mCard: "tr" },
@@ -201,64 +163,36 @@ router.get("/", (req, res) => {
       ] };
     });
   }
-  // 관계자 탭 = 연락처와 같은 2단(2026-07-17). 선택은 ?sel=<party id> — 이 라우트는 탭 쿼리 기반이라 경로 파라미터를 못 쓴다.
-  // 행 링크는 폭과 무관하게 항상 ?sel= 하나(서버는 href를 하나만 렌더하므로 뷰포트별 목적지 분기는 불가).
-  let associatePanes = "";
-  if (group === "associate") {
-    const selId = Number(req.query.sel || 0) || null;
-    const sel = selId ? displayed.find((r) => Number(r.id) === selId) || null : null;
-    const keep = `group=associate${q ? "&q=" + encodeURIComponent(q) : ""}`;
-    const left = displayed.length
-      ? contactNameList({ rows: displayed, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients?${keep}&sel=${c.id}` })
-      : emptyState("관계자가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 관계자" } });
-    const right = sel
-      ? contactReadView(sel, {
-          affs: listAffiliations(sel.id),
-          projects: listProjectsForParty(sel.id),
-          sessions: listSessionsForParty(sel.id),
-          editHref: `/contacts/${sel.id}/edit?return=${encodeURIComponent(req.originalUrl)}`, // 편집 폼은 연락처 메뉴에 하나만
-          extras: contactExtras(sel), // 연락처 메뉴와 같은 읽기 뷰(설계 §4) — 관계자는 회사 대표가 많아 '대표 클라이언트' 크로스링크가 특히 유용
-        })
-      : emptyState("관계자를 선택하세요.", { card: true, icon: "clients" });
-    // 좁은 화면(<lg)은 왼쪽 목록이 숨겨지므로 상세 위에 '← 관계자' 뒤로가기(설계 §4).
-    associatePanes = contactPanes({ left, right, hasSelection: !!sel, backHref: `/clients?${keep}`, backLabel: "관계자" });
-  }
 
-  const list = group === "associate"
-    ? associatePanes
-    : displayed.length
-      ? dataTable(orgCols, orgRows, { filterList: true }) + capped.more
-      : q
-        ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
-        : emptyState(group === "artist" ? "아티스트가 없습니다." : group === "group" ? "그룹이 없습니다." : "업체가 없습니다.", {
-            card: true,
-            icon: "clients",
-            // 유형 선택 페이지 폐기 — 빈 상태 CTA는 현재 탭 유형으로 바로 생성(탭=유형). 나머지 유형은 상단 드롭다운.
-            cta: group === "artist" ? { href: "/clients/new?type=artist", label: "+ 새 아티스트" }
-              : group === "group" ? { href: "/clients/new?type=group", label: "+ 새 그룹" }
-              : { href: "/clients/new?type=company", label: "+ 새 업체" },
-          });
+  const list = displayed.length
+    ? dataTable(orgCols, orgRows, { filterList: true }) + capped.more
+    : q
+      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
+      : emptyState(group === "group" ? "그룹이 없습니다." : "업체가 없습니다.", {
+          card: true,
+          icon: "clients",
+          // 유형 선택 페이지 폐기 — 빈 상태 CTA는 현재 탭 유형으로 바로 생성(탭=유형). 나머지 유형은 상단 드롭다운.
+          cta: group === "group" ? { href: "/clients/new?type=group", label: "+ 새 그룹" } : { href: "/clients/new?type=company", label: "+ 새 업체" },
+        });
 
-  // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 관계자=연락처 생성.
+  // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 사람(관계자·아티스트)은 연락처 생성(2026-07-17).
   const newMenu = `
     <details class="relative inline-block" data-menu>
-      <summary class="btn-primary cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">+ 새 클라이언트</summary>
+      <summary class="btn-primary cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">+ 새 업체·그룹</summary>
       <div class="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-bg py-1 text-left shadow-lg">
         <a href="/clients/new?type=company" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">업체</span> <span class="text-xs text-muted">소속사·제작사</span></a>
-        <a href="/contacts/new" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">관계자</span> <span class="text-xs text-muted">대표·A&amp;R·디렉터 등</span></a>
-        <a href="/clients/new?type=artist" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">아티스트</span> <span class="text-xs text-muted">개인·솔로</span></a>
         <a href="/clients/new?type=group" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">그룹</span> <span class="text-xs text-muted">밴드·아이돌</span></a>
       </div>
     </details>`;
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "클라이언트", action: newMenu })}
+    ${pageHeader({ title: "업체·그룹", action: newMenu })}
     ${groupChips}
     ${kindChips}
     ${searchBar}
     ${resultNote}
     ${list}`;
-  res.send(layout({ title: "클라이언트", user: req.user, current: "/clients", body, wide: true }));
+  res.send(layout({ title: "업체·그룹", user: req.user, current: "/clients", body, wide: true }));
 });
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listClients는 q 미지원이라 이름/활동명 인메모리 필터 ──
@@ -278,10 +212,12 @@ router.get("/suggest", (req, res) => {
 // ── 새 클라이언트 ── 유형(업체/아티스트/그룹)은 목록의 드롭다운(또는 탭별 빈 상태 CTA)에서만 선택 → 유형별 폼.
 const CLIENT_TYPES = ["company", "artist", "group"];
 router.get("/new", (req, res) => {
-  const type = CLIENT_TYPES.includes(req.query.type) ? req.query.type : null;
+  if (req.query.type === "artist") return res.redirect("/contacts/new"); // 사람 생성은 연락처(2026-07-17)
+  const type = ["company", "group"].includes(req.query.type) ? req.query.type : null;
   if (!type) return res.redirect("/clients"); // 유형 선택 페이지 폐기(드롭다운만) — 유형 없는 진입은 목록으로
+  const typeLabel = type === "company" ? "업체" : "그룹";
   const companies = listClients({}).filter((x) => x.kind === "company");
-  res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
+  res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({}, false, [], "", false, listContacts({}), companies, false, true, type) }));
 });
 
 /**
@@ -311,10 +247,11 @@ function resolveContactPartyId(b) {
 router.post("/", (req, res) => {
   const b = req.body;
   const type = CLIENT_TYPES.includes(b.type) ? b.type : "artist"; // 업체/아티스트/그룹(폼 hidden)
+  const typeLabel = type === "company" ? "업체" : "그룹"; // 오류 재렌더용 표시 라벨(2026-07-17)
   const name = String(b.party_name != null ? b.party_name : b.name || "").trim(); // 폼 필드=party_name(Chrome name= 자동완성 회피 — 함정 #19·#21)
   if (!name) {
     const companies = listClients({}).filter((x) => x.kind === "company");
-    return res.send(layout({ title: "새 클라이언트", user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), companies, false, true, listGroupsForPicker(), type) }));
+    return res.send(layout({ title: `새 ${typeLabel}`, user: req.user, current: "/clients", body: clientForm({ ...b, _err: "이름을 입력하세요." }, false, [], "", false, listContacts({}), companies, false, true, type) }));
   }
   let id;
   if (type === "group") {
@@ -368,7 +305,6 @@ router.post("/", (req, res) => {
     id = createPerson({
       name: realName || name, phone: b.phone, email: b.email, memo: b.memo,
       activity_name: name, is_artist: 1, cash_receipt_no: b.cash_receipt_no,
-      activity_form: b.activity_form, // 활동 형태(솔로/그룹/솔로+그룹)
     });
     if (b.group_id) setPartyGroup(id, b.group_id); // 아티스트 생성 시 소속 그룹 선택했으면 연결
   }
@@ -392,14 +328,15 @@ router.get("/:id/edit", (req, res) => {
 router.post("/:id", (req, res) => {
   const id = Number(req.params.id);
   const c = getParty(id);
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const isFetch = req.get("X-Requested-With") === "fetch"; // 자동저장(AJAX)
   const b = req.body;
   const name = String(b.party_name != null ? b.party_name : b.name || "").trim(); // 폼 필드=party_name(Chrome name= 자동완성 회피 — 함정 #19·#21)
+  const typeLabel = c.kind === "group" ? "그룹" : "업체"; // 오류 재렌더용 표시 라벨(2026-07-17)
   if (!name) {
     if (isFetch) return res.status(400).json({ ok: false, error: "이름을 입력하세요." });
     const files = listClientFiles(id);
-    return res.send(layout({ title: "클라이언트 수정", user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({}), listClients({}).filter((x) => x.kind === "company"), false, true, listGroupsForPicker()) }));
+    return res.send(layout({ title: `${typeLabel} 수정`, user: req.user, current: "/clients", body: clientForm({ ...c, ...b, _err: "이름을 입력하세요." }, true, files, "", true, listContacts({}), listClients({}).filter((x) => x.kind === "company"), false, true) }));
   }
   // kind는 party 정체성이라 불변 — 폼 유형 고정, 현재 party.kind 기준으로 필드 갱신(updateParty가 분기).
   updateParty(id, {
@@ -412,7 +349,6 @@ router.post("/:id", (req, res) => {
     // 본명≠활동명(모달 등록 등)이면 activity_name 보존(이름 필드=본명 편집이므로 활동명 유지). 그 외 person도 보존.
     activity_name: (c.kind === "group" || c.name === c.activity_name) ? name : c.activity_name, is_artist: c.is_artist,
     cash_receipt_no: c.kind === "group" ? c.cash_receipt_no : b.cash_receipt_no, // 그룹은 폼에 필드 없음 → 기존값 보존(개인 아티스트만 현금영수증)
-    activity_form: b.activity_form, // 활동 형태(아티스트 폼에만 있음 — 그룹·업체는 undefined로 보존)
     // 그룹 담당자(멤버/관계자) — 그룹일 때만 폼에서 전송(person은 undefined로 보존)
     contact_party_id: c.kind === "group" ? resolveContactPartyId(b) : undefined,
   });
@@ -465,7 +401,7 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
   const c = getParty(id);
   if (!c) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
-    return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "", user: req.user }));
+    return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "", user: req.user }));
   }
   if (!FILE_KINDS.find((k) => k.key === kind)) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
@@ -547,10 +483,10 @@ router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, r
 // ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리 + 첨부 서류 링크) ──
 router.get("/:id", asyncHandler(async (req, res) => {
   const c = getParty(Number(req.params.id));
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "클라이언트를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  // 비아티스트 개인(관계자)은 클라이언트 화면이 아니라 연락처 상세가 정 화면(관계자 탭 링크와 동일 규칙) —
-  // 청구처 정보 카드 '클라이언트 ↗' 등이 관계자 청구처를 이 경로로 보낼 때 아티스트 편집 폼이 뜨던 어색함 제거(2026-07-05 전수점검).
-  if (c.kind === "person" && !c.is_artist) {
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  // 사람은 전부 연락처에서 본다(2026-07-17 사람/조직 축 정리 — 이전엔 비아티스트만 리다이렉트라
+  // 같은 사람이 아티스트면 클라이언트 상세, 아니면 연락처로 갈리고 편집 폼도 두 벌이었다).
+  if (c.kind === "person") {
     const from = String(req.query.from || "");
     const retQ = String(req.query.return || "");
     const qs = [
@@ -578,8 +514,8 @@ router.get("/:id", asyncHandler(async (req, res) => {
   const ret = safePath(retQ);
   const clientsBackHref = ret || (fromOk ? `/clients?${from}` : "/clients");
   const backLabel = ret
-    ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/contacts") ? "연락처" : ret.startsWith("/clients") ? "클라이언트" : "돌아가기"
-    : "클라이언트";
+    ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/contacts") ? "연락처" : ret.startsWith("/clients") ? "업체·그룹" : "돌아가기"
+    : "업체·그룹";
   const keepQ = [fromOk ? `from=${from}` : "", ret ? `return=${encodeURIComponent(ret)}` : ""].filter(Boolean).join("&"); // 탭 전환 시 복귀 경로 유실 방지
   const tabBarHtml = tabBar({
     tabs: [
@@ -604,7 +540,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
         </div>
         <div class="space-y-2">${invoices.map((i) => invoiceRow(i)).join("")}</div>`;
     } else {
-      content = emptyState("이 클라이언트가 청구처인 청구 내역이 없습니다.", { card: true });
+      content = emptyState(`이 ${c.kind === "group" ? "그룹이" : "업체가"} 청구처인 청구 내역이 없습니다.`, { card: true });
     }
   } else {
     content = projects.length
@@ -649,7 +585,7 @@ router.get("/:id", asyncHandler(async (req, res) => {
   if (c.kind !== "company") { c.agency_id = currentAgencyId(c.id); c.agency_name = currentAgencyName(c.id); } // 아티스트·그룹: 소속사 콤보 기본값(이름)
   const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
   // 폼의 대표자/담당자 콤보는 전체 연락처(contactOptions)를 내부에서 조회(상세의 contacts는 이 클라이언트 소속만이라 별도).
-  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false, listGroupsForPicker()); // withExtras=false — 첨부·삭제 제외
+  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false); // withExtras=false — 첨부·삭제 제외
   const crossRefs = [
     // 아티스트(사람) party는 연락처와 동일 레코드 — '연락처로 보기' 링크(같은 party를 연락처 화면에서).
     c.kind === "person" ? `<div><span class="text-muted">연락처로 보기</span> <a href="/contacts/${c.id}" class="text-primary hover:underline">${esc(c.name)} ↗</a></div>` : "",

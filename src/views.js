@@ -148,7 +148,7 @@ const NAV = [
   { href: "/deliverables", label: "자료 전달", key: "deliverables", access: "staff", group: "ops" },
   { href: "/invoices", label: "청구", key: "invoices", access: "billing", group: "billing" },
   { href: "/contacts", label: "연락처", key: "contacts", access: "editor", group: "manage" },
-  { href: "/clients", label: "클라이언트", key: "clients", access: "editor", group: "manage" },
+  { href: "/clients", label: "업체·그룹", key: "clients", access: "editor", group: "manage" },
   { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
   { href: "/revenue", label: "매출", key: "revenue", access: "invoice", group: "billing" },
   { href: "/settings", label: "환경설정", key: "settings", access: "staff", group: "manage" },
@@ -766,12 +766,12 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
       <input type="hidden" name="payer_contact_id" value="" data-pk-pid />
       <div class="relative">
         <input class="input pr-9" type="text" data-pk-input autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
-          placeholder="클라이언트·담당자 검색…" value="${esc(selLabel)}" aria-label="청구처 검색" />
+          placeholder="청구처 검색…" value="${esc(selLabel)}" aria-label="청구처 검색" />
         <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
         <div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-64 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-pk-pop role="listbox"></div>
       </div>
       <script type="application/json" data-pk-options>${json}</script>
-      ${explain(hint || `클라이언트·담당자 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.`)}
+      ${explain(hint || `청구처 이름 일부만 입력해도 좁혀집니다. 담당자를 고르면 개인 청구처로 등록됩니다. 비워 두면 자동 연결.`)}
     </div>`;
 }
 
