@@ -404,7 +404,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 "use strict";
 process.env.NODE_ENV = "test";
 process.env.DEV_LOGIN = "1";
-process.env.PORT = String(4100 + (process.pid % 400));
+process.env.PORT = String(4500 + (process.pid % 300)); // 기존 서버 테스트(settings-email 3500대·smoke 3900~4399대)와 겹치지 않는 대역
 const { tempDbPath, cleanupDb } = require("./helpers");
 process.env.DB_PATH = tempDbPath();
 
