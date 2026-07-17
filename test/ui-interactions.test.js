@@ -1467,3 +1467,69 @@ test("청구 할인 정액칸: value='0' 없이 placeholder만", () => {
   assert.match(html, /name="discount_amount" placeholder="0"/, "할인 정액=placeholder만");
   assert.doesNotMatch(html, /name="discount_amount" value="0"/, "미리 채운 value='0' 없음");
 });
+
+// ── 연락처 목록 키보드 이동(2026-07-17 사용자 요청 '연락처 선택 후 위아래 키로 옮겨 다니게') ──
+// 서버 렌더 목록 위에서 실제 app.js를 돌려 ↑↓ 동작을 잠근다(정적 계약이 못 보는 동작 계층).
+const { contactNameList } = require("../src/views.contacts");
+
+const KB_ROWS = [
+  { id: 1, kind: "person", name: "김하나" },
+  { id: 2, kind: "person", name: "이두리" },
+  { id: 3, kind: "person", name: "박세찌" },
+];
+// 클릭을 가로채 '어디로 이동했는지'만 확인(jsdom은 실제 내비게이션을 안 함).
+function mountList(selectedId) {
+  const { win, doc } = mountDom(contactNameList({ rows: KB_ROWS, selectedId, hrefFn: (c) => `/contacts/${c.id}` }));
+  const clicked = [];
+  doc.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a");
+    if (a) { clicked.push(a.getAttribute("href")); e.preventDefault(); }
+  });
+  const arrow = (key, target) => target.dispatchEvent(new win.KeyboardEvent("keydown", { key, bubbles: true }));
+  const rowOf = (id) => doc.querySelector(`a[href="/contacts/${id}"]`);
+  return { win, doc, clicked, arrow, rowOf };
+}
+
+test("연락처 ↑↓: 선택 행에 포커스가 가고 아래/위 사람으로 이동", () => {
+  const { doc, clicked, arrow, rowOf } = mountList(2);
+  assert.equal(doc.activeElement, rowOf(2), "선택된 행에 자동 포커스(클릭 직후 바로 ↑↓ 먹게)");
+
+  arrow("ArrowDown", doc.activeElement);
+  assert.deepEqual(clicked, ["/contacts/3"], "↓ = 다음 사람");
+
+  arrow("ArrowUp", rowOf(2));
+  assert.deepEqual(clicked, ["/contacts/3", "/contacts/1"], "↑ = 이전 사람");
+});
+
+test("연락처 ↑↓: 처음/끝에서는 순환하지 않음", () => {
+  const first = mountList(1);
+  first.arrow("ArrowUp", first.rowOf(1));
+  assert.deepEqual(first.clicked, [], "첫 행에서 ↑는 무동작");
+
+  const last = mountList(3);
+  last.arrow("ArrowDown", last.rowOf(3));
+  assert.deepEqual(last.clicked, [], "끝 행에서 ↓는 무동작");
+});
+
+test("연락처 ↑↓: 실시간 필터로 숨은 행은 건너뛴다", () => {
+  const { doc, clicked, arrow, rowOf } = mountList(1);
+  rowOf(2).style.display = "none"; // 필터가 숨긴 상태(app.js 실시간 필터와 동일 방식 — 함정 #26)
+  arrow("ArrowDown", doc.activeElement);
+  assert.deepEqual(clicked, ["/contacts/3"], "숨은 이두리를 건너뛰고 박세찌로");
+});
+
+test("연락처 ↑↓: 목록 밖(상세 패널)에선 가로채지 않아 스크롤이 살아 있다", () => {
+  const { win, doc, clicked } = mountList(2);
+  const outside = doc.createElement("div"); // 오른쪽 읽기 패널 대역
+  doc.body.appendChild(outside);
+  const e = new win.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+  outside.dispatchEvent(e);
+  assert.equal(clicked.length, 0, "이동 없음");
+  assert.equal(e.defaultPrevented, false, "기본 스크롤 유지(preventDefault 안 함)");
+});
+
+test("연락처 ↑↓: 한글 IME 조합 중에는 무시(함정 #18)", () => {
+  const { win, doc, clicked } = mountList(2);
+  doc.activeElement.dispatchEvent(new win.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, isComposing: true }));
+  assert.deepEqual(clicked, [], "조합 중 방향키는 이동 안 함");
+});

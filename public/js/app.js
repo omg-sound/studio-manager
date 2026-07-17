@@ -2919,3 +2919,47 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     if (win) { e.preventDefault(); try { win.focus(); } catch (_e) {} }
   });
 })();
+
+// ── 연락처 목록 키보드 이동(2026-07-17 사용자 요청 '연락처 선택 후 위아래 키로 옮겨 다니게') ──
+// 애플 연락처처럼 ↑↓로 앞뒤 사람으로 이동한다. 서버 렌더라 이동 = 그 사람의 페이지 로드이고,
+// 새 페이지에서 선택 행에 다시 포커스를 줘 연속으로 넘길 수 있다.
+// **포커스가 목록 안에 있을 때만** 가로챈다 — 오른쪽 상세를 보는 중엔 ↑↓가 평소대로 스크롤이어야 하므로.
+(function () {
+  "use strict";
+  function listRoot() { return document.querySelector("[data-contact-list]"); }
+  // 실시간 필터로 숨겨진 행은 건너뛴다 — 보이는 행만 이동 대상.
+  // 판정은 **인라인 style.display**로: 필터가 그렇게 숨기고(함정 #26), offsetParent는 레이아웃이 없는 jsdom에서 항상 null이라 못 쓴다.
+  function visibleRows(root) {
+    var out = [], all = root.querySelectorAll("a");
+    for (var i = 0; i < all.length; i++) if (all[i].style.display !== "none") out.push(all[i]);
+    return out;
+  }
+  // 선택된 사람이 있으면 그 행에 포커스 — 클릭·이동 직후 바로 ↑↓가 먹게(사용자가 이미 다른 곳을 잡고 있으면 뺏지 않음).
+  function focusSelected() {
+    var root = listRoot();
+    if (!root) return;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    var cur = root.querySelector('[aria-current="true"]');
+    if (!cur) return;
+    try { cur.focus({ preventScroll: true }); } catch (_e) { cur.focus(); }
+    if (cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" }); // 목록 자체가 스크롤 영역이라 페이지는 안 튄다
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중(함정 #18)
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    var root = listRoot();
+    if (!root || !root.contains(e.target)) return; // 목록 밖(상세 패널·검색창)에선 기본 동작(스크롤) 유지
+    var rows = visibleRows(root);
+    if (!rows.length) return;
+    var idx = rows.indexOf(e.target);
+    if (idx < 0) idx = rows.indexOf(root.querySelector('[aria-current="true"]'));
+    var next = idx < 0
+      ? (e.key === "ArrowDown" ? rows[0] : rows[rows.length - 1])
+      : rows[idx + (e.key === "ArrowDown" ? 1 : -1)];
+    if (!next) return; // 처음/끝에서는 아무것도 안 함(순환하지 않음)
+    e.preventDefault(); // 목록 안에서만 스크롤 대신 이동
+    next.click(); // 링크 이동(a.click → 서버 렌더 페이지 로드)
+  });
+  focusSelected();
+})();

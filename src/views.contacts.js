@@ -33,7 +33,10 @@ function contactNameList({ rows, selectedId = null, hrefFn }) {
     const cls = active ? "bg-primary/10 font-semibold text-fg" : "text-fg";
     return `<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${esc(personName(c))}</a>`;
   });
-  return listGroup({ rows: items, filterList: true });
+  // data-contact-list = app.js 키보드 이동 마커(선택 행 포커스 + ↑↓로 앞뒤 사람 이동, 2026-07-17 사용자 요청).
+  // lg에서 목록 자체가 스크롤 영역이다: 전 명단(202명)이 페이지와 함께 흐르면 아래쪽 사람을 고를 때 페이지가 그 위치까지
+  // 내려가 오른쪽 상세 머리가 화면 밖으로 나간다. 자체 스크롤이면 선택 행만 목록 안에서 스크롤된다(모바일은 한 단이라 그대로).
+  return `<div data-contact-list class="lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>`;
 }
 
 /** 읽기 뷰 한 줄(라벨 + 값). 값은 이미 esc/copyable 처리된 HTML. */
