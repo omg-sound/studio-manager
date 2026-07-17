@@ -169,7 +169,7 @@ test("contactReadView: [편집]은 같은 탭(연락처 안에 머무는 링크)
   assert.ok(!/target="_blank"/.test(html.slice(i, html.indexOf(">", i))), "편집은 새 탭이 아니다");
 });
 
-test("contactExtras: 아티스트로 보기·대표 클라이언트·담당자 연동도 새 탭", () => {
+test("contactExtras: 아티스트로 보기·대표 업체·담당자 연동도 새 탭", () => {
   const html = contactExtras({ id: 3, activity_name: "감성소녀", is_artist: 1 });
   // 파생 링크가 하나라도 있으면 전부 새 탭이어야 한다(연동 정보 블록 안에서 규칙이 갈리면 안 됨).
   const anchors = html.match(/<a [^>]*>/g) || [];

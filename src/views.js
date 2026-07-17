@@ -574,7 +574,7 @@ function listRowLinked({ href, title, badges = "", right = "" }) {
 }
 
 /**
- * 범용 정보 표(2026-07-16 사용자 요청: 클라이언트도 넓어진 화면에 정보 많이) — 연락처·청구·프로젝트 표와 통일감.
+ * 범용 정보 표(2026-07-16 사용자 요청 '연락처·클라이언트도 넓어진 화면에 정보 많이') — 청구·프로젝트 표와 통일감.
  * @param {Array<{label,w?,hide?,right?,primary?,mobileHide?,mCard?,wrap?}>} cols  열 정의(w=콜 폭 **Tailwind 클래스명**[예 "w-[16rem]"] — 인라인 style은 CSP에 막히니 클래스로·미지정=유동, hide='sm'|'md'|'lg'|'xl' 그 미만 숨김[col도 함께 숨겨 폭 예약 제거], mobileHide=<640 카드에서 셀 숨김, mCard='tl'|'tr'|'bl'|'br'=<640 카드를 2열 그리드로 배치[좌상/우상/좌하/우하·라벨 없이 값만], wrap=…로 안 자르고 줄바꿈 허용[배지 여러 개 열], primary=모바일 카드 헤더 셀).
  * @param {Array<{cells:string[]}>} rows  각 행 = 열 순서대로의 셀 HTML.
  * @param {{filterList?:boolean}} [opt]  filterList=실시간 검색 필터(tbody에 data-filter-list, app.js [data-live-filter]와 연동).

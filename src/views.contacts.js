@@ -57,7 +57,7 @@ function readRow(label, valueHtml) {
 /**
  * 읽기 뷰 — 탭 없이 한 화면 스크롤(2026-07-17 사용자 결정).
  * 순서: 헤더 → 연락 정보 → 소속(+이력) → 메모 → 참여 내역 → 연동 정보.
- * 편집은 별도 경로(editHref) — 클라이언트 상세는 그대로이고, 연락처에서만 '상세=바로 편집'이 '읽기 후 편집'으로 뒤집혔다.
+ * 편집은 별도 경로(editHref) — '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 뒤집었다(클라이언트 상세는 그대로).
  * @param {string} [o.extras] 신뢰 HTML — esc 없이 그대로 삽입된다(호출부가 esc 책임). 사용자 입력을 그대로 흘려보내지 말 것.
  */
 function contactReadView(p, { affs = [], projects = [], sessions = [], editHref, extras = "" } = {}) {

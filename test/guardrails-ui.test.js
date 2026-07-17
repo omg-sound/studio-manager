@@ -177,13 +177,14 @@ test("ui-guardrail: 시간 콤보 팝업은 scrollIntoView가 아니라 scrollTo
 // ── 2026-07-17 사람/조직 축 정리: 화면 문구에서 '클라이언트' 제거 ──
 // 코드 식별자·주석은 그대로 두므로(배포 안정성), **사용자 노출 문자열 리터럴**만 검사한다.
 test("가드: 사용자 노출 문자열에 '클라이언트'가 없다", () => {
-  const files = ["views.js", "views.clients.js", "views.contacts.js", "views.invoices.js",
-    "routes/clients.routes.js", "routes/contacts.routes.js", "routes/invoices.routes.js"];
+  const files = ["views.js", "views.clients.js", "views.contacts.js", "views.invoices.js", "views.settings.js",
+    "routes/clients.routes.js", "routes/contacts.routes.js", "routes/invoices.routes.js", "routes/dashboard.routes.js"];
   const offenders = [];
   files.forEach((f) => {
-    const src = fs.readFileSync(path.join(__dirname, "..", "src", f), "utf8");
+    const raw = fs.readFileSync(path.join(__dirname, "..", "src", f), "utf8");
+    const src = raw.replace(/\/\*[\s\S]*?\*\//g, ""); // 블록 주석 제거(라인 분할 전 — //만 제거하면 /** */ 오탐)
     src.split("\n").forEach((line, i) => {
-      const code = line.replace(/\/\/.*$/, ""); // 주석 제외
+      const code = line.replace(/\/\/.*$/, ""); // 한 줄 주석 제외
       if (!/클라이언트/.test(code)) return;
       // 문자열 리터럴(", ', `) 안의 '클라이언트'만 위반 — 식별자엔 한글이 없으므로 사실상 전부 노출 문구다.
       if (/["'`][^"'`]*클라이언트/.test(code)) offenders.push(`${f}:${i + 1} ${line.trim().slice(0, 80)}`);
