@@ -46,12 +46,24 @@ test("contactPanes: 선택 없으면 목록만(좁은 화면), 선택 있으면 
   assert.match(sel, /lg:grid-cols-\[18rem_minmax\(0,1fr\)\]/, "2단 그리드(리터럴 클래스)");
 });
 
+test("contactPanes: 좁은 화면 뒤로가기 — 선택 있을 때만 lg:hidden 링크", () => {
+  // <lg에선 왼쪽 목록이 hidden이라 이 링크가 목록으로 돌아갈 유일한 길이다.
+  const sel = contactPanes({ left: "LEFT", right: "RIGHT", hasSelection: true, backHref: "/contacts?tab=external", backLabel: "연락처" });
+  assert.match(sel, /<a href="\/contacts\?tab=external" class="[^"]*lg:hidden[^"]*">← 연락처<\/a>/, "선택 시 lg:hidden 뒤로가기");
+  assert.ok(sel.indexOf("← 연락처") < sel.indexOf("RIGHT"), "상세 위에 위치");
+  // 목록만 보이는 화면(선택 없음)에선 돌아갈 곳이 이미 화면이라 렌더하지 않는다.
+  const none = contactPanes({ left: "LEFT", right: "RIGHT", hasSelection: false, backHref: "/contacts?tab=external", backLabel: "연락처" });
+  assert.ok(!/← 연락처/.test(none), "미선택(목록만)엔 뒤로가기 없음");
+  // backHref 미전달(기본값)이면 링크 없음 — 호출부가 명시할 때만.
+  assert.ok(!/lg:hidden/.test(contactPanes({ left: "L", right: "R", hasSelection: true })));
+});
+
 test("contactPanes: 인라인 style 없음(CSP — 함정 #27)", () => {
   const html = contactPanes({ left: "L", right: "R", hasSelection: true });
   assert.ok(!/style="/.test(html));
 });
 
-const { contactReadView } = require("../src/views.contacts");
+const { contactReadView, contactExtras } = require("../src/views.contacts");
 
 const PARTY = { id: 2, kind: "person", name: "강병원", activity_name: "", honorific: "대표님",
   phone: "010-8765-4321", email: "bw@undefined-ent.co.kr", cash_receipt_no: "010-1111-2222",
@@ -98,6 +110,18 @@ test("contactReadView: 참여 내역 없으면 빈 안내", () => {
   const html = read({ projects: [], sessions: [] });
   assert.match(html, /연결된 프로젝트가 없습니다/);
   assert.match(html, /지정된 세션이 없습니다/);
+});
+
+test("extras = 신뢰 HTML 삽입점 — 그대로 통과하되 사용자 데이터 esc는 contactExtras 책임", () => {
+  // (1) extras 문자열은 읽기 뷰에 esc 없이 삽입된다(호출부가 만든 링크·배지 HTML이 살아야 하므로).
+  const html = read({ extras: '<div id="trusted-extra">ok</div>' });
+  assert.match(html, /<div id="trusted-extra">ok<\/div>/, "신뢰 HTML은 그대로 통과");
+  // (2) 그래서 사용자 데이터를 끼워 넣는 조립 함수가 esc 책임을 진다 — 안 하면 곧 XSS.
+  const extras = contactExtras({ id: 999999, activity_name: '<script>alert(1)</script>', is_artist: 1 });
+  assert.match(extras, /&lt;script&gt;/, "활동명은 이스케이프되어 나온다");
+  assert.ok(!/<script>/.test(extras), "생 스크립트 태그 없음");
+  // (3) 그 extras를 읽기 뷰에 넣어도(=downstream 재이스케이프 없음) 여전히 안전.
+  assert.ok(!/<script>/.test(read({ extras })), "읽기 뷰 삽입 후에도 안전");
 });
 
 test("contactReadView: 탭 없음(한 화면 스크롤)", () => {

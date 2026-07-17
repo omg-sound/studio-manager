@@ -19,7 +19,6 @@ const {
   listProjectsForParty,
   listSessionsForParty,
   listClients,
-  orgsWithOwnerParty,
   getManagerByPartyId,
   syncPartyToManager,
   listGroupsForPicker,
@@ -30,7 +29,7 @@ const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(open-redirect 차단, 공용)
 const { layout, pageHeader, esc, personName, flashBanner, emptyState, errorPage, tabBar, dirtyActionRow, searchBox, companyCombo, dateCombo, detailsChevron } = require("../views");
-const { contactPanes, contactNameList, contactReadView } = require("../views.contacts");
+const { contactPanes, contactNameList, contactReadView, contactExtras } = require("../views.contacts");
 
 const router = express.Router();
 
@@ -113,7 +112,7 @@ router.get("/:id/edit", (req, res) => {
   const c = getParty(Number(req.params.id));
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   const returnTo = safePath(req.query.return); // 백링크 규약(CLAUDE.md) — 내부 절대경로만(open-redirect 차단)
-  res.send(renderContacts(req, c, editPaneFor(req, c, returnTo)));
+  res.send(renderContacts(req, c, editPaneFor(c, returnTo)));
 });
 
 router.post("/:id", asyncHandler(async (req, res) => {
@@ -174,6 +173,13 @@ router.post("/:id/delete", asyncHandler(async (req, res) => {
 }));
 
 // ── 소속 이력: 추가/이직 · 종료 · 삭제 ──
+// 소속 이력 폼은 편집 패널(/contacts/:id/edit)에 있으므로 처리 후에도 **편집 화면에 머문다**(읽기 뷰로 튕기면 편집 흐름이 끊긴다).
+// 폼이 return(관계자 탭 등 외부 복귀 경로)을 실어왔으면 safePath 검증 후 그대로 이어붙여 백링크 체인을 보존한다.
+function editRedirect(id, body, flash) {
+  const ret = safePath(body && body.return);
+  return `/contacts/${id}/edit?flash=${flash}${ret ? `&return=${encodeURIComponent(ret)}` : ""}`;
+}
+
 router.post("/:id/affiliations", (req, res) => {
   const id = Number(req.params.id);
   if (!getParty(id)) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
@@ -185,12 +191,12 @@ router.post("/:id/affiliations", (req, res) => {
     memo: b.memo,
     closeCurrent: b.closeCurrent === "1",
   });
-  res.redirect(`/contacts/${id}?flash=added`);
+  res.redirect(editRedirect(id, b, "added"));
 });
 
 router.post("/:id/affiliations/:aid/end", (req, res) => {
   endAffiliation(Number(req.params.aid));
-  res.redirect(`/contacts/${Number(req.params.id)}?flash=saved`);
+  res.redirect(editRedirect(Number(req.params.id), req.body, "saved"));
 });
 
 // 소속 이력 행 수정(회사·직함·기간·메모). ended_on 비우면 현재 소속.
@@ -203,12 +209,12 @@ router.post("/:id/affiliations/:aid", (req, res) => {
     ended_on: b.ended_on,
     memo: b.memo,
   });
-  res.redirect(`/contacts/${Number(req.params.id)}?flash=saved`);
+  res.redirect(editRedirect(Number(req.params.id), b, "saved"));
 });
 
 router.post("/:id/affiliations/:aid/delete", (req, res) => {
   deleteAffiliation(Number(req.params.aid));
-  res.redirect(`/contacts/${Number(req.params.id)}?flash=deleted`);
+  res.redirect(editRedirect(Number(req.params.id), req.body, "deleted"));
 });
 
 // ── 상세(2단: 왼쪽 이름 목록[선택 강조] + 오른쪽 읽기 뷰) ──
@@ -316,6 +322,10 @@ function renderContacts(req, sel, rightHtml) {
     action: "/contacts", q, placeholder: "이름 검색", label: "연락처 검색", liveFilter: true, noButton: true,
     hidden: `<input type="hidden" name="tab" value="${esc(tab)}" />`,
   });
+  // 검색 결과 건수 + 전체 보기(클라이언트 목록과 동일 문구·형식).
+  const resultNote = q
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/contacts?tab=${tab}" class="text-primary hover:underline">전체 보기</a></div>`
+    : "";
   const list = rows.length
     ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/contacts/${c.id}${keep}` })
     : q
@@ -326,45 +336,39 @@ function renderContacts(req, sel, rightHtml) {
           ? emptyState("외주 작업자가 없습니다. 외주 작업자 메뉴에서 추가하면 자동 등록됩니다.", { card: true, icon: "clients" })
           : emptyState("등록된 연락처가 없습니다.", { card: true, icon: "clients", cta: { href: "/contacts/new", label: "+ 새 연락처" } });
 
-  const left = `${searchBar}${list}`;
-  const right = rightHtml || (sel ? readPaneFor(req, sel) : emptyState("연락처를 선택하세요.", { card: true, icon: "clients" }));
+  const left = `${searchBar}${resultNote}${list}`;
+  const right = rightHtml || (sel ? readPaneFor(sel) : emptyState("연락처를 선택하세요.", { card: true, icon: "clients" }));
 
   // 백링크 규약(CLAUDE.md): 청구·프로젝트·클라이언트에서 ?return=(내부 절대경로)로 들어오면 그 화면으로 복귀.
   // 목록 행 링크의 return은 2단이라 불필요해졌지만, **외부 유입 return은 유지**한다(스펙 '제거·정리' 표).
+  // ?from=(클라이언트 목록 필터 쿼리스트링·안전문자만)은 관계자 리다이렉트 경로가 아직 실어보내므로 폴백으로 유지.
   const retQ = String(req.query.return || "");
   const ret = safePath(retQ);
+  const from = String(req.query.from || "");
+  const fromOk = Boolean(from) && /^[\w=&%.\-]*$/.test(from);
   const back = ret
     ? { href: ret, label: ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/clients") ? "클라이언트" : "돌아가기" }
-    : undefined;
+    : fromOk
+      ? { href: `/clients?${from}`, label: "클라이언트" }
+      : undefined;
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "연락처", back, action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
     ${tabs}
-    ${contactPanes({ left, right, hasSelection: !!sel })}`;
+    ${contactPanes({ left, right, hasSelection: !!sel, backHref: `/contacts${keep}`, backLabel: "연락처" })}`;
   return layout({ title: sel ? sel.name : "연락처", user: req.user, current: "/contacts", body, wide: true });
 }
 
-/** 읽기 패널 — 상세 데이터 조회 + 연동 정보(파생) 조립. */
-function readPaneFor(req, c) {
+/** 읽기 패널 — 상세 데이터 조회 + 연동 정보(파생·contactExtras 공용) 조립. */
+function readPaneFor(c) {
   const affs = listAffiliations(c.id);
   const projects = listProjectsForParty(c.id);
   const sessions = listSessionsForParty(c.id);
-  const linkedManager = getManagerByPartyId(c.id);
-  const ownerClients = orgsWithOwnerParty(c.id);
-  const extras = [
-    c.activity_name ? `<div><span class="text-muted">아티스트명</span> ${esc(c.activity_name)}${c.is_artist ? ` · <a href="/clients/${c.id}" class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
-    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : "",
-    linkedManager
-      ? `<div><span class="text-muted">담당자 연동</span> ${linkedManager.user_id != null
-          ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
-          : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`}</div>`
-      : "",
-  ].filter(Boolean).join("");
-  return contactReadView(c, { affs, projects, sessions, editHref: `/contacts/${c.id}/edit`, extras });
+  return contactReadView(c, { affs, projects, sessions, editHref: `/contacts/${c.id}/edit`, extras: contactExtras(c) });
 }
 
 /** 편집 패널 — 폼 + 소속 이력 인라인 편집 + 소속 추가/이직 + 삭제(옛 '상세 정보' 탭 내용을 그대로 이동). */
-function editPaneFor(req, c, returnTo = null) {
+function editPaneFor(c, returnTo = null) {
   const affs = listAffiliations(c.id);
   const clients = listClients({});
   const linkedManager = getManagerByPartyId(c.id);
@@ -372,6 +376,8 @@ function editPaneFor(req, c, returnTo = null) {
   // 취소 = 저장하지 않고 읽기 뷰(또는 return 경로)로. data-no-guard + app.js가 bypass도 세워 beforeunload까지 통과(함정 #24).
   const cancelHref = returnTo || `/contacts/${c.id}`;
   const cancel = `<a href="${esc(cancelHref)}" class="text-sm text-primary hover:underline" data-no-guard>← 취소</a>`;
+  // 소속 이력 폼도 복귀 경로를 함께 실어보낸다 — 처리 후 편집 화면으로 돌아올 때 백링크 체인이 끊기지 않게.
+  const retInput = returnTo ? `<input type="hidden" name="return" value="${esc(returnTo)}" />` : "";
   const form = contactForm({ ...c, company: c.company || (cur && cur.client_name) || "" }, true, clients, linkedManager, true, listGroupsForPicker(), returnTo);
 
   const timeline = affs.length
@@ -384,6 +390,7 @@ function editPaneFor(req, c, returnTo = null) {
           // 각 소속 행을 펼치면(details) 회사·직함·기간·메모를 직접 수정(dirty 저장). 종료·삭제도 그 안에.
           const editForm = `
             <form method="post" action="/contacts/${c.id}/affiliations/${a.id}" class="mt-2 space-y-2 border-t border-border pt-2" data-dirty-form>
+              ${retInput}
               <div class="grid gap-2 sm:grid-cols-2">
                 <div>
                   <label class="label mb-0.5 text-xs">소속 회사 <span class="font-normal text-muted">(검색 · 비우면 무소속)</span></label>
@@ -400,8 +407,8 @@ function editPaneFor(req, c, returnTo = null) {
               </div>
             </form>
             <div class="mt-2 flex gap-1 border-t border-border pt-2">
-              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end"><button class="btn-ghost btn-xs" type="submit">종료 처리</button></form>` : ""}
-              <form method="post" action="/contacts/${c.id}/affiliations/${a.id}/delete" data-confirm="이 소속 이력을 삭제할까요?"><button class="btn-ghost btn-xs text-danger" type="submit">삭제</button></form>
+              ${isCurrent ? `<form method="post" action="/contacts/${c.id}/affiliations/${a.id}/end">${retInput}<button class="btn-ghost btn-xs" type="submit">종료 처리</button></form>` : ""}
+              <form method="post" action="/contacts/${c.id}/affiliations/${a.id}/delete" data-confirm="이 소속 이력을 삭제할까요?">${retInput}<button class="btn-ghost btn-xs text-danger" type="submit">삭제</button></form>
             </div>`;
           return `<div class="card">
             <details class="group">
@@ -422,6 +429,7 @@ function editPaneFor(req, c, returnTo = null) {
 
   const affForm = `
     <form method="post" action="/contacts/${c.id}/affiliations" class="card mt-3 space-y-3">
+      ${retInput}
       <div class="font-semibold">소속 추가 / 이직</div>
       <div class="grid gap-3 sm:grid-cols-2">
         <div>

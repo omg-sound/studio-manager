@@ -26,7 +26,7 @@ const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
 const { FILE_KINDS, fileKindLabel, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
-const { contactPanes, contactNameList, contactReadView } = require("../views.contacts");
+const { contactPanes, contactNameList, contactReadView, contactExtras } = require("../views.contacts");
 
 const router = express.Router();
 
@@ -217,10 +217,11 @@ router.get("/", (req, res) => {
           projects: listProjectsForParty(sel.id),
           sessions: listSessionsForParty(sel.id),
           editHref: `/contacts/${sel.id}/edit?return=${encodeURIComponent(req.originalUrl)}`, // 편집 폼은 연락처 메뉴에 하나만
-          extras: "",
+          extras: contactExtras(sel), // 연락처 메뉴와 같은 읽기 뷰(설계 §4) — 관계자는 회사 대표가 많아 '대표 클라이언트' 크로스링크가 특히 유용
         })
       : emptyState("관계자를 선택하세요.", { card: true, icon: "clients" });
-    associatePanes = contactPanes({ left, right, hasSelection: !!sel });
+    // 좁은 화면(<lg)은 왼쪽 목록이 숨겨지므로 상세 위에 '← 관계자' 뒤로가기(설계 §4).
+    associatePanes = contactPanes({ left, right, hasSelection: !!sel, backHref: `/clients?${keep}`, backLabel: "관계자" });
   }
 
   const list = group === "associate"

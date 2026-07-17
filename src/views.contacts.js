@@ -6,14 +6,19 @@ const { esc, personName, listGroup, copyable, emptyState, dataTable } = require(
 /**
  * 2단 골격. lg 이상 = [이름 목록 18rem | 상세]. 미만 = 한 단(선택 여부로 한쪽만).
  * 서버가 선택 여부를 알고 클래스를 정하므로 JS가 없다.
- * @param {{left:string, right:string, hasSelection:boolean}} o
+ * backHref/backLabel: 좁은 화면(<lg)은 왼쪽 목록이 숨겨져 목록으로 돌아갈 길이 없다 → 상세 위에 lg:hidden 뒤로가기.
+ * (pageHeader의 back은 전 폭에서 보이므로 이건 lg:hidden이라야 데스크톱에서 중복되지 않는다.)
+ * @param {{left:string, right:string, hasSelection:boolean, backHref?:string, backLabel?:string}} o
  */
-function contactPanes({ left, right, hasSelection }) {
+function contactPanes({ left, right, hasSelection, backHref = "", backLabel = "" }) {
   const leftCls = hasSelection ? "hidden lg:block" : "block";
   const rightCls = hasSelection ? "block" : "hidden lg:block";
+  const back = hasSelection && backHref
+    ? `<a href="${esc(backHref)}" class="mb-3 inline-block text-sm text-primary hover:underline lg:hidden">← ${esc(backLabel)}</a>`
+    : "";
   return `<div class="lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-6 lg:items-start">
       <div class="${leftCls} lg:sticky lg:top-4">${left}</div>
-      <div class="${rightCls} min-w-0">${right}</div>
+      <div class="${rightCls} min-w-0">${back}${right}</div>
     </div>`;
 }
 
@@ -31,7 +36,7 @@ function contactNameList({ rows, selectedId = null, hrefFn }) {
   return listGroup({ rows: items, filterList: true });
 }
 
-/** 읽기 뷰 한 줄(아이콘 + 라벨 + 값). 값은 이미 esc/copyable 처리된 HTML. */
+/** 읽기 뷰 한 줄(라벨 + 값). 값은 이미 esc/copyable 처리된 HTML. */
 function readRow(label, valueHtml) {
   return `<div class="border-t border-border/60 px-4 py-3 first:border-t-0">
       <div class="text-xs text-muted">${esc(label)}</div>
@@ -143,4 +148,25 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
     ${extras ? `<div class="mt-6 space-y-1 text-sm">${extras}</div>` : ""}`;
 }
 
-module.exports = { contactPanes, contactNameList, contactReadView };
+/**
+ * 읽기 뷰 '연동 정보'(extras) 조립 — 아티스트로 보기 · 대표 클라이언트 · 담당자 연동 배지.
+ * 연락처 메뉴와 관계자 탭이 같은 읽기 뷰를 쓰므로(설계 §4) 이 파생 정보도 한곳에서 만든다.
+ * extras는 contactReadView에 **esc 없이** 삽입되므로 사용자 데이터(이름 등)의 esc는 이 함수 책임이다.
+ * @param {object} p 사람 party
+ */
+function contactExtras(p) {
+  const { orgsWithOwnerParty, getManagerByPartyId } = require("./data"); // 지연 require(순환 회피 — classifyParty와 동일 패턴)
+  const linkedManager = getManagerByPartyId(p.id);
+  const ownerClients = orgsWithOwnerParty(p.id);
+  return [
+    p.activity_name ? `<div><span class="text-muted">아티스트명</span> ${esc(p.activity_name)}${p.is_artist ? ` · <a href="/clients/${p.id}" class="text-primary hover:underline">아티스트로 보기 ↗</a>` : ""}</div>` : "",
+    ownerClients.length ? `<div><span class="text-muted">대표 클라이언트</span> ${ownerClients.map((oc) => `<a href="/clients/${oc.id}" class="text-primary hover:underline">${esc(oc.name)}</a>`).join(", ")}</div>` : "",
+    linkedManager
+      ? `<div><span class="text-muted">담당자 연동</span> ${linkedManager.user_id != null
+          ? `<span class="badge badge-info">하우스 엔지니어</span> <a href="/settings?tab=people" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`
+          : `<span class="badge badge-neutral">외주 작업자</span> <a href="/workers/${linkedManager.id}" class="text-primary hover:underline">${esc(linkedManager.name)}</a>`}</div>`
+      : "",
+  ].filter(Boolean).join("");
+}
+
+module.exports = { contactPanes, contactNameList, contactReadView, contactExtras };

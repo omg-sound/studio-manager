@@ -66,6 +66,25 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.match(html, /연락처 삭제/, "삭제는 편집 화면에");
   });
 
+  await t.test("없는 id 편집 = 404", async () => {
+    const { status } = await get("/contacts/999999/edit");
+    assert.equal(status, 404);
+  });
+
+  await t.test("편집: 외부 return은 safePath가 걸러 폼·링크에 안 박힌다", async () => {
+    const { status, html } = await get(`/contacts/${target}/edit?return=${encodeURIComponent("https://evil.example.com")}`);
+    assert.equal(status, 200);
+    assert.ok(!/evil\.example\.com/.test(html), "외부 return은 렌더에 남지 않음");
+    assert.ok(!/name="return"/.test(html), "hidden return도 세우지 않음(폴백=읽기 뷰)");
+  });
+
+  await t.test("좁은 화면 뒤로가기: 선택 있으면 lg:hidden '← 연락처', 목록만이면 없음", async () => {
+    const sel = await get(`/contacts/${target}?tab=external&q=외부인001`);
+    assert.match(sel.html, /<a href="\/contacts\?tab=external&amp;q=[^"]*" class="[^"]*lg:hidden[^"]*">← 연락처<\/a>/, "탭·검색어 보존한 목록으로");
+    const list = await get("/contacts?tab=external");
+    assert.ok(!/← 연락처/.test(list.html), "목록만 볼 땐 없음");
+  });
+
   await t.test("저장하면 읽기 뷰로 복귀", async () => {
     const r = await fetch(`${base}/contacts/${target}`, {
       method: "POST", redirect: "manual",
@@ -94,6 +113,29 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     const bad = await get("/clients?group=associate&sel=999999");
     assert.equal(bad.status, 200, "없는 id여도 탭 자체는 유효(404 아님)");
     assert.match(bad.html, /관계자를 선택하세요/);
+
+    // 좁은 화면: 왼쪽 목록이 숨겨지므로 '← 관계자'로 돌아간다(선택 없으면 목록이 이미 보이니 없음).
+    assert.match(sel.html, /<a href="\/clients\?group=associate" class="[^"]*lg:hidden[^"]*">← 관계자<\/a>/);
+    assert.ok(!/← 관계자/.test(none.html), "목록만 볼 땐 없음");
+  });
+
+  await t.test("소속 이력 폼은 편집 화면에 머문다(읽기 뷰로 안 튕김)", async () => {
+    const post = async (path, body) => fetch(base + path, {
+      method: "POST", redirect: "manual",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded", origin: base, "sec-fetch-site": "same-origin" },
+      body: new URLSearchParams(body).toString(),
+    });
+    // 추가 → 편집 화면 복귀
+    const add = await post(`/contacts/${target}/affiliations`, { affiliation_company: "테스트소속사", title: "매니저" });
+    assert.equal(add.status, 302);
+    assert.match(add.headers.get("location"), new RegExp(`^/contacts/${target}/edit\\?flash=added`), "추가 후 편집 화면");
+
+    const aid = db().prepare("SELECT id FROM affiliations WHERE person_id = ? ORDER BY id DESC").get(target).id;
+    // 삭제 → 편집 화면 복귀 + return(관계자 탭) 보존
+    const ret = `/clients?group=associate&sel=${target}`;
+    const del = await post(`/contacts/${target}/affiliations/${aid}/delete`, { return: ret });
+    assert.equal(del.status, 302);
+    assert.equal(del.headers.get("location"), `/contacts/${target}/edit?flash=deleted&return=${encodeURIComponent(ret)}`, "삭제 후 편집 화면 + return 보존");
   });
 
   await t.test("편집 진입 시 return= 실어오면 폼이 hidden으로 보존", async () => {
