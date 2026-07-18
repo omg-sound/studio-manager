@@ -175,6 +175,14 @@ test("revenueSummary 확장: 연간 선택은 전년 전체 비교(prevYear null
   assert.equal(s.cmp.prevYearSupply, null, "연간은 전년동월 없음");
 });
 
+test("revenueSummary 확장: 1월 전월 비교는 전년 12월로 롤오버(cmp)", () => {
+  // 2028/2029 격리 — 다른 테스트와 안 겹치게.
+  seedInvoice({ issued: "2028-12-10", payerName: "롤오버12월", amount: 110000, tax: 10000, workerRate: 0 }); // 12월 공급가 100000
+  seedInvoice({ issued: "2029-01-10", payerName: "롤오버1월", amount: 220000, tax: 20000, workerRate: 0 }); // 1월 공급가 200000
+  const s = D.revenueSummary({ year: 2029, month: 1 });
+  assert.equal(s.cmp.prevPeriodSupply, 100000, "전월(2028년 12월)로 롤오버");
+});
+
 test("revenueTax: VAT 합계 + 외주 원천징수 3.3%", () => {
   const { withholding33 } = require("../src/lib/tax");
   seedInvoice({ issued: "2027-09-10", payerName: "세무테스트", amount: 330000, tax: 30000, workerRate: 100000 });

@@ -34,7 +34,7 @@ function revTabs({ tab, year, month }) {
 function revBarChart(monthly) {
   const max = Math.max(1, ...monthly.map((m) => m.supply));
   const W = 680, H = 168, base = H - 30, top = 14, n = monthly.length, slot = (W - 8) / n, bw = slot * 0.28;
-  const bar = (x, v, cls) => { const h = Math.round((v / max) * (base - top)); return `<rect x="${x.toFixed(1)}" y="${base - h}" width="${bw.toFixed(1)}" height="${h}" rx="2" class="${cls}"><title>${cls === "rev-bar" ? "매출" : "순이익"} ${formatKRW(v)}</title></rect>`; };
+  const bar = (x, v, cls) => { const h = Math.max(0, Math.round((v / max) * (base - top))); return `<rect x="${x.toFixed(1)}" y="${base - h}" width="${bw.toFixed(1)}" height="${h}" rx="2" class="${cls}"><title>${cls === "rev-bar" ? "매출" : "순이익"} ${formatKRW(v)}</title></rect>`; };
   const parts = monthly.map((m, k) => {
     const cx = 4 + k * slot + slot / 2;
     return bar(cx - bw - 1, m.supply, "rev-bar") + bar(cx + 1, m.profit, "rev-bar-profit")
