@@ -283,6 +283,10 @@
    → 선택 행은 tint 배경(bg-primary/10)이 이미 선택·포커스를 표시하므로 링 중복 → 링만 제거. 다른 행(키보드 Tab 포커스)은 링 유지(a11y). */
 [data-contact-list] a[aria-current="true"]:focus,
 [data-contact-list] a[aria-current="true"]:focus-visible { box-shadow: none; }
+/* 선택 행은 hover 효과 없이 tint 유지(2026-07-18 사용자 요청). 기본 `.row-link:hover`(bg-elevated/60 회색)가 tint보다
+   특정도가 높아 hover 시 선택색이 회색으로 덮였다 — 이미 선택된(현재 페이지) 행이라 hover 피드백이 오히려 선택 표시를 지운다.
+   tint(bg-primary/10)를 hover에서도 그대로 재지정해 안정적으로 유지. */
+[data-contact-list] a[aria-current="true"]:hover { background-color: rgb(var(--color-primary) / 0.1); }
 
 /* ── 청구 목록 = 데스크톱 넓은 표(2026-07-16 사용자 요청, bookipi 참고) ──
    ≥640px = 진짜 표(컬럼 정렬), <640px = 각 행을 카드로 접음(td[data-label]→::before 라벨).
