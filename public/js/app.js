@@ -149,7 +149,7 @@
   });
   syncThemeLabel(document.documentElement.getAttribute("data-theme")); // 초기 로드 시 현재값 기준 1회 동기화
 
-  // 테마(팔레트) 선택 = 특징색 스와치 아이콘([data-theme-swatch]): linear(기본)/apple/claude + localStorage["palette"].
+  // 테마(팔레트) 선택 = 특징색 스와치 아이콘([data-theme-swatch]): linear(기본)/apple/spotify/pinterest/claude + localStorage["palette"].
   // theme-init.js가 <head>에서 조기 적용하므로 여기선 활성 표시 동기화 + 클릭 처리만. 라이트/다크는 별도 토글(팔레트가 강제하지 않음 — Linear도 라이트 가능).
   // 기본 팔레트=Linear(속성 있음). claude=기본 :root(속성 없음) — 속성 미설정 시 claude로 표시.
   function currentPalette() { return document.documentElement.getAttribute("data-palette") || "claude"; }

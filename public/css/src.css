@@ -560,6 +560,92 @@
 }
 :root[data-palette="linear"] .font-display { font-weight: 600; letter-spacing: -0.01em; }
 
+/* ─── C) Spotify — 그린 액센트·pill 버튼·둥근 카드(2026-07-18 사용자 요청). 다크가 정체성이나 팔레트는 테마 강제 안 함(라이트 변형 제공) ─── */
+:root[data-palette="spotify"] {
+  color-scheme: light;
+  --color-bg: 255 255 255;
+  --color-surface: 247 247 247;
+  --color-elevated: 240 240 240;
+  --color-border: 224 224 224;
+  --color-muted: 106 106 106;    /* AA */
+  --color-fg: 18 18 18;
+  --color-primary: 25 168 79;    /* Spotify 그린(라이트=약간 어둡게 조정, 텍스트 대비) */
+  --color-primary-fg: 255 255 255;
+  --color-success: 25 168 79;
+  --color-warning: 176 122 8;
+  --color-danger: 214 69 69;
+  --color-info: 25 168 79;
+  --font-sans: "Pretendard", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font-serif: var(--font-sans);
+  --font-display: "Pretendard", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --radius-btn: 624.9375rem;     /* pill(Spotify 버튼) */
+  --radius-input: 0.5rem;
+  --radius-card: 0.5rem;
+  --radius-badge: 624.9375rem;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.06);
+}
+:root[data-palette="spotify"][data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: 18 18 18;          /* Spotify #121212 */
+  --color-surface: 24 24 24;     /* #181818 */
+  --color-elevated: 40 40 40;    /* #282828 */
+  --color-border: 51 51 51;
+  --color-muted: 179 179 179;    /* #b3b3b3 */
+  --color-fg: 255 255 255;
+  --color-primary: 29 185 84;    /* Spotify #1DB954 */
+  --color-primary-fg: 0 0 0;     /* 그린 버튼=검정 텍스트(Spotify 실제) */
+  --color-success: 29 185 84;
+  --color-warning: 242 201 76;
+  --color-danger: 235 87 87;
+  --color-info: 29 185 84;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+}
+:root[data-palette="spotify"] .font-display { font-weight: 700; letter-spacing: -0.02em; }
+:root[data-palette="spotify"] .btn-primary { font-weight: 700; }
+
+/* ─── D) Pinterest — 레드 액센트·넉넉한 pill·둥근 카드·부드러운 그림자(2026-07-18 사용자 요청) ─── */
+:root[data-palette="pinterest"] {
+  color-scheme: light;
+  --color-bg: 255 255 255;
+  --color-surface: 255 255 255;
+  --color-elevated: 247 247 247;
+  --color-border: 225 225 225;
+  --color-muted: 118 118 118;    /* Pinterest 보조 텍스트 #767676, AA */
+  --color-fg: 17 17 17;
+  --color-primary: 230 0 35;     /* Pinterest 레드 #E60023 */
+  --color-primary-fg: 255 255 255;
+  --color-success: 20 130 60;
+  --color-warning: 176 122 8;
+  --color-danger: 230 0 35;
+  --color-info: 0 116 179;
+  --font-sans: "Pretendard", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --font-serif: var(--font-sans);
+  --font-display: "Pretendard", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --radius-btn: 624.9375rem;     /* pill(Pinterest 버튼) */
+  --radius-input: 1rem;
+  --radius-card: 1rem;           /* 16px — 넉넉한 둥근 카드 */
+  --radius-badge: 624.9375rem;
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.08);
+}
+:root[data-palette="pinterest"][data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: 17 17 17;
+  --color-surface: 30 30 30;
+  --color-elevated: 42 42 42;
+  --color-border: 56 56 56;
+  --color-muted: 176 176 176;
+  --color-fg: 245 245 245;
+  --color-primary: 255 45 76;    /* 다크에서 밝은 레드 */
+  --color-primary-fg: 255 255 255;
+  --color-success: 76 183 130;
+  --color-warning: 242 201 76;
+  --color-danger: 255 45 76;
+  --color-info: 100 190 255;
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.4);
+}
+:root[data-palette="pinterest"] .font-display { font-weight: 700; letter-spacing: -0.01em; }
+:root[data-palette="pinterest"] .btn-primary { font-weight: 700; }
+
 /* ─── 테마 선택 스와치 아이콘(2026-07-17 사용자 요청 — 드롭다운 대신 특징색 원형 버튼 클릭 선택) ───
    색은 CSP(style-src 인라인 금지)상 인라인 style 불가라 클래스로. 활성 스와치=fg 링 강조(어느 배경에서도 보임). */
 .theme-swatch {
@@ -574,3 +660,5 @@
 .theme-swatch-claude { background: #C8795B; }   /* 클레이(Claude 기본 정체성) */
 .theme-swatch-apple { background: #007AFF; }    /* iOS 블루 */
 .theme-swatch-linear { background: #5E6AD2; }   /* Linear indigo */
+.theme-swatch-spotify { background: #1DB954; }  /* Spotify 그린 */
+.theme-swatch-pinterest { background: #E60023; }/* Pinterest 레드 */

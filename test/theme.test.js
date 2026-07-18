@@ -31,8 +31,8 @@ test("요구사항1: 폰트·radius·shadow가 CSS 변수로 추출됨(Original 
   assert.match(SRC_CSS, /border-radius:\s*var\(--radius-btn\)/, ".btn이 변수 참조");
 });
 
-test("2팔레트(apple·linear) 색·폰트·radius 오버라이드 존재 + Material 제거", () => {
-  for (const p of ["apple", "linear"]) {
+test("4팔레트(apple·linear·spotify·pinterest) 색·폰트·radius 오버라이드 존재 + Material 제거", () => {
+  for (const p of ["apple", "linear", "spotify", "pinterest"]) {
     assert.match(SRC_CSS, new RegExp(`data-palette="${p}"`), `${p} 팔레트 블록`);
     assert.match(SRC_CSS, new RegExp(`data-palette="${p}"\\]\\[data-theme="dark"`), `${p} 다크 변형`);
   }
@@ -40,15 +40,19 @@ test("2팔레트(apple·linear) 색·폰트·radius 오버라이드 존재 + Mat
   assert.ok(!/Roboto/.test(SRC_CSS), "Material용 Roboto 폰트 제거");
   assert.match(SRC_CSS, /--color-primary:\s*0 122 255/, "Apple=iOS 블루");
   assert.match(SRC_CSS, /--color-primary:\s*94 106 210/, "Linear=indigo 액센트");
+  assert.match(SRC_CSS, /--color-primary:\s*29 185 84/, "Spotify=그린 #1DB954(다크)");
+  assert.match(SRC_CSS, /--color-primary:\s*230 0 35/, "Pinterest=레드 #E60023");
 });
 
 test("스와치 아이콘·FOUC 스크립트 배선(views.js)", () => {
-  // 팔레트 선택 = 특징색 스와치 아이콘(드롭다운 아님, 2026-07-17). Linear·Apple·Claude 3종(Material 제거·Original→Claude, 2026-07-18).
-  for (const p of ["linear", "apple", "claude"]) {
+  // 팔레트 선택 = 특징색 스와치 아이콘(드롭다운 아님, 2026-07-17). Linear·Apple·Spotify·Pinterest·Claude(2026-07-18).
+  for (const p of ["linear", "apple", "spotify", "pinterest", "claude"]) {
     assert.match(VIEWS, new RegExp(`data-theme-swatch="${p}"`), `${p} 스와치`);
   }
   assert.ok(!/data-theme-swatch="material"/.test(VIEWS), "Material 스와치 제거");
   assert.ok(!/data-theme-swatch="original"/.test(VIEWS), "Original 스와치 제거(→claude)");
+  assert.match(SRC_CSS, /\.theme-swatch-spotify\s*{\s*background:\s*#1DB954/i, "Spotify 스와치 색");
+  assert.match(SRC_CSS, /\.theme-swatch-pinterest\s*{\s*background:\s*#E60023/i, "Pinterest 스와치 색");
   // theme-init.js를 CSS보다 먼저 동기 로드(FOUC 방지, CSP-safe 외부 파일)
   assert.match(VIEWS, /theme-init\.js/, "theme-init 스크립트 로드");
   const initIdx = VIEWS.indexOf('src="/js/theme-init.js');

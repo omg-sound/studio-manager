@@ -280,6 +280,8 @@ function layout({ title, user, current = "", body, wide = false }) {
           <div class="flex items-center gap-2" role="group" aria-label="테마 선택">
             <button type="button" data-theme-swatch="linear" aria-label="Linear" title="Linear" class="theme-swatch theme-swatch-linear"></button>
             <button type="button" data-theme-swatch="apple" aria-label="Apple" title="Apple" class="theme-swatch theme-swatch-apple"></button>
+            <button type="button" data-theme-swatch="spotify" aria-label="Spotify" title="Spotify" class="theme-swatch theme-swatch-spotify"></button>
+            <button type="button" data-theme-swatch="pinterest" aria-label="Pinterest" title="Pinterest" class="theme-swatch theme-swatch-pinterest"></button>
             <button type="button" data-theme-swatch="claude" aria-label="Claude" title="Claude" class="theme-swatch theme-swatch-claude"></button>
           </div>
         </div>
