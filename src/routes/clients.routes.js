@@ -136,20 +136,22 @@ router.get("/", (req, res) => {
   const link = (id, inner, cls = "") => `<a href="/clients/${id}${fromParam}${retParam}" class="dt-link ${cls}">${inner}</a>`;
   let orgCols, orgRows;
   if (group === "group") {
-    // 담당자 열 추가(2026-07-18) — 업체 탭의 '대표'와 같은 자리·톤. 좁아지면 전화 먼저 숨김(xl), 모바일 카드=이름·담당자/소속·이메일.
+    // 열 순서·폭(2026-07-18 사용자 요청 '이름 넓고 소속 좁다 → 적당히, 담당자 맨 뒤로'):
+    // 이름·소속=유동(둘이 남는 폭을 나눠 균형 — 이름은 좁아지고 소속은 넓어짐), 전화·이메일·담당자=고정 rem. 담당자 맨 끝.
+    // 좁아지면 전화 먼저 숨김(xl). 모바일 카드는 담당자=tr(업체 '대표' 자리와 동일 톤) 유지 — 데스크톱 열 순서와 별개(mCard 슬롯).
     orgCols = [
       { label: "이름", primary: true, mCard: "tl" },
-      { label: "담당자", w: "w-[9rem]", hide: "sm", mCard: "tr" },
-      { label: "소속", w: "w-[12rem]", hide: "sm", mCard: "bl" },
+      { label: "소속", hide: "sm", mCard: "bl" },
       { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
-      { label: "이메일", hide: "sm", mCard: "br" },
+      { label: "이메일", w: "w-[13rem]", hide: "sm", mCard: "br" },
+      { label: "담당자", w: "w-[9rem]", hide: "sm", mCard: "tr" },
     ];
     orgRows = displayed.map((c) => ({ cells: [
       link(c.id, esc(personLabel(c.activity_name || c.name, c.name)), "font-medium"),
-      contactByGroup[c.id] ? esc(contactByGroup[c.id]) : dash, // 그룹 담당자(contact_party_id)
       agencyByParty[c.id] ? esc(agencyByParty[c.id]) : dash, // 그룹 소속사
       c.phone ? copyable(c.phone) : dash,
       c.email ? copyable(c.email) : dash,
+      contactByGroup[c.id] ? esc(contactByGroup[c.id]) : dash, // 그룹 담당자(contact_party_id) — 맨 뒤
     ] }));
   } else {
     // 업체(company)
