@@ -284,7 +284,12 @@
    선택 행에 border-bottom을 직접 주고, 바로 다음 행의 중복 border-top을 투명화. 두 선이 같은 el·같은 clip(padding)이라 동일 렌더.
    ⚠️ !important 필수: Tailwind `divide-y`/`divide-border`(`.divide-* > :not([hidden]) ~ :not([hidden])`)는 특정도 (0,3,0)로
    이 선택자 (0,2,1)를 이겨 border-bottom-width:0·border-color를 도로 덮는다 → 유틸 기본값을 겨냥해 뒤집는 케이스라 !important가 정당. */
-[data-contact-list] a[aria-current="true"] { border-bottom: 1px solid rgb(var(--color-border)) !important; }
+/* 선택 행 위·아래 선은 '있는 듯 없는 듯' 옅게(2026-07-18 사용자 요청 — 강조는 tint 배경이 하고 선은 최소).
+   위 선(divide 기본색=진함)도 함께 낮춘다. tint 배경이 대비를 주므로 선은 아주 옅어도 경계가 보인다. */
+[data-contact-list] a[aria-current="true"] {
+  border-top-color: rgb(var(--color-border) / 0.35) !important;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.35) !important;
+}
 [data-contact-list] a[aria-current="true"] + a { border-top-color: transparent !important; }
 
 /* ── 청구 목록 = 데스크톱 넓은 표(2026-07-16 사용자 요청, bookipi 참고) ──
