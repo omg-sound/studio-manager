@@ -24,7 +24,7 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
   return `<div class="cl-panes lg:flex lg:gap-2 lg:h-[calc(100vh-11rem)]" data-cl-panes>
       <div class="${leftCls} cl-col-left lg:shrink-0 lg:min-h-0 lg:flex-col">${left}</div>
       <div class="cl-resizer hidden lg:block" data-cl-resizer role="separator" aria-orientation="vertical" tabindex="0" aria-label="목록 폭 조절" title="드래그로 목록 폭 조절"></div>
-      <div class="${rightCls} min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pl-2 lg:pr-1">${back}${right}</div>
+      <div class="${rightCls} min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pl-2 lg:pr-1">${back}<div class="max-w-content">${right}</div></div>
     </div>`;
 }
 
