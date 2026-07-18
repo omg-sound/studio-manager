@@ -65,7 +65,8 @@ function newClientMenuHtml() {
 // 2단 렌더(연락처 renderContacts와 대칭) — 왼쪽 업체/그룹 탭+검색+이름 목록, 오른쪽 rightHtml(없으면 빈 패널).
 function renderClients(req, sel, rightHtml, backHref) {
   const q = String(req.query.q || "").trim();
-  const group = ["company", "group"].includes(req.query.group) ? req.query.group : "company";
+  // 왼쪽 목록 탭: ?group 우선, 없으면 선택된 조직의 kind로 폴백(그룹 상세·[편집]·유입 링크가 ?group 없이 와도 그룹 탭·선택 강조 유지). 없으면 업체 기본.
+  const group = ["company", "group"].includes(req.query.group) ? req.query.group : (sel && sel.kind === "group" ? "group" : "company");
   const all = listClients({});
   const companyCount = all.filter((c) => c.kind === "company").length;
   const groupCount = all.filter((c) => c.kind === "group").length;

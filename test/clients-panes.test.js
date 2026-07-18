@@ -69,6 +69,13 @@ test("업체·그룹 2단: 목록/상세/편집", async (t) => {
     assert.match(html, /업로드 실패 테스트/, "첨부 오류 메시지가 편집 화면에 표시");
   });
 
+  await t.test("GET /clients/:groupId (?group 없음) = 왼쪽 목록이 그룹 탭·선택 강조(sel.kind 폴백)", async () => {
+    // ?group 없이 그룹 상세를 열면(유입 링크·[편집]) 왼쪽 목록이 업체 탭으로 떨어져 그 그룹이 목록에서 사라지던 것 방지.
+    const { html } = await get(`/clients/${groupId}`);
+    assert.match(html, /더윈드/, "선택한 그룹이 왼쪽 목록에 있음(그룹 탭 활성 — 업체 탭 폴백이면 목록에서 사라졌을 것)");
+    assert.match(html, /aria-current="true">더윈드</, "그룹 행이 선택 강조됨");
+  });
+
   server.close(); // 서버가 이벤트 루프를 붙잡아 node --test가 안 끝나는 것 방지(contacts-panes와 동일)
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });
