@@ -18,8 +18,9 @@
   --color-danger: 188 75 60; /* #BC4B3C warm red */
   --color-info: 96 115 140; /* #60738C 쿨 블루그레이 — 정보/중립 강조 */
 
-  /* ── 테마 토큰(폰트·radius·shadow) — 요구사항 1: 현재 값들을 CSS 변수로 추출 = 'Original' 기본 테마. ──
-     팔레트(data-palette)가 이 변수만 덮어써 폰트·모서리·그림자를 통째로 교체. 값은 현재와 동일해 Original 렌더 불변. */
+  /* ── 테마 토큰(폰트·radius·shadow) — :root 기본값 = 'Claude' 팔레트(크림·클레이 원본 정체성). ──
+     팔레트(data-palette)가 이 변수만 덮어써 폰트·모서리·그림자를 통째로 교체. 속성 없음 = Claude 렌더.
+     ⚠️ 미선택 사용자의 실제 기본은 Linear(theme-init.js가 data-palette="linear" 조기 적용, 2026-07-18). */
   --font-sans: "Pretendard", "Inter", "system-ui", "-apple-system", sans-serif;
   --font-serif: "Source Serif 4", "Noto Serif KR", ui-serif, Georgia, Cambria, serif;
   --font-display: var(--font-serif); /* 제목 글꼴(팔레트별로 sans로 바꾸기도) */
@@ -469,7 +470,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   테마 선택(data-palette) — 2026-07-17 사용자 요청. Original(기본)은 위 :root 그대로 보존.
+   테마 선택(data-palette) — 2026-07-17 사용자 요청. Claude(:root 원본)는 위 :root 그대로 보존.
    각 팔레트는 --color-*·--font-*·--radius-*·--shadow-* 변수만 덮어써 시각 레이어를 통째로 교체
    (컴포넌트 구조·마크업·로직 불변). data-theme(light/dark)와 직교. 색 채널은 "R G B"(Tailwind 소비).
    ════════════════════════════════════════════════════════════════════════ */
@@ -517,55 +518,9 @@
 /* Apple: 살짝 큰 제목·부드러운 헤어라인·모바일 상단바 글래스 강화 */
 :root[data-palette="apple"] .font-display { letter-spacing: -0.02em; font-weight: 700; }
 
-/* ─── B) Material Design 3 — Roboto / elevation / pill 버튼·뱃지 / M3 컬러 ─── */
-:root[data-palette="material"] {
-  color-scheme: light;
-  --color-bg: 254 247 255;       /* M3 surface */
-  --color-surface: 255 255 255;
-  --color-elevated: 243 237 247; /* surfaceContainer */
-  --color-border: 202 196 208;   /* outlineVariant */
-  --color-muted: 73 69 79;       /* onSurfaceVariant */
-  --color-fg: 29 27 32;          /* onSurface */
-  --color-primary: 103 80 164;   /* M3 primary(보라) */
-  --color-primary-fg: 255 255 255;
-  --color-success: 20 108 46;
-  --color-warning: 140 80 0;
-  --color-danger: 179 38 30;     /* M3 error */
-  --color-info: 0 99 155;
-  --font-sans: "Roboto", "Pretendard", system-ui, sans-serif;
-  --font-serif: var(--font-sans);
-  --font-display: "Roboto", "Pretendard", system-ui, sans-serif;
-  --radius-btn: 624.9375rem;     /* pill(둥근 버튼) */
-  --radius-input: 0.5rem;
-  --radius-card: 0.75rem;
-  --radius-badge: 624.9375rem;   /* pill 뱃지 */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15); /* M3 elevation 1 */
-}
-:root[data-palette="material"][data-theme="dark"] {
-  color-scheme: dark;
-  --color-bg: 20 18 24;
-  --color-surface: 33 31 38;
-  --color-elevated: 43 41 48;
-  --color-border: 73 69 79;
-  --color-muted: 202 196 208;
-  --color-fg: 230 224 233;
-  --color-primary: 208 188 255;  /* M3 primary dark */
-  --color-primary-fg: 56 30 114;
-  --color-success: 109 213 140;
-  --color-warning: 245 190 72;
-  --color-danger: 242 184 181;
-  --color-info: 127 207 255;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 1px 3px 1px rgb(0 0 0 / 0.4);
-}
-:root[data-palette="material"] .font-display { font-weight: 500; letter-spacing: 0; }
-/* Material: contained 버튼 elevation + 눌림(state layer 근사, JS 리플 없이 CSS만) */
-:root[data-palette="material"] .btn-primary { box-shadow: 0 1px 2px rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15); }
-:root[data-palette="material"] .btn-primary:hover { box-shadow: 0 1px 2px rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15); }
-:root[data-palette="material"] .btn:active { transform: scale(0.98); }
-
-/* ─── C) Linear — 다크 기본·고대비·얇은 보더·미니멀(그림자 없음) ─── */
+/* ─── B) Linear(기본 팔레트) — 고대비·얇은 보더·미니멀(그림자 없음) ─── */
 :root[data-palette="linear"] {
-  color-scheme: light; /* 보조(라이트) — 기본은 app.js가 선택 시 dark로 */
+  color-scheme: light; /* Linear 라이트(기본 팔레트·기본 테마). 다크는 아래 [data-theme="dark"] 변형 */
   --color-bg: 255 255 255;
   --color-surface: 251 251 251;
   --color-elevated: 244 245 248;
@@ -616,7 +571,6 @@
 .theme-swatch:hover { transform: scale(1.12); }
 .theme-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px rgb(var(--color-bg)), 0 0 0 3px rgb(var(--color-fg)); }
 .theme-swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(var(--color-bg)), 0 0 0 3px rgb(var(--color-primary)); }
-.theme-swatch-original { background: #C8795B; } /* 클레이 */
+.theme-swatch-claude { background: #C8795B; }   /* 클레이(Claude 기본 정체성) */
 .theme-swatch-apple { background: #007AFF; }    /* iOS 블루 */
-.theme-swatch-material { background: #6750A4; } /* M3 보라 */
 .theme-swatch-linear { background: #5E6AD2; }   /* Linear indigo */

@@ -206,7 +206,7 @@ const WORDMARK = `<span class="font-display text-[17px] font-semibold text-fg">O
 const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Noto+Serif+KR:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
   <!-- Pretendard: Inter에 없는 한글 글리프 담당(본문 한글). CSP style-src(cdn.jsdelivr.net) 허용은 server.js에서 처리. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />`;
 
@@ -278,10 +278,9 @@ function layout({ title, user, current = "", body, wide = false }) {
         <div class="mb-2 px-2">
           <div class="mb-1 text-[11px] text-muted">테마 <span class="opacity-70">· 시각 스타일</span></div>
           <div class="flex items-center gap-2" role="group" aria-label="테마 선택">
-            <button type="button" data-theme-swatch="original" aria-label="Original" title="Original" class="theme-swatch theme-swatch-original"></button>
-            <button type="button" data-theme-swatch="apple" aria-label="Apple" title="Apple" class="theme-swatch theme-swatch-apple"></button>
-            <button type="button" data-theme-swatch="material" aria-label="Material" title="Material" class="theme-swatch theme-swatch-material"></button>
             <button type="button" data-theme-swatch="linear" aria-label="Linear" title="Linear" class="theme-swatch theme-swatch-linear"></button>
+            <button type="button" data-theme-swatch="apple" aria-label="Apple" title="Apple" class="theme-swatch theme-swatch-apple"></button>
+            <button type="button" data-theme-swatch="claude" aria-label="Claude" title="Claude" class="theme-swatch theme-swatch-claude"></button>
           </div>
         </div>
         <!-- 테마(라이트/다크) 토글: 마크업만(아이콘+라벨). 토글 로직=app.js([data-theme-toggle]), 다크 분기=src.css. CSP-safe(인라인 onclick 없음). -->
