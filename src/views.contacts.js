@@ -31,15 +31,34 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
  * @param {{rows:object[], selectedId?:number|null, hrefFn:(row:object)=>string}} o
  */
 function contactNameList({ rows, selectedId = null, hrefFn }) {
-  const items = rows.map((c) => {
+  const { chosungOf } = require("./lib/chosung"); // 지연 require
+  // 초성별 그룹 헤더(iCloud식) — 목록은 이미 이름순 정렬이라 같은 초성이 연속. 초성이 바뀌는 지점에 sticky 헤더 삽입.
+  // 헤더는 <div>(키보드 이동은 <a>만 순회해 자연히 건너뜀). 검색 중엔 실시간 필터가 헤더 텍스트도 안 맞아 함께 숨김(iCloud와 동일).
+  const items = [];
+  const keys = []; // 레일용: 등장 순서의 distinct 초성
+  let curKey = null;
+  rows.forEach((c) => {
+    const key = chosungOf(personName(c));
+    if (key !== curKey) {
+      curKey = key;
+      keys.push(key);
+      items.push(`<div class="cl-cho-head" data-cho-head="${esc(key)}">${esc(key)}</div>`);
+    }
     const active = Number(selectedId) === Number(c.id);
     const cls = active ? "bg-primary/10 font-semibold text-fg" : "text-fg";
-    return `<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${esc(personName(c))}</a>`;
+    items.push(`<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${esc(personName(c))}</a>`);
   });
+  // 오른쪽 초성 인덱스 레일(스크롤쪽) — 클릭/드래그로 그 초성 섹션으로 이동(app.js [data-cho-rail], lg 이상만).
+  const rail = keys.length > 1
+    ? `<div class="cl-rail" data-cho-rail aria-hidden="true">${keys.map((k) => `<button type="button" class="cl-rail-item" data-cho-jump="${esc(k)}" tabindex="-1">${esc(k)}</button>`).join("")}</div>`
+    : "";
   // data-contact-list = app.js 키보드 이동 마커(선택 행 포커스 + ↑↓로 앞뒤 사람 이동, 2026-07-17 사용자 요청).
   // lg: 왼쪽 열(flex-col) 안에서 **검색은 위에 고정, 목록만 flex-1로 남은 높이를 채워 내부 스크롤**(contactPanes 고정 높이 영역과 함께 동작).
-  // 모바일(<lg)은 flex-1/overflow가 없어 페이지와 함께 흐른다(한 단이라 그대로).
-  return `<div data-contact-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>`;
+  // 모바일(<lg)은 flex-1/overflow가 없어 페이지와 함께 흐른다(한 단이라 그대로). 레일은 이 relative 래퍼 기준 절대배치.
+  return `<div class="cl-listwrap relative lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+      <div data-contact-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>
+      ${rail}
+    </div>`;
 }
 
 /**

@@ -3053,3 +3053,41 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   });
   focusSelected();
 })();
+
+// ── 초성 인덱스 레일(iCloud식, 2026-07-18 사용자 요청) ──
+// 오른쪽 초성 레일([data-cho-rail])의 글자를 클릭·드래그하면 목록 스크롤 영역([data-contact-list])을
+// 그 초성 섹션 헤더([data-cho-head])로 스크롤한다. 서버 렌더라 로드 시 1회 배선(초성 2개 이상일 때만 레일 존재).
+(function () {
+  "use strict";
+  var rail = document.querySelector("[data-cho-rail]");
+  var scroller = document.querySelector("[data-contact-list]");
+  if (!rail || !scroller) return;
+  function jump(key) {
+    var head = scroller.querySelector('[data-cho-head="' + key + '"]'); // 값=단일 초성/영문/#, 이스케이프 불필요
+    if (!head) return;
+    var sr = scroller.getBoundingClientRect(), hr = head.getBoundingClientRect();
+    scroller.scrollTop += hr.top - sr.top; // 헤더를 스크롤 영역 최상단에 맞춤(sticky 헤더와 일치)
+    Array.prototype.forEach.call(rail.children, function (b) { b.classList.toggle("cl-rail-on", b.getAttribute("data-cho-jump") === key); });
+  }
+  function keyFromPoint(x, y) {
+    var el = document.elementFromPoint(x, y);
+    var b = el && el.closest && el.closest("[data-cho-jump]");
+    return b ? b.getAttribute("data-cho-jump") : null;
+  }
+  var dragging = false;
+  rail.addEventListener("pointerdown", function (e) {
+    e.preventDefault(); // 포커스·페이지 스크롤 방지(레일 버튼 tabindex=-1)
+    dragging = true;
+    try { rail.setPointerCapture(e.pointerId); } catch (_e) {}
+    var k = keyFromPoint(e.clientX, e.clientY);
+    if (k) jump(k);
+  });
+  rail.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    var k = keyFromPoint(e.clientX, e.clientY); // 드래그 스크럽(손가락 따라 섹션 이동)
+    if (k) jump(k);
+  });
+  function end() { dragging = false; }
+  rail.addEventListener("pointerup", end);
+  rail.addEventListener("pointercancel", end);
+})();

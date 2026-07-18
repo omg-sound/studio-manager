@@ -191,6 +191,31 @@
 .row-link:hover { background-color: rgb(var(--color-fg) / 0.06); }
 .row-link:active { background-color: rgb(var(--color-fg) / 0.1); }
 
+/* 연락처·업체 이름 목록 초성 그룹(iCloud식, 2026-07-18) — sticky 섹션 헤더 + 오른쪽 초성 인덱스 레일. */
+.cl-cho-head {
+  position: sticky; top: 0; z-index: 2;
+  padding: 0.3rem 0.75rem 0.15rem;
+  font-size: 0.6875rem; font-weight: 700; color: rgb(var(--color-muted));
+  background: rgb(var(--color-surface)); /* 스크롤 시 뒤 행이 비치지 않게 불투명 */
+  border-top: 0 !important; /* divide-y 상단선 제거(섹션 라벨은 구분선 없이 — iCloud식) */
+}
+/* 헤더 바로 다음 행의 상단 구분선도 제거(헤더-첫행 사이 이중선 방지). */
+.cl-cho-head + a { border-top: 0 !important; }
+.cl-rail {
+  display: none; /* 모바일(<lg)엔 레일 없음 — 한 단 흐름이라 절대배치 부적합 */
+  position: absolute; top: 0.25rem; bottom: 0.25rem; right: 1px; z-index: 3;
+  flex-direction: column; align-items: center; justify-content: space-evenly;
+  width: 1.1rem; padding: 0.25rem 0;
+  -webkit-user-select: none; user-select: none; touch-action: none;
+}
+@media (min-width: 1024px) { .cl-rail { display: flex; } }
+.cl-rail-item {
+  display: block; width: 100%; line-height: 1;
+  font-size: 0.625rem; font-weight: 600; color: rgb(var(--color-muted));
+  cursor: pointer; border-radius: 9999px;
+}
+.cl-rail-item:hover, .cl-rail-item.cl-rail-on { color: rgb(var(--color-primary)); }
+
 /* 커스텀 콤보(검색 드롭다운) 행 눌림 피드백 — 터치엔 hover 없음. 모든 pop은 role="listbox". */
 [role="listbox"] > button:active {
   background-color: rgb(var(--color-elevated));
