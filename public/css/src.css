@@ -202,11 +202,11 @@
 
 /* ── 프로젝트 목록 = 청구 표식 컬럼 테이블(2026-07-16 사용자 요청 '청구처럼 항목명·칸칸이·작성일') ──
    헤더(.proj-thead)와 각 행 summary(.proj-summary)가 같은 grid 열이라 칸이 정렬된다.
-   행은 <details>라 클릭하면 그 자리에서 세션·곡 요약이 펼쳐진다(아티스트·제작사·프로젝트 셀만 상세 링크). */
+   행 전체가 이동 링크(모든 셀=<a>), 오른쪽 끝 .proj-toggle(비인터랙티브 span)만 클릭 시 <details> 펼침(2026-07-18). */
 .proj-thead, .proj-summary {
   display: grid;
   /* 아티스트·제작사·프로젝트 = 유연(넘치면 … 로 자름) / PM·다음세션·금액·작성일·⌄ = 고정 폭. */
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 6rem 1.25rem;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 6rem 2rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
@@ -228,27 +228,33 @@
 /* ⚠️ 클래스명 = **pt-cell**(마크업과 일치). 이게 안 맞으면 nowrap이 안 먹어 셀이 글자 단위로 세로로 쪼개진다(2026-07-16 버그).
    grid 아이템은 min-width:auto가 기본이라 min-width:0을 줘야 내용보다 좁게 줄어 … 로 잘린다. */
 .pt-cell, .pt-h { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.proj-link { color: inherit; text-underline-offset: 3px; }
-.proj-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
-.proj-chevron {
-  height: 0.875rem; width: 0.875rem;
-  color: rgb(var(--color-muted));
+/* 행 전체가 이동 링크(2026-07-18 사용자 요청): 개별 셀 밑줄·색강조 없음 — 어포던스는 행 배경 호버(.proj-summary:hover)만.
+   셀별로 링크 티가 나면 '여기만 눌러야 이동하나'라는 오해를 줘서 강조 제거. */
+.proj-link { color: inherit; text-decoration: none; }
+.proj-link:hover { color: inherit; text-decoration: none; }
+/* 오른쪽 끝 펼침 버튼(유일한 토글 — 나머지 셀은 전부 이동 링크). 셀보다 넓은 히트 영역 + 호버 원형으로 '버튼' 느낌. */
+.proj-toggle {
   justify-self: end;
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 1.75rem; width: 1.75rem;
+  border-radius: 9999px;
+  color: rgb(var(--color-muted));
 }
-.proj-summary:hover .proj-chevron { color: rgb(var(--color-fg)); }
+.proj-toggle:hover { background: rgb(var(--color-primary) / 0.12); color: rgb(var(--color-fg)); }
+.proj-chevron { height: 0.875rem; width: 0.875rem; }
 
 /* 좁아지면 우측 열부터 숨긴다(2026-07-16 사용자 '줄어들때 PM·금액·작성일 숨기며 줄여도 됨'):
    작성일 <1280 → 금액 <1024 → PM <820. 열을 숨기면 grid 열도 함께 줄여 남는 셀이 늘어난다. */
 @media (max-width: 1279.98px) {
-  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 1.25rem; }
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 2rem; }
   .pt-created, .pt-h-created { display: none; }
 }
 @media (max-width: 1023.98px) {
-  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 1.25rem; }
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 2rem; }
   .pt-amount, .pt-h-amount { display: none; }
 }
 @media (max-width: 819.98px) {
-  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 8.5rem 1.25rem; }
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 8.5rem 2rem; }
   .pt-pm, .pt-h-pm { display: none; }
 }
 
@@ -268,7 +274,7 @@
   .pt-next::before, .pt-amount::before, .pt-created::before {
     content: attr(data-label) " · "; color: rgb(var(--color-muted)); font-size: 0.75rem;
   }
-  .proj-chevron { position: absolute; top: 0.75rem; right: 0; }
+  .proj-toggle { position: absolute; top: 0.5rem; right: 0; }
 }
 
 /* ── 청구 목록 = 데스크톱 넓은 표(2026-07-16 사용자 요청, bookipi 참고) ──

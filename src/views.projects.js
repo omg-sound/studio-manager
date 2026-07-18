@@ -137,8 +137,9 @@ function projectTableHead() {
 
 /**
  * 목록 행(2026-07-16 청구 표식 재설계 — 컬럼 정렬 + 항목명 헤더 + 작성일 열, 밀도 토글 폐지).
- *  - `<details>` 한 벌: summary=grid 셀(헤더와 같은 열), 클릭하면 그 자리에서 펼침(세션·곡 요약 + 완료 토글).
- *  - **아티스트·제작사·프로젝트 셀은 상세 링크**(projectRowHref), PM·다음세션·금액·작성일·⌄ 셀은 펼침(토글).
+ *  - `<details>` 한 벌: summary=grid 셀(헤더와 같은 열).
+ *  - **행 전체가 이동 링크**(2026-07-18 사용자 요청 — 모든 데이터 셀이 `projectRowHref`로 가는 `<a>`, 셀별 밑줄·색강조 없음·어포던스는 행 배경 호버만).
+ *    `<summary>` 안의 `<a>`는 클릭 시 이동만 하고 토글 안 함(브라우저 기본), 유일하게 **오른쪽 끝 `.proj-toggle`(비인터랙티브 span)만 클릭 시 펼침**(세션·곡 요약 + 완료 토글).
  *  - 다음 세션=진행 중 탭만(디데이 pill), 금액=프로젝트 버짓(청구 필요 탭은 '청구 필요 N' 배지 병기), 작성일=전 탭.
  *  - 반응형: <640px면 thead 숨기고 아티스트·프로젝트 + 탭 값만 2줄 카드(제작사·PM·작성일 숨김).
  */
@@ -159,15 +160,15 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   const isOpen = openId != null && Number(p.id) === Number(openId);
   return `
     <details class="proj-row group/proj"${isOpen ? " open" : ""} id="proj-${p.id}">
-      <summary class="proj-summary row-link">
+      <summary class="proj-summary">
         ${cellLink(artist || dash, "pt-artist font-medium", "아티스트")}
         ${cellLink(company || dash, "pt-company text-muted", "제작사")}
         ${cellLink(title, "pt-title", "프로젝트")}
-        <span class="pt-cell pt-pm text-muted" data-label="PM">${pm || dash}</span>
-        <span class="pt-cell pt-next" data-label="다음 세션">${next}</span>
-        <span class="pt-cell pt-amount tabular" data-label="금액">${amount}${billingBadge}</span>
-        <span class="pt-cell pt-created tabular text-muted" data-label="작성일">${created}</span>
-        <svg class="proj-chevron transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg>
+        ${cellLink(pm || dash, "pt-pm text-muted", "PM")}
+        ${cellLink(next, "pt-next", "다음 세션")}
+        ${cellLink(`${amount}${billingBadge}`, "pt-amount tabular", "금액")}
+        ${cellLink(created, "pt-created tabular text-muted", "작성일")}
+        <span class="proj-toggle" aria-hidden="true" title="펼치기"><svg class="proj-chevron transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg></span>
       </summary>
       <div class="proj-expand border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>
     </details>`;
