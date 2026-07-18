@@ -3138,4 +3138,9 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     apply(left.getBoundingClientRect().width + (e.key === "ArrowRight" ? 16 : -16));
     save();
   });
+  // 더블클릭 = 기본 폭(18rem)으로 복귀 — 변수·저장값 제거하면 CSS 폴백(var(--cl-list-w, 18rem))이 적용된다.
+  handle.addEventListener("dblclick", function () {
+    panes.style.removeProperty("--cl-list-w");
+    try { localStorage.removeItem(KEY); } catch (_e) {}
+  });
 })();
