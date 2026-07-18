@@ -220,12 +220,14 @@
 @media (min-width: 1024px) {
   .cl-col-left { width: var(--cl-list-w, 18rem); }
   .cl-resizer { flex: 0 0 auto; width: 9px; cursor: col-resize; position: relative; align-self: stretch; }
+  /* 평소엔 경계선 없음(깔끔) — 커서(col-resize)로만 조절 가능함을 알린다. hover/포커스/드래그 때만 얇은 선이 나타남. */
   .cl-resizer::before {
-    content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
-    background: rgb(var(--color-border)); transform: translateX(-50%);
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
+    background: transparent; transform: translateX(-50%); border-radius: 9999px;
+    transition: background-color 0.12s ease;
   }
   .cl-resizer:hover::before, .cl-resizer:focus-visible::before, .cl-resizer.cl-resizing::before {
-    width: 2px; background: rgb(var(--color-primary) / 0.6);
+    background: rgb(var(--color-primary) / 0.5);
   }
   .cl-resizer:focus-visible { outline: none; }
 }

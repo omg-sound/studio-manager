@@ -744,6 +744,12 @@ function setTaskPayout(taskId, paid, paidOn) {
  * 아티스트이면서 디렉터인 사람은 artist·associate 양쪽에 나온다(겸업 — 설계 의도).
  * 레거시 `staff:true/false`·`tab:"external"`은 폴백으로 흡수(external = 전체로 취급).
  */
+// 한글 우선 이름 정렬(iCloud식, 2026-07-18 사용자 요청) — 한글 음절(가~힣)·호환 자모(ㄱ~ㆎ) 먼저, 그 다음 영문·숫자·기호.
+// unicode(col)=이름 첫 글자의 코드포인트. 한글이면 rank 0, 아니면 1로 묶고 각 묶음 안은 이름순(한글=가나다).
+function hangulFirstOrder(col) {
+  return `(CASE WHEN unicode(${col}) BETWEEN 44032 AND 55203 OR unicode(${col}) BETWEEN 12593 AND 12686 THEN 0 ELSE 1 END), ${col} COLLATE NOCASE`;
+}
+
 function listContacts({ q, tab, staff } = {}) {
   if (staff === true) tab = "staff";
   const where = ["p.kind = 'person'"];
@@ -757,7 +763,7 @@ function listContacts({ q, tab, staff } = {}) {
   else if (tab === "associate") {
     where.push("p.user_id IS NULL", "NOT (" + workerSub + ")", `(p.is_artist = 0 OR p.id IN (${ASSOCIATE_ROLE_SUBQUERY}))`);
   }
-  const sql = "SELECT p.* FROM parties p WHERE " + where.join(" AND ") + " ORDER BY p.name COLLATE NOCASE";
+  const sql = "SELECT p.* FROM parties p WHERE " + where.join(" AND ") + " ORDER BY " + hangulFirstOrder("p.name");
   return db().prepare(sql).all(...args).map(withLegacy);
 }
 
@@ -796,7 +802,7 @@ function listClients({ kind } = {}) {
   if (kind === "소속사/레이블" || kind === "제작사" || kind === "company" || kind === "조직") return listParties({ kind: "company" });
   if (kind === "아티스트" || kind === "artist") return listParties({ artist: true });
   if (kind === "group" || kind === "그룹") return listParties({ kind: "group" });
-  return db().prepare("SELECT * FROM parties WHERE kind IN ('company','group') OR is_artist = 1 ORDER BY name COLLATE NOCASE").all().map(withLegacy);
+  return db().prepare("SELECT * FROM parties WHERE kind IN ('company','group') OR is_artist = 1 ORDER BY " + hangulFirstOrder("name")).all().map(withLegacy);
 }
 
 /** 거래처 kind 카운트(탭 배지) — 레거시 라벨 키 포함. */
