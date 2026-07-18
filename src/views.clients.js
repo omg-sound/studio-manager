@@ -25,20 +25,24 @@ function clientRoleList(c) {
   return r; // roles CSV(겸업). 없으면 빈 배열 → 배지에서 '업체'로 폴백
 }
 
-/** 업체·그룹 상세용 프로젝트 카드 — **제목=아티스트·회사(강조)**, 부제=프로젝트명·작성일(약화).
- *  2026-07-18 사용자 요청: 항목을 아티스트/회사·시점으로 식별하게(프로젝트명은 덜 강조). */
-function clientProjectCard(p) {
-  const parties = [...new Set([p.artist, p.artist_company, p.production_company].filter(Boolean))]; // 중복 제거(제작=소속이면 한 번만)
-  const title = parties.join(" · ") || p.title; // 아티스트·회사 없으면 프로젝트명으로 폴백
+/** 업체·그룹 상세용 프로젝트 행(목록형) — **제목=아티스트(강조)**, 부제=프로젝트명·작성일(약화).
+ *  업체 상세 안이라 회사명은 생략(중복). 개별 카드 대신 구분선으로 이어지는 목록(clientProjectList). */
+function clientProjectRow(p) {
+  const title = p.artist || p.title; // 회사명 생략(업체 상세 안 — 중복), 아티스트 없으면 프로젝트명으로 폴백
   const created = p.created_at ? String(p.created_at).slice(0, 10) : "";
-  const subtitle = [parties.length ? p.title : "", created].filter(Boolean).join(" · "); // 아티스트가 제목일 때만 프로젝트명을 부제로(폴백이면 날짜만)
-  return `<a href="/projects/${p.id}" class="card flex items-center justify-between gap-3 hover:opacity-80">
+  const subtitle = [p.artist ? p.title : "", created].filter(Boolean).join(" · "); // 아티스트가 제목일 때만 프로젝트명을 부제로(폴백이면 날짜만)
+  return `<a href="/projects/${p.id}" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
     <div class="min-w-0">
       <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(title)}</span>${projectTypeBadge(p.project_type)}</div>
       ${subtitle ? `<div class="mt-0.5 truncate text-xs text-muted">${esc(subtitle)}</div>` : ""}
     </div>
     <span class="shrink-0 text-xs text-muted">열기 ›</span>
   </a>`;
+}
+
+/** 프로젝트 목록형 판 — 흰 바탕·바깥 테두리 + 행 사이 구분선 하나(개별 카드 보더 폐지). */
+function clientProjectList(projects) {
+  return `<div class="overflow-hidden rounded-lg border border-border/60 bg-surface divide-y divide-border/60">${projects.map((p) => clientProjectRow(p)).join("")}</div>`;
 }
 
 /** 첨부 서류 업로드·교체 UI 섹션(isEdit=true일 때만 렌더). */
@@ -246,9 +250,9 @@ function clientReadView(c, { owners = [], contacts = [], artists = [], members =
     extraSections = membersSec;
   }
 
-  // 프로젝트·청구 — 있을 때만. 프로젝트=clientProjectCard(같은 파일), 청구=invoiceRow(공용) + 합계.
+  // 프로젝트·청구 — 있을 때만. 프로젝트=목록형(clientProjectList), 청구=invoiceRow(공용) + 합계.
   const projectsSec = projects.length
-    ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2><div class="space-y-2">${projects.map((p) => clientProjectCard(p)).join("")}</div>`
+    ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2>${clientProjectList(projects)}`
     : "";
   let invoicesSec = "";
   if (invoices.length) {
@@ -306,4 +310,4 @@ function clientEditPane(c, { files = [], fileErr = "", fileOk = {}, contacts = [
     ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}`;
 }
 
-module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };
+module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectRow, clientProjectList, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };

@@ -478,7 +478,7 @@ async function readPaneForClient(c) {
 }
 
 // ── 헬퍼 함수 ──
-// 렌더 함수(clientProjectCard·clientFileSection·clientContactCombo·clientForm·clientFilesBlock)는
+// 렌더 함수(clientProjectList·clientFileSection·clientContactCombo·clientForm·clientFilesBlock)는
 // src/views.clients.js로 이동(2026-07-09) — 여기 남은 건 req/db가 얽힌 쓰기 로직만.
 
 /**
