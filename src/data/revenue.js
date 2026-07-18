@@ -12,6 +12,45 @@
 
 const { db } = require("../db");
 
+// 발행 청구서 조건(별칭 i). issued_date NULL·미발행 제외.
+const ISSUED = "i.status <> '미발행' AND i.issued_date IS NOT NULL";
+
+// 발행일 기간 조건 SQL. year·month는 라우트에서 정수 파싱(month='all' 연간). 정수/고정문자열만 보간(주입 안전).
+function issuedInPeriodSql(alias, { year, month }) {
+  const y = Number(year);
+  if (month === "all" || month == null || month === "") return `substr(${alias}.issued_date,1,4) = '${y}'`;
+  const ym = `${y}-${String(Number(month)).padStart(2, "0")}`;
+  return `substr(${alias}.issued_date,1,7) = '${ym}'`;
+}
+
+// 발행 청구서가 있는 년(내림차순).
+function revenueYears() {
+  return db()
+    .prepare(`SELECT DISTINCT substr(issued_date,1,4) AS y FROM invoices WHERE status <> '미발행' AND issued_date IS NOT NULL ORDER BY y DESC`)
+    .all()
+    .map((r) => Number(r.y))
+    .filter(Boolean);
+}
+
+// 기간 매출·순이익 + 선택 년 월별 추세.
+function revenueSummary({ year, month }) {
+  const y = Number(year);
+  const per = issuedInPeriodSql("i", { year, month });
+  const yr = issuedInPeriodSql("i", { year, month: "all" });
+  const supplyIn = (cond) => db().prepare(`SELECT COALESCE(SUM(i.amount - i.tax_amount),0) AS v FROM invoices i WHERE ${ISSUED} AND ${cond}`).get().v;
+  const payoutIn = (cond) => {
+    const taskPay = db().prepare(`SELECT COALESCE(SUM(t.worker_rate),0) AS v FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${cond}`).get().v;
+    const sessPay = db().prepare(`SELECT COALESCE(SUM(se.worker_rate),0) AS v FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${cond}`).get().v;
+    return taskPay + sessPay;
+  };
+  const periodSupply = supplyIn(per);
+  const ytdSupply = supplyIn(yr);
+  const monthRows = db().prepare(`SELECT CAST(substr(i.issued_date,6,2) AS INTEGER) AS m, COALESCE(SUM(i.amount - i.tax_amount),0) AS v FROM invoices i WHERE ${ISSUED} AND substr(i.issued_date,1,4) = '${y}' GROUP BY m`).all();
+  const byMonth = new Map(monthRows.map((r) => [r.m, r.v]));
+  const monthly = Array.from({ length: 12 }, (_, k) => ({ month: k + 1, supply: byMonth.get(k + 1) || 0 }));
+  return { periodSupply, periodProfit: periodSupply - payoutIn(per), ytdSupply, ytdProfit: ytdSupply - payoutIn(yr), monthly };
+}
+
 /**
  * 전체 엔지니어별 매출 요약. 작업(engineer_id)·세션(engineer_name) 합산.
  * total > 0인 엔지니어만 반환, 합계 내림차순.
@@ -102,4 +141,7 @@ function revenueForEngineer(managerId) {
 module.exports = {
   revenueByEngineer,
   revenueForEngineer,
+  issuedInPeriodSql,
+  revenueYears,
+  revenueSummary,
 };
