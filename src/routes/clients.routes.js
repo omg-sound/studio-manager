@@ -112,6 +112,15 @@ router.get("/", (req, res) => {
       if (!agencyByParty[r.pid]) agencyByParty[r.pid] = r.agency; // 현재(최근) 소속사
     }
   }
+  // 그룹 행: 담당자(parties.contact_party_id → 사람) 배치 조회로 이름 표시(2026-07-18 사용자 요청 '그룹 목록에서 담당자 한눈에'). N+1 회피.
+  const contactByGroup = {};
+  const groupIds = displayed.filter((c) => c.kind === "group").map((c) => c.id);
+  if (groupIds.length) {
+    const ph = groupIds.map(() => "?").join(",");
+    for (const r of db().prepare(`SELECT g.id AS gid, p.name, p.activity_name, p.honorific, p.family_name, p.given_name FROM parties g JOIN parties p ON p.id = g.contact_party_id WHERE g.contact_party_id IS NOT NULL AND g.id IN (${ph})`).all(...groupIds)) {
+      contactByGroup[r.gid] = personName(r);
+    }
+  }
   // 업체 행: 사업자등록증(client_files kind='biz_license') 업로드 여부 배치 조회(있음/없음 배지). 목록은 기록 존재만 확인(파일 실제 접근은 상세에서).
   const bizLicenseSet = new Set();
   const companyIds = displayed.filter((c) => c.kind === "company").map((c) => c.id);
@@ -127,14 +136,17 @@ router.get("/", (req, res) => {
   const link = (id, inner, cls = "") => `<a href="/clients/${id}${fromParam}${retParam}" class="dt-link ${cls}">${inner}</a>`;
   let orgCols, orgRows;
   if (group === "group") {
+    // 담당자 열 추가(2026-07-18) — 업체 탭의 '대표'와 같은 자리·톤. 좁아지면 전화 먼저 숨김(xl), 모바일 카드=이름·담당자/소속·이메일.
     orgCols = [
       { label: "이름", primary: true, mCard: "tl" },
-      { label: "소속", w: "w-[13rem]", hide: "sm", mCard: "tr" },
-      { label: "전화", w: "w-[9.5rem]", hide: "sm", mCard: "bl" },
+      { label: "담당자", w: "w-[9rem]", hide: "sm", mCard: "tr" },
+      { label: "소속", w: "w-[12rem]", hide: "sm", mCard: "bl" },
+      { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
       { label: "이메일", hide: "sm", mCard: "br" },
     ];
     orgRows = displayed.map((c) => ({ cells: [
       link(c.id, esc(personLabel(c.activity_name || c.name, c.name)), "font-medium"),
+      contactByGroup[c.id] ? esc(contactByGroup[c.id]) : dash, // 그룹 담당자(contact_party_id)
       agencyByParty[c.id] ? esc(agencyByParty[c.id]) : dash, // 그룹 소속사
       c.phone ? copyable(c.phone) : dash,
       c.email ? copyable(c.email) : dash,

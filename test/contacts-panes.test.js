@@ -227,6 +227,18 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.match(html, /새 그룹 등록/, "간이 등록 모달");
   });
 
+  // 2026-07-18 사용자 요청: 업체·그룹 목록 그룹 탭에서 담당자를 한눈에.
+  await t.test("업체·그룹 그룹 탭: 담당자 열에 그룹 contact_party_id 사람 이름", async () => {
+    const mgr = db().prepare("INSERT INTO parties (kind, name) VALUES ('person','그룹담당박')").run().lastInsertRowid;
+    db().prepare("INSERT INTO parties (kind, name, is_artist, contact_party_id) VALUES ('group','열검증밴드',1,?)").run(mgr);
+    const { html } = await get("/clients?group=group");
+    // 컬럼 헤더에 '담당자'
+    assert.match(html, /<th[^>]*>담당자<\/th>/, "담당자 열 헤더");
+    // 그 그룹 행에 담당자 이름
+    const row = html.split("열검증밴드")[1] || "";
+    assert.match(row, /그룹담당박/, "담당자 지정된 그룹은 담당자 이름 표시");
+  });
+
   server.close();
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });
