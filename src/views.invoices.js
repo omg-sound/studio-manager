@@ -84,9 +84,9 @@ function taxBadgeShort(inv) {
 
 /**
  * (계산서|현금영수증) 발행 완료 / 입금완료 토글 버튼 2개 — 청구 목록 카드·청구 상세 공용(2026-07-05 상세도 select→버튼 통일).
- * 상태 반영(불): 완료=success 초록 tint(켜짐), 미완료=ghost+초록 텍스트(꺼짐). 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다.
+ * 상태 반영(불): 켜짐=의미색 tint(border/40·bg/10·text), 꺼짐=ghost+의미색 텍스트. 둘 다 클릭 토글 — 잘못 누르면 다시 눌러 되돌린다.
  * 토글 대상: 발행 버튼=발행됨이면 미발행으로 되돌림·아니면 발행. 입금완료 버튼=입금완료면 계산서 발행으로 되돌림(자동 완납 입금은 서버가 제거)·아니면 입금완료.
- * 색 계열: 세션 완료 토글과 동일한 은은한 success(초록) 흐름. 무JS 동작(폼 제출).
+ * 색: **버튼별 의미색(팔레트 토큰이라 테마 적응)** — 계산서/현금영수증 발행=info, 입금완료=success. 배지(taxBadge/INVOICE_STATUS_BADGE)와 동일 스킴이라 배지↔버튼 색 일치. 무JS 동작(폼 제출).
  */
 function taxToggleButtons(inv, retPath, { iconOnly = false } = {}) {
   const retHidden = `<input type="hidden" name="return" value="${esc(retPath || "/invoices")}" />`;
@@ -103,12 +103,14 @@ function taxToggleButtons(inv, retPath, { iconOnly = false } = {}) {
       ? `<span class="inv-icon">${icon}</span>`
       : `<span aria-hidden="true" class="inline-block w-3.5 text-center ${lit ? "" : "opacity-60"}">${lit ? "✓" : "−"}</span>${esc(long)}`;
   const sizeCls = iconOnly ? "btn-xs" : "btn-sm";
-  const toggleBtn = (target, icon, long, lit) => {
+  // 버튼별 의미색(팔레트 토큰이라 테마 따라 적응, 배지와 동일 스킴): 계산서/현금영수증 발행=info, 입금완료=success.
+  // 클래스는 리터럴이라야 Tailwind가 스캔·생성한다(동적 조립 금지 — 함정 #27 계열).
+  const toggleBtn = (target, icon, long, lit, onCls, offCls) => {
     // 툴팁·스크린리더: 현재 상태 + 누르면 무엇이 되는지(되돌리기 포함) — 아이콘만 보일 때도 의미가 전달되게.
     const hint = lit ? `${long} (누르면 되돌리기)` : `${long}로 표시`;
-    return `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost ${sizeCls} ${lit ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" title="${esc(hint)}" aria-label="${esc(hint)}">${face(icon, long, lit)}</button></form>`;
+    return `<form method="post" action="/invoices/${inv.id}/tax-status"><input type="hidden" name="tax_status" value="${esc(target)}" />${retHidden}<button class="btn-ghost ${sizeCls} ${lit ? onCls : offCls}" type="submit" title="${esc(hint)}" aria-label="${esc(hint)}">${face(icon, long, lit)}</button></form>`;
   };
-  return `${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", DOC_ICON, `${taxDoc} 발행 완료`, taxIssued)}${toggleBtn(isPaid ? "계산서 발행" : "입금완료", PAY_ICON, "입금완료", isPaid)}`;
+  return `${toggleBtn(taxIssued ? "계산서 미발행" : "계산서 발행", DOC_ICON, `${taxDoc} 발행 완료`, taxIssued, "border-info/40 bg-info/10 text-info", "text-info")}${toggleBtn(isPaid ? "계산서 발행" : "입금완료", PAY_ICON, "입금완료", isPaid, "border-success/40 bg-success/10 text-success", "text-success")}`;
 }
 
 /** 목록 행 첫 열 = 청구처(결제 주체). 미지정이면 청구 제목으로 폴백. */

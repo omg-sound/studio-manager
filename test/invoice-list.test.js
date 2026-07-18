@@ -62,7 +62,9 @@ test("청구 목록 표: 처리 열 = 아이콘 토글(대표·치프) + 상태 
   // 툴팁·스크린리더로 의미 전달
   assert.match(html, /title="계산서 발행 완료 \(누르면 되돌리기\)" aria-label="계산서 발행 완료 \(누르면 되돌리기\)"/, "켜진 계산서 툴팁");
   assert.match(html, /title="입금완료로 표시"/, "꺼진 입금 툴팁");
-  assert.match(html, /bg-success\/10 text-success/, "발행됨 = 켜짐(불)");
+  // 버튼별 의미색(테마 토큰, 배지와 동일 스킴): 계산서 발행=info, 입금완료=success. 계산서 발행됨 → 계산서 버튼 켜짐(info tint), 입금 버튼 꺼짐(success 텍스트).
+  assert.match(html, /border-info\/40 bg-info\/10 text-info/, "계산서 발행됨 = info 켜짐(불)");
+  assert.match(html, /class="btn-ghost btn-xs text-success"/, "입금완료 버튼 = success 색(꺼짐)");
   assert.match(html, /class="badge/, "상태 배지");
 });
 
