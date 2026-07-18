@@ -117,14 +117,15 @@ router.get("/", requireBilling, (req, res) => {
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });
 
-  // 상단 개요 3장(2026-07-18 사용자 요청): 미수금 합계 · 이번 달 발행(매출) · 올해 매출. 탭(건수)과 안 겹치게 금액만.
+  // 상단 개요 3장(2026-07-18 사용자 요청): 미수금 합계 · 이번 달 매출 · 올해 매출. 탭(건수)과 안 겹치게 금액만.
+  // '매출'=발행(청구) 기준 발생주의(입금 아님·부가세 포함). 사용자 결정: 발생만 봐도 됨(2026-07-18).
   const statCard = (label, value, tone = "text-fg") => `<div class="card flex items-center justify-between gap-3">
       <span class="text-sm text-muted">${label}</span>
       <span class="tabular text-lg font-bold ${tone}">${formatKRW(value)}</span>
     </div>`;
   const overview = `<div class="mb-4 grid gap-3 sm:grid-cols-3">
       ${statCard("미수금 합계", totalDue, totalDue > 0 ? "text-danger" : "text-fg")}
-      ${statCard(`이번 달 발행 <span class="font-normal opacity-70">· ${esc(String(Number(thisMonth.slice(5, 7))))}월</span>`, thisMonthIssued)}
+      ${statCard(`이번 달 매출 <span class="font-normal opacity-70">· ${esc(String(Number(thisMonth.slice(5, 7))))}월</span>`, thisMonthIssued)}
       ${statCard(`올해 매출 <span class="font-normal opacity-70">· ${esc(thisYear)}</span>`, thisYearIssued)}
     </div>`;
 
