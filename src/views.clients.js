@@ -267,4 +267,39 @@ function clientReadView(c, { owners = [], contacts = [], artists = [], members =
     ${invoicesSec}`;
 }
 
-module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFileSection, clientFilesBlock, clientForm, clientReadView };
+/**
+ * 편집 패널 — clientForm(dirty 저장) + (업체)첨부 + (그룹)멤버 섹션 + 크로스링크 + 취소.
+ * 현행 상세 라우트의 infoContent 조립을 그대로 옮긴 것(2026-07-18 마스터-디테일 전환 — 편집을 /edit 경로로 분리).
+ */
+function clientEditPane(c, { files = [], fileErr = "", fileOk = {}, contacts = [], companies = [], members = [], memberCandidates = [], crossRefsHtml = "", cancelHref, returnTo = null } = {}) {
+  const { listGroup, listRow, personCombo, emptyState } = require("./views");
+  const isCompany = c.kind === "company";
+  const cancel = `<a href="${esc(cancelHref)}" class="mb-3 inline-block text-sm text-primary hover:underline" data-no-guard>← 취소</a>`;
+  const editCard = clientForm(c, true, files, fileErr, true, contacts, companies, true, false);
+  const filesBlock = clientFilesBlock(c, files, fileErr, fileOk);
+  const memberSection = c.kind === "group"
+    ? `<div class="mb-6">
+        <h3 class="mb-2 font-display text-lg font-semibold text-fg">멤버 <span class="text-sm font-normal text-muted">· 그룹 소속 아티스트</span></h3>
+        ${members.length
+          ? listGroup({ rows: members.map((m) => listRow({
+              left: `<a href="/clients/${m.id}" class="font-medium text-fg hover:text-primary hover:underline">${esc(personLabel(m.display_name, m.name))}</a>`,
+              right: `<form method="post" action="/clients/${c.id}/members/${m.id}/remove" data-confirm="${esc(m.display_name)} 님을 이 그룹에서 제거할까요? (아티스트 자체는 삭제되지 않고 그룹 연결만 해제)"><button class="btn-ghost btn-sm text-danger" type="submit">제거</button></form>`,
+            })) })
+          : emptyState("아직 등록된 멤버가 없습니다.", { card: true })}
+        <form method="post" action="/clients/${c.id}/members" class="card mt-2 flex items-end gap-2">
+          <div class="min-w-0 flex-1">
+            <label class="label">멤버 추가 <span class="font-normal text-muted text-xs">(개인 아티스트 검색 또는 새로 등록)</span></label>
+            ${personCombo({ idField: "member_id", nameField: "member_name", options: memberCandidates, companyOptions: companies, entityLabel: "멤버", placeholder: "멤버 검색 또는 새로 등록" })}
+          </div>
+          <button class="btn-primary shrink-0" type="submit">추가</button>
+        </form>
+      </div>`
+    : "";
+  return `${cancel}
+    ${editCard}
+    ${isCompany ? `<div class="mt-3">${filesBlock}</div>` : ""}
+    ${crossRefsHtml ? `<div class="mt-3 space-y-1 text-sm">${crossRefsHtml}</div>` : ""}
+    ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}`;
+}
+
+module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };

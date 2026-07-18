@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert");
-const { clientReadView } = require("../src/views.clients");
+const { clientReadView, clientEditPane } = require("../src/views.clients");
 
 const company = { id: 10, kind: "company", name: "(주)도너츠컬처", roles: "제작사", biz_no: "261-81-02922", address: "서울시", email: "note@daum.net", phone: "010-1111-2222" };
 const group = { id: 20, kind: "group", name: "더윈드", activity_name: "더윈드" };
@@ -47,4 +47,23 @@ test("clientReadView(group): 소속사·멤버·[편집]", () => {
 test("clientReadView: 빈 섹션(프로젝트·청구 0) 숨김", () => {
   const html = clientReadView(company, { owners: [], contacts: [], artists: [], bizLicenseOk: true, projects: [], invoices: [], editHref: "/clients/10/edit" });
   assert.doesNotMatch(html, /청구 합계/, "청구 0이면 섹션 없음");
+});
+
+test("clientEditPane(company): 편집 폼(data-dirty-form)+취소", () => {
+  const html = clientEditPane({ id: 10, kind: "company", name: "(주)도너츠컬처" }, {
+    files: [], contacts: [], companies: [], cancelHref: "/clients/10",
+  });
+  assert.match(html, /data-dirty-form/, "편집 폼");
+  assert.match(html, /href="\/clients\/10"[^>]*>← 취소</, "취소 링크");
+  assert.match(html, /data-dropzone/, "업체 첨부 업로드");
+});
+
+test("clientEditPane(group): 멤버 추가/제거 폼", () => {
+  const html = clientEditPane({ id: 20, kind: "group", name: "더윈드" }, {
+    members: [{ id: 8, name: "멤버1", display_name: "멤버1" }],
+    memberCandidates: [], cancelHref: "/clients/20",
+  });
+  assert.match(html, /멤버/, "멤버 섹션");
+  assert.match(html, /\/clients\/20\/members/, "멤버 추가 폼 action");
+  assert.match(html, /\/clients\/20\/members\/8\/remove/, "멤버 제거 폼");
 });
