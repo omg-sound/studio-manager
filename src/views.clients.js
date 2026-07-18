@@ -48,12 +48,14 @@ function clientProjectList(projects) {
   );
 }
 
-/** 업체 상세용 청구 목록 — 항목명(작성일·청구·상태·금액) 헤더 표. 각 셀=청구서(/invoices/:id)로 새 탭 링크(인라인 펼침 대신 전체 화면). */
+/** 업체 상세용 청구 목록 — 항목명(발행일·청구번호·청구·상태·금액) 헤더 표. 각 셀=청구서(/invoices/:id)로 새 탭 링크(인라인 펼침 대신 전체 화면).
+ *  작성일(프로젝트 작성일) 대신 청구서 발행일 — 청구 관점 기준. 청구번호는 홈택스 대조용(넓은 화면만·모바일 카드 생략). */
 function clientInvoiceList(invoices) {
   const { invoiceBadge } = require("./views.invoices"); // 지연 require(순환 회피)
   return dataTable(
     [
-      { label: "작성일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
+      { label: "발행일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
+      { label: "청구번호", w: "w-[10rem]", nowrap: true, hide: "md", mobileHide: true },
       { label: "청구", primary: true, mCard: "tl" },
       { label: "상태", w: "w-[7rem]", mCard: "bl" },
       { label: "금액", w: "w-[8rem]", right: true, nowrap: true, mCard: "br" },
@@ -61,7 +63,8 @@ function clientInvoiceList(invoices) {
     invoices.map((inv) => {
       const link = (inner, cls = "") => `<a href="/invoices/${inv.id}"${OUT} class="dt-link ${cls}">${inner}</a>`;
       return { cells: [
-        link(esc(String(inv.project_created_at || "").slice(0, 10)), "text-muted"),
+        inv.issued_date ? link(esc(String(inv.issued_date).slice(0, 10)), "text-muted") : DT_DASH,
+        inv.invoice_number ? link(esc(inv.invoice_number), "text-xs text-muted") : DT_DASH,
         link(esc(inv.title || ""), "font-medium"),
         invoiceBadge(inv),
         link(formatKRW(inv.amount), "font-semibold"),
