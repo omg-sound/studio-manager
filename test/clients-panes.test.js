@@ -51,6 +51,19 @@ test("업체·그룹 2단: 목록/상세/편집", async (t) => {
     assert.match(location, new RegExp(`^/contacts/${personId}`));
   });
 
+  await t.test("GET /clients/:id/edit(업체) = 편집 폼(data-dirty-form)+취소", async () => {
+    const { status, html } = await get(`/clients/${companyId}/edit`);
+    assert.equal(status, 200);
+    assert.match(html, /data-dirty-form/, "편집 폼");
+    assert.match(html, /data-filter-list/, "왼쪽 목록 유지");
+    assert.match(html, /← 취소/, "취소 링크");
+  });
+
+  await t.test("GET /clients/:id/edit(그룹) = 멤버 섹션", async () => {
+    const { html } = await get(`/clients/${groupId}/edit`);
+    assert.match(html, new RegExp(`/clients/${groupId}/members`), "멤버 추가 폼 action");
+  });
+
   server.close(); // 서버가 이벤트 루프를 붙잡아 node --test가 안 끝나는 것 방지(contacts-panes와 동일)
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });

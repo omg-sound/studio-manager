@@ -10,7 +10,7 @@ const {
   listInvoicesForParty,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
   setOrgContacts, setCompanyOwners, listCompanyOwners, listOrgContacts, listContacts, resolvePersonByName,
-  listArtistsForAgency,
+  listArtistsForAgency, artistPersonOptions,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
   setPartyGroup, listGroupMembers,
   setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty, resolveCompanyByName, addCompanyRole,
@@ -22,7 +22,7 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
-const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, capList, errorPage, tabBar, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, tabBar, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { FILE_KINDS, fileKindLabel, clientFilesBlock, clientForm, clientReadView, clientEditPane } = require("../views.clients");
 const { contactPanes, contactNameList } = require("../views.contacts");
 
@@ -230,13 +230,40 @@ router.post("/", (req, res) => {
   res.redirect("/clients?flash=created#c" + id);
 });
 
-// ── 수정 ──
-// 이제 상세(GET /:id)가 인라인 편집 화면 — 옛 편집 경로는 상세로 리다이렉트(첨부 오류 ferr 보존, 북마크 호환).
-router.get("/:id/edit", (req, res) => {
-  const id = Number(req.params.id);
-  const ferr = String(req.query.ferr || "").trim();
-  res.redirect(`/clients/${id}${ferr ? "?ferr=" + encodeURIComponent(ferr) : ""}`);
-});
+// ── 수정 — 2단 편집 화면(왼쪽 목록 유지 + 오른쪽 편집 패널, 연락처 /contacts/:id/edit와 대칭) ──
+// Express 라우팅: 정적 세그먼트 `/edit`가 `/:id`(GET, 아래)보다 먼저 매칭되도록 이 라우트를 위에 둔다.
+router.get("/:id/edit", asyncHandler(async (req, res) => {
+  const c = getParty(Number(req.params.id));
+  if (!c) return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (c.kind === "person") return res.redirect(`/contacts/${c.id}/edit`);
+  const returnTo = safePath(String(req.query.return || "")) || null;
+  res.send(renderClients(req, c, editPaneForClient(c, returnTo), `/clients/${c.id}`));
+}));
+
+// 편집 패널 — 데이터 조회 + clientEditPane 조립(연락처 editPaneFor와 대칭).
+function editPaneForClient(c, returnTo = null) {
+  const files = listClientFiles(c.id);
+  const isCompany = c.kind === "company";
+  const companies = listClients({}).filter((x) => x.kind === "company");
+  if (!isCompany) { c.agency_id = currentAgencyId(c.id); c.agency_name = currentAgencyName(c.id); } // 소속사 콤보 기본값
+  // 크로스링크(대표자 연락처) — 현행 상세 crossRefBlock의 대표자 부분만 유지(연락처로 보기·소속 그룹은 조직엔 무의미).
+  const crossRefsHtml = (() => {
+    const owners = isCompany ? listCompanyOwners(c.id) : [];
+    if (!owners.length) return "";
+    const links = owners.map((o) => `<a href="/contacts/${o.id}" class="text-primary hover:underline">${esc(personName(o))} ↗</a>`).join(" · ");
+    return `<div><span class="text-muted">대표자 연락처</span> ${links}</div>`;
+  })();
+  return clientEditPane(c, {
+    files,
+    contacts: listContacts({}),
+    companies,
+    members: c.kind === "group" ? listGroupMembers(c.id) : [],
+    memberCandidates: c.kind === "group" ? artistPersonOptions().filter((a) => Number(a.group_id) !== c.id) : [],
+    crossRefsHtml,
+    cancelHref: returnTo || `/clients/${c.id}`,
+    returnTo,
+  });
+}
 
 router.post("/:id", (req, res) => {
   const id = Number(req.params.id);
@@ -296,14 +323,14 @@ router.post("/:id/members", (req, res) => {
     db().prepare("UPDATE parties SET is_artist = 1 WHERE id = ? AND kind = 'person'").run(memberId); // 그룹 멤버 = 개인 아티스트
     setPartyGroup(memberId, id); // 개인 아티스트를 이 그룹 소속으로(다른 그룹이면 이동)
   }
-  res.redirect(`/clients/${id}`);
+  res.redirect(`/clients/${id}/edit`); // 멤버 편집은 편집 화면 액션 — 편집 뷰로 복귀
 });
 router.post("/:id/members/:mid/remove", (req, res) => {
   const id = Number(req.params.id);
   const mid = Number(req.params.mid);
   const m = getParty(mid);
   if (m && Number(m.group_id) === id) setPartyGroup(mid, null); // 이 그룹 소속일 때만 해제
-  res.redirect(`/clients/${id}`);
+  res.redirect(`/clients/${id}/edit`);
 });
 
 // ── 첨부 서류 업로드(치프·스태프 — requireEditor) ──
@@ -318,17 +345,17 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
   }
   if (!FILE_KINDS.find((k) => k.key === kind)) {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
-    return res.redirect(`/clients/${id}?ferr=${encodeURIComponent("알 수 없는 서류 종류입니다.")}`);
+    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("알 수 없는 서류 종류입니다.")}`);
   }
   if (!req.file) {
-    return res.redirect(`/clients/${id}?ferr=${encodeURIComponent("파일을 선택하세요.")}`);
+    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("파일을 선택하세요.")}`);
   }
 
   // 매직바이트 검증: Content-Type 헤더를 신뢰하지 않고 파일 첫 바이트로 직접 확인
   const detectedMime = detectMimeFromFile(req.file.path);
   if (!detectedMime) {
     fs.promises.unlink(req.file.path).catch(() => {});
-    return res.redirect(`/clients/${id}?ferr=${encodeURIComponent("PNG, JPG, PDF 파일만 업로드할 수 있습니다.")}`);
+    return res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent("PNG, JPG, PDF 파일만 업로드할 수 있습니다.")}`);
   }
 
   const originalName = decodeName(req.file.originalname);
@@ -337,13 +364,13 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
     // 기존 같은 kind 파일을 교체하는 경우 이전 파일 스토리지 정리
     const old = upsertClientFile(id, kind, { storage_backend: backend, file_id: fileId, file_name: originalName, mime_type: detectedMime, file_size: req.file.size });
     if (old) await storage.remove(old.storage_backend, old.file_id);
-    res.redirect(`/clients/${id}?flash=saved`);
+    res.redirect(`/clients/${id}/edit?flash=saved`);
   } catch (e) {
     console.error("[client file upload]", e);
     const msg = e && e.code === "DRIVE_UPLOAD_FAILED"
       ? "구글 Drive 업로드에 실패했습니다 — 로컬에 저장하지 않았습니다. 잠시 후 다시 시도하거나 환경설정 › 일반 › 자료 저장에서 Drive 연동을 확인하세요."
       : "업로드에 실패했습니다.";
-    res.redirect(`/clients/${id}?ferr=${encodeURIComponent(msg)}`);
+    res.redirect(`/clients/${id}/edit?ferr=${encodeURIComponent(msg)}`);
   } finally {
     if (req.file) fs.promises.unlink(req.file.path).catch(() => {});
   }
@@ -387,10 +414,10 @@ router.get("/:id/files/:kind/raw", requireEditor, asyncHandler(async (req, res) 
 router.post("/:id/files/:kind/delete", requireEditor, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
-  if (!FILE_KINDS.find((k) => k.key === kind)) return res.redirect(`/clients/${id}`);
+  if (!FILE_KINDS.find((k) => k.key === kind)) return res.redirect(`/clients/${id}/edit`);
   const old = deleteClientFile(id, kind);
   if (old) await storage.remove(old.storage_backend, old.file_id);
-  res.redirect(`/clients/${id}?flash=deleted`);
+  res.redirect(`/clients/${id}/edit?flash=deleted`);
 }));
 
 // ── 클라이언트 상세(프로젝트 + 청구·결제 히스토리 + 첨부 서류 링크) ──
