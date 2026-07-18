@@ -216,6 +216,20 @@
 }
 .cl-rail-item:hover, .cl-rail-item.cl-rail-on { color: rgb(var(--color-primary)); }
 
+/* 이름 목록 폭 드래그 조절(2026-07-18) — lg 이상만. 폭=CSS 변수(app.js가 갱신·저장). */
+@media (min-width: 1024px) {
+  .cl-col-left { width: var(--cl-list-w, 18rem); }
+  .cl-resizer { flex: 0 0 auto; width: 9px; cursor: col-resize; position: relative; align-self: stretch; }
+  .cl-resizer::before {
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+    background: rgb(var(--color-border)); transform: translateX(-50%);
+  }
+  .cl-resizer:hover::before, .cl-resizer:focus-visible::before, .cl-resizer.cl-resizing::before {
+    width: 2px; background: rgb(var(--color-primary) / 0.6);
+  }
+  .cl-resizer:focus-visible { outline: none; }
+}
+
 /* 커스텀 콤보(검색 드롭다운) 행 눌림 피드백 — 터치엔 hover 없음. 모든 pop은 role="listbox". */
 [role="listbox"] > button:active {
   background-color: rgb(var(--color-elevated));

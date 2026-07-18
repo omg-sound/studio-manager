@@ -44,8 +44,11 @@ test("contactPanes: 선택 없으면 목록만(좁은 화면), 선택 있으면 
   assert.match(sel, /<div class="hidden lg:flex[^"]*">LEFT/, "선택: 왼쪽은 lg 이상만(flex-col)");
   assert.match(sel, /<div class="block[^"]*">RIGHT/, "선택: 오른쪽 항상 보임");
   // 고정 높이 flex 영역(2단) — 페이지 스크롤 대신 좌·우 내부 스크롤(2026-07-18 재설계, 리터럴 클래스).
-  assert.match(sel, /lg:flex lg:gap-6 lg:h-\[calc\(100vh-11rem\)\]/, "고정 높이 flex 컨테이너");
+  assert.match(sel, /lg:flex lg:gap-2 lg:h-\[calc\(100vh-11rem\)\]/, "고정 높이 flex 컨테이너");
   assert.match(sel, /lg:flex-1 lg:min-h-0 lg:overflow-y-auto/, "오른쪽 내부 스크롤");
+  // 폭 조절 리사이저(2026-07-18) — 목록↔상세 사이 드래그 핸들, CSS 변수 폭(cl-col-left).
+  assert.match(sel, /data-cl-resizer/, "리사이저 핸들");
+  assert.match(sel, /cl-col-left/, "왼쪽 열 = 변수 폭 클래스");
 });
 
 test("contactPanes: 좁은 화면 뒤로가기 — 선택 있을 때만 lg:hidden 링크", () => {

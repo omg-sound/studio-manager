@@ -3091,3 +3091,51 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   rail.addEventListener("pointerup", end);
   rail.addEventListener("pointercancel", end);
 })();
+
+// ── 이름 목록 폭 드래그 조절(2026-07-18 사용자 요청) ──
+// 목록↔상세 사이 리사이저([data-cl-resizer])를 드래그하면 왼쪽 목록 폭(CSS 변수 --cl-list-w)을 조절하고
+// localStorage에 저장(연락처·업체·그룹 공유). 키보드 ←→로도 조절(a11y). lg 이상에서만 리사이저가 보인다.
+(function () {
+  "use strict";
+  var panes = document.querySelector("[data-cl-panes]");
+  var handle = panes && panes.querySelector("[data-cl-resizer]");
+  var left = panes && panes.querySelector(".cl-col-left");
+  if (!panes || !handle || !left) return;
+  var KEY = "clListW", MIN = 180, MAX = 560;
+  function apply(px) {
+    px = Math.max(MIN, Math.min(px, MAX));
+    panes.style.setProperty("--cl-list-w", px + "px");
+    return px;
+  }
+  function save() {
+    try { var w = panes.style.getPropertyValue("--cl-list-w"); if (w) localStorage.setItem(KEY, w); } catch (_e) {}
+  }
+  try { var saved = localStorage.getItem(KEY); if (saved) panes.style.setProperty("--cl-list-w", saved); } catch (_e) {}
+  var dragging = false;
+  handle.addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    dragging = true;
+    handle.classList.add("cl-resizing");
+    document.body.style.userSelect = "none";
+    try { handle.setPointerCapture(e.pointerId); } catch (_e) {}
+  });
+  handle.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    apply(e.clientX - left.getBoundingClientRect().left);
+  });
+  function end() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove("cl-resizing");
+    document.body.style.userSelect = "";
+    save();
+  }
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+  handle.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    apply(left.getBoundingClientRect().width + (e.key === "ArrowRight" ? 16 : -16));
+    save();
+  });
+})();

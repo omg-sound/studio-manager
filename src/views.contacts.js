@@ -19,9 +19,12 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
   // lg: 패널 영역을 뷰포트 고정 높이 **flex**로 — **페이지 자체는 스크롤되지 않고** 좌(목록)·우(상세)가 각자 내부 스크롤(마스터-디테일 표준, 2026-07-18 재설계).
   // 이전엔 왼쪽만 lg:sticky라 헤더가 스크롤되며 목록이 함께 밀리고(전환 중 흔들림) 아래 빈 공간이 생겼다 → 고정 높이 flex 영역으로 교체.
   // 높이=100vh-9.5rem(상단 py-6 + pageHeader + 탭). flex 자식은 stretch로 전체 높이를 채우고 min-h-0로 내부 스크롤 허용. 좌측은 flex-col(검색 고정 + 목록만 스크롤).
-  return `<div class="lg:flex lg:gap-6 lg:h-[calc(100vh-11rem)]">
-      <div class="${leftCls} lg:w-72 lg:shrink-0 lg:min-h-0 lg:flex-col">${left}</div>
-      <div class="${rightCls} min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1">${back}${right}</div>
+  // 이름 목록 폭 = 드래그 조절(2026-07-18 사용자 요청). 폭은 CSS 변수 --cl-list-w(lg에서만·기본 18rem), app.js가
+  // 리사이저 드래그로 갱신·localStorage 저장. 리사이저는 lg 이상만(모바일은 한 단이라 조절 불필요).
+  return `<div class="cl-panes lg:flex lg:gap-2 lg:h-[calc(100vh-11rem)]" data-cl-panes>
+      <div class="${leftCls} cl-col-left lg:shrink-0 lg:min-h-0 lg:flex-col">${left}</div>
+      <div class="cl-resizer hidden lg:block" data-cl-resizer role="separator" aria-orientation="vertical" tabindex="0" aria-label="목록 폭 조절" title="드래그로 목록 폭 조절"></div>
+      <div class="${rightCls} min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pl-2 lg:pr-1">${back}${right}</div>
     </div>`;
 }
 
