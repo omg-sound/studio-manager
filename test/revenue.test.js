@@ -184,3 +184,20 @@ test("revenueTax: VAT 합계 + 외주 원천징수 3.3%", () => {
   assert.deepEqual(t.withholding, withholding33(100000), "원천징수=withholding33(외주지급)");
   assert.equal(t.withholding.total, 3300, "3.3% (소득세 3000 + 지방세 300)");
 });
+
+test("revenueByType: 작업+세션 종류별 매출 통합(라벨 합산·정렬)", () => {
+  // 작업(믹싱) 라인 + 세션(녹음) 라인 각각 발행
+  seedInvoice({ issued: "2027-10-10", payerName: "구성작업", amount: 220000, tax: 20000, workerRate: 0 }); // task 'Mixing' 라인 공급가 200000 (seedInvoice의 task_type='Mixing')
+  // 세션 라인 발행(별도)
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company','구성세션')").run().lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('CP','session',0)").run().lastInsertRowid;
+  const sess = db().prepare("INSERT INTO sessions (project_id, session_type, session_date, status) VALUES (?, '녹음', '2027-10-12', '완료')").run(proj).lastInsertRowid;
+  const inv = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'S', 110000, 10000, '발행', '2027-10-12')").run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount) VALUES (?, ?, '녹음', 1, 100000, 100000)").run(inv, sess);
+  const rows = D.revenueByType({ year: 2027, month: 10 });
+  const mix = rows.find((r) => r.label === D.taskTypeLabel("Mixing"));
+  const rec = rows.find((r) => r.label === "녹음");
+  assert.ok(mix && mix.amount === 200000, "믹싱(작업) 200000");
+  assert.ok(rec && rec.amount === 100000, "녹음(세션) 100000");
+  assert.ok(rows[0].amount >= rows[rows.length - 1].amount, "내림차순");
+});

@@ -142,6 +142,19 @@ function revenueForPayer(id, { year, month }) {
   return { party, invoices, supply, invoice_cnt: invoices.length };
 }
 
+// 종류별 매출 구성(B4): 작업 종류(taskTypeLabel) + 세션 종류(session_type) 통합, 같은 라벨 합산.
+function revenueByType({ year, month }) {
+  const { taskTypeLabel } = require("../data");
+  const per = issuedInPeriodSql("i", { year, month });
+  const taskRows = db().prepare(`SELECT t.task_type AS key, COALESCE(SUM(ii.amount),0) AS amount FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} GROUP BY t.task_type`).all();
+  const sessRows = db().prepare(`SELECT s.session_type AS label, COALESCE(SUM(ii.amount),0) AS amount FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} GROUP BY s.session_type`).all();
+  const byLabel = new Map();
+  const add = (label, amount) => { if (amount > 0) byLabel.set(label, (byLabel.get(label) || 0) + amount); };
+  taskRows.forEach((r) => add(taskTypeLabel(r.key), r.amount));
+  sessRows.forEach((r) => add(r.label || "세션", r.amount));
+  return Array.from(byLabel, ([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
+}
+
 module.exports = {
   issuedInPeriodSql,
   revenueYears,
@@ -151,4 +164,5 @@ module.exports = {
   revenueForStaff,
   revenueByPayer,
   revenueForPayer,
+  revenueByType,
 };
