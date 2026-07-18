@@ -100,3 +100,32 @@ test("revenueForStaff: 담당자 상세(기간 작업·세션 + 순이익), 없�
   assert.equal(d.tasks.length, 1, "작업 1건");
   assert.equal(D.revenueForStaff(999999, { year: 2026, month: 6 }), null, "없는 id는 null");
 });
+
+test("revenueByStaff/revenueForStaff: 다인 세션은 리드 엔지니어에게 전액 귀속", () => {
+  // 모델 A(리드 귀속, 사용자 확정): 다인 세션의 전체 외주지급이 리드에게. 공동 엔지니어는 안 나타남.
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("다인세션컴퍼니").lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('MP', 'task', 0)").run().lastInsertRowid;
+  const lead = db().prepare("INSERT INTO project_managers (name) VALUES ('리드엔지')").run().lastInsertRowid;
+  const co = db().prepare("INSERT INTO project_managers (name) VALUES ('공동엔지')").run().lastInsertRowid;
+  const sess = db()
+    .prepare("INSERT INTO sessions (project_id, session_type, session_date, engineer_name, status) VALUES (?, '녹음', '2026-12-05', '리드엔지', '완료')")
+    .run(proj).lastInsertRowid;
+  db().prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)").run(sess, lead, 10000);
+  db().prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)").run(sess, co, 20000);
+  const inv = db()
+    .prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'MT', 110000, 10000, '발행', '2026-12-05')")
+    .run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount) VALUES (?, ?, '녹음', 1, 100000, 100000)").run(inv, sess);
+
+  const d = D.revenueForStaff(lead, { year: 2026, month: 12 });
+  assert.equal(d.supply, 100000, "리드 공급가 = 세션 청구액 전액");
+  assert.equal(d.payout, 30000, "리드 외주지급 = 세션 전체 worker_rate 합(10000+20000)");
+  assert.equal(d.profit, 70000, "순이익 = 100000-30000");
+
+  const rows = D.revenueByStaff({ year: 2026, month: 12 });
+  const leadRow = rows.find((r) => r.id === lead);
+  assert.ok(leadRow, "리드 매출 노출");
+  assert.equal(leadRow.supply, 100000, "리드 공급가");
+  assert.equal(leadRow.profit, 70000, "리드 순이익");
+  assert.equal(rows.find((r) => r.id === co), undefined, "공동 엔지니어는 별도 행으로 안 나타남(공급가 0 → 필터됨)");
+});
