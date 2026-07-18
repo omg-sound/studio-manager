@@ -30,8 +30,8 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
 function contactNameList({ rows, selectedId = null, hrefFn }) {
   const items = rows.map((c) => {
     const active = Number(selectedId) === Number(c.id);
-    // bg-clip-padding: tint가 테두리 밑까지 안 칠해지게(기본 border-box면 선택 행 tint가 자기 위쪽 divide 선 밑에 깔려
-    // 위 선만 두껍고 색이 배어 보였다 — 아래 선은 tint 없는 다음 행 테두리라 멀쩡. 2026-07-18 사용자 리포트).
+    // 선택 행 위·아래 구분선 대칭은 src.css `[data-contact-list] a[aria-current]`에서 처리(선택 행이 위·아래 선을 모두 소유·다음 행 border-top 투명화, 2026-07-18 재수정).
+    // bg-clip-padding: tint가 테두리 밑까지 안 칠해지게(padding-box라 두 border 모두 깔끔한 선색 유지) — 위 CSS와 함께 동작.
     const cls = active ? "bg-primary/10 bg-clip-padding font-semibold text-fg" : "text-fg";
     return `<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${esc(personName(c))}</a>`;
   });
