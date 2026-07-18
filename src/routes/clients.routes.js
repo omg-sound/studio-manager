@@ -24,7 +24,8 @@ const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
 const { invoiceRow } = require("../views.invoices");
-const { FILE_KINDS, fileKindLabel, clientProjectCard, clientFilesBlock, clientForm } = require("../views.clients");
+const { FILE_KINDS, fileKindLabel, clientProjectCard, clientFilesBlock, clientForm, clientReadView, clientEditPane } = require("../views.clients");
+const { contactPanes, contactNameList } = require("../views.contacts");
 
 const router = express.Router();
 
@@ -39,7 +40,7 @@ function companyRolesFrom(b) {
   return checked.length ? checked.join(",") : null;
 }
 
-// ── 목록(서브메뉴 = 업체/아티스트 우선 분리 + 업체 내 분류 · 이름 검색) ──
+// ── 목록(2단: 왼쪽 업체/그룹 탭+검색+이름 목록, 오른쪽 빈 패널) ──
 router.get("/", (req, res) => {
   // 사람 탭(관계자·아티스트)은 연락처로 이관됨(2026-07-17 사람/조직 축 정리) — 옛 링크·북마크는 그 필터로 보낸다.
   const legacyPeopleTab = { associate: "associate", artist: "artist" }[String(req.query.group || "")];
@@ -47,150 +48,12 @@ router.get("/", (req, res) => {
     const q0 = String(req.query.q || "").trim();
     return res.redirect(`/contacts?tab=${legacyPeopleTab}${q0 ? `&q=${encodeURIComponent(q0)}` : ""}`);
   }
-  // 당사자 모델 분류(서로 섞이지 않음): 업체(company) / 그룹(밴드·아이돌). 사람(관계자·아티스트)은 연락처.
-  const group = ["company", "group"].includes(req.query.group) ? req.query.group : "company"; // 조직 명부 — 업체/그룹
-  const activeKind = ""; // 레거시 2차 필터 제거(호환용 빈값 유지)
-  const q = String(req.query.q || "").trim();
+  res.send(renderClients(req, null));
+});
 
-  const allRows = listClients({});
-  const groupCount = allRows.filter((c) => c.kind === "group").length;
-  const companyCount = allRows.filter((c) => c.kind === "company").length;
-
-  // 표시 행: 클라이언트(업체/그룹)만.
-  let displayed;
-  {
-    let rows = group === "group" ? allRows.filter((c) => c.kind === "group") : allRows.filter((c) => c.kind === "company");
-    const ql = q.toLowerCase();
-    displayed = q ? rows.filter((c) => c.name.toLowerCase().includes(ql)) : rows;
-  }
-  // 목록 상한(2026-07-09 스케일 점검) — 업체·그룹이 계속 누적되므로 기본 100건 + 더 보기(검색·개수 라벨은 전체 기준).
-  const capTotal = displayed.length;
-  const capped = capList(displayed, req.query, (n) => `/clients?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}&limit=${n}`);
-  displayed = capped.shown;
-
-  const qs = (params) => {
-    const p = Object.entries(params).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`);
-    if (q) p.push("q=" + encodeURIComponent(q));
-    return p.length ? "/clients?" + p.join("&") : "/clients";
-  };
-  // 1차 서브메뉴(업체/그룹) — 조직 명부. 사람(관계자·아티스트)은 연락처로 이관(2026-07-17). '전체' 폐기.
-  const groupChips = tabBar({
-    tabs: [
-      { key: "company", label: `업체 ${companyCount}` },
-      { key: "group", label: `그룹 ${groupCount}` },
-    ],
-    activeKey: group,
-    hrefFn: (key) => qs({ group: key }),
-  });
-  const kindChips = ""; // 2차 분류 필터 폐기(당사자 모델 — 조직 겸업은 roles 배지로 표시)
-
-  // 검색 문구는 탭별 명사(2026-07-16 사용자 요청 '이름 검색→업체명 검색').
-  const searchNoun = { company: "업체명", group: "그룹" }[group] || "이름";
-  const searchBar = searchBox({
-    action: "/clients", q, placeholder: `${searchNoun} 검색`, label: `${searchNoun} 검색`, liveFilter: true, noButton: true,
-    remote: !!capped.more, // 목록이 상한으로 잘렸으면(100+ 업체) 타이핑 시 서버 전체 검색으로 보강(2026-07-17)
-    hidden: `${group ? `<input type="hidden" name="group" value="${esc(group)}" />` : ""}${activeKind ? `<input type="hidden" name="kind" value="${esc(activeKind)}" />` : ""}`,
-  });
-
-  const clearQHref = group === "company" && activeKind ? `/clients?group=company&kind=${encodeURIComponent(activeKind)}` : group ? `/clients?group=${group}` : "/clients";
-  const resultNote = q
-    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${capTotal}건 · <a href="${clearQHref}" class="text-primary hover:underline">전체 보기</a></div>`
-    : "";
-
-  // 상세로 넘어갈 때 현재 필터를 from으로 전달 → 상세의 '← 클라이언트' 백링크가 같은 필터로 복귀.
-  const fromQ = [group ? `group=${encodeURIComponent(group)}` : "", activeKind ? `kind=${encodeURIComponent(activeKind)}` : "", q ? `q=${encodeURIComponent(q)}` : ""].filter(Boolean).join("&");
-  const fromParam = fromQ ? `?from=${encodeURIComponent(fromQ)}` : "";
-  // 복귀 경로(2026-07-14 — 상세 백링크가 보던 탭·검색으로 돌아오게. 전 목록 공통 방식).
-  const retParam = `${fromParam ? "&" : "?"}return=${encodeURIComponent(req.originalUrl)}`;
-  // 그룹 행: 이름 뒤에 소속사 표시(업체 '대표'와 동일 톤). 배치 조회로 N+1 회피.
-  const artistRows = displayed.filter((c) => c.is_artist);
-  const agencyByParty = {};
-  if (artistRows.length) {
-    const ids = artistRows.map((c) => c.id);
-    const ph = ids.map(() => "?").join(",");
-    for (const r of db().prepare(`SELECT a.person_id AS pid, o.name AS agency FROM affiliations a JOIN parties o ON o.id = a.org_id WHERE a.ended_on IS NULL AND o.kind = 'company' AND a.person_id IN (${ph}) ORDER BY a.started_on DESC, a.id DESC`).all(...ids)) {
-      if (!agencyByParty[r.pid]) agencyByParty[r.pid] = r.agency; // 현재(최근) 소속사
-    }
-  }
-  // 그룹 행: 담당자(parties.contact_party_id → 사람) 배치 조회로 이름 표시(2026-07-18 사용자 요청 '그룹 목록에서 담당자 한눈에'). N+1 회피.
-  const contactByGroup = {};
-  const groupIds = displayed.filter((c) => c.kind === "group").map((c) => c.id);
-  if (groupIds.length) {
-    const ph = groupIds.map(() => "?").join(",");
-    for (const r of db().prepare(`SELECT g.id AS gid, p.name, p.activity_name, p.honorific, p.family_name, p.given_name FROM parties g JOIN parties p ON p.id = g.contact_party_id WHERE g.contact_party_id IS NOT NULL AND g.id IN (${ph})`).all(...groupIds)) {
-      contactByGroup[r.gid] = personName(r);
-    }
-  }
-  // 업체 행: 사업자등록증(client_files kind='biz_license') 업로드 여부 배치 조회(있음/없음 배지). 목록은 기록 존재만 확인(파일 실제 접근은 상세에서).
-  const bizLicenseSet = new Set();
-  const companyIds = displayed.filter((c) => c.kind === "company").map((c) => c.id);
-  if (companyIds.length) {
-    for (const r of db().prepare(`SELECT DISTINCT client_id FROM client_files WHERE kind = 'biz_license' AND client_id IN (${companyIds.map(() => "?").join(",")})`).all(...companyIds)) bizLicenseSet.add(r.client_id);
-  }
-  // 청구·프로젝트식 컬럼 표(2026-07-16 사용자 요청 '넓어진 화면에 정보 많이').
-  const dash = '<span class="text-muted">—</span>';
-  // 사업자등록증 미업로드 표시 아이콘(경고 삼각형) — 유형 배지 대신 사업자번호 뒤 작은 아이콘(2026-07-16 사용자 요청).
-  const bizLicenseMissingIcon = ` <span title="사업자등록증 미등록" aria-label="사업자등록증 미등록" class="ml-0.5 inline-flex align-middle text-warning"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>`;
-  // 탭별 컬럼(2026-07-16 사용자 요청): 유형 열 폐기(전 탭) / 그룹=사업자번호 없음.
-  // 폭 배분(청구 표처럼): 식별 열 **이름·이메일=유동**(남는 폭 나눠 채움). 나머지=고정 rem. 좁아지면 전화 먼저 숨김(xl). 모바일 카드(<640)=2열 그리드(mCard 슬롯 tl/tr/bl/br).
-  const link = (id, inner, cls = "") => `<a href="/clients/${id}${fromParam}${retParam}" class="dt-link ${cls}">${inner}</a>`;
-  let orgCols, orgRows;
-  if (group === "group") {
-    // 열 순서·폭(2026-07-18 사용자 요청 '이름 넓고 소속 좁다 → 적당히, 담당자 맨 뒤로'):
-    // 이름·소속=유동(둘이 남는 폭을 나눠 균형 — 이름은 좁아지고 소속은 넓어짐), 전화·이메일·담당자=고정 rem. 담당자 맨 끝.
-    // 좁아지면 전화 먼저 숨김(xl). 모바일 카드는 담당자=tr(업체 '대표' 자리와 동일 톤) 유지 — 데스크톱 열 순서와 별개(mCard 슬롯).
-    orgCols = [
-      { label: "이름", primary: true, mCard: "tl" },
-      { label: "소속", hide: "sm", mCard: "bl" },
-      { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
-      { label: "이메일", w: "w-[13rem]", hide: "sm", mCard: "br" },
-      { label: "담당자", w: "w-[9rem]", hide: "sm", mCard: "tr" },
-    ];
-    orgRows = displayed.map((c) => ({ cells: [
-      link(c.id, esc(personLabel(c.activity_name || c.name, c.name)), "font-medium"),
-      agencyByParty[c.id] ? esc(agencyByParty[c.id]) : dash, // 그룹 소속사
-      c.phone ? copyable(c.phone) : dash,
-      c.email ? copyable(c.email) : dash,
-      contactByGroup[c.id] ? esc(contactByGroup[c.id]) : dash, // 그룹 담당자(contact_party_id) — 맨 뒤
-    ] }));
-  } else {
-    // 업체(company)
-    orgCols = [
-      { label: "이름", primary: true, mCard: "tl" },
-      { label: "대표", w: "w-[11rem]", hide: "sm", mCard: "tr" },
-      { label: "사업자번호", w: "w-[11.5rem]", hide: "sm", mCard: "bl", nowrap: true }, // 번호+복사·경고 아이콘이 다 들어가게 넓힘 + …로 안 자름(2026-07-16 사용자 요청)
-      { label: "전화", w: "w-[9.5rem]", hide: "xl", mobileHide: true },
-      { label: "이메일", hide: "sm", mCard: "br" },
-    ];
-    orgRows = displayed.map((c) => {
-      const certMissing = !bizLicenseSet.has(c.id); // 사업자등록증 미업로드 → 사업자번호 뒤 경고 아이콘
-      const ownerLabel = stripTrailingTitle(c.owner_name); // 대표(말미 호칭 제거)
-      const ownerCell = ownerLabel
-        ? (c.owner_party_id ? `<a href="/contacts/${c.owner_party_id}${fromParam}${retParam}" class="dt-link text-muted">${esc(ownerLabel)}</a>` : `<span class="text-muted">${esc(ownerLabel)}</span>`)
-        : dash;
-      return { cells: [
-        link(c.id, esc(c.name), "font-medium"),
-        ownerCell,
-        (c.biz_no ? copyable(c.biz_no) : dash) + (certMissing ? bizLicenseMissingIcon : ""),
-        c.phone ? copyable(c.phone) : dash,
-        c.email ? copyable(c.email) : dash,
-      ] };
-    });
-  }
-
-  const list = displayed.length
-    ? dataTable(orgCols, orgRows, { filterList: true }) + capped.more
-    : q
-      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
-      : emptyState(group === "group" ? "그룹이 없습니다." : "업체가 없습니다.", {
-          card: true,
-          icon: "clients",
-          // 유형 선택 페이지 폐기 — 빈 상태 CTA는 현재 탭 유형으로 바로 생성(탭=유형). 나머지 유형은 상단 드롭다운.
-          cta: group === "group" ? { href: "/clients/new?type=group", label: "+ 새 그룹" } : { href: "/clients/new?type=company", label: "+ 새 업체" },
-        });
-
-  // '새 클라이언트' = 작은 선택 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 사람(관계자·아티스트)은 연락처 생성(2026-07-17).
-  const newMenu = `
+// 신규 업체·그룹 드롭다운(페이지 이동 없이 유형 선택) — CSP 안전한 <details> 팝오버. 사람(관계자·아티스트)은 연락처 생성(2026-07-17).
+function newClientMenuHtml() {
+  return `
     <details class="relative inline-block" data-menu>
       <summary class="btn-primary cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">+ 새 업체·그룹</summary>
       <div class="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-border bg-bg py-1 text-left shadow-lg">
@@ -198,16 +61,53 @@ router.get("/", (req, res) => {
         <a href="/clients/new?type=group" class="block px-4 py-2 text-sm hover:bg-surface active:bg-surface"><span class="font-medium text-fg">그룹</span> <span class="text-xs text-muted">밴드·아이돌</span></a>
       </div>
     </details>`;
+}
+
+// 2단 렌더(연락처 renderContacts와 대칭) — 왼쪽 업체/그룹 탭+검색+이름 목록, 오른쪽 rightHtml(없으면 빈 패널).
+function renderClients(req, sel, rightHtml) {
+  const q = String(req.query.q || "").trim();
+  const group = ["company", "group"].includes(req.query.group) ? req.query.group : "company";
+  const all = listClients({});
+  const companyCount = all.filter((c) => c.kind === "company").length;
+  const groupCount = all.filter((c) => c.kind === "group").length;
+  let rows = all.filter((c) => c.kind === group);
+  if (q) { const ql = q.toLowerCase(); rows = rows.filter((c) => String(c.name || "").toLowerCase().includes(ql)); }
+  const keep = `?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}`;
+
+  const tabs = tabBar({
+    tabs: [
+      { key: "company", label: `업체 ${companyCount}` },
+      { key: "group", label: `그룹 ${groupCount}` },
+    ],
+    activeKey: group,
+    hrefFn: (k) => `/clients?group=${k}${q ? "&q=" + encodeURIComponent(q) : ""}`,
+  });
+  const searchBar = searchBox({
+    action: "/clients", q, placeholder: group === "group" ? "그룹 검색" : "업체명 검색", label: group === "group" ? "그룹 검색" : "업체 검색",
+    liveFilter: true, noButton: true, hidden: `<input type="hidden" name="group" value="${esc(group)}" />`,
+  });
+  const resultNote = q
+    ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/clients?group=${group}" class="text-primary hover:underline">전체 보기</a></div>`
+    : "";
+  const list = rows.length
+    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients/${c.id}${keep}` })
+    : q
+      ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
+      : group === "group"
+        ? emptyState("등록된 그룹이 없습니다.", { card: true, icon: "clients", cta: { href: "/clients/new?type=group", label: "+ 새 그룹" } })
+        : emptyState("등록된 업체가 없습니다.", { card: true, icon: "clients", cta: { href: "/clients/new?type=company", label: "+ 새 업체" } });
+
+  const left = `${searchBar}${resultNote}${list}`;
+  const right = rightHtml || emptyState("업체·그룹을 선택하세요.", { card: true, icon: "clients" });
+
+  const action = newClientMenuHtml();
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "업체·그룹", action: newMenu })}
-    ${groupChips}
-    ${kindChips}
-    ${searchBar}
-    ${resultNote}
-    ${list}`;
-  res.send(layout({ title: "업체·그룹", user: req.user, current: "/clients", body, wide: true }));
-});
+    ${pageHeader({ title: "업체·그룹", action })}
+    ${tabs}
+    ${contactPanes({ left, right, hasSelection: !!sel, backHref: `/clients${keep}`, backLabel: "업체·그룹" })}`;
+  return layout({ title: sel ? sel.name : "업체·그룹", user: req.user, current: "/clients", body, wide: true });
+}
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listClients는 q 미지원이라 이름/활동명 인메모리 필터 ──
 router.get("/suggest", (req, res) => {
