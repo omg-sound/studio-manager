@@ -173,6 +173,55 @@
 
 // (프로젝트 목록 밀도 토글 폐지 2026-07-16 — 목록이 청구식 컬럼 표로 통일되며 좁게/넓게 개념 제거.)
 
+// 청구 목록 헤더 클릭 정렬(Finder식·client-side, 2026-07-18): [data-sort-key] th 클릭 → 로드된 <tr>을 셀
+//   [data-sort-value](없으면 textContent)로 즉시 재정렬. 첫 클릭=오름차순, 같은 열 다시=내림차순. aria-sort로 화살표.
+//   서버 기본 정렬(발행 최신순)은 로드 시 그대로 — 정렬은 클릭할 때만. 실시간 필터로 숨은 행은 순서만 바뀌고 display 유지.
+(function () {
+  "use strict";
+  Array.prototype.forEach.call(document.querySelectorAll(".inv-table"), function (table) {
+    var thead = table.tHead;
+    if (!thead) return;
+    var headers = Array.prototype.slice.call(thead.querySelectorAll("th[data-sort-key]"));
+    if (!headers.length) return;
+    var state = { key: null, dir: 1 }; // dir: 1=오름차순, -1=내림차순
+    function sortBy(th) {
+      var type = th.getAttribute("data-sort-type") || "text";
+      var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+      var tbody = table.tBodies[0];
+      if (!tbody) return;
+      if (state.key === th) { state.dir = -state.dir; } else { state.key = th; state.dir = 1; }
+      function val(row) {
+        var cell = row.cells[idx];
+        if (!cell) return "";
+        var v = cell.getAttribute("data-sort-value");
+        return v == null ? (cell.textContent || "").trim() : v;
+      }
+      var rows = Array.prototype.slice.call(tbody.rows);
+      rows.sort(function (a, b) {
+        var va = val(a), vb = val(b);
+        if (va === "" && vb === "") return 0;
+        if (va === "") return 1; // 빈 값은 방향과 무관하게 뒤로
+        if (vb === "") return -1;
+        var cmp;
+        if (type === "num") cmp = parseFloat(va) - parseFloat(vb);
+        else if (type === "date") cmp = va < vb ? -1 : va > vb ? 1 : 0; // ISO(YYYY-MM-DD)는 문자열 비교로 시간순
+        else cmp = va.localeCompare(vb, "ko");
+        return cmp * state.dir;
+      });
+      rows.forEach(function (r) { tbody.appendChild(r); });
+      headers.forEach(function (h) { h.setAttribute("aria-sort", "none"); });
+      th.setAttribute("aria-sort", state.dir === 1 ? "ascending" : "descending");
+    }
+    headers.forEach(function (th) {
+      th.addEventListener("click", function () { sortBy(th); });
+      th.addEventListener("keydown", function (e) {
+        if (e.isComposing || e.keyCode === 229) return; // 함정 #18 IME 가드
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); sortBy(th); }
+      });
+    });
+  });
+})();
+
 // 청구 목록 일괄 선택 + 일괄 처리(2026-07-16): 행 체크박스([data-inv-select])·전체선택([data-inv-select-all])
 // → 바([data-inv-bulk-bar])에 선택 개수 표시, 선택 행 id를 hidden ids에 모아 제출(계산서 발행/입금완료).
 // **데스크톱** = 체크박스·처리 열 상시 노출·상단 바. **모바일** = 평소 숨김, **카드를 꾹 눌러(long-press)**

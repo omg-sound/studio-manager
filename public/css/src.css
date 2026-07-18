@@ -313,6 +313,17 @@
   border-bottom: 1px solid rgb(var(--color-border));
   white-space: nowrap;
 }
+/* 헤더 클릭 정렬(Finder식) — 커서·호버·정렬 화살표(aria-sort 기반, app.js가 aria-sort 토글). */
+.inv-table thead th.inv-sortable { cursor: pointer; user-select: none; }
+.inv-table thead th.inv-sortable:hover { color: rgb(var(--color-fg)); }
+.inv-table thead th.inv-sortable:focus-visible { outline: 2px solid rgb(var(--color-primary) / 0.5); outline-offset: -2px; }
+.inv-sort-label { display: inline-flex; align-items: center; gap: 0.2rem; }
+.inv-table th.inv-amt-col .inv-sort-label { justify-content: flex-end; }
+.inv-sort-arrow { display: inline-block; width: 0.7em; font-size: 0.7em; opacity: 0.75; }
+.inv-table thead th[aria-sort="ascending"] { color: rgb(var(--color-fg)); }
+.inv-table thead th[aria-sort="descending"] { color: rgb(var(--color-fg)); }
+.inv-table thead th[aria-sort="ascending"] .inv-sort-arrow::after { content: "▲"; }
+.inv-table thead th[aria-sort="descending"] .inv-sort-arrow::after { content: "▼"; }
 .inv-table tbody td {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid rgb(var(--color-border) / 0.6);

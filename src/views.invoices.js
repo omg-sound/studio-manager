@@ -59,6 +59,11 @@ function displayStatus(inv) {
   return inv.tax_status || "계산서 미발행";
 }
 
+/** 상태 정렬용 순위(미발행<발행<부분납<입금완료<연체) — 청구 목록 헤더 클릭 정렬(data-sort-value). */
+function statusRank(inv) {
+  return { "계산서 미발행": 0, "계산서 발행": 1, "부분납": 2, "입금완료": 3, "연체": 4 }[displayStatus(inv)] ?? 0;
+}
+
 /** 청구처 유형에 따른 세무 문서명 — 개인(person)=현금영수증, 그 외(업체·그룹·미지정)=계산서. tax_status DB값(계산서 …)은 그대로, 표시만 치환. */
 function taxDocOf(inv) {
   return inv && inv.payer_kind === "person" ? "현금영수증" : "계산서";
@@ -248,17 +253,19 @@ function invoiceTable(rows, { isInvoicer = false, ret = "", filterList = false }
   const retBase = ret || "/invoices";
   const cellLink = (inv, inner, cls = "") => `<a href="/invoices/${inv.id}?return=${encodeURIComponent(retBase)}" class="inv-cell-link ${cls}">${inner}</a>`;
   const dash = '<span class="text-muted">—</span>';
+  // 헤더 클릭 정렬(Finder식·client-side, app.js [data-sort-key]): 첫 클릭=오름차순, 다시=내림차순. aria-sort로 화살표 표시(CSP-safe). 서버 기본 정렬은 로드 시 그대로.
+  const sortTh = (label, key, type, cls = "") => `<th class="${cls ? cls + " " : ""}inv-sortable" data-sort-key="${key}" data-sort-type="${type}" aria-sort="none" tabindex="0"><span class="inv-sort-label">${esc(label)}<span class="inv-sort-arrow" aria-hidden="true"></span></span></th>`;
   const head = `
     <thead>
       <tr>
         ${isInvoicer ? `<th class="inv-check"><input type="checkbox" data-inv-select-all aria-label="전체 선택" class="align-middle" /></th>` : ""}
-        <th class="inv-w-status">상태</th>
-        <th class="inv-w-num">청구번호</th>
-        <th>청구처</th>
-        <th class="hidden xl:table-cell">아티스트</th>
-        <th class="hidden xl:table-cell">프로젝트</th>
-        <th class="inv-amt-col">금액</th>
-        <th class="inv-w-issued">발행</th>
+        ${sortTh("상태", "status", "num", "inv-w-status")}
+        ${sortTh("청구번호", "invnum", "text", "inv-w-num")}
+        ${sortTh("청구처", "payer", "text")}
+        ${sortTh("아티스트", "artist", "text", "hidden xl:table-cell")}
+        ${sortTh("프로젝트", "project", "text", "hidden xl:table-cell")}
+        ${sortTh("금액", "amount", "num", "inv-amt-col")}
+        ${sortTh("발행", "issued", "date", "inv-w-issued")}
         ${isInvoicer ? `<th class="inv-act-col">처리</th>` : ""}
       </tr>
     </thead>`;
@@ -278,13 +285,13 @@ function invoiceTable(rows, { isInvoicer = false, ret = "", filterList = false }
       return `
       <tr>
         ${check}
-        <td class="inv-c-status" data-label="상태">${cellLink(inv, taxBadgeShort(inv))}</td>
-        <td class="inv-c-num" data-label="청구번호">${cellLink(inv, num ? esc(num) : dash, "tabular text-muted")}</td>
-        <td class="inv-c-client" data-label="청구처">${cellLink(inv, payer, "inv-cell-payer font-medium")}</td>
-        <td class="inv-c-artist hidden xl:table-cell" data-label="아티스트">${cellLink(inv, artist ? esc(artist) : dash, "text-muted")}</td>
-        <td class="inv-c-project hidden xl:table-cell" data-label="프로젝트">${cellLink(inv, project ? esc(project) : dash, "text-muted")}</td>
-        <td class="inv-amt inv-c-amt" data-label="금액">${cellLink(inv, formatKRW(inv.amount), "tabular font-semibold")}</td>
-        <td class="inv-c-issued" data-label="발행">${cellLink(inv, issued || dash, "tabular text-muted")}</td>
+        <td class="inv-c-status" data-label="상태" data-sort-value="${statusRank(inv)}">${cellLink(inv, taxBadgeShort(inv))}</td>
+        <td class="inv-c-num" data-label="청구번호" data-sort-value="${esc(num)}">${cellLink(inv, num ? esc(num) : dash, "tabular text-muted")}</td>
+        <td class="inv-c-client" data-label="청구처" data-sort-value="${payer}">${cellLink(inv, payer, "inv-cell-payer font-medium")}</td>
+        <td class="inv-c-artist hidden xl:table-cell" data-label="아티스트" data-sort-value="${esc(artist)}">${cellLink(inv, artist ? esc(artist) : dash, "text-muted")}</td>
+        <td class="inv-c-project hidden xl:table-cell" data-label="프로젝트" data-sort-value="${esc(project)}">${cellLink(inv, project ? esc(project) : dash, "text-muted")}</td>
+        <td class="inv-amt inv-c-amt" data-label="금액" data-sort-value="${inv.amount || 0}">${cellLink(inv, formatKRW(inv.amount), "tabular font-semibold")}</td>
+        <td class="inv-c-issued" data-label="발행" data-sort-value="${esc(inv.issued_date || "")}">${cellLink(inv, issued || dash, "tabular text-muted")}</td>
         ${act}
       </tr>`;
     })
