@@ -176,6 +176,23 @@ function revenueForStaff(id, { year, month }) {
   return { manager, tasks, sessions, supply, payout, profit: supply - payout };
 }
 
+// 결제자(업체·개인)별 매출 기여(공급가)·건수.
+function revenueByPayer({ year, month }) {
+  const per = issuedInPeriodSql("i", { year, month });
+  return db().prepare(`SELECT i.payer_id AS id, c.kind, c.name, COALESCE(SUM(i.amount - i.tax_amount),0) AS supply, COUNT(*) AS invoice_cnt FROM invoices i JOIN parties c ON c.id = i.payer_id WHERE ${ISSUED} AND ${per} AND i.payer_id IS NOT NULL GROUP BY i.payer_id ORDER BY supply DESC`).all();
+}
+
+// 결제자 상세(기간 발행 청구서 목록 + 공급가 합계).
+function revenueForPayer(id, { year, month }) {
+  const party = db().prepare("SELECT * FROM parties WHERE id = ?").get(Number(id));
+  if (!party) return null;
+  const per = issuedInPeriodSql("i", { year, month });
+  // payer_kind = 결제자 kind(현금영수증/계산서 배지용 taxBadge가 inv.payer_kind를 읽음). 전 청구서가 이 party라 party.kind 동일.
+  const invoices = db().prepare(`SELECT i.id, i.invoice_number, i.issued_date, i.amount, i.tax_amount, i.tax_status, i.status, (i.amount - i.tax_amount) AS supply, c.kind AS payer_kind, p.title AS project_title FROM invoices i JOIN parties c ON c.id = i.payer_id LEFT JOIN projects p ON p.id = i.project_id WHERE ${ISSUED} AND ${per} AND i.payer_id = ? ORDER BY i.issued_date DESC, i.id DESC`).all(Number(id));
+  const supply = invoices.reduce((a, r) => a + (r.supply || 0), 0);
+  return { party, invoices, supply, invoice_cnt: invoices.length };
+}
+
 module.exports = {
   revenueByEngineer,
   revenueForEngineer,
@@ -184,4 +201,6 @@ module.exports = {
   revenueSummary,
   revenueByStaff,
   revenueForStaff,
+  revenueByPayer,
+  revenueForPayer,
 };

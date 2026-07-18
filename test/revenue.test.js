@@ -129,3 +129,23 @@ test("revenueByStaff/revenueForStaff: 다인 세션은 리드 엔지니어에게
   assert.equal(leadRow.profit, 70000, "리드 순이익");
   assert.equal(rows.find((r) => r.id === co), undefined, "공동 엔지니어는 별도 행으로 안 나타남(공급가 0 → 필터됨)");
 });
+
+test("revenueByPayer: 결제자(업체/개인)별 공급가 기여·건수, 기간·kind", () => {
+  const { payer } = seedInvoice({ issued: "2026-05-10", payerName: "기여도컴퍼니", amount: 330000, tax: 30000 });
+  const rows = D.revenueByPayer({ year: 2026, month: 5 });
+  const r = rows.find((x) => x.id === payer);
+  assert.ok(r, "결제자 노출");
+  assert.equal(r.supply, 300000, "공급가 = 330000-30000");
+  assert.equal(r.invoice_cnt, 1, "1건");
+  assert.equal(r.kind, "company", "업체 kind");
+  assert.equal(r.name, "기여도컴퍼니");
+});
+
+test("revenueForPayer: 결제자 상세(기간 발행 청구서 목록), 없으면 null", () => {
+  const { payer } = seedInvoice({ issued: "2026-04-10", payerName: "결제자상세사", amount: 110000, tax: 10000 });
+  const d = D.revenueForPayer(payer, { year: 2026, month: 4 });
+  assert.equal(d.supply, 100000, "공급가 합계");
+  assert.equal(d.invoice_cnt, 1, "청구서 1건");
+  assert.equal(d.invoices[0].supply, 100000, "라인 supply 파생");
+  assert.equal(D.revenueForPayer(999999, { year: 2026, month: 4 }), null, "없는 id는 null");
+});
