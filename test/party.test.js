@@ -748,3 +748,25 @@ test("setPartyAgency와 syncCompanyAffiliation은 같은 현재 소속을 만든
   assert.equal(D.listAffiliations(a).filter((x) => !x.ended_on).length, 1, "현재 소속 1건");
   assert.equal(D.listAffiliations(b).filter((x) => !x.ended_on).length, 1, "현재 소속 1건");
 });
+
+test("updateParty: 성/이름 편집 시 표시명(name) 재구성 — 옛 name에 막히지 않음(2026-07-18 버그)", () => {
+  // 단일필드 이름 '내원'(활동명도 내원)으로 생성 → 성=공, 이름=내원 편집 → name이 '공내원'으로 반영돼야.
+  const id = D.createPerson({ name: "내원", nickname: "내원" });
+  assert.equal(D.getParty(id).name, "내원", "생성 직후 단일필드 이름");
+  D.updateParty(id, { family_name: "공", given_name: "내원", nickname: "내원" });
+  assert.equal(D.getParty(id).name, "공내원", "성+이름으로 재구성");
+  assert.equal(D.getParty(id).family_name, "공");
+  assert.equal(D.getParty(id).given_name, "내원");
+});
+
+test("updateParty: 이름 필드 미전송(전화만 수정)이면 표시명 보존", () => {
+  const id = D.createPerson({ name: "홍길동", family_name: "홍", given_name: "길동" });
+  D.updateParty(id, { phone: "010-1234-5678" }); // 이름 분리 필드 미전송
+  assert.equal(D.getParty(id).name, "홍길동", "이름 미전송 시 기존 표시명 보존");
+});
+
+test("updateParty: 레거시 단일필드 이름 + 이름 필드 미전송이면 보존(재구성으로 지워지지 않음)", () => {
+  const id = D.createPerson({ name: "외자" }); // family/given 없음
+  D.updateParty(id, { memo: "메모만" });
+  assert.equal(D.getParty(id).name, "외자", "성/이름 없는 단일필드 이름 보존");
+});

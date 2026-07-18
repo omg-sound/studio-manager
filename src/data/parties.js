@@ -171,7 +171,11 @@ function updateParty(id, b = {}) {
   const activityName = b.activity_name !== undefined ? blankToNull(b.activity_name)
     : b.nickname !== undefined ? blankToNull(b.nickname)
     : (cur.activity_name || null);
-  const name = resolveDisplayName({ ...b, activity_name: activityName, name: b.name || cur.name });
+  // 표시명(name) 재구성: 성/이름을 편집하면 반영되게 **성+이름(현재값 반영)을 옛 name보다 우선**한다.
+  // (2026-07-18 버그: `name: b.name || cur.name`이라 성/이름을 고쳐도 resolveDisplayName이 옛 name을 그대로 반환 → 목록 미반영.)
+  // 우선순위: 명시 name(폼엔 없음) > 성+이름 > 기존 name(레거시 단일필드·이름 없는 부분수정 보존) > 활동명/호칭(resolveDisplayName 폴백).
+  const fullName = `${String(pick("family_name") || "").trim()}${String(pick("given_name") || "").trim()}`;
+  const name = resolveDisplayName({ ...b, activity_name: activityName, name: String(b.name || "").trim() || fullName || cur.name });
   const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (activityName ? 1 : cur.is_artist);
   const contactPartyId = b.contact_party_id !== undefined ? (b.contact_party_id ? Number(b.contact_party_id) : null) : (cur.contact_party_id || null);
   const jobTitle = pick("job_title");
