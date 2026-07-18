@@ -735,4 +735,5 @@
 
 /* 매출 월별 추세 SVG 바 차트(2026-07-19) — 색은 CSS 클래스(fill), 인라인 style 금지(CSP·함정 #27). */
 .rev-bar { fill: rgb(var(--color-primary)); }
+.rev-bar-profit { fill: rgb(var(--color-success)); }
 .rev-bar-label { fill: rgb(var(--color-muted)); font-size: 10px; }

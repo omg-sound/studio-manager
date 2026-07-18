@@ -30,18 +30,57 @@ function revTabs({ tab, year, month }) {
   });
 }
 
-// 월별 공급가 인라인 SVG 바 차트(높이=월/최대월). 색=CSS 클래스(fill), 인라인 style 금지(CSP·함정 #27).
+// 월별 매출·순이익 2막대 인라인 SVG(색=CSS 클래스 fill). monthly[k]={month,supply,profit}.
 function revBarChart(monthly) {
   const max = Math.max(1, ...monthly.map((m) => m.supply));
-  const W = 640, H = 150, base = H - 22, top = 12;
-  const n = monthly.length, slot = (W - 8) / n, bw = slot * 0.56;
+  const W = 680, H = 168, base = H - 30, top = 14, n = monthly.length, slot = (W - 8) / n, bw = slot * 0.28;
+  const bar = (x, v, cls) => { const h = Math.round((v / max) * (base - top)); return `<rect x="${x.toFixed(1)}" y="${base - h}" width="${bw.toFixed(1)}" height="${h}" rx="2" class="${cls}"><title>${cls === "rev-bar" ? "매출" : "순이익"} ${formatKRW(v)}</title></rect>`; };
   const parts = monthly.map((m, k) => {
-    const h = Math.round((m.supply / max) * (base - top));
-    const x = 4 + k * slot + (slot - bw) / 2, y = base - h;
-    return `<rect x="${x.toFixed(1)}" y="${y}" width="${bw.toFixed(1)}" height="${h}" rx="2" class="rev-bar"><title>${m.month}월 ${formatKRW(m.supply)}</title></rect>`
-      + `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle" class="rev-bar-label">${m.month}</text>`;
+    const cx = 4 + k * slot + slot / 2;
+    return bar(cx - bw - 1, m.supply, "rev-bar") + bar(cx + 1, m.profit, "rev-bar-profit")
+      + `<text x="${cx.toFixed(1)}" y="${H - 14}" text-anchor="middle" class="rev-bar-label">${m.month}</text>`;
   }).join("");
-  return `<svg viewBox="0 0 ${W} ${H}" class="w-full" role="img" aria-label="월별 매출 추세">${parts}</svg>`;
+  // 범례
+  const legend = `<rect x="8" y="${H - 9}" width="9" height="9" class="rev-bar"/><text x="21" y="${H - 1}" class="rev-bar-label">매출</text>`
+    + `<rect x="60" y="${H - 9}" width="9" height="9" class="rev-bar-profit"/><text x="73" y="${H - 1}" class="rev-bar-label">순이익</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="w-full" role="img" aria-label="월별 매출·순이익 추세">${parts}${legend}</svg>`;
+}
+
+// 비교 증감 배지. prev>0이면 ((cur-prev)/prev*100) 반올림 + ▲/▼ + 색, 아니면 —.
+function revDeltaBadge(cur, prev) {
+  if (!prev || prev <= 0) return `<span class="text-xs text-muted">—</span>`;
+  const pct = Math.round(((cur - prev) / prev) * 100);
+  const up = pct >= 0;
+  return `<span class="text-xs ${up ? "text-success" : "text-danger"}">${up ? "▲" : "▼"}${Math.abs(pct)}%</span>`;
+}
+
+// 종류별 매출 구성 가로 막대(비중 = amount/total). 막대=인라인 SVG(width=pct, viewBox 100 단위).
+function revTypeBreakdown(rows) {
+  if (!rows.length) return `<div class="card text-sm text-muted">이 기간 매출 구성이 없습니다.</div>`;
+  const total = rows.reduce((s, r) => s + r.amount, 0) || 1;
+  const items = rows.map((r) => {
+    const pct = Math.round((r.amount / total) * 100);
+    return `<div class="flex items-center gap-2 py-1">
+      <span class="w-20 shrink-0 truncate text-sm">${esc(r.label)}</span>
+      <svg viewBox="0 0 100 8" preserveAspectRatio="none" class="h-2 flex-1"><rect x="0" y="0" width="${pct}" height="8" rx="1" class="rev-bar"/></svg>
+      <span class="w-10 shrink-0 text-right text-xs text-muted">${pct}%</span>
+      <span class="w-24 shrink-0 text-right text-sm tabular">${formatKRW(r.amount)}</span>
+    </div>`;
+  }).join("");
+  return `<div class="card">${items}</div>`;
+}
+
+// 세무 참고 카드: VAT 합계 + 외주 원천징수(실지급 병기).
+function revTaxCard(tax) {
+  const w = tax.withholding;
+  return `<div class="card text-sm">
+    <div class="mb-1 font-semibold">세무 참고</div>
+    <div class="flex justify-between py-0.5"><span class="text-muted">VAT 합계</span><span class="tabular">${formatKRW(tax.vatTotal)}</span></div>
+    <div class="flex justify-between py-0.5"><span class="text-muted">외주 지급</span><span class="tabular">${formatKRW(tax.payoutTotal)}</span></div>
+    <div class="flex justify-between py-0.5"><span class="text-muted">원천징수(3.3%)</span><span class="tabular text-danger">−${formatKRW(w.total)}</span></div>
+    <div class="flex justify-between py-0.5"><span class="text-muted">실지급</span><span class="tabular">${formatKRW(w.net)}</span></div>
+    <div class="mt-1 text-xs text-muted">참고용 — 소액부징수·사업자 외주 예외 미반영.</div>
+  </div>`;
 }
 
 // KPI 카드(청구 overview statCard와 동일 톤).
@@ -164,4 +203,4 @@ function revPayerDetail(data, { year, month }) {
   return `${summary}${table}`;
 }
 
-module.exports = { revPeriodControl, revTabs, revBarChart, revOverview, revStaffTable, revPayerTable, revStaffDetail, revPayerDetail };
+module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffTable, revPayerTable, revStaffDetail, revPayerDetail };
