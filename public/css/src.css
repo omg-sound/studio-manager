@@ -322,8 +322,9 @@
 .inv-table tbody tr:last-child td { border-bottom: 0; }
 .inv-table tbody tr:hover { background: rgb(var(--color-primary) / 0.04); }
 .inv-table tbody tr.inv-selected { background: rgb(var(--color-primary) / 0.08); }
-.inv-cell-link { display: block; color: inherit; text-underline-offset: 3px; }
-.inv-cell-link:hover { color: rgb(var(--color-primary)); text-decoration: underline; }
+/* 행 전체가 이동 링크(프로젝트 목록과 동일, 2026-07-18): 셀별 밑줄·색강조 없음 — 어포던스는 행 배경 호버(tr:hover)만. */
+.inv-cell-link { display: block; color: inherit; text-decoration: none; }
+.inv-cell-link:hover { color: inherit; text-decoration: none; }
 .inv-cell-payer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-table td.inv-amt, .inv-table th.inv-amt-col { text-align: right; white-space: nowrap; }
 /* 식별자·날짜·상태는 줄바꿈 금지(짧은데 좁은 열로 찌부되며 3줄로 접히던 것 방지, 2026-07-16). */
