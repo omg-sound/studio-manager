@@ -249,7 +249,7 @@ function layout({ title, user, current = "", body, wide = false }) {
 
   <div class="mx-auto flex w-full max-w-wide gap-8 px-4 py-6 sm:px-6">
     <!-- 사이드바(데스크톱) / 드로어(모바일) -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-64 transform border-r border-border bg-elevated p-4 transition sm:static sm:z-0 sm:block sm:w-56 sm:translate-x-0 sm:border-0 sm:bg-transparent sm:p-0">
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-64 transform border-r border-border bg-elevated p-4 transition sm:sticky sm:top-6 sm:z-0 sm:block sm:w-56 sm:translate-x-0 sm:self-start sm:max-h-[calc(100vh-3rem)] sm:overflow-y-auto sm:border-0 sm:bg-transparent sm:p-0">
       <!-- 모바일 드로어 헤더: 로고 + 닫기(X) 버튼 -->
       <div class="mb-4 flex items-center justify-between sm:hidden">
         ${WORDMARK}
