@@ -11,14 +11,17 @@ const { esc, personName, listGroup, copyable, dataTable } = require("./views");
  * @param {{left:string, right:string, hasSelection:boolean, backHref?:string, backLabel?:string}} o
  */
 function contactPanes({ left, right, hasSelection, backHref = "", backLabel = "" }) {
-  const leftCls = hasSelection ? "hidden lg:block" : "block";
+  const leftCls = hasSelection ? "hidden lg:flex" : "block lg:flex"; // lg에선 flex-col(검색 고정 + 목록 스크롤)
   const rightCls = hasSelection ? "block" : "hidden lg:block";
   const back = hasSelection && backHref
     ? `<a href="${esc(backHref)}" class="mb-3 inline-block text-sm text-primary hover:underline lg:hidden">← ${esc(backLabel)}</a>`
     : "";
-  return `<div class="lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-6 lg:items-start">
-      <div class="${leftCls} lg:sticky lg:top-4">${left}</div>
-      <div class="${rightCls} min-w-0">${back}${right}</div>
+  // lg: 패널 영역을 뷰포트 고정 높이 **flex**로 — **페이지 자체는 스크롤되지 않고** 좌(목록)·우(상세)가 각자 내부 스크롤(마스터-디테일 표준, 2026-07-18 재설계).
+  // 이전엔 왼쪽만 lg:sticky라 헤더가 스크롤되며 목록이 함께 밀리고(전환 중 흔들림) 아래 빈 공간이 생겼다 → 고정 높이 flex 영역으로 교체.
+  // 높이=100vh-9.5rem(상단 py-6 + pageHeader + 탭). flex 자식은 stretch로 전체 높이를 채우고 min-h-0로 내부 스크롤 허용. 좌측은 flex-col(검색 고정 + 목록만 스크롤).
+  return `<div class="lg:flex lg:gap-6 lg:h-[calc(100vh-11rem)]">
+      <div class="${leftCls} lg:w-72 lg:shrink-0 lg:min-h-0 lg:flex-col">${left}</div>
+      <div class="${rightCls} min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1">${back}${right}</div>
     </div>`;
 }
 
@@ -34,9 +37,9 @@ function contactNameList({ rows, selectedId = null, hrefFn }) {
     return `<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${esc(personName(c))}</a>`;
   });
   // data-contact-list = app.js 키보드 이동 마커(선택 행 포커스 + ↑↓로 앞뒤 사람 이동, 2026-07-17 사용자 요청).
-  // lg에서 목록 자체가 스크롤 영역이다: 전 명단(202명)이 페이지와 함께 흐르면 아래쪽 사람을 고를 때 페이지가 그 위치까지
-  // 내려가 오른쪽 상세 머리가 화면 밖으로 나간다. 자체 스크롤이면 선택 행만 목록 안에서 스크롤된다(모바일은 한 단이라 그대로).
-  return `<div data-contact-list class="lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>`;
+  // lg: 왼쪽 열(flex-col) 안에서 **검색은 위에 고정, 목록만 flex-1로 남은 높이를 채워 내부 스크롤**(contactPanes 고정 높이 영역과 함께 동작).
+  // 모바일(<lg)은 flex-1/overflow가 없어 페이지와 함께 흐른다(한 단이라 그대로).
+  return `<div data-contact-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>`;
 }
 
 /**

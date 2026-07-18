@@ -41,9 +41,11 @@ test("contactPanes: 선택 없으면 목록만(좁은 화면), 선택 있으면 
   assert.match(none, /<div class="block[^"]*">LEFT/, "미선택: 왼쪽 항상 보임");
   assert.match(none, /<div class="hidden lg:block[^"]*">RIGHT/, "미선택: 오른쪽은 lg 이상만");
   const sel = contactPanes({ left: "LEFT", right: "RIGHT", hasSelection: true });
-  assert.match(sel, /<div class="hidden lg:block[^"]*">LEFT/, "선택: 왼쪽은 lg 이상만");
+  assert.match(sel, /<div class="hidden lg:flex[^"]*">LEFT/, "선택: 왼쪽은 lg 이상만(flex-col)");
   assert.match(sel, /<div class="block[^"]*">RIGHT/, "선택: 오른쪽 항상 보임");
-  assert.match(sel, /lg:grid-cols-\[18rem_minmax\(0,1fr\)\]/, "2단 그리드(리터럴 클래스)");
+  // 고정 높이 flex 영역(2단) — 페이지 스크롤 대신 좌·우 내부 스크롤(2026-07-18 재설계, 리터럴 클래스).
+  assert.match(sel, /lg:flex lg:gap-6 lg:h-\[calc\(100vh-11rem\)\]/, "고정 높이 flex 컨테이너");
+  assert.match(sel, /lg:flex-1 lg:min-h-0 lg:overflow-y-auto/, "오른쪽 내부 스크롤");
 });
 
 test("contactPanes: 좁은 화면 뒤로가기 — 선택 있을 때만 lg:hidden 링크", () => {
