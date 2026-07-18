@@ -22,7 +22,7 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, errorPage, tabBar, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
+const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, errorPage, tabBar, searchBox, fileViewerPage } = require("../views");
 const { FILE_KINDS, fileKindLabel, clientFilesBlock, clientForm, clientReadView, clientEditPane } = require("../views.clients");
 const { contactPanes, contactNameList } = require("../views.contacts");
 

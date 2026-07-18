@@ -71,12 +71,18 @@ test("전 목록: 행 링크가 현재 목록 주소를 return으로 넘긴다",
   assert.match(R("invoices.routes.js"), /invoiceTable\(shown, \{ isInvoicer: invoicer, ret[,)]/, "invoices: 행(넓은 표)에 목록 주소(ret) 전달");
   assert.match(R("projects.routes.js"), /listQuery/, "projects: 행에 listQuery 전달");
   assert.match(R("contacts.routes.js"), /contactNameList\(\{ rows, selectedId/, "contacts: 이름 목록 2단 렌더");
-  assert.match(R("clients.routes.js"), /return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "clients: 행에 return");
   assert.match(R("workers.routes.js"), /\/workers\/\$\{w\.id\}\?return=\$\{encodeURIComponent\(req\.originalUrl\)\}/, "workers: 행에 return");
+  // clients는 2026-07-18 마스터-디테일 전환으로 목록 행이 왼쪽 이름 목록 안에 항상 남아 있어(연락처와 동일 구조)
+  // 행별 return 파라미터가 필요 없어졌다(아래 별도 테스트로 대체 — 편집 링크·읽기 복귀 계약).
 });
 test("상세 탭 링크가 return을 잃지 않는다 — 탭 한 번 누르면 백링크가 기본 목록으로 떨어지던 사각", () => {
   // 목록→상세 진입에 return을 실어도, 상세 안의 탭 링크가 그걸 버리면 탭을 한 번 누른 순간 백링크가 무효화된다
   // (프로젝트에서 실제 발생). 탭바를 가진 상세 화면은 탭 href에 return을 이어 붙여야 한다.
   assert.match(R("projects.routes.js"), /\?tab=\$\{t\.key\}\$\{keepRet\}/, "projects: 탭 링크가 return 보존");
-  assert.match(R("clients.routes.js"), /keepQ/, "clients: 탭 링크가 from·return 보존");
+  // clients는 2026-07-18 마스터-디테일 전환 후 상세 안에 탭바가 없다(업체/그룹 탭은 목록 좌측에만 존재) — keepQ 계약 소멸.
+});
+test("업체·그룹 상세: 2단 전환 후 [편집] 링크 + 저장하면 읽기 뷰로 복귀(2026-07-18)", () => {
+  const src = R("clients.routes.js");
+  assert.match(src, /editHref: `\/clients\/\$\{c\.id\}\/edit`/, "clients: 읽기 뷰에 [편집] 링크(editHref)");
+  assert.match(src, /res\.redirect\(`\/clients\/\$\{id\}\?flash=saved`\)/, "clients: 저장 후 읽기 뷰로 복귀");
 });
