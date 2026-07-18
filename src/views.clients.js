@@ -3,7 +3,7 @@
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
 const { COMPANY_ROLES } = require("./config");
-const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, projectTypeBadge } = require("./views");
+const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, projectTypeBadge, personName, personLabel, copyable, formatKRW } = require("./views");
 const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
@@ -174,4 +174,97 @@ function clientFilesBlock(c, files, fileErr, fileOk = {}) {
   return `<div>${clientFileSection(c, fileMap, fileErr, fileOk)}</div>`;
 }
 
-module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFileSection, clientFilesBlock, clientForm };
+// 읽기 뷰에서 업체·그룹 '밖으로' 나가는 링크(연락처·프로젝트)는 새 탭 — 왼쪽 목록이 작업 맥락이라 같은 탭에서 나가면 돌아오기 번거롭다.
+// 업체·그룹 '안'에 머무는 링크(소속사=다른 업체)는 같은 탭(마스터-디테일 유지).
+const OUT_CLIENT = ' target="_blank" rel="noopener"';
+
+/** 읽기 뷰 한 줄(라벨 + 값 HTML). 값은 이미 esc/copyable 처리된 신뢰 HTML. */
+function clientReadRow(label, valueHtml) {
+  return `<div class="border-t border-border/60 px-4 py-3 first:border-t-0">
+      <div class="text-xs text-muted">${esc(label)}</div>
+      <div class="mt-0.5 text-sm">${valueHtml}</div>
+    </div>`;
+}
+
+/** 사업자등록증 미등록 경고 아이콘(사업자번호 옆). */
+const CERT_MISSING_ICON = ` <span title="사업자등록증 미등록" aria-label="사업자등록증 미등록" class="ml-0.5 inline-flex align-middle text-warning"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>`;
+
+/**
+ * 업체·그룹 읽기 뷰 — 탭 없이 한 화면 스크롤(연락처 contactReadView와 대칭). 빈 섹션은 헤딩까지 통째로 숨김.
+ * 편집은 별도 경로(editHref) — 상세=바로 편집을 읽기 후 편집으로 뒤집음(2026-07-18, 연락처와 통일).
+ */
+function clientReadView(c, { owners = [], contacts = [], artists = [], members = [], agencyName = "", agencyId = null, groupContact = null, bizLicenseOk = false, projects = [], invoices = [], editHref } = {}) {
+  const { invoiceRow } = require("./views.invoices"); // 지연 require(순환 회피)
+  const dash = '<span class="text-muted">—</span>';
+  const isCompany = c.kind === "company";
+
+  // 헤더: 이름 + 배지 + [편집]
+  const badges = isCompany
+    ? (clientRoleList(c).length ? clientRoleList(c).map((r) => `<span class="badge badge-neutral">${esc(companyRoleLabel(r))}</span>`).join(" ") : `<span class="badge badge-neutral">업체</span>`)
+    : `<span class="badge badge-info">그룹</span>`;
+  const title = isCompany ? c.name : (c.activity_name || c.name);
+  const header = `<div class="mb-4 flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h1 class="truncate font-display text-2xl font-semibold text-fg">${esc(title)}</h1>
+        <div class="mt-1 flex flex-wrap gap-1">${badges}</div>
+      </div>
+      <a href="${esc(editHref)}" class="btn-ghost btn-sm shrink-0">편집</a>
+    </div>`;
+
+  const personLink = (p) => `<a href="/contacts/${p.id}"${OUT_CLIENT} class="text-primary hover:underline">${esc(personName(p))} ↗</a>`;
+
+  let infoCard, extraSections = "";
+  if (isCompany) {
+    const ownerLinks = owners.length ? owners.map(personLink).join(" · ") : dash;
+    infoCard = `<div class="card p-0">
+        ${clientReadRow("사업자등록번호", (c.biz_no ? copyable(c.biz_no) : dash) + (bizLicenseOk ? "" : CERT_MISSING_ICON))}
+        ${clientReadRow("대표", ownerLinks)}
+        ${clientReadRow("사업장 주소", c.address ? copyable(c.address) : dash)}
+        ${clientReadRow("계산서 발행 이메일", c.email ? copyable(c.email) : dash)}
+        ${clientReadRow("전화", c.phone ? copyable(c.phone) : dash)}
+      </div>`;
+    const contactsSec = contacts.length
+      ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">담당자 ${contacts.length}</h2><div class="card p-0">${contacts.map((p) => clientReadRow("", personLink(p))).join("")}</div>`
+      : "";
+    const artistsSec = artists.length
+      ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">소속 아티스트 ${artists.length}</h2><div class="card p-0">${artists.map((a) => clientReadRow("", `<a href="/contacts/${a.id}"${OUT_CLIENT} class="text-primary hover:underline">${esc(personLabel(a.name, a.real_name))} ↗</a>`)).join("")}</div>`
+      : "";
+    const filesSec = `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">첨부 서류</h2><div class="card text-sm">${bizLicenseOk ? `<a href="/clients/${c.id}/files/biz_license/view" target="_blank" rel="noopener" data-popup-view class="text-primary hover:underline">사업자등록증 보기</a>` : `<span class="text-muted">사업자등록증 미등록</span>`}</div>`;
+    extraSections = `${contactsSec}${artistsSec}${filesSec}`;
+  } else {
+    infoCard = `<div class="card p-0">
+        ${clientReadRow("소속사", agencyId ? `<a href="/clients/${agencyId}" class="text-primary hover:underline">${esc(agencyName)}</a>` : (agencyName ? esc(agencyName) : dash))}
+        ${clientReadRow("담당자", groupContact ? personLink(groupContact) : dash)}
+      </div>`;
+    const membersSec = members.length
+      ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">멤버 ${members.length}</h2><div class="card p-0">${members.map((m) => clientReadRow("", `<a href="/contacts/${m.id}"${OUT_CLIENT} class="text-primary hover:underline">${esc(personLabel(m.display_name || m.name, m.name))} ↗</a>`)).join("")}</div>`
+      : "";
+    extraSections = membersSec;
+  }
+
+  // 프로젝트·청구 — 있을 때만. 프로젝트=clientProjectCard(같은 파일), 청구=invoiceRow(공용) + 합계.
+  const projectsSec = projects.length
+    ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2><div class="space-y-2">${projects.map((p) => clientProjectCard(p)).join("")}</div>`
+    : "";
+  let invoicesSec = "";
+  if (invoices.length) {
+    const total = invoices.reduce((s, i) => s + (i.amount || 0), 0);
+    const paid = invoices.reduce((s, i) => s + (i.paid_amount || 0), 0);
+    const due = total - paid;
+    invoicesSec = `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">청구·결제 ${invoices.length}</h2>
+      <div class="card mb-3 flex flex-wrap gap-4 text-sm">
+        <span>청구 합계 <b class="text-fg tabular">${formatKRW(total)}</b></span>
+        <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
+        <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
+      </div>
+      <div class="space-y-2">${invoices.map((i) => invoiceRow(i)).join("")}</div>`;
+  }
+
+  return `${header}
+    ${infoCard}
+    ${extraSections}
+    ${projectsSec}
+    ${invoicesSec}`;
+}
+
+module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectCard, clientFileSection, clientFilesBlock, clientForm, clientReadView };
