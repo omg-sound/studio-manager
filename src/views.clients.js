@@ -25,15 +25,15 @@ function clientRoleList(c) {
   return r; // roles CSV(겸업). 없으면 빈 배열 → 배지에서 '업체'로 폴백
 }
 
-/** 업체·그룹 상세용 프로젝트 행(목록형) — **제목=아티스트(강조)**, 부제=프로젝트명·작성일(약화).
- *  업체 상세 안이라 회사명은 생략(중복). 개별 카드 대신 구분선으로 이어지는 목록(clientProjectList). */
+/** 업체·그룹 상세용 프로젝트 행(목록형) — **제목=작성일 + 아티스트(강조)**, 부제=프로젝트명(약화).
+ *  업체 상세 안이라 회사명은 생략(중복). 날짜를 아티스트명 앞에 둬 시점 식별(2026-07-18). 개별 카드 대신 목록(clientProjectList). */
 function clientProjectRow(p) {
-  const title = p.artist || p.title; // 회사명 생략(업체 상세 안 — 중복), 아티스트 없으면 프로젝트명으로 폴백
+  const name = p.artist || p.title; // 회사명 생략(업체 상세 안 — 중복), 아티스트 없으면 프로젝트명으로 폴백
   const created = p.created_at ? String(p.created_at).slice(0, 10) : "";
-  const subtitle = [p.artist ? p.title : "", created].filter(Boolean).join(" · "); // 아티스트가 제목일 때만 프로젝트명을 부제로(폴백이면 날짜만)
+  const subtitle = p.artist ? p.title : ""; // 아티스트가 제목일 때만 프로젝트명을 부제로(폴백이면 없음)
   return `<a href="/projects/${p.id}" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
     <div class="min-w-0">
-      <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(title)}</span>${projectTypeBadge(p.project_type)}</div>
+      <div class="flex items-center gap-2">${created ? `<span class="shrink-0 tabular text-xs text-muted">${created}</span>` : ""}<span class="truncate font-semibold">${esc(name)}</span>${projectTypeBadge(p.project_type)}</div>
       ${subtitle ? `<div class="mt-0.5 truncate text-xs text-muted">${esc(subtitle)}</div>` : ""}
     </div>
     <span class="shrink-0 text-xs text-muted">열기 ›</span>
