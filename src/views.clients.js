@@ -33,15 +33,36 @@ function clientProjectRow(p) {
   const nameHtml = artist
     ? `<span class="shrink-0 font-semibold">${esc(artist)}</span><span class="truncate text-xs text-muted">${esc(p.title || "")}</span>`
     : `<span class="truncate font-semibold">${esc(p.title || "")}</span>`; // 아티스트 없으면 프로젝트명 강조
-  return `<a href="/projects/${p.id}" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
+  // 업체 상세는 왼쪽 목록이 작업 맥락 — 프로젝트로 나갈 땐 새 탭(업체 창 유지, 연락처 읽기 뷰와 동일 규칙).
+  return `<a href="/projects/${p.id}" target="_blank" rel="noopener" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
     <div class="flex min-w-0 items-center gap-2">${created ? `<span class="shrink-0 tabular text-xs text-muted">${created}</span>` : ""}${nameHtml}</div>
-    <span class="shrink-0 text-xs text-muted">열기 ›</span>
+    <span class="shrink-0 text-xs text-muted">열기 ↗</span>
   </a>`;
 }
 
 /** 프로젝트 목록형 판 — 흰 바탕·바깥 테두리 + 행 사이 구분선 하나(개별 카드 보더 폐지). */
 function clientProjectList(projects) {
   return `<div class="overflow-hidden rounded-lg border border-border/60 bg-surface divide-y divide-border/60">${projects.map((p) => clientProjectRow(p)).join("")}</div>`;
+}
+
+/** 업체 상세용 청구 행(목록형·링크) — 작성일·제목·상태배지·금액. 누르면 청구서(/invoices/:id)를 새 탭으로.
+ *  인라인 펼침(invoiceRow) 대신 전용 링크 행: 업체 상세에선 청구서 전체 화면으로 넘어간다(2026-07-18). */
+function clientInvoiceRow(inv) {
+  const { invoiceBadge } = require("./views.invoices"); // 지연 require(순환 회피)
+  const created = inv.project_created_at ? String(inv.project_created_at).slice(0, 10) : "";
+  return `<a href="/invoices/${inv.id}" target="_blank" rel="noopener" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
+    <div class="flex min-w-0 items-center gap-2">${created ? `<span class="shrink-0 tabular text-xs text-muted">${created}</span>` : ""}<span class="truncate font-medium">${esc(inv.title)}</span></div>
+    <div class="flex shrink-0 items-center gap-2">
+      <div class="flex flex-wrap justify-end gap-1">${invoiceBadge(inv)}</div>
+      <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
+      <span class="text-xs text-muted">↗</span>
+    </div>
+  </a>`;
+}
+
+/** 청구 목록형 판 — 프로젝트 목록과 동일 톤. */
+function clientInvoiceList(invoices) {
+  return `<div class="overflow-hidden rounded-lg border border-border/60 bg-surface divide-y divide-border/60">${invoices.map((i) => clientInvoiceRow(i)).join("")}</div>`;
 }
 
 /** 첨부 서류 업로드·교체 UI 섹션(isEdit=true일 때만 렌더). */
@@ -201,7 +222,6 @@ const CERT_MISSING_ICON = ` <span title="사업자등록증 미등록" aria-labe
  * 편집은 별도 경로(editHref) — 상세=바로 편집을 읽기 후 편집으로 뒤집음(2026-07-18, 연락처와 통일).
  */
 function clientReadView(c, { owners = [], contacts = [], artists = [], members = [], agencyName = "", agencyId = null, groupContact = null, bizLicenseOk = false, projects = [], invoices = [], editHref } = {}) {
-  const { invoiceRow } = require("./views.invoices"); // 지연 require(순환 회피)
   const dash = '<span class="text-muted">—</span>';
   const isCompany = c.kind === "company";
 
@@ -249,7 +269,7 @@ function clientReadView(c, { owners = [], contacts = [], artists = [], members =
     extraSections = membersSec;
   }
 
-  // 프로젝트·청구 — 있을 때만. 프로젝트=목록형(clientProjectList), 청구=invoiceRow(공용) + 합계.
+  // 프로젝트·청구 — 있을 때만. 프로젝트=목록형(clientProjectList), 청구=목록형 링크(clientInvoiceList·새 탭) + 합계.
   const projectsSec = projects.length
     ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2>${clientProjectList(projects)}`
     : "";
@@ -264,7 +284,7 @@ function clientReadView(c, { owners = [], contacts = [], artists = [], members =
         <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
         <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
       </div>
-      <div class="overflow-hidden rounded-lg border border-border/60 bg-surface px-4">${invoices.map((i) => invoiceRow(i, { projectDate: true })).join("")}</div>`;
+      ${clientInvoiceList(invoices)}`;
   }
 
   return `${header}
@@ -309,4 +329,4 @@ function clientEditPane(c, { files = [], fileErr = "", fileOk = {}, contacts = [
     ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}`;
 }
 
-module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectRow, clientProjectList, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };
+module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectRow, clientProjectList, clientInvoiceRow, clientInvoiceList, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };

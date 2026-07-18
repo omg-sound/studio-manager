@@ -202,28 +202,19 @@ function payerName(inv) {
  * 목록 행(compact) = 프로젝트 상세 청구 탭 — 클릭하면 그 자리에서 펼침(청구 항목·PDF·삭제).
  * (/invoices 목록 페이지는 2026-07-16부터 넓은 표 invoiceTable를 쓴다 — 이 행은 프로젝트 탭·클라이언트 상세 전용.)
  */
-function invoiceRow(inv, { items = [], isAdmin = false, returnTo = "", openId = null, projectDate = false } = {}) {
+function invoiceRow(inv, { items = [], isAdmin = false, returnTo = "", openId = null } = {}) {
   const sub = esc(payerName(inv) || "청구처 미지정");
-  // 업체·그룹 상세(projectDate): 회사명(청구처)은 중복이라 생략 + 작성일을 제목 앞으로(시점 식별, 2026-07-18).
-  // 다른 소비처(프로젝트 청구 탭 등)는 날짜 미표시·청구처명 부제 유지.
-  const dateStr = projectDate && inv.project_created_at ? esc(String(inv.project_created_at).slice(0, 10)) : "";
-  const subLine = projectDate ? "" : `<div class="mt-0.5 truncate text-xs text-muted">${sub}</div>`;
-  // 업체 상세(projectDate)에서는 상태 배지를 금액 앞(오른쪽 묶음)으로. 다른 소비처는 제목 밑 유지.
-  const badgeHtml = invoiceBadge(inv);
-  const leftBadge = projectDate ? "" : `<div class="mt-1 flex flex-wrap gap-1">${badgeHtml}</div>`;
-  const rightBadge = projectDate ? `<div class="flex flex-wrap justify-end gap-1">${badgeHtml}</div>` : "";
   // 청구 탭 행: 클릭하면 그 자리에서 펼침(details). 처리 후 ?open=ID로 복귀하면 펼쳐진 채 유지.
   const isOpen = openId != null && Number(openId) === inv.id;
   return `
     <details id="inv-${inv.id}" class="group border-b border-border last:border-0"${isOpen ? " open" : ""}>
       <summary class="row-link flex cursor-pointer list-none items-center justify-between gap-3 py-3">
         <div class="min-w-0">
-          <div class="flex items-center gap-2">${dateStr ? `<span class="shrink-0 tabular text-xs text-muted">${dateStr}</span>` : ""}<span class="truncate font-medium">${esc(inv.title)}</span></div>
-          ${leftBadge}
-          ${subLine}
+          <div class="truncate font-medium">${esc(inv.title)}</div>
+          <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
+          <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
-          ${rightBadge}
           <div class="text-right">
             <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
           </div>
