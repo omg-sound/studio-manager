@@ -220,6 +220,29 @@
     if (t.matches("[data-inv-select-all]")) { var on = t.checked; boxes().forEach(function (b) { b.checked = on; }); sync(); }
     else if (t.matches("[data-inv-select]")) { sync(); }
   });
+  // Shift+클릭 범위 선택(2026-07-18 사용자 요청) — 앵커(직전 클릭) ~ 현재 사이 행을 현재 상태로 일괄.
+  // click에서 shiftKey를 읽는다(change엔 없음). 클릭 시점엔 이미 토글돼 box.checked가 새 상태라 그대로 범위에 전파.
+  var anchorId = null;
+  document.addEventListener("click", function (e) {
+    var box = e.target.closest && e.target.closest("[data-inv-select]");
+    if (!box) return;
+    var list = boxes();
+    var idx = list.indexOf(box);
+    if (e.shiftKey && anchorId != null) {
+      var aIdx = -1;
+      for (var k = 0; k < list.length; k++) { if (list[k].value === anchorId) { aIdx = k; break; } }
+      if (aIdx >= 0) {
+        var lo = Math.min(aIdx, idx), hi = Math.max(aIdx, idx);
+        for (var i = lo; i <= hi; i++) {
+          var tr = list[i].closest("tr");
+          if (tr && tr.style.display === "none") continue; // 실시간 필터로 숨은 행은 범위에서 제외
+          list[i].checked = box.checked;
+        }
+        sync();
+      }
+    }
+    anchorId = box.value; // 다음 shift 범위의 새 앵커
+  });
   document.addEventListener("click", function (e) {
     var clear = e.target.closest && e.target.closest("[data-inv-bulk-clear]");
     if (clear) { e.preventDefault(); boxes().forEach(function (b) { b.checked = false; }); sync(); return; }
