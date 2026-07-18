@@ -182,9 +182,14 @@
   }
   /* 행/카드 클릭 어포던스(소비 레인이 클릭 가능한 행·카드에 적용). 터치엔 hover가 없어 active:로 눌림 피드백. */
   .row-link {
-    @apply transition-colors hover:bg-elevated/60 active:bg-elevated;
+    @apply transition-colors;
   }
 }
+/* hover/active는 fg(전경색) 오버레이로(2026-07-18 — 팔레트마다 --color-elevated가 surface와 거의 같아
+   기존 bg-elevated/60 hover가 Claude 빼고 안 보였다[Apple·Linear·Pinterest는 elevated-surface 차이 5~8]).
+   fg는 어느 팔레트·라이트/다크에서도 배경과 대비되므로 hover가 항상 균일하게 보인다. */
+.row-link:hover { background-color: rgb(var(--color-fg) / 0.06); }
+.row-link:active { background-color: rgb(var(--color-fg) / 0.1); }
 
 /* 커스텀 콤보(검색 드롭다운) 행 눌림 피드백 — 터치엔 hover 없음. 모든 pop은 role="listbox". */
 [role="listbox"] > button:active {
