@@ -138,10 +138,50 @@ function revenueForEngineer(managerId) {
   return { manager, tasks, sessions, task_total, session_total, total: task_total + session_total };
 }
 
+// 스탭(엔지니어)별 매출·순이익. 작업=engineer_id·세션=engineer_name 라인 기준(공급가). 순이익=매출−외주지급.
+function revenueByStaff({ year, month }) {
+  const { listProjectManagers } = require("../data");
+  const per = issuedInPeriodSql("i", { year, month });
+  const q = (sql) => db().prepare(sql).all();
+  const taskRev = q(`SELECT t.engineer_id AS id, COALESCE(SUM(ii.amount),0) AS supply, COUNT(*) AS cnt FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id IS NOT NULL GROUP BY t.engineer_id`);
+  const taskPay = q(`SELECT t.engineer_id AS id, COALESCE(SUM(t.worker_rate),0) AS payout FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id IS NOT NULL GROUP BY t.engineer_id`);
+  const sessRev = q(`SELECT s.engineer_name AS name, COALESCE(SUM(ii.amount),0) AS supply, COUNT(*) AS cnt FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name IS NOT NULL GROUP BY s.engineer_name`);
+  const sessPay = q(`SELECT s.engineer_name AS name, COALESCE(SUM(se.worker_rate),0) AS payout FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name IS NOT NULL GROUP BY s.engineer_name`);
+  const trById = new Map(taskRev.map((r) => [r.id, r]));
+  const tpById = new Map(taskPay.map((r) => [r.id, r.payout]));
+  const srByName = new Map(sessRev.map((r) => [r.name, r]));
+  const spByName = new Map(sessPay.map((r) => [r.name, r.payout]));
+  return listProjectManagers({ includeInactive: true })
+    .map((m) => {
+      const tr = trById.get(m.id) || { supply: 0, cnt: 0 };
+      const sr = srByName.get(m.name) || { supply: 0, cnt: 0 };
+      const supply = (tr.supply || 0) + (sr.supply || 0);
+      const payout = (tpById.get(m.id) || 0) + (spByName.get(m.name) || 0);
+      return { id: m.id, name: m.name, is_external: !m.user_id, supply, profit: supply - payout, task_cnt: tr.cnt || 0, session_cnt: sr.cnt || 0 };
+    })
+    .filter((r) => r.supply > 0)
+    .sort((a, b) => b.supply - a.supply);
+}
+
+// 스탭 상세(기간 작업·세션 + 순이익).
+function revenueForStaff(id, { year, month }) {
+  const manager = db().prepare("SELECT * FROM project_managers WHERE id = ?").get(Number(id));
+  if (!manager) return null;
+  const per = issuedInPeriodSql("i", { year, month });
+  const tasks = db().prepare(`SELECT t.id, t.task_type, ii.amount AS amount, t.worker_rate, tr.title AS track_title, p.id AS project_id, p.title AS project_title, i.issued_date FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN project_tracks tr ON tr.id = t.track_id JOIN projects p ON p.id = tr.project_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id = ? ORDER BY i.issued_date DESC, p.title COLLATE NOCASE`).all(Number(id));
+  const sessions = db().prepare(`SELECT s.id, s.session_date, s.session_type, ii.amount AS amount, p.id AS project_id, p.title AS project_title, i.issued_date FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN projects p ON p.id = s.project_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name = ? ORDER BY i.issued_date DESC, s.session_date DESC`).all(manager.name);
+  const sessPayout = db().prepare(`SELECT COALESCE(SUM(se.worker_rate),0) AS v FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name = ?`).get(manager.name).v;
+  const supply = tasks.reduce((a, t) => a + (t.amount || 0), 0) + sessions.reduce((a, s) => a + (s.amount || 0), 0);
+  const payout = tasks.reduce((a, t) => a + (t.worker_rate || 0), 0) + sessPayout;
+  return { manager, tasks, sessions, supply, payout, profit: supply - payout };
+}
+
 module.exports = {
   revenueByEngineer,
   revenueForEngineer,
   issuedInPeriodSql,
   revenueYears,
   revenueSummary,
+  revenueByStaff,
+  revenueForStaff,
 };

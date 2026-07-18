@@ -17,7 +17,8 @@ function seedInvoice({ issued = "2026-07-10", payerName = "테스트컴퍼니", 
   const tr = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(proj).lastInsertRowid;
   const task = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, engineer_id, worker_rate) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 100000, 100000, 'Completed', 1, ?, ?)").run(tr, engineerId, workerRate).lastInsertRowid;
   const inv = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'T', ?, ?, '발행', ?)").run(proj, payer, amount, tax, issued).lastInsertRowid;
-  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?, ?, 'Mixing', 1, 100000, 100000)").run(inv, task);
+  const supply = amount - tax;
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?, ?, 'Mixing', 1, ?, ?)").run(inv, task, supply, supply);
   return { payer, proj, task, inv };
 }
 
@@ -69,4 +70,33 @@ test("revenueYears: 발행 청구서가 있는 년 내림차순", () => {
   const ys = D.revenueYears();
   assert.ok(ys.includes(2026), "2026 포함");
   for (let k = 1; k < ys.length; k++) assert.ok(ys[k - 1] >= ys[k], "내림차순");
+});
+
+test("revenueByStaff: 작업(engineer_id)+세션(engineer_name) 매출·순이익·건수, 기간·공급가", () => {
+  // 담당자(하우스) 생성 — user_id는 users FK라 실제 사용자 행이 필요(브리프 원안의 하드코딩 1은 FK 위반)
+  const u = db().prepare("INSERT INTO users (email, role, name) VALUES ('staff-rbs@test.com', 'staff', '김엔지')").run().lastInsertRowid;
+  const mgr = db().prepare("INSERT INTO project_managers (name, active, user_id) VALUES ('김엔지', 1, ?)").run(u).lastInsertRowid;
+  // 그 담당자의 작업이 든 발행 청구서(공급가 100000·외주 30000)
+  seedInvoice({ issued: "2026-08-10", payerName: "스탭테스트사", amount: 110000, tax: 10000, workerRate: 30000, engineerId: mgr });
+  const rows = D.revenueByStaff({ year: 2026, month: 8 });
+  const me = rows.find((r) => r.id === mgr);
+  assert.ok(me, "담당자 매출 노출");
+  assert.equal(me.supply, 100000, "작업 라인 공급가");
+  assert.equal(me.profit, 70000, "순이익 = 100000-30000");
+  assert.equal(me.task_cnt, 1, "작업 1건");
+  assert.equal(me.is_external, false, "하우스(user_id 있음)");
+  // 다른 달 조회 시 제외
+  assert.ok(!D.revenueByStaff({ year: 2026, month: 9 }).find((r) => r.id === mgr), "9월엔 없음");
+});
+
+test("revenueForStaff: 담당자 상세(기간 작업·세션 + 순이익), 없으면 null", () => {
+  const u = db().prepare("INSERT INTO users (email, role, name) VALUES ('staff-rfs@test.com', 'staff', '박엔지')").run().lastInsertRowid;
+  const mgr = db().prepare("INSERT INTO project_managers (name, active, user_id) VALUES ('박엔지', 1, ?)").run(u).lastInsertRowid;
+  seedInvoice({ issued: "2026-06-10", payerName: "상세테스트사", amount: 220000, tax: 20000, workerRate: 50000, engineerId: mgr });
+  const d = D.revenueForStaff(mgr, { year: 2026, month: 6 });
+  assert.equal(d.supply, 200000, "공급가");
+  assert.equal(d.payout, 50000, "외주 지급");
+  assert.equal(d.profit, 150000, "순이익");
+  assert.equal(d.tasks.length, 1, "작업 1건");
+  assert.equal(D.revenueForStaff(999999, { year: 2026, month: 6 }), null, "없는 id는 null");
 });
