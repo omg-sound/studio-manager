@@ -1,7 +1,7 @@
 "use strict";
 const express = require("express");
 const { requireInvoice } = require("../auth");
-const { revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer, revenueYears } = require("../data");
+const { revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer, revenueYears, revenueByType, revenueTax } = require("../data");
 const { revPeriodControl, revTabs, revOverview, revStaffTable, revPayerTable, revStaffDetail, revPayerDetail } = require("../views.revenue");
 const { layout, pageHeader, esc, errorPage } = require("../views");
 const { todayYmd } = require("../lib/date");
@@ -31,14 +31,14 @@ router.get("/", requireInvoice, (req, res) => {
     const summary = revenueSummary(period);
     const topStaff = revenueByStaff(period).slice(0, 5);
     const topPayer = revenueByPayer(period).slice(0, 5);
-    content = revOverview({ summary, topStaff, topPayer, ...period });
+    content = revOverview({ summary, topStaff, topPayer, byType: revenueByType(period), tax: revenueTax(period), ...period });
   }
   const body = `
     ${pageHeader({ title: "매출", desc: "공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급." })}
     ${revPeriodControl({ ...period, years, tab })}
     ${revTabs({ tab, ...period })}
     <div class="mt-4">${content}</div>`;
-  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body }));
+  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: true }));
 });
 
 // 스탭 드릴다운.

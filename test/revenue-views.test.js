@@ -59,3 +59,14 @@ test("revPayerTable: 업체/개인 배지 + 매출 기여 + 상세 링크", () =
   assert.match(html, /도너츠컬처/);
   assert.match(html, /\/revenue\/payer\/5\?year=2026&month=7/, "상세 링크");
 });
+
+test("revOverview: 대시보드 그리드 + KPI 델타(선택 기간만) + 명칭 '스탭별 매출'/'업체·개인별 매출'", () => {
+  const summary = { periodSupply: 200, periodProfit: 150, ytdSupply: 500, ytdProfit: 400, monthly: Array.from({length:12},(_,k)=>({month:k+1,supply:0,profit:0})), cmp: { isYear: false, prevPeriodSupply: 100, prevPeriodProfit: 100, prevYearSupply: 100, prevYearProfit: 50 } };
+  const html = V.revOverview({ summary, topStaff: [], topPayer: [], byType: [{label:"믹싱",amount:200}], tax: { vatTotal: 20, payoutTotal: 50, withholding: { total: 1, net: 49 } }, year: 2027, month: 7 });
+  assert.match(html, /스탭별 매출/, "명칭 변경");
+  assert.match(html, /업체·개인별 매출/, "명칭 변경");
+  assert.match(html, /종류별 매출 구성|믹싱/, "종류 구성");
+  assert.match(html, /세무 참고|VAT 합계/, "세무 카드");
+  assert.match(html, /전월/, "선택 기간 KPI 델타(전월)");
+  assert.doesNotMatch(html, /올해 누적[^<]*전월/s, "누적 KPI엔 델타 없음(느슨 검사)");
+});

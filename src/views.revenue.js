@@ -83,35 +83,35 @@ function revTaxCard(tax) {
   </div>`;
 }
 
-// KPI 카드(청구 overview statCard와 동일 톤).
-function kpiCard(label, value, tone = "text-fg") {
-  return `<div class="card flex items-center justify-between gap-3"><span class="text-sm text-muted">${label}</span><span class="tabular text-lg font-bold ${tone}">${formatKRW(value)}</span></div>`;
-}
-
-// 이름·금액 미니 목록(Top N).
-function miniList(rows, hrefFn, moreHref, moreLabel) {
-  if (!rows.length) return `<div class="card text-sm text-muted">내역이 없습니다.</div>`;
-  const items = rows.map((r) => listRow({ href: hrefFn(r), left: `<span class="font-medium">${esc(r.name)}</span>`, right: `<span class="tabular font-semibold">${formatKRW(r.supply)}</span>` }));
-  return `${listGroup({ rows: items })}<div class="mt-1 text-right"><a href="${esc(moreHref)}" class="text-xs text-primary hover:underline">${esc(moreLabel)} →</a></div>`;
-}
-
-// 개요 탭.
-function revOverview({ summary, topStaff, topPayer, year, month }) {
+// 개요 탭 — 대시보드 그리드: KPI 한 줄(선택 기간 2장=델타 배지·누적 2장=배지 없음) → [차트|세무] → [종류 구성|Top들].
+function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) {
   const qs = periodQS({ year, month });
   const periodLabel = month === "all" ? `${year}년 전체` : `${year}년 ${Number(month)}월`;
-  const kpis = `<div class="mb-4 grid gap-3 sm:grid-cols-2">
-    ${kpiCard(`${esc(periodLabel)} 매출`, summary.periodSupply)}
-    ${kpiCard(`${esc(periodLabel)} 순이익`, summary.periodProfit, "text-success")}
-    ${kpiCard(`${esc(year)}년 누적 매출`, summary.ytdSupply)}
-    ${kpiCard(`${esc(year)}년 누적 순이익`, summary.ytdProfit, "text-success")}
+  const c = summary.cmp;
+  const deltas = (curKey, prevKey) => c.isYear
+    ? `<div class="mt-0.5">전년 ${revDeltaBadge(summary[curKey], c["prevPeriod" + prevKey])}</div>`
+    : `<div class="mt-0.5 flex gap-2"><span>전월 ${revDeltaBadge(summary[curKey], c["prevPeriod" + prevKey])}</span><span>전년 ${revDeltaBadge(summary[curKey], c["prevYear" + prevKey])}</span></div>`;
+  const kpi = (label, value, tone, delta) => `<div class="card"><div class="text-sm text-muted">${label}</div><div class="tabular text-xl font-bold ${tone}">${formatKRW(value)}</div>${delta || ""}</div>`;
+  const kpis = `<div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    ${kpi(`${esc(periodLabel)} 매출`, summary.periodSupply, "text-fg", deltas("periodSupply", "Supply"))}
+    ${kpi(`${esc(periodLabel)} 순이익`, summary.periodProfit, "text-success", deltas("periodProfit", "Profit"))}
+    ${kpi("올해 누적 매출", summary.ytdSupply, "text-fg", "")}
+    ${kpi("올해 누적 순이익", summary.ytdProfit, "text-success", "")}
   </div>`;
-  const chart = `<div class="card mb-4"><div class="mb-1 text-sm font-semibold">${esc(year)}년 월별 매출</div>${revBarChart(summary.monthly)}</div>`;
+  const chart = `<div class="card"><div class="mb-1 text-sm font-semibold">${esc(year)}년 월별 매출·순이익</div>${revBarChart(summary.monthly)}</div>`;
+  const typeSec = `<div><h2 class="mb-2 text-sm font-semibold text-muted">종류별 매출 구성</h2>${revTypeBreakdown(byType)}</div>`;
+  const mini = (rows, hrefFn, moreHref, moreLabel) => rows.length
+    ? `${rows.map((r) => `<a href="${hrefFn(r)}" class="row-link flex items-center justify-between gap-2 px-3 py-2"><span class="truncate font-medium">${esc(r.name)}</span><span class="tabular font-semibold">${formatKRW(r.supply)}</span></a>`).join("")}<div class="mt-1 text-right"><a href="${moreHref}" class="text-xs text-primary hover:underline">${moreLabel} →</a></div>`
+    : `<div class="text-sm text-muted">내역이 없습니다.</div>`;
   const tops = `<div class="grid gap-4 sm:grid-cols-2">
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">Top 스탭</h2>${miniList(topStaff, (r) => `/revenue/staff/${r.id}?${qs}`, `/revenue?tab=staff&${qs}`, "스탭별 전체")}</div>
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">Top 업체·개인</h2>${miniList(topPayer, (r) => `/revenue/payer/${r.id}?${qs}`, `/revenue?tab=payer&${qs}`, "업체·개인별 전체")}</div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue/staff/${r.id}?${qs}`, `/revenue?tab=staff&${qs}`, "전체 보기")}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue/payer/${r.id}?${qs}`, `/revenue?tab=payer&${qs}`, "전체 보기")}</div></div>
   </div>`;
-  const note = `<p class="mt-4 text-xs text-muted">매출 = 공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급. Top 스탭 합은 청구서 할인 시 총 매출과 다를 수 있음(라인 기준).</p>`;
-  return `${kpis}${chart}${tops}${note}`;
+  const note = `<p class="mt-4 text-xs text-muted">매출 = 공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급. 스탭별 매출 합은 청구서 할인 시 총 매출과 다를 수 있음(라인 기준).</p>`;
+  return `${kpis}
+    <div class="mb-4 grid gap-4 lg:grid-cols-[2fr_1fr]">${chart}${revTaxCard(tax)}</div>
+    <div class="grid gap-4 lg:grid-cols-2">${typeSec}${tops}</div>
+    ${note}`;
 }
 
 // 스탭 순위 표.
