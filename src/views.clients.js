@@ -3,7 +3,7 @@
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
 const { COMPANY_ROLES } = require("./config");
-const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, personName, personLabel, copyable, formatKRW } = require("./views");
+const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, personName, personLabel, copyable, formatKRW, dataTable } = require("./views");
 const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
@@ -25,44 +25,49 @@ function clientRoleList(c) {
   return r; // roles CSV(겸업). 없으면 빈 배열 → 배지에서 '업체'로 폴백
 }
 
-/** 업체·그룹 상세용 프로젝트 행(목록형) — 한 줄: **작성일(약화) · 아티스트(강조) · 프로젝트명(약화)**.
- *  업체 상세 안이라 회사명은 생략(중복). 아티스트 없으면 프로젝트명을 강조로 폴백. 개별 카드 대신 목록(clientProjectList). */
-function clientProjectRow(p) {
-  const created = p.created_at ? String(p.created_at).slice(0, 10) : "";
-  const artist = p.artist || "";
-  const nameHtml = artist
-    ? `<span class="shrink-0 font-semibold">${esc(artist)}</span><span class="truncate text-xs text-muted">${esc(p.title || "")}</span>`
-    : `<span class="truncate font-semibold">${esc(p.title || "")}</span>`; // 아티스트 없으면 프로젝트명 강조
-  // 업체 상세는 왼쪽 목록이 작업 맥락 — 프로젝트로 나갈 땐 새 탭(업체 창 유지, 연락처 읽기 뷰와 동일 규칙).
-  return `<a href="/projects/${p.id}" target="_blank" rel="noopener" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
-    <div class="flex min-w-0 items-center gap-2">${created ? `<span class="shrink-0 tabular text-xs text-muted">${created}</span>` : ""}${nameHtml}</div>
-    <span class="shrink-0 text-xs text-muted">열기 ↗</span>
-  </a>`;
-}
+// 업체 상세 목록은 왼쪽 명단이 작업 맥락 — 밖으로 나가는 링크는 새 탭(업체 창 유지, 연락처 읽기 뷰와 동일 규칙).
+const OUT = ' target="_blank" rel="noopener"';
+const DT_DASH = '<span class="text-muted">—</span>';
 
-/** 프로젝트 목록형 판 — 흰 바탕·바깥 테두리 + 행 사이 구분선 하나(개별 카드 보더 폐지). */
+/** 업체 상세용 프로젝트 목록 — 항목명(작성일·아티스트·프로젝트) 헤더 표(연락처 참여 내역과 동일 dataTable). 회사명은 업체 상세 안이라 생략. 각 셀=새 탭 링크. */
 function clientProjectList(projects) {
-  return `<div class="overflow-hidden rounded-lg border border-border/60 bg-surface divide-y divide-border/60">${projects.map((p) => clientProjectRow(p)).join("")}</div>`;
+  return dataTable(
+    [
+      { label: "작성일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
+      { label: "아티스트", w: "w-[12rem]", primary: true, mCard: "tl" },
+      { label: "프로젝트", mCard: "bl" },
+    ],
+    projects.map((p) => {
+      const link = (inner, cls = "") => `<a href="/projects/${p.id}"${OUT} class="dt-link ${cls}">${inner}</a>`;
+      return { cells: [
+        link(esc(String(p.created_at || "").slice(0, 10)), "text-muted"),
+        p.artist ? link(esc(p.artist), "font-medium") : DT_DASH,
+        link(esc(p.title || ""), "text-muted"),
+      ] };
+    })
+  );
 }
 
-/** 업체 상세용 청구 행(목록형·링크) — 작성일·제목·상태배지·금액. 누르면 청구서(/invoices/:id)를 새 탭으로.
- *  인라인 펼침(invoiceRow) 대신 전용 링크 행: 업체 상세에선 청구서 전체 화면으로 넘어간다(2026-07-18). */
-function clientInvoiceRow(inv) {
-  const { invoiceBadge } = require("./views.invoices"); // 지연 require(순환 회피)
-  const created = inv.project_created_at ? String(inv.project_created_at).slice(0, 10) : "";
-  return `<a href="/invoices/${inv.id}" target="_blank" rel="noopener" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
-    <div class="flex min-w-0 items-center gap-2">${created ? `<span class="shrink-0 tabular text-xs text-muted">${created}</span>` : ""}<span class="truncate font-medium">${esc(inv.title)}</span></div>
-    <div class="flex shrink-0 items-center gap-2">
-      <div class="flex flex-wrap justify-end gap-1">${invoiceBadge(inv)}</div>
-      <div class="tabular text-sm font-semibold">${formatKRW(inv.amount)}</div>
-      <span class="text-xs text-muted">↗</span>
-    </div>
-  </a>`;
-}
-
-/** 청구 목록형 판 — 프로젝트 목록과 동일 톤. */
+/** 업체 상세용 청구 목록 — 항목명(작성일·청구·상태·금액) 헤더 표. 각 셀=청구서(/invoices/:id)로 새 탭 링크(인라인 펼침 대신 전체 화면). */
 function clientInvoiceList(invoices) {
-  return `<div class="overflow-hidden rounded-lg border border-border/60 bg-surface divide-y divide-border/60">${invoices.map((i) => clientInvoiceRow(i)).join("")}</div>`;
+  const { invoiceBadge } = require("./views.invoices"); // 지연 require(순환 회피)
+  return dataTable(
+    [
+      { label: "작성일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
+      { label: "청구", primary: true, mCard: "tl" },
+      { label: "상태", w: "w-[7rem]", mCard: "bl" },
+      { label: "금액", w: "w-[8rem]", right: true, nowrap: true, mCard: "br" },
+    ],
+    invoices.map((inv) => {
+      const link = (inner, cls = "") => `<a href="/invoices/${inv.id}"${OUT} class="dt-link ${cls}">${inner}</a>`;
+      return { cells: [
+        link(esc(String(inv.project_created_at || "").slice(0, 10)), "text-muted"),
+        link(esc(inv.title || ""), "font-medium"),
+        invoiceBadge(inv),
+        link(formatKRW(inv.amount), "font-semibold"),
+      ] };
+    })
+  );
 }
 
 /** 첨부 서류 업로드·교체 UI 섹션(isEdit=true일 때만 렌더). */
@@ -329,4 +334,4 @@ function clientEditPane(c, { files = [], fileErr = "", fileOk = {}, contacts = [
     ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}`;
 }
 
-module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectRow, clientProjectList, clientInvoiceRow, clientInvoiceList, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };
+module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectList, clientInvoiceList, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };
