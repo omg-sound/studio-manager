@@ -111,7 +111,7 @@ test("revenueYears: 발행 청구서가 있는 년 내림차순", () => {
 Run: `node --test test/revenue.test.js`
 Expected: FAIL (`D.revenueSummary is not a function`).
 
-- [ ] **Step 3: 구현** — `src/data/revenue.js`를 아래로 **전면 교체**(이 태스크는 상단 헬퍼 + summary + years + 골격 exports까지. Task 2·3에서 함수 추가)
+- [ ] **Step 3: 구현** — `src/data/revenue.js`에 아래 헬퍼·함수를 **추가**한다(파일 전면 교체 금지). **기존 `revenueByEngineer`·`revenueForEngineer` 함수와 그 export는 그대로 둔다** — 라우트가 Task 5까지 사용하므로 지금 지우면 Task 3 전체 스위트(스모크가 `/revenue` 호출)가 500으로 깨진다. 아래 코드에서 `"use strict"`·`const { db } = require("../db")`는 이미 파일에 있으니 중복 추가하지 말고, `ISSUED`·`issuedInPeriodSql`·`revenueYears`·`revenueSummary`만 넣는다. module.exports는 **기존 두 이름에 새 이름을 병합**한다.
 
 ```js
 "use strict";
@@ -163,7 +163,8 @@ function revenueSummary({ year, month }) {
   return { periodSupply, periodProfit: periodSupply - payoutIn(per), ytdSupply, ytdProfit: ytdSupply - payoutIn(yr), monthly };
 }
 
-module.exports = { issuedInPeriodSql, revenueYears, revenueSummary };
+// 기존 exports에 병합(옛 revenueByEngineer·revenueForEngineer 유지 — Task 5에서 라우트 교체 후 제거).
+module.exports = { revenueByEngineer, revenueForEngineer, issuedInPeriodSql, revenueYears, revenueSummary };
 ```
 
 - [ ] **Step 4: 통과 확인**
@@ -272,7 +273,7 @@ function revenueForStaff(id, { year, month }) {
 }
 ```
 
-`module.exports`를 확장: `module.exports = { issuedInPeriodSql, revenueYears, revenueSummary, revenueByStaff, revenueForStaff };`
+`module.exports`를 확장(옛 두 이름 유지): `module.exports = { revenueByEngineer, revenueForEngineer, issuedInPeriodSql, revenueYears, revenueSummary, revenueByStaff, revenueForStaff };`
 
 - [ ] **Step 4: 통과 확인**
 
@@ -341,13 +342,14 @@ function revenueForPayer(id, { year, month }) {
   const party = db().prepare("SELECT * FROM parties WHERE id = ?").get(Number(id));
   if (!party) return null;
   const per = issuedInPeriodSql("i", { year, month });
-  const invoices = db().prepare(`SELECT i.id, i.invoice_number, i.issued_date, i.amount, i.tax_amount, i.tax_status, i.status, (i.amount - i.tax_amount) AS supply, p.title AS project_title FROM invoices i LEFT JOIN projects p ON p.id = i.project_id WHERE ${ISSUED} AND ${per} AND i.payer_id = ? ORDER BY i.issued_date DESC, i.id DESC`).all(Number(id));
+  // payer_kind = 결제자 kind(현금영수증/계산서 배지용 taxBadge가 inv.payer_kind를 읽음). 전 청구서가 이 party라 party.kind 동일.
+  const invoices = db().prepare(`SELECT i.id, i.invoice_number, i.issued_date, i.amount, i.tax_amount, i.tax_status, i.status, (i.amount - i.tax_amount) AS supply, c.kind AS payer_kind, p.title AS project_title FROM invoices i JOIN parties c ON c.id = i.payer_id LEFT JOIN projects p ON p.id = i.project_id WHERE ${ISSUED} AND ${per} AND i.payer_id = ? ORDER BY i.issued_date DESC, i.id DESC`).all(Number(id));
   const supply = invoices.reduce((a, r) => a + (r.supply || 0), 0);
   return { party, invoices, supply, invoice_cnt: invoices.length };
 }
 ```
 
-`module.exports = { issuedInPeriodSql, revenueYears, revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer };`
+`module.exports = { revenueByEngineer, revenueForEngineer, issuedInPeriodSql, revenueYears, revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer };`(옛 두 이름은 Task 5에서 함께 제거)
 
 - [ ] **Step 4: 통과 확인** — Run: `node --test test/revenue.test.js` → PASS.
 
@@ -359,7 +361,7 @@ git add src/data/revenue.js test/revenue.test.js
 git commit -m "feat(revenue): 업체·개인별 매출 기여 집계 + 결제자 상세"
 ```
 
-> ⚠️ **주의(구현자)**: 이 태스크까지는 `revenue.js`에서 옛 `revenueByEngineer`/`revenueForEngineer`를 **아직 지우지 않는다**(Task 5에서 라우트를 새 함수로 바꾼 뒤 함께 제거). 지금 지우면 `revenue.routes.js`가 옛 이름을 require해 서버가 깨진다. 옛 두 함수 + 새 함수가 공존하도록 module.exports에 옛 이름도 유지: `module.exports = { ...(옛 revenueByEngineer, revenueForEngineer), issuedInPeriodSql, revenueYears, revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer };`
+> ⚠️ **주의(구현자)**: 이 태스크까지 `revenue.js`의 옛 `revenueByEngineer`/`revenueForEngineer` 함수·export를 **그대로 둔다**(Task 5에서 라우트를 새 함수로 바꾼 뒤 함께 제거). 지금 지우면 `revenue.routes.js`가 옛 이름을 호출해 스모크 테스트(`/revenue` 200)가 500으로 깨진다. 위 Step 3의 module.exports가 옛 두 이름을 포함하는지 확인.
 
 ---
 
