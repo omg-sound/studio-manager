@@ -3,7 +3,7 @@
 /** 클라이언트(당사자) 렌더 — 목록 행·상세 편집 폼·첨부 서류 섹션. clients.routes.js에서 분리(2026-07-09, views.sessions.js·views.invoices.js 컨벤션 동일). */
 
 const { COMPANY_ROLES } = require("./config");
-const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, projectTypeBadge, personName, personLabel, copyable, formatKRW } = require("./views");
+const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, personName, personLabel, copyable, formatKRW } = require("./views");
 const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
@@ -33,7 +33,7 @@ function clientProjectRow(p) {
   const subtitle = p.artist ? p.title : ""; // 아티스트가 제목일 때만 프로젝트명을 부제로(폴백이면 없음)
   return `<a href="/projects/${p.id}" class="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
     <div class="min-w-0">
-      <div class="flex items-center gap-2">${created ? `<span class="shrink-0 tabular text-xs text-muted">${created}</span>` : ""}<span class="truncate font-semibold">${esc(name)}</span>${projectTypeBadge(p.project_type)}</div>
+      <div class="flex items-center gap-2">${created ? `<span class="shrink-0 tabular text-xs text-muted">${created}</span>` : ""}<span class="truncate font-semibold">${esc(name)}</span></div>
       ${subtitle ? `<div class="mt-0.5 truncate text-xs text-muted">${esc(subtitle)}</div>` : ""}
     </div>
     <span class="shrink-0 text-xs text-muted">열기 ›</span>
@@ -265,7 +265,7 @@ function clientReadView(c, { owners = [], contacts = [], artists = [], members =
         <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
         <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
       </div>
-      <div class="space-y-2">${invoices.map((i) => invoiceRow(i, { projectDate: true })).join("")}</div>`;
+      <div class="overflow-hidden rounded-lg border border-border/60 bg-surface px-4">${invoices.map((i) => invoiceRow(i, { projectDate: true })).join("")}</div>`;
   }
 
   return `${header}
