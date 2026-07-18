@@ -32,23 +32,59 @@ function revenueYears() {
     .filter(Boolean);
 }
 
-// 기간 매출·순이익 + 선택 년 월별 추세.
+// 기간 매출·순이익 + 선택 년 월별 추세(순이익 포함) + 전월/전년 비교.
 function revenueSummary({ year, month }) {
   const y = Number(year);
-  const per = issuedInPeriodSql("i", { year, month });
-  const yr = issuedInPeriodSql("i", { year, month: "all" });
+  const isYear = month === "all" || month == null || month === "";
   const supplyIn = (cond) => db().prepare(`SELECT COALESCE(SUM(i.amount - i.tax_amount),0) AS v FROM invoices i WHERE ${ISSUED} AND ${cond}`).get().v;
   const payoutIn = (cond) => {
     const taskPay = db().prepare(`SELECT COALESCE(SUM(t.worker_rate),0) AS v FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${cond}`).get().v;
     const sessPay = db().prepare(`SELECT COALESCE(SUM(se.worker_rate),0) AS v FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${cond}`).get().v;
     return taskPay + sessPay;
   };
+  const profitIn = (cond) => supplyIn(cond) - payoutIn(cond);
+  const condOf = (p) => issuedInPeriodSql("i", p);
+  const per = condOf({ year, month });
+  const yr = condOf({ year, month: "all" });
   const periodSupply = supplyIn(per);
   const ytdSupply = supplyIn(yr);
-  const monthRows = db().prepare(`SELECT CAST(substr(i.issued_date,6,2) AS INTEGER) AS m, COALESCE(SUM(i.amount - i.tax_amount),0) AS v FROM invoices i WHERE ${ISSUED} AND substr(i.issued_date,1,4) = '${y}' GROUP BY m`).all();
-  const byMonth = new Map(monthRows.map((r) => [r.m, r.v]));
-  const monthly = Array.from({ length: 12 }, (_, k) => ({ month: k + 1, supply: byMonth.get(k + 1) || 0 }));
-  return { periodSupply, periodProfit: periodSupply - payoutIn(per), ytdSupply, ytdProfit: ytdSupply - payoutIn(yr), monthly };
+
+  // 비교 기간(전월/전년 동월, 연간 선택은 전년 전체)
+  const m = Number(month);
+  const prevPeriod = isYear ? { year: y - 1, month: "all" } : (m === 1 ? { year: y - 1, month: 12 } : { year: y, month: m - 1 });
+  const prevYear = isYear ? null : { year: y - 1, month: m };
+  const cmp = {
+    isYear,
+    prevPeriodSupply: supplyIn(condOf(prevPeriod)),
+    prevPeriodProfit: profitIn(condOf(prevPeriod)),
+    prevYearSupply: prevYear ? supplyIn(condOf(prevYear)) : null,
+    prevYearProfit: prevYear ? profitIn(condOf(prevYear)) : null,
+  };
+
+  // 월별 매출·순이익
+  const groupByMonth = (sql) => new Map(db().prepare(sql).all().map((r) => [r.m, r.v]));
+  const supM = groupByMonth(`SELECT CAST(substr(i.issued_date,6,2) AS INTEGER) AS m, COALESCE(SUM(i.amount - i.tax_amount),0) AS v FROM invoices i WHERE ${ISSUED} AND substr(i.issued_date,1,4) = '${y}' GROUP BY m`);
+  const taskPayM = groupByMonth(`SELECT CAST(substr(i.issued_date,6,2) AS INTEGER) AS m, COALESCE(SUM(t.worker_rate),0) AS v FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND substr(i.issued_date,1,4) = '${y}' GROUP BY m`);
+  const sessPayM = groupByMonth(`SELECT CAST(substr(i.issued_date,6,2) AS INTEGER) AS m, COALESCE(SUM(se.worker_rate),0) AS v FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND substr(i.issued_date,1,4) = '${y}' GROUP BY m`);
+  const monthly = Array.from({ length: 12 }, (_, k) => {
+    const mm = k + 1;
+    const sup = supM.get(mm) || 0;
+    const pay = (taskPayM.get(mm) || 0) + (sessPayM.get(mm) || 0);
+    return { month: mm, supply: sup, profit: sup - pay };
+  });
+
+  return { periodSupply, periodProfit: periodSupply - payoutIn(per), ytdSupply, ytdProfit: ytdSupply - payoutIn(yr), monthly, cmp };
+}
+
+// 세무 참고: 기간 VAT 합계 + 외주 원천징수 3.3% 예상(표시 참고용, lib/tax.js withholding33).
+function revenueTax({ year, month }) {
+  const { withholding33 } = require("../lib/tax");
+  const per = issuedInPeriodSql("i", { year, month });
+  const vatTotal = db().prepare(`SELECT COALESCE(SUM(i.tax_amount),0) AS v FROM invoices i WHERE ${ISSUED} AND ${per}`).get().v;
+  const taskPay = db().prepare(`SELECT COALESCE(SUM(t.worker_rate),0) AS v FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per}`).get().v;
+  const sessPay = db().prepare(`SELECT COALESCE(SUM(se.worker_rate),0) AS v FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per}`).get().v;
+  const payoutTotal = taskPay + sessPay;
+  return { vatTotal, payoutTotal, withholding: withholding33(payoutTotal) };
 }
 
 // 스탭(엔지니어)별 매출·순이익. 작업=engineer_id·세션=engineer_name 라인 기준(공급가). 순이익=매출−외주지급.
@@ -110,6 +146,7 @@ module.exports = {
   issuedInPeriodSql,
   revenueYears,
   revenueSummary,
+  revenueTax,
   revenueByStaff,
   revenueForStaff,
   revenueByPayer,
