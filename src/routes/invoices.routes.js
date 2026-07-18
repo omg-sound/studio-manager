@@ -106,7 +106,7 @@ router.get("/", requireBilling, (req, res) => {
   const ret = retPath + limitQ;
   const bulkBar = invoicer ? invoiceBulkBar(ret) : ""; // 대표·치프만 일괄 처리
   const list = shown.length
-    ? `${invoicer ? bulkBar : ""}<div class="overflow-hidden rounded-lg border border-border/50 bg-surface">${invoiceTable(shown, { isInvoicer: invoicer, ret, filterList: true })}</div>${cap.more}`
+    ? `${invoicer ? bulkBar : ""}<div class="inv-table-wrap overflow-hidden rounded-lg border border-border/50 bg-surface">${invoiceTable(shown, { isInvoicer: invoicer, ret, filterList: true })}</div>${cap.more}`
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });
