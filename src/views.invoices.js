@@ -263,7 +263,7 @@ function invoiceTable(rows, { isInvoicer = false, ret = "", filterList = false }
       const num = String(inv.invoice_number || "").trim();
       const issued = inv.issued_date ? esc(formatYmdShort(inv.issued_date)) : "";
       const check = isInvoicer
-        ? `<td class="inv-check" data-label="선택"><input type="checkbox" data-inv-select value="${inv.id}" aria-label="선택" class="align-middle" /></td>`
+        ? `<td class="inv-check" data-label="선택"><input type="checkbox" data-inv-select value="${inv.id}" data-inv-amount="${inv.amount || 0}" aria-label="선택" class="align-middle" /></td>`
         : "";
       const act = isInvoicer
         ? `<td class="inv-act-col" data-label="처리"><span class="inv-actions">${taxToggleButtons(inv, retBase, { iconOnly: true })}</span></td>`
@@ -297,7 +297,7 @@ function invoiceBulkBar(ret = "/invoices") {
     <form data-inv-bulk-form data-inv-bulk-bar method="post" action="/invoices/bulk-tax-status" style="display:none" class="inv-bulkbar card z-40 flex flex-wrap items-center justify-between gap-3 border-primary/40">
       <input type="hidden" name="ids" data-inv-bulk-ids />
       <input type="hidden" name="return" value="${esc(ret)}" />
-      <span class="text-sm"><b class="tabular" data-inv-bulk-count>0</b>건 선택됨</span>
+      <span class="text-sm"><b class="tabular" data-inv-bulk-count>0</b>건 선택됨<span data-inv-bulk-sum class="tabular ml-2 font-semibold text-fg"></span></span>
       <div class="flex flex-wrap items-center gap-2">
         <button type="submit" name="tax_status" value="계산서 발행" data-bulk-label="계산서 발행 완료" class="btn-ghost btn-sm border-success/40 text-success">계산서 발행 완료</button>
         <button type="submit" name="tax_status" value="입금완료" data-bulk-label="입금완료" class="btn-primary btn-sm">입금완료 처리</button>

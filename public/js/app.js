@@ -185,13 +185,28 @@
   function inMode() { return root.classList.contains("inv-selecting"); }
   function enterMode() { root.classList.add("inv-selecting"); }
   function exitMode() { root.classList.remove("inv-selecting"); }
+  function fmtWon(n) { return "₩" + String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
   function sync() {
     var all = boxes(), sel = selected();
     var bar = document.querySelector("[data-inv-bulk-bar]");
     var cnt = document.querySelector("[data-inv-bulk-count]");
     if (cnt) cnt.textContent = String(sel.length);
+    // 선택 항목 금액 합계(2026-07-18 사용자 요청) — 체크박스 data-inv-amount 합산.
+    var sumEl = document.querySelector("[data-inv-bulk-sum]");
+    if (sumEl) {
+      var sum = sel.reduce(function (a, b) { return a + (Number(b.getAttribute("data-inv-amount")) || 0); }, 0);
+      sumEl.textContent = sel.length ? "· " + fmtWon(sum) : "";
+    }
     if (bar) bar.style.display = sel.length ? "" : "none"; // ⚠️ hidden 속성 아님(함정 #26 — flex 유틸에 밀림)
-    if (!sel.length) exitMode(); // 선택 0이면 모바일 선택 모드 해제(데스크톱은 무영향)
+    // 바가 마지막 항목을 가리지 않게 여백을 **실측**(모바일 버튼 줄바꿈으로 높이가 변해 고정값은 부족했다 — 2026-07-18 사용자 리포트).
+    // inv-selecting는 여백(margin) rule의 게이트 — 선택이 있으면 데스크톱에서도 켠다(모바일 체크박스 노출은 별개 media 규칙).
+    if (sel.length) enterMode(); else exitMode();
+    if (bar && sel.length) {
+      var rect = bar.getBoundingClientRect(); // display 세팅 직후 측정(getBoundingClientRect가 레이아웃 강제)
+      root.style.setProperty("--inv-bar-h", Math.max(0, Math.round(window.innerHeight - rect.top) + 16) + "px");
+    } else {
+      root.style.removeProperty("--inv-bar-h");
+    }
     var master = document.querySelector("[data-inv-select-all]");
     if (master) {
       master.checked = all.length > 0 && sel.length === all.length;

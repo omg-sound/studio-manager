@@ -369,7 +369,6 @@
     border-top: 1px solid rgb(var(--color-border));
     box-shadow: 0 -2px 12px rgb(0 0 0 / 0.12);
   }
-  :root.inv-selecting .inv-table { padding-bottom: 4.5rem; } /* 하단 바에 마지막 카드가 가리지 않게 */
 }
 
 /* 데스크톱(≥1024): 일괄 바 = 하단 중앙 플로팅 알약. 이전엔 표 위 sticky라 선택 시 목록이 밀려 내려갔다
@@ -381,8 +380,11 @@
     width: auto; max-width: calc(100vw - 3rem); margin: 0;
     box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
   }
-  :root.inv-selecting .inv-table-wrap { margin-bottom: 4.5rem; } /* 스크롤 맨 아래에서 마지막 행이 플로팅 바에 안 가리게 */
 }
+
+/* 스크롤 맨 아래에서 마지막 행이 하단 바(모바일 전폭·데스크톱 플로팅)에 안 가리게 여백 확보(모바일·데스크톱 공통).
+   높이는 app.js가 바를 실측해 --inv-bar-h로 설정(모바일 버튼 줄바꿈으로 높이가 변해 고정값은 부족했다 — 2026-07-18 사용자 리포트). */
+:root.inv-selecting .inv-table-wrap { margin-bottom: var(--inv-bar-h, 6rem); }
 
 /* 터치(모바일)에서만: ①체크박스를 롱프레스 전까지 숨김(마우스=상시 노출·롱프레스 불가) ②카드 long-press가
    iOS의 링크 미리보기/컨텍스트 메뉴(열기·새 탭에서 열기…)를 안 띄우게 -webkit-touch-callout·user-select 차단
