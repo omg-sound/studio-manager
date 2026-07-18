@@ -73,6 +73,19 @@ function clientInvoiceList(invoices) {
   );
 }
 
+/** 청구·결제 섹션 본문 — 미수 요약(청구 합계·입금·미수) + 청구 목록 표. 업체·연락처(개인 청구처) 상세 공용. */
+function clientBillingSection(invoices) {
+  const total = invoices.reduce((s, i) => s + (i.amount || 0), 0);
+  const paid = invoices.reduce((s, i) => s + (i.paid_amount || 0), 0);
+  const due = total - paid;
+  const summary = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
+      <span>청구 합계 <b class="text-fg tabular">${formatKRW(total)}</b></span>
+      <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
+      <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
+    </div>`;
+  return `${summary}${clientInvoiceList(invoices)}`;
+}
+
 /** 첨부 서류 업로드·교체 UI 섹션(isEdit=true일 때만 렌더). */
 function clientFileSection(c, fileMap, fileErr, fileOk = {}) {
   const rows = FILE_KINDS.map(({ key, label }) => {
@@ -281,19 +294,9 @@ function clientReadView(c, { owners = [], contacts = [], artists = [], members =
   const projectsSec = projects.length
     ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">프로젝트 ${projects.length}</h2>${clientProjectList(projects)}`
     : "";
-  let invoicesSec = "";
-  if (invoices.length) {
-    const total = invoices.reduce((s, i) => s + (i.amount || 0), 0);
-    const paid = invoices.reduce((s, i) => s + (i.paid_amount || 0), 0);
-    const due = total - paid;
-    invoicesSec = `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">청구·결제 ${invoices.length}</h2>
-      <div class="card mb-3 flex flex-wrap gap-4 text-sm">
-        <span>청구 합계 <b class="text-fg tabular">${formatKRW(total)}</b></span>
-        <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
-        <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
-      </div>
-      ${clientInvoiceList(invoices)}`;
-  }
+  const invoicesSec = invoices.length
+    ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">청구·결제 ${invoices.length}</h2>${clientBillingSection(invoices)}`
+    : "";
 
   return `${header}
     ${infoCard}
@@ -337,4 +340,4 @@ function clientEditPane(c, { files = [], fileErr = "", fileOk = {}, contacts = [
     ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}`;
 }
 
-module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectList, clientInvoiceList, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };
+module.exports = { FILE_KINDS, fileKindLabel, companyRoleLabel, clientRoleList, clientProjectList, clientInvoiceList, clientBillingSection, clientFileSection, clientFilesBlock, clientForm, clientReadView, clientEditPane };

@@ -521,7 +521,7 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
 function getInvoiceForUser(_user, id) {
   const row = db()
     .prepare(
-      `SELECT i.*, p.title AS project_title, p.artist AS project_artist, ${PAYER_DISPLAY_SQL} AS client_name
+      `SELECT i.*, p.title AS project_title, p.artist AS project_artist, ${PAYER_DISPLAY_SQL} AS client_name, c.kind AS payer_kind
        FROM invoices i
        LEFT JOIN projects p ON p.id = i.project_id
        LEFT JOIN parties c ON c.id = i.payer_id WHERE i.id = ?`

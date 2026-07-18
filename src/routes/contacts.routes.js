@@ -18,6 +18,7 @@ const {
   deleteAffiliation,
   listProjectsForParty,
   listSessionsForParty,
+  listInvoicesForParty,
   getManagerByPartyId,
   syncPartyToManager,
   listGroupsForPicker,
@@ -367,7 +368,8 @@ function readPaneFor(c) {
   const affs = listAffiliations(c.id);
   const projects = listProjectsForParty(c.id);
   const sessions = listSessionsForParty(c.id);
-  return contactReadView(c, { affs, projects, sessions, editHref: `/contacts/${c.id}/edit`, extras: contactExtras(c) });
+  const invoices = listInvoicesForParty(c.id); // 이 사람이 청구처인 청구서(개인 현금영수증 결제 확인)
+  return contactReadView(c, { affs, projects, sessions, invoices, editHref: `/contacts/${c.id}/edit`, extras: contactExtras(c) });
 }
 
 /** 편집 패널 — 폼 + 소속 이력 인라인 편집 + 소속 추가/이직 + 삭제(옛 '상세 정보' 탭 내용을 그대로 이동). */

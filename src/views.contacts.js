@@ -63,7 +63,7 @@ function readRow(label, valueHtml) {
  * 편집은 별도 경로(editHref) — '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 뒤집었다(클라이언트 상세는 그대로).
  * @param {string} [o.extras] 신뢰 HTML — esc 없이 그대로 삽입된다(호출부가 esc 책임). 사용자 입력을 그대로 흘려보내지 말 것.
  */
-function contactReadView(p, { affs = [], projects = [], sessions = [], editHref, extras = "" } = {}) {
+function contactReadView(p, { affs = [], projects = [], sessions = [], invoices = [], editHref, extras = "" } = {}) {
   const { classifyParty } = require("./data"); // 지연 require(순환 회피)
   const dash = '<span class="text-muted">—</span>';
   const cur = affs.find((a) => !a.ended_on);
@@ -155,9 +155,14 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], editHref,
     table ? `<h2 class="mb-2 mt-6 font-display text-lg font-semibold text-fg">${label} ${count}</h2>${table}` : "";
   const activity = `${section("프로젝트", projects.length, projectTable)}${section("세션", sessions.length, sessionTable)}`;
 
+  // 청구·결제 — 이 사람이 청구처(payer)인 청구서. 개인 현금영수증 결제를 여기서 확인(업체 상세와 동일 부품, 있을 때만).
+  const { clientBillingSection } = require("./views.clients"); // 지연 require(순환 회피)
+  const billing = invoices.length ? section("청구·결제", invoices.length, clientBillingSection(invoices)) : "";
+
   return `${header}
     <div class="space-y-3">${contact}${org}${memo}</div>
     ${activity}
+    ${billing}
     ${extras ? `<div class="mt-6 space-y-1 text-sm">${extras}</div>` : ""}`;
 }
 
