@@ -64,6 +64,11 @@ test("업체·그룹 2단: 목록/상세/편집", async (t) => {
     assert.match(html, new RegExp(`/clients/${groupId}/members`), "멤버 추가 폼 action");
   });
 
+  await t.test("GET /clients/:id/edit?ferr= = 업로드 오류 메시지 표시", async () => {
+    const { html } = await get(`/clients/${companyId}/edit?ferr=${encodeURIComponent("업로드 실패 테스트")}`);
+    assert.match(html, /업로드 실패 테스트/, "첨부 오류 메시지가 편집 화면에 표시");
+  });
+
   server.close(); // 서버가 이벤트 루프를 붙잡아 node --test가 안 끝나는 것 방지(contacts-panes와 동일)
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });

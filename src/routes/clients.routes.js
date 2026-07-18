@@ -237,11 +237,12 @@ router.get("/:id/edit", asyncHandler(async (req, res) => {
   if (!c) return res.status(404).send(errorPage({ code: 404, title: "업체·그룹을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
   if (c.kind === "person") return res.redirect(`/contacts/${c.id}/edit`);
   const returnTo = safePath(String(req.query.return || "")) || null;
-  res.send(renderClients(req, c, editPaneForClient(c, returnTo), `/clients/${c.id}`));
+  const fileErr = String(req.query.ferr || "").trim();
+  res.send(renderClients(req, c, editPaneForClient(c, returnTo, fileErr), `/clients/${c.id}`));
 }));
 
 // 편집 패널 — 데이터 조회 + clientEditPane 조립(연락처 editPaneFor와 대칭).
-function editPaneForClient(c, returnTo = null) {
+function editPaneForClient(c, returnTo = null, fileErr = "") {
   const files = listClientFiles(c.id);
   const isCompany = c.kind === "company";
   const companies = listClients({}).filter((x) => x.kind === "company");
@@ -255,6 +256,7 @@ function editPaneForClient(c, returnTo = null) {
   })();
   return clientEditPane(c, {
     files,
+    fileErr,
     contacts: listContacts({}),
     companies,
     members: c.kind === "group" ? listGroupMembers(c.id) : [],
