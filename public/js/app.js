@@ -3133,6 +3133,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   handle.addEventListener("pointerup", end);
   handle.addEventListener("pointercancel", end);
   handle.addEventListener("keydown", function (e) {
+    if (e.isComposing || e.keyCode === 229) return; // IME 조합 중 무시(함정 #18)
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
     apply(left.getBoundingClientRect().width + (e.key === "ArrowRight" ? 16 : -16));

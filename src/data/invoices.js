@@ -556,7 +556,7 @@ function listInvoicesForProject(user, projectId) {
   if (!project) return null;
   const rows = db()
     .prepare(
-      `SELECT i.*, ${PAYER_DISPLAY_SQL} AS client_name FROM invoices i
+      `SELECT i.*, ${PAYER_DISPLAY_SQL} AS client_name, c.kind AS payer_kind FROM invoices i
        LEFT JOIN parties c ON c.id = i.payer_id
        WHERE i.project_id = ? ORDER BY i.created_at DESC, i.id DESC`
     )

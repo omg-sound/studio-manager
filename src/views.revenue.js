@@ -164,13 +164,14 @@ function revPayerTable(rows, { year, month }) {
 
 // 스탭 드릴다운.
 function revStaffDetail(data, { year, month }) {
+  const { taskTypeLabel } = require("./data");
   const { manager, tasks, sessions, supply, payout, profit } = data;
   const summary = `<div class="card mb-4 flex flex-wrap gap-4 text-sm">
     <span>매출 <b class="tabular text-fg">${formatKRW(supply)}</b></span>
     <span>외주 지급 <b class="tabular text-fg">${formatKRW(payout)}</b></span>
     <span class="font-semibold">순이익 <b class="tabular text-success">${formatKRW(profit)}</b></span>
   </div>`;
-  const taskRows = tasks.length ? listGroup({ rows: tasks.map((t) => listRow({ href: `/projects/${t.project_id}?tab=tracks`, left: `<span class="font-medium">${esc(t.task_type)}</span> <span class="text-xs text-muted">· ${esc(t.project_title)} / ${esc(t.track_title)} · ${esc(String(t.issued_date))}</span>`, right: formatKRW(t.amount) })) }) : emptyState("작업 없음", { card: true });
+  const taskRows = tasks.length ? listGroup({ rows: tasks.map((t) => listRow({ href: `/projects/${t.project_id}?tab=tracks`, left: `<span class="font-medium">${esc(taskTypeLabel(t.task_type))}</span> <span class="text-xs text-muted">· ${esc(t.project_title)} / ${esc(t.track_title)} · ${esc(String(t.issued_date))}</span>`, right: formatKRW(t.amount) })) }) : emptyState("작업 없음", { card: true });
   const sessRows = sessions.length ? listGroup({ rows: sessions.map((s) => listRow({ href: `/projects/${s.project_id}?tab=sessions`, left: `<span class="font-medium">${esc(s.session_date)} ${esc(s.session_type)}</span> <span class="text-xs text-muted">· ${esc(s.project_title)}</span>`, right: formatKRW(s.amount) })) }) : emptyState("세션 없음", { card: true });
   return `${summary}<h2 class="mb-2 mt-4 text-sm font-semibold text-muted">작업 (${tasks.length})</h2>${taskRows}<h2 class="mb-2 mt-4 text-sm font-semibold text-muted">세션 (${sessions.length})</h2>${sessRows}`;
 }

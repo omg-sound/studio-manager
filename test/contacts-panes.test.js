@@ -71,6 +71,13 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
     assert.equal(status, 404);
   });
 
+  await t.test("조직(업체/그룹) id = 404 — 연락처는 사람 전용(상세·편집 모두)", async () => {
+    db().prepare("INSERT INTO parties (kind, name) VALUES ('company', '조직테스트')").run();
+    const orgId = db().prepare("SELECT id FROM parties WHERE name = '조직테스트'").get().id;
+    assert.equal((await get(`/contacts/${orgId}`)).status, 404, "조직 상세는 404");
+    assert.equal((await get(`/contacts/${orgId}/edit`)).status, 404, "조직 편집도 404");
+  });
+
   await t.test("편집: 외부 return은 safePath가 걸러 폼·링크에 안 박힌다", async () => {
     const { status, html } = await get(`/contacts/${target}/edit?return=${encodeURIComponent("https://evil.example.com")}`);
     assert.equal(status, 200);

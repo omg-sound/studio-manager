@@ -110,7 +110,7 @@ router.post("/", asyncHandler(async (req, res) => {
 // (옛 '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 바뀜 — 클라이언트 상세는 인라인 편집 유지.)
 router.get("/:id/edit", (req, res) => {
   const c = getParty(Number(req.params.id));
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!c || c.kind !== "person") return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user })); // 연락처는 사람 전용(조직 id는 404)
   const returnTo = safePath(req.query.return); // 백링크 규약(CLAUDE.md) — 내부 절대경로만(open-redirect 차단)
   res.send(renderContacts(req, c, editPaneFor(c, returnTo)));
 });
@@ -222,7 +222,7 @@ router.post("/:id/affiliations/:aid/delete", (req, res) => {
 // 옛 2탭·인라인 편집 폼·소속 이력 폼은 편집 패널(/contacts/:id/edit)로 옮겨갔다.
 router.get("/:id", (req, res) => {
   const c = getParty(Number(req.params.id));
-  if (!c) return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+  if (!c || c.kind !== "person") return res.status(404).send(errorPage({ code: 404, title: "연락처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user })); // 연락처는 사람 전용(조직 id는 404 — 조직은 /clients)
   res.send(renderContacts(req, c));
 });
 
