@@ -47,6 +47,24 @@ test("revenueSummary: 미발행 청구서는 매출에서 제외", () => {
   assert.equal(D.revenueSummary({ year: 2027, month: 1 }).periodSupply, before, "미발행 제외");
 });
 
+test("revenueSummary: 세션 청구 라인의 session_engineers.worker_rate도 순이익에서 차감", () => {
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("세션청구컴퍼니").lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('SP', 'task', 0)").run().lastInsertRowid;
+  const mgr = db().prepare("INSERT INTO project_managers (name) VALUES ('세션엔지')").run().lastInsertRowid;
+  const sess = db()
+    .prepare("INSERT INTO sessions (project_id, session_type, session_date, engineer_name, status) VALUES (?, '녹음', '2026-11-05', '세션엔지', '완료')")
+    .run(proj).lastInsertRowid;
+  db().prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)").run(sess, mgr, 40000);
+  const inv = db()
+    .prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'ST', 132000, 12000, '발행', '2026-11-05')")
+    .run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount) VALUES (?, ?, '녹음', 1, 120000, 120000)").run(inv, sess);
+
+  const s = D.revenueSummary({ year: 2026, month: 11 });
+  assert.equal(s.periodSupply, 120000, "11월 공급가 = 132000-12000");
+  assert.equal(s.periodProfit, 80000, "11월 순이익 = 120000-40000(세션 외주 지급단가)");
+});
+
 test("revenueYears: 발행 청구서가 있는 년 내림차순", () => {
   const ys = D.revenueYears();
   assert.ok(ys.includes(2026), "2026 포함");
