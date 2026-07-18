@@ -1,6 +1,6 @@
 "use strict";
 // 매출 전용 뷰(2026-07-19) — 기간 컨트롤·탭·KPI·SVG 바 차트·순위 표·드릴다운.
-const { esc, formatKRW, tabBar, dataTable, emptyState, pageHeader, listGroup, listRow } = require("./views");
+const { esc, formatKRW, tabBar, dataTable, emptyState, listGroup, listRow } = require("./views");
 
 const MONTHS = Array.from({ length: 12 }, (_, k) => k + 1);
 // 기간 쿼리 문자열(링크·폼 유지). month은 숫자 또는 'all'.
@@ -63,8 +63,8 @@ function revOverview({ summary, topStaff, topPayer, year, month }) {
   const kpis = `<div class="mb-4 grid gap-3 sm:grid-cols-2">
     ${kpiCard(`${esc(periodLabel)} 매출`, summary.periodSupply)}
     ${kpiCard(`${esc(periodLabel)} 순이익`, summary.periodProfit, "text-success")}
-    ${kpiCard(`올해 누적 매출`, summary.ytdSupply)}
-    ${kpiCard(`올해 누적 순이익`, summary.ytdProfit, "text-success")}
+    ${kpiCard(`${esc(year)}년 누적 매출`, summary.ytdSupply)}
+    ${kpiCard(`${esc(year)}년 누적 순이익`, summary.ytdProfit, "text-success")}
   </div>`;
   const chart = `<div class="card mb-4"><div class="mb-1 text-sm font-semibold">${esc(year)}년 월별 매출</div>${revBarChart(summary.monthly)}</div>`;
   const tops = `<div class="grid gap-4 sm:grid-cols-2">
