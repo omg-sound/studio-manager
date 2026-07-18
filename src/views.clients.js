@@ -25,13 +25,17 @@ function clientRoleList(c) {
   return r; // roles CSV(겸업). 없으면 빈 배열 → 배지에서 '업체'로 폴백
 }
 
-/** 클라이언트 상세용 프로젝트 카드(제목·유형·메타 → 프로젝트 상세 링크). */
+/** 업체·그룹 상세용 프로젝트 카드 — **제목=아티스트·회사(강조)**, 부제=프로젝트명·작성일(약화).
+ *  2026-07-18 사용자 요청: 항목을 아티스트/회사·시점으로 식별하게(프로젝트명은 덜 강조). */
 function clientProjectCard(p) {
-  const meta = [p.artist, p.artist_company, p.production_company].filter(Boolean).join(" · ");
+  const parties = [...new Set([p.artist, p.artist_company, p.production_company].filter(Boolean))]; // 중복 제거(제작=소속이면 한 번만)
+  const title = parties.join(" · ") || p.title; // 아티스트·회사 없으면 프로젝트명으로 폴백
+  const created = p.created_at ? String(p.created_at).slice(0, 10) : "";
+  const subtitle = [parties.length ? p.title : "", created].filter(Boolean).join(" · "); // 아티스트가 제목일 때만 프로젝트명을 부제로(폴백이면 날짜만)
   return `<a href="/projects/${p.id}" class="card flex items-center justify-between gap-3 hover:opacity-80">
     <div class="min-w-0">
-      <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(p.title)}</span>${projectTypeBadge(p.project_type)}</div>
-      ${meta ? `<div class="mt-0.5 truncate text-xs text-muted">${esc(meta)}</div>` : ""}
+      <div class="flex items-center gap-2"><span class="truncate font-semibold">${esc(title)}</span>${projectTypeBadge(p.project_type)}</div>
+      ${subtitle ? `<div class="mt-0.5 truncate text-xs text-muted">${esc(subtitle)}</div>` : ""}
     </div>
     <span class="shrink-0 text-xs text-muted">열기 ›</span>
   </a>`;
@@ -257,7 +261,7 @@ function clientReadView(c, { owners = [], contacts = [], artists = [], members =
         <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
         <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
       </div>
-      <div class="space-y-2">${invoices.map((i) => invoiceRow(i)).join("")}</div>`;
+      <div class="space-y-2">${invoices.map((i) => invoiceRow(i, { projectDate: true })).join("")}</div>`;
   }
 
   return `${header}

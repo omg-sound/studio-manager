@@ -202,8 +202,10 @@ function payerName(inv) {
  * 목록 행(compact) = 프로젝트 상세 청구 탭 — 클릭하면 그 자리에서 펼침(청구 항목·PDF·삭제).
  * (/invoices 목록 페이지는 2026-07-16부터 넓은 표 invoiceTable를 쓴다 — 이 행은 프로젝트 탭·클라이언트 상세 전용.)
  */
-function invoiceRow(inv, { items = [], isAdmin = false, returnTo = "", openId = null } = {}) {
+function invoiceRow(inv, { items = [], isAdmin = false, returnTo = "", openId = null, projectDate = false } = {}) {
   const sub = esc(payerName(inv) || "청구처 미지정");
+  // 업체·그룹 상세에서 항목 식별용 프로젝트 작성일(opt-in, 2026-07-18). 다른 소비처(프로젝트 청구 탭 등)는 미표시.
+  const dateStr = projectDate && inv.project_created_at ? esc(String(inv.project_created_at).slice(0, 10)) : "";
   // 청구 탭 행: 클릭하면 그 자리에서 펼침(details). 처리 후 ?open=ID로 복귀하면 펼쳐진 채 유지.
   const isOpen = openId != null && Number(openId) === inv.id;
   return `
@@ -212,7 +214,7 @@ function invoiceRow(inv, { items = [], isAdmin = false, returnTo = "", openId = 
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(inv.title)}</div>
           <div class="mt-1 flex flex-wrap gap-1">${invoiceBadge(inv)}</div>
-          <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
+          <div class="mt-0.5 truncate text-xs text-muted">${sub}${dateStr ? ` · ${dateStr}` : ""}</div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <div class="text-right">
