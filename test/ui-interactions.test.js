@@ -1086,11 +1086,17 @@ test("청구 목록 표: 체크 시 일괄 바 표시·개수, 전체선택, 제
   assert.equal(count.textContent, "1");
   assert.ok(boxes()[0].closest("tr").classList.contains("inv-selected"), "선택 행 하이라이트");
 
-  // 전체 선택
+  // 전체 선택 버튼: 선택된 게 있으면 **먼저 전부 해제**(2026-07-18 사용자 요청 — 부분 선택 상태에서 전체선택은 clear 우선).
   const all = doc.querySelector("[data-inv-select-all]");
+  all.checked = true; // 네이티브 토글 흉내(indeterminate→checked). 핸들러는 all.checked가 아니라 선택 개수로 판단.
+  fire(win, all, "change");
+  assert.ok(boxes().every((b) => !b.checked), "선택 있으면 전체선택 버튼은 먼저 해제");
+  assert.equal(count.textContent, "0");
+
+  // 다시 누르면(선택 0) 전체 선택
   all.checked = true;
   fire(win, all, "change");
-  assert.ok(boxes().every((b) => b.checked), "전체 선택");
+  assert.ok(boxes().every((b) => b.checked), "선택 0이면 전체 선택");
   assert.equal(count.textContent, "2");
 
   // 제출 → 선택 id 수집(confirm=true라 통과)

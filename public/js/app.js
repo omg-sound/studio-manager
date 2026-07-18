@@ -217,7 +217,9 @@
   document.addEventListener("change", function (e) {
     var t = e.target;
     if (!t || !t.matches) return;
-    if (t.matches("[data-inv-select-all]")) { var on = t.checked; boxes().forEach(function (b) { b.checked = on; }); sync(); }
+    // 전체 선택: 하나라도 선택돼 있으면 **먼저 전부 해제**, 없으면 전체 선택(2026-07-18 사용자 요청 — 부분 선택
+    // 상태에서 네이티브 토글은 전체 선택이 되던 것을 개수 기준으로 뒤집음). sync()가 마스터 checked/indeterminate 정정.
+    if (t.matches("[data-inv-select-all]")) { var on = selected().length === 0; boxes().forEach(function (b) { b.checked = on; }); sync(); }
     else if (t.matches("[data-inv-select]")) { sync(); }
   });
   // Shift+클릭 범위 선택(2026-07-18 사용자 요청) — 앵커(직전 클릭) ~ 현재 사이 행을 현재 상태로 일괄.
