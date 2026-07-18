@@ -277,20 +277,12 @@
   .proj-toggle { position: absolute; top: 0.5rem; right: 0; }
 }
 
-/* ── 연락처 목록 선택 행: 위·아래 구분선 두께·색 대칭(2026-07-18 재수정, 사용자 3차 리포트) ──
-   원인(실측): `divide-y`는 각 행에 border-top만 준다 → 선택 행의 **위 선은 자기 border-top**(tint 있는 el 소유)이지만
-   **아래 선은 '다음 행'의 border-top**(tint 없는 el·다른 background-clip 소유)이라, 두 선의 소유 주체·배경 인접이 달라
-   한쪽이 두껍게 보였다(bg-clip-padding만으론 소유 주체 불일치가 안 풀림). → 선택 행이 **위·아래 선을 모두 직접 소유**하게:
-   선택 행에 border-bottom을 직접 주고, 바로 다음 행의 중복 border-top을 투명화. 두 선이 같은 el·같은 clip(padding)이라 동일 렌더.
-   ⚠️ !important 필수: Tailwind `divide-y`/`divide-border`(`.divide-* > :not([hidden]) ~ :not([hidden])`)는 특정도 (0,3,0)로
-   이 선택자 (0,2,1)를 이겨 border-bottom-width:0·border-color를 도로 덮는다 → 유틸 기본값을 겨냥해 뒤집는 케이스라 !important가 정당. */
-/* 선택 행 위·아래 선은 '있는 듯 없는 듯' 옅게(2026-07-18 사용자 요청 — 강조는 tint 배경이 하고 선은 최소).
-   위 선(divide 기본색=진함)도 함께 낮춘다. tint 배경이 대비를 주므로 선은 아주 옅어도 경계가 보인다. */
-[data-contact-list] a[aria-current="true"] {
-  border-top-color: rgb(var(--color-border) / 0.35) !important;
-  border-bottom: 1px solid rgb(var(--color-border) / 0.35) !important;
-}
-[data-contact-list] a[aria-current="true"] + a { border-top-color: transparent !important; }
+/* ── 연락처 목록 선택 행 '두꺼운 선'의 진짜 원인 = focus-visible 링(2026-07-18 실측 확정) ──
+   선택 행은 키보드 ↑↓ 이동용으로 로드 시 자동 포커스(app.js) → `:focus-visible` 매칭 → base의 `a:focus-visible { ring-2 ring-primary/40 }`가
+   행 전체에 **2px 인디고 box-shadow 링**을 두른다. 이게 '두꺼운 선'이었다(인접 행 hover 시 형제 페인트 순서로 위 링은 보이고 아래 링은 다음 행 배경에 덮여 비대칭 — 사용자 리포트 정확히 일치). divide 구분선이 아니었다.
+   → 선택 행은 tint 배경(bg-primary/10)이 이미 선택·포커스를 표시하므로 링 중복 → 링만 제거. 다른 행(키보드 Tab 포커스)은 링 유지(a11y). */
+[data-contact-list] a[aria-current="true"]:focus,
+[data-contact-list] a[aria-current="true"]:focus-visible { box-shadow: none; }
 
 /* ── 청구 목록 = 데스크톱 넓은 표(2026-07-16 사용자 요청, bookipi 참고) ──
    ≥640px = 진짜 표(컬럼 정렬), <640px = 각 행을 카드로 접음(td[data-label]→::before 라벨).
