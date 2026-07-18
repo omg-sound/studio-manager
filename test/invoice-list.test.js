@@ -141,3 +141,11 @@ test("청구 목록 라우트: 필터·표·일괄 바·ret limit 보존(소스 
   assert.match(src, /invoiceBulkBar\(ret\)/, "일괄 처리 바(대표·치프)");
   assert.match(src, /\["todo", "done", "paid"\]\.includes\(req\.query\.filter\)/, "상태 필터 파라미터");
 });
+
+test("청구 overview 카드: '매출'이 아니라 '발행액'(VAT 포함·매출은 매출 화면 전용)", () => {
+  const fs = require("fs");
+  const src = fs.readFileSync(require("path").join(__dirname, "..", "src", "routes", "invoices.routes.js"), "utf8");
+  assert.match(src, /이번 달 발행액/, "이번 달 발행액 라벨");
+  assert.match(src, /올해 발행액/, "올해 발행액 라벨");
+  assert.doesNotMatch(src, /이번 달 매출|올해 매출/, "'매출'이라는 단어는 청구 카드에서 제거");
+});
