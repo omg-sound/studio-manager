@@ -73,6 +73,12 @@ router.get("/", requireBilling, (req, res) => {
   }
 
   const totalDue = allRows.reduce((s, i) => s + (i.status === "발행" ? balanceOf(i) : 0), 0); // 미수금 합계=전체 기준(필터 무관)
+  // 이번 달 발행(매출) — status<>'미발행' & 발행일 YYYY-MM=이번 달(invoiceStats.thisMonthIssued와 동일 로직, 2026-07-18 사용자 요청).
+  const thisMonth = todayYmd().slice(0, 7);
+  const thisYear = todayYmd().slice(0, 4);
+  const issuedInPeriod = (len, period) => allRows.reduce((s, i) => s + (i.status !== "미발행" && String(i.issued_date || "").slice(0, len) === period ? (i.amount || 0) : 0), 0);
+  const thisMonthIssued = issuedInPeriod(7, thisMonth);
+  const thisYearIssued = issuedInPeriod(4, thisYear); // 올해 매출(2026-07-18 사용자 요청)
 
   const chips = filterChips({
     chips: [
@@ -111,14 +117,21 @@ router.get("/", requireBilling, (req, res) => {
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true })
       : emptyState("청구 내역이 없습니다. 청구는 프로젝트의 청구 탭에서 생성합니다.", { card: true });
 
-  const dueNote = totalDue > 0
-    ? `<div class="card mb-4 flex items-center justify-between"><span class="text-sm text-muted">미수금 합계</span><span class="tabular text-lg font-bold text-danger">${formatKRW(totalDue)}</span></div>`
-    : "";
+  // 상단 개요 3장(2026-07-18 사용자 요청): 미수금 합계 · 이번 달 발행(매출) · 올해 매출. 탭(건수)과 안 겹치게 금액만.
+  const statCard = (label, value, tone = "text-fg") => `<div class="card flex items-center justify-between gap-3">
+      <span class="text-sm text-muted">${label}</span>
+      <span class="tabular text-lg font-bold ${tone}">${formatKRW(value)}</span>
+    </div>`;
+  const overview = `<div class="mb-4 grid gap-3 sm:grid-cols-3">
+      ${statCard("미수금 합계", totalDue, totalDue > 0 ? "text-danger" : "text-fg")}
+      ${statCard(`이번 달 발행 <span class="font-normal opacity-70">· ${esc(String(Number(thisMonth.slice(5, 7))))}월</span>`, thisMonthIssued)}
+      ${statCard(`올해 매출 <span class="font-normal opacity-70">· ${esc(thisYear)}</span>`, thisYearIssued)}
+    </div>`;
 
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "청구", desc: admin ? "발행·입금" : "내 청구 내역" })}
-    ${dueNote}
+    ${overview}
     ${chips}
     ${searchBar}
     ${resultNote}
