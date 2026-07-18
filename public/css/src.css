@@ -533,9 +533,9 @@
   --color-warning: 176 122 8;
   --color-danger: 214 69 69;
   --color-info: 94 106 210;
-  --font-sans: "Inter", "Pretendard", system-ui, sans-serif;
+  --font-sans: -apple-system, "SF Pro Text", "SF Pro Display", "Pretendard", system-ui, sans-serif; /* Apple과 동일(2026-07-18 사용자 요청) */
   --font-serif: var(--font-sans);
-  --font-display: "Inter", "Pretendard", system-ui, sans-serif;
+  --font-display: -apple-system, "SF Pro Display", "Pretendard", system-ui, sans-serif;
   --radius-btn: 0.375rem;
   --radius-input: 0.375rem;
   --radius-card: 0.5rem;
