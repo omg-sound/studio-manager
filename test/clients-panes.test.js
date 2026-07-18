@@ -35,6 +35,22 @@ test("업체·그룹 2단: 목록/상세/편집", async (t) => {
   });
   // Task 4·5가 여기 아래에 서브테스트를 추가한다(companyId·groupId·personId·get·raw 재사용).
 
+  await t.test("GET /clients/:id(업체) = 읽기 뷰(사업자번호·계산서 이메일·[편집]·폼 없음)", async () => {
+    const { status, html } = await get(`/clients/${companyId}`);
+    assert.equal(status, 200);
+    assert.match(html, /111-11-11111/, "사업자번호");
+    assert.match(html, /계산서 발행 이메일/, "계산서 이메일 라벨");
+    assert.match(html, new RegExp(`href="/clients/${companyId}/edit"[^>]*>편집<`), "[편집] 링크");
+    assert.ok(!/data-dirty-form/.test(html), "읽기 뷰엔 편집 폼 없음");
+    assert.match(html, /data-filter-list/, "왼쪽 목록 유지");
+  });
+
+  await t.test("GET /clients/:id(사람) = /contacts/:id로 302", async () => {
+    const { status, location } = await raw(`/clients/${personId}`);
+    assert.equal(status, 302);
+    assert.match(location, new RegExp(`^/contacts/${personId}`));
+  });
+
   server.close(); // 서버가 이벤트 루프를 붙잡아 node --test가 안 끝나는 것 방지(contacts-panes와 동일)
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });

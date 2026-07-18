@@ -9,10 +9,10 @@ const {
   listClients, getParty, listProjectsForParty,
   listInvoicesForParty,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
-  setOrgContacts, setCompanyOwners, listCompanyOwners, listContacts, resolvePersonByName,
+  setOrgContacts, setCompanyOwners, listCompanyOwners, listOrgContacts, listContacts, resolvePersonByName,
   listArtistsForAgency,
   createCompany, createGroup, createPerson, updateParty, deleteParty,
-  setPartyGroup, listGroupMembers, artistPersonOptions, groupOfParty,
+  setPartyGroup, listGroupMembers,
   setPartyAgency, currentAgencyId, currentAgencyName, ensureCompanyParty, resolveCompanyByName, addCompanyRole,
 } = require("../data");
 const storage = require("../storage");
@@ -22,9 +22,8 @@ const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachme
 const { formatBizNo } = require("../lib/forms");
 const { stripTrailingTitle } = require("../lib/korean-name");
 const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공용)
-const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, capList, formatKRW, errorPage, tabBar, listGroup, listRow, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
-const { invoiceRow } = require("../views.invoices");
-const { FILE_KINDS, fileKindLabel, clientProjectCard, clientFilesBlock, clientForm, clientReadView, clientEditPane } = require("../views.clients");
+const { layout, pageHeader, esc, personLabel, flashBanner, emptyState, capList, errorPage, tabBar, listRowLinked, dataTable, explain, personCombo, copyable, searchBox, fileViewerPage } = require("../views");
+const { FILE_KINDS, fileKindLabel, clientFilesBlock, clientForm, clientReadView, clientEditPane } = require("../views.clients");
 const { contactPanes, contactNameList } = require("../views.contacts");
 
 const router = express.Router();
@@ -64,7 +63,7 @@ function newClientMenuHtml() {
 }
 
 // 2단 렌더(연락처 renderContacts와 대칭) — 왼쪽 업체/그룹 탭+검색+이름 목록, 오른쪽 rightHtml(없으면 빈 패널).
-function renderClients(req, sel, rightHtml) {
+function renderClients(req, sel, rightHtml, backHref) {
   const q = String(req.query.q || "").trim();
   const group = ["company", "group"].includes(req.query.group) ? req.query.group : "company";
   const all = listClients({});
@@ -105,7 +104,7 @@ function renderClients(req, sel, rightHtml) {
     ${flashBanner(req.query)}
     ${pageHeader({ title: "업체·그룹", action })}
     ${tabs}
-    ${contactPanes({ left, right, hasSelection: !!sel, backHref: `/clients${keep}`, backLabel: "업체·그룹" })}`;
+    ${contactPanes({ left, right, hasSelection: !!sel, backHref: backHref || `/clients${keep}`, backLabel: "업체·그룹" })}`;
   return layout({ title: sel ? sel.name : "업체·그룹", user: req.user, current: "/clients", body, wide: true });
 }
 
@@ -409,128 +408,44 @@ router.get("/:id", asyncHandler(async (req, res) => {
     ].filter(Boolean).join("&");
     return res.redirect(`/contacts/${c.id}${qs ? `?${qs}` : ""}`);
   }
-  // 탭 3구성(2026-07-08 사용자 요청): 상세 정보(기본) / 프로젝트 / 청구·결제 — 이전엔 프로젝트·청구 2탭 아래 상세 폼이 항상 붙어 길었음.
-  const tab = ["info", "projects", "invoices"].includes(req.query.tab) ? req.query.tab : "info";
-  const projects = listProjectsForParty(c.id); // c.id(숫자)를 넘겨야 함 — 객체를 넘기면 Number(c)=NaN이라 매칭 0(연결 프로젝트/청구 안 뜨던 버그)
-  const invoices = listInvoicesForParty(c.id);
-  const files = listClientFiles(c.id);
-  // 첨부 파일 실제 접근 가능 여부(깨진 링크는 '있음'으로 안 보이게). 확실한 부재(404/휴지통)만 false, 불확실은 true.
-  const fileOk = {};
-  for (const f of files) {
-    try { fileOk[f.kind] = await storage.exists(f.storage_backend, f.file_id); }
-    catch (_e) { fileOk[f.kind] = true; }
-  }
-  // 목록에서 넘어왔으면 그 필터로 복귀(?from=쿼리스트링, 안전문자만 허용).
-  // 청구·프로젝트 청구처 카드에서 넘어왔으면 ?return=(내부 절대경로만)으로 그 화면 복귀(2026-07-08 사용자 요청).
+  // 읽기 뷰 데이터 조회 — 목록에서 넘어왔으면 그 필터로(?from=), 청구·프로젝트에서 넘어왔으면 ?return=(내부 절대경로만)으로 복귀.
   const from = String(req.query.from || "");
   const fromOk = from && /^[\w=&%.\-]*$/.test(from);
   const retQ = String(req.query.return || "");
   const ret = safePath(retQ);
   const clientsBackHref = ret || (fromOk ? `/clients?${from}` : "/clients");
-  const backLabel = ret
-    ? ret.startsWith("/invoices") ? "청구" : ret.startsWith("/projects") ? "프로젝트" : ret.startsWith("/contacts") ? "연락처" : ret.startsWith("/clients") ? "업체·그룹" : "돌아가기"
-    : "업체·그룹";
-  const keepQ = [fromOk ? `from=${from}` : "", ret ? `return=${encodeURIComponent(ret)}` : ""].filter(Boolean).join("&"); // 탭 전환 시 복귀 경로 유실 방지
-  const tabBarHtml = tabBar({
-    tabs: [
-      { key: "info", label: "상세 정보" },
-      { key: "projects", label: `프로젝트 ${projects.length}` },
-      { key: "invoices", label: `청구·결제 ${invoices.length}` },
-    ],
-    activeKey: tab,
-    hrefFn: (key) => `/clients/${c.id}?tab=${key}${keepQ ? `&${keepQ}` : ""}`,
-  });
-
-  let content;
-  if (tab === "invoices") {
-    if (invoices.length) {
-      const total = invoices.reduce((s, i) => s + (i.amount || 0), 0);
-      const paid = invoices.reduce((s, i) => s + (i.paid_amount || 0), 0);
-      const due = total - paid;
-      content = `<div class="card mb-3 flex flex-wrap gap-4 text-sm">
-          <span>청구 합계 <b class="text-fg tabular">${formatKRW(total)}</b></span>
-          <span>입금 <b class="text-success tabular">${formatKRW(paid)}</b></span>
-          <span>미수 <b class="${due > 0 ? "text-danger" : "text-fg"} tabular">${formatKRW(due)}</b></span>
-        </div>
-        <div class="space-y-2">${invoices.map((i) => invoiceRow(i)).join("")}</div>`;
-    } else {
-      content = emptyState(`이 ${c.kind === "group" ? "그룹이" : "업체가"} 청구처인 청구 내역이 없습니다.`, { card: true });
-    }
-  } else {
-    content = projects.length
-      ? `<div class="space-y-2">${projects.map((p) => clientProjectCard(p)).join("")}</div>`
-      : emptyState("연결된 프로젝트가 없습니다.", { card: true });
-  }
-
-  // 그룹(group): 소속 멤버(개인 아티스트) 목록 + 추가/제거.
-  const members = c.kind === "group" ? listGroupMembers(c.id) : [];
-  const memberCandidates = c.kind === "group" ? artistPersonOptions().filter((a) => Number(a.group_id) !== c.id) : [];
-  const memberSection = c.kind === "group"
-    ? `<div class="mb-6">
-        <h3 class="mb-2 font-display text-lg font-semibold text-fg">멤버 <span class="text-sm font-normal text-muted">· 그룹 소속 아티스트</span></h3>
-        ${members.length
-          ? listGroup({ rows: members.map((m) => listRow({
-              left: `<a href="/clients/${m.id}" class="font-medium text-fg hover:text-primary hover:underline">${esc(personLabel(m.display_name, m.name))}</a>`,
-              right: `<form method="post" action="/clients/${c.id}/members/${m.id}/remove" data-confirm="${esc(m.display_name)} 님을 이 그룹에서 제거할까요? (아티스트 자체는 삭제되지 않고 그룹 연결만 해제)"><button class="btn-ghost btn-sm text-danger" type="submit">제거</button></form>`,
-            })) })
-          : emptyState("아직 등록된 멤버가 없습니다.", { card: true })}
-        <form method="post" action="/clients/${c.id}/members" class="card mt-2 flex items-end gap-2">
-          <div class="min-w-0 flex-1">
-            <label class="label">멤버 추가 <span class="font-normal text-muted text-xs">(개인 아티스트 검색 또는 새로 등록)</span></label>
-            ${personCombo({ idField: "member_id", nameField: "member_name", options: memberCandidates, companyOptions: listClients({}).filter((x) => x.kind === "company"), entityLabel: "멤버", placeholder: "멤버 검색 또는 새로 등록" })}
-          </div>
-          <button class="btn-primary shrink-0" type="submit">추가</button>
-        </form>
-      </div>`
-    : "";
-
-  // 업체(company): 소속 아티스트 목록(affiliations 기반). 아티스트: 소속 업체 링크는 소속 이력에서.
-  const roster = c.kind === "company" ? listArtistsForAgency(c.id) : [];
-  const rosterSection = c.kind === "company" && roster.length
-    ? `<div class="mb-4">
-        <h3 class="mb-2 text-sm font-medium text-muted">소속 아티스트</h3>
-        ${listGroup({ rows: roster.map((a) => listRow({ href: `/clients/${a.id}`, left: `<span class="font-medium">${esc(personLabel(a.name, a.real_name))}</span>` })) })}
-      </div>`
-    : "";
-  const agencyLink = "";
-
-  // 상세로 들어오면 바로 편집 — '정보 수정' 버튼 폐기, 인라인 편집 폼(dirty 저장). 첨부·삭제는 분리 배치.
-  const companies = listClients({}).filter((x) => x.kind === "company");
-  if (c.kind !== "company") { c.agency_id = currentAgencyId(c.id); c.agency_name = currentAgencyName(c.id); } // 아티스트·그룹: 소속사 콤보 기본값(이름)
-  const fileErr = String(req.query.ferr || "").trim(); // 첨부 업로드 오류(파일 라우트가 ?ferr= 로 복귀)
-  // 폼의 대표자/담당자 콤보는 전체 연락처(contactOptions)를 내부에서 조회(상세의 contacts는 이 클라이언트 소속만이라 별도).
-  const editCard = clientForm(c, true, files, fileErr, true, listContacts({}), companies, true, false); // withExtras=false — 첨부·삭제 제외
-  const crossRefs = [
-    // 아티스트(사람) party는 연락처와 동일 레코드 — '연락처로 보기' 링크(같은 party를 연락처 화면에서).
-    c.kind === "person" ? `<div><span class="text-muted">연락처로 보기</span> <a href="/contacts/${c.id}" class="text-primary hover:underline">${esc(c.name)} ↗</a></div>` : "",
-    (() => { const g = c.kind === "person" && c.is_artist ? groupOfParty(c.id) : null; return g ? `<div><span class="text-muted">소속 그룹</span> <a href="/clients/${g.id}" class="text-primary hover:underline">${esc(g.activity_name || g.name)} ↗</a></div>` : ""; })(),
-    // 대표자 연락처 — 공동대표 전원 링크(첫 대표만 나오던 것, 2026-07-10)
-    (() => {
-      const owners = c.kind === "company" ? listCompanyOwners(c.id) : [];
-      if (!owners.length) return "";
-      const links = owners.map((o) => `<a href="/contacts/${o.id}" class="text-primary hover:underline">${esc(personName(o))} ↗</a>`).join(" · ");
-      return `<div><span class="text-muted">대표자 연락처</span> ${links}</div>`;
-    })(),
-  ].filter(Boolean).join("");
-  const crossRefBlock = crossRefs ? `<div class="mt-3 space-y-1 text-sm">${crossRefs}</div>` : "";
-  const filesBlock = clientFilesBlock(c, files, fileErr, fileOk); // 자체 '첨부 서류' 헤딩 포함 · 깨진 링크는 경고
-  // 삭제는 편집 폼(clientForm)의 저장 줄 왼쪽 버튼으로 이동(UI 통일: 저장 우측·삭제 좌측·같은 줄).
-
-  // 탭 3구성(2026-07-08): 상세 정보(편집 폼·첨부·멤버·소속 아티스트, 기본 탭) / 프로젝트 / 청구·결제 — 한 화면에 다 쌓지 않고 탭으로 분리.
-  const infoContent = `
-    ${editCard}
-    <div class="mt-3">${filesBlock}</div>
-    ${crossRefBlock}
-    ${memberSection ? `<div class="mt-6">${memberSection}</div>` : ""}
-    ${agencyLink ? `<div class="mt-3">${agencyLink}</div>` : ""}
-    ${rosterSection}`;
-  const body = `
-    ${flashBanner(req.query)}
-    ${pageHeader({ title: c.is_artist ? personLabel(c.activity_name || c.name, c.name) : c.name, desc: c.is_artist ? (c.kind === "group" ? "그룹 아티스트" : "아티스트") : "업체", back: { href: clientsBackHref, label: backLabel } })}
-    ${tabBarHtml}
-    ${tab === "info" ? infoContent : content}`;
-  res.send(layout({ title: c.name, user: req.user, current: "/clients", body }));
+  const right = await readPaneForClient(c);
+  res.send(renderClients(req, c, right, clientsBackHref));
 }));
+
+// 읽기 패널 — 상세 데이터 조회 + clientReadView 조립(연락처 readPaneFor와 대칭). c=조직 party. storage.exists가 async라 이 함수도 async.
+async function readPaneForClient(c) {
+  const isCompany = c.kind === "company";
+  const files = listClientFiles(c.id);
+  let bizLicenseOk = false;
+  const biz = files.find((f) => f.kind === "biz_license");
+  if (biz) {
+    try { bizLicenseOk = await storage.exists(biz.storage_backend, biz.file_id); }
+    catch (_e) { bizLicenseOk = true; } // 확실한 부재(404/휴지통)만 false, 불확실은 true(깨진 링크 오탐 방지)
+  }
+  const opts = {
+    projects: listProjectsForParty(c.id), // c.id(숫자)를 넘겨야 함 — 객체를 넘기면 Number(c)=NaN이라 매칭 0
+    invoices: listInvoicesForParty(c.id),
+    editHref: `/clients/${c.id}/edit`,
+  };
+  if (isCompany) {
+    opts.owners = listCompanyOwners(c.id);
+    opts.contacts = listOrgContacts(c.id);
+    opts.artists = listArtistsForAgency(c.id);
+    opts.bizLicenseOk = bizLicenseOk;
+  } else {
+    opts.members = listGroupMembers(c.id);
+    opts.agencyId = currentAgencyId(c.id);
+    opts.agencyName = currentAgencyName(c.id);
+    opts.groupContact = c.contact_party_id ? getParty(c.contact_party_id) : null;
+  }
+  return clientReadView(c, opts);
+}
 
 // ── 헬퍼 함수 ──
 // 렌더 함수(clientProjectCard·clientFileSection·clientContactCombo·clientForm·clientFilesBlock)는
