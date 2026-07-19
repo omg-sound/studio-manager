@@ -252,16 +252,20 @@ function issuedDayLabel(ymd) {
 }
 
 /**
- * 스탭 상세 항목 행 — 발행일·종류·프로젝트(·세부)·금액 4칸 정렬(2026-07-19 사용자 요청 '항목별로 나눠').
+ * 상세 항목 행(스탭·청구처 공용) — `발행일 | 가운데 | 이름 · 세부 ↗ | 금액` 4칸 정렬
+ * (2026-07-19 사용자 요청 '항목별로 나눠'. 청구처 탭에도 2026-07-20 동일 적용).
+ * 가운데 칸은 행마다 가장 갈리는 값: 스탭=일의 종류(믹싱·공연·녹음), 청구처=상태(발행·입금).
  * 폭은 `.rev-item` CSS 그리드가 잡는다(서버 렌더 인라인 style은 CSP에 막혀 조용히 무시된다 — 함정 #27).
  * 월 그룹이 여럿이라 표 헤더는 두지 않는다(그룹마다 반복되면 시끄럽고, 내용만으로 각 칸이 무엇인지 읽힌다).
+ * @param {{href:string, date:string, mid:string, name:string, detail?:string, amount:number}} it
+ *   `mid`는 **이미 빌드된 HTML**(배지 등) — 호출부가 esc 책임을 진다(listRow의 left/right와 같은 관례).
  */
-function staffItemRow(it) {
+function revItemRow(it) {
   return `<a href="${esc(it.href)}" target="_blank" rel="noopener" class="rev-item row-link px-4 py-3">
       <span class="rev-item-day tabular text-xs text-muted">${esc(issuedDayLabel(it.date))}</span>
-      <span class="rev-item-kind truncate text-sm" title="${esc(it.kind)}">${esc(it.kind)}</span>
-      <span class="rev-item-name min-w-0 truncate text-sm">
-        <span class="font-medium">${esc(it.project)}</span>${it.detail ? ` <span class="text-muted">· ${esc(it.detail)}</span>` : ""} ↗
+      <span class="rev-item-kind truncate text-sm">${it.mid}</span>
+      <span class="rev-item-name min-w-0 truncate text-sm" title="${esc(it.detail ? `${it.name} · ${it.detail}` : it.name)}">
+        <span class="font-medium">${esc(it.name)}</span>${it.detail ? ` <span class="text-muted">· ${esc(it.detail)}</span>` : ""} ↗
       </span>
       <span class="rev-item-amt tabular text-sm font-semibold">${formatKRW(it.amount)}</span>
     </a>`;
@@ -301,13 +305,17 @@ function revStaffDetail(data) {
   </div>`;
   if (!items.length) return `${summary}${emptyState("내역이 없습니다.", { card: true })}`;
   const groups = groupByMonth(items).map((g) => `${monthHeader(g, { profit: true })}
-    ${listGroup({ rows: g.items.map(staffItemRow) })}`).join("");
+    ${listGroup({ rows: g.items.map((it) => revItemRow({
+      href: it.href, date: it.date, name: it.project, detail: it.detail, amount: it.amount,
+      // 긴 커스텀 작업 종류는 칸에서 …로 잘리므로 title로 읽히게 한다.
+      mid: `<span title="${esc(it.kind)}">${esc(it.kind)}</span>`,
+    })) })}`).join("");
   return `${summary}${groups}`;
 }
 
 // 청구처 상세 — 월별 그룹(최신 월 우선). 월 소계는 매출(공급가)만(청구처엔 외주지급 개념이 없다).
 function revPayerDetail(data) {
-  const { taxBadge } = require("./views.invoices");
+  const { taxBadgeShort } = require("./views.invoices");
   const { invoices, supply, invoice_cnt } = data;
   // 방어적 정렬(발행일 내림차순) — revStaffDetail과 동일 수준: 데이터 레이어 SQL 정렬(ORDER BY issued_date DESC)이
   // 진실원천이지만, 그게 바뀌어도 같은 달이 여러 그룹으로 쪼개지는 조용한 회귀가 나지 않게 뷰에서도 보장한다.
@@ -317,14 +325,17 @@ function revPayerDetail(data) {
   const summary = `<div class="card flex flex-wrap gap-4 text-sm"><span>총 매출 기여 <b class="tabular text-fg">${formatKRW(supply)}</b></span><span>청구 ${invoice_cnt}건</span>${last ? `<span class="text-muted">${esc(last)}</span>` : ""}</div>`;
   if (!invoices.length) return `${summary}${emptyState("발행 청구서가 없습니다.", { card: true })}`;
   const items = sorted.map((inv) => ({ ym: String(inv.issued_date || "").slice(0, 7), amount: inv.supply || 0, payout: 0, inv }));
+  // 가운데 칸 = 상태. 짧은 배지(taxBadgeShort)를 쓰는 이유는 /invoices 넓은 표와 같다 — '계산서 발행'은
+  // 칸에 안 들어가고, 미수를 세로로 훑는 게 목적이라 미발행/발행/입금 세 글자면 충분하다.
+  // 세부 = 청구번호(스탭의 곡·세션날짜와 같은 자리): 같은 달 같은 프로젝트로 두 건이 나가면 그것만이 두 행을 가른다.
   const groups = groupByMonth(items).map((g) => `${monthHeader(g)}
-    ${listGroup({ rows: g.items.map(({ inv }) => listRow({
+    ${listGroup({ rows: g.items.map(({ inv }) => revItemRow({
       href: `/invoices/${inv.id}`,
-      left: `<span class="font-medium">${esc(inv.project_title || `청구 #${inv.id}`)} ↗</span>
-             <span class="text-xs text-muted">· ${esc(String(inv.issued_date).slice(0, 10))}${inv.invoice_number ? ` · ${esc(inv.invoice_number)}` : ""}</span>
-             <span class="ml-1">${taxBadge(inv)}</span>`,
-      right: formatKRW(inv.supply),
-      newTab: true,
+      date: inv.issued_date,
+      mid: taxBadgeShort(inv),
+      name: inv.project_title || `청구 #${inv.id}`,
+      detail: inv.invoice_number || "",
+      amount: inv.supply,
     })) })}`).join("");
   return `${summary}${groups}`;
 }

@@ -380,4 +380,4 @@ function invoicesSection({ project, rows, isAdmin, collapsed = false, unbilledFo
     </div>`;
 }
 
-module.exports = { invoiceBadge, invoiceRow, invoiceTable, invoiceBulkBar, invoicesSection, payerInfoCard, payerName, taxToggleButtons, taxBadge }; // displayStatus는 내부 전용; payerName=청구처 표시명(본명 (활동명)) 헬퍼; taxBadge=매출 결제자 상세(views.revenue.js)에서 재사용
+module.exports = { invoiceBadge, invoiceRow, invoiceTable, invoiceBulkBar, invoicesSection, payerInfoCard, payerName, taxToggleButtons, taxBadge, taxBadgeShort }; // displayStatus는 내부 전용; payerName=청구처 표시명(본명 (활동명)) 헬퍼; taxBadge·taxBadgeShort=매출 결제자 상세(views.revenue.js)에서 재사용(short=칸 좁은 표·항목 행용)
