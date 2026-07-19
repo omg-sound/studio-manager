@@ -271,6 +271,19 @@ function revItemRow(it) {
     </a>`;
 }
 
+/**
+ * 청구처 상세 행의 '세부' — 스탭 상세와 같은 자리(여럿 중 어느 것).
+ * 라인 1개: 곡 제목(프로젝트명과 같으면 생략) 또는 세션 날짜. 여러 개: 'N개 항목'.
+ */
+function payerItemDetail(inv) {
+  if (Number(inv.item_count) > 1) return `${inv.item_count}개 항목`;
+  const d = inv.work_detail || "";
+  if (!d) return "";
+  // 세션이면 'YYYY-MM-DD' → '7월 15일', 작업이면 곡 제목(프로젝트명과 같으면 중복이라 생략).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return sessionDayLabel(d);
+  return d === inv.project_title ? "" : d;
+}
+
 // 스탭 상세 — 월별 그룹(최신 월 우선). 월 안에서 작업·세션을 **섞어** 날짜순으로 둔다
 // (2026-07-19 사용자 확정: 월별 리듬이 목적인데 종류로 먼저 가르면 리듬이 두 번 쪼개진다).
 function revStaffDetail(data) {
@@ -315,7 +328,6 @@ function revStaffDetail(data) {
 
 // 청구처 상세 — 월별 그룹(최신 월 우선). 월 소계는 매출(공급가)만(청구처엔 외주지급 개념이 없다).
 function revPayerDetail(data) {
-  const { taxBadgeShort } = require("./views.invoices");
   const { invoices, supply, invoice_cnt } = data;
   // 방어적 정렬(발행일 내림차순) — revStaffDetail과 동일 수준: 데이터 레이어 SQL 정렬(ORDER BY issued_date DESC)이
   // 진실원천이지만, 그게 바뀌어도 같은 달이 여러 그룹으로 쪼개지는 조용한 회귀가 나지 않게 뷰에서도 보장한다.
@@ -325,16 +337,18 @@ function revPayerDetail(data) {
   const summary = `<div class="card flex flex-wrap gap-4 text-sm"><span>총 매출 기여 <b class="tabular text-fg">${formatKRW(supply)}</b></span><span>청구 ${invoice_cnt}건</span>${last ? `<span class="text-muted">${esc(last)}</span>` : ""}</div>`;
   if (!invoices.length) return `${summary}${emptyState("발행 청구서가 없습니다.", { card: true })}`;
   const items = sorted.map((inv) => ({ ym: String(inv.issued_date || "").slice(0, 7), amount: inv.supply || 0, payout: 0, inv }));
-  // 가운데 칸 = 상태. 짧은 배지(taxBadgeShort)를 쓰는 이유는 /invoices 넓은 표와 같다 — '계산서 발행'은
-  // 칸에 안 들어가고, 미수를 세로로 훑는 게 목적이라 미발행/발행/입금 세 글자면 충분하다.
-  // 세부 = 청구번호(스탭의 곡·세션날짜와 같은 자리): 같은 달 같은 프로젝트로 두 건이 나가면 그것만이 두 행을 가른다.
+  // 스탭 상세와 **같은 칸·같은 내용**(2026-07-20 사용자 요청 '일관성이 떨어진다'):
+  // 가운데 = 일의 종류(믹싱·녹음·공연), 세부 = 곡 제목 또는 세션 날짜.
+  // 행 단위는 청구서 그대로 — 할인이 청구서 단위라 라인 합 ≠ 매출이기 때문(revenueForPayer 주석 참조).
+  // 그래서 **금액은 청구서 매출(할인 반영)** 이고 종류·세부만 그 청구서의 첫 라인에서 온다.
+  // 라인이 여러 개면 세부를 'N개 항목'으로 접는다(실측 18건 중 1건뿐이라 드문 경우).
   const groups = groupByMonth(items).map((g) => `${monthHeader(g)}
     ${listGroup({ rows: g.items.map(({ inv }) => revItemRow({
       href: `/invoices/${inv.id}`,
       date: inv.issued_date,
-      mid: taxBadgeShort(inv),
+      mid: `<span title="${esc(inv.work_kind || "")}">${esc(inv.work_kind || "")}</span>`,
       name: inv.project_title || `청구 #${inv.id}`,
-      detail: inv.invoice_number || "",
+      detail: payerItemDetail(inv),
       amount: inv.supply,
     })) })}`).join("");
   return `${summary}${groups}`;

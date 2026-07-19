@@ -353,30 +353,58 @@ test("revPayerDetail: 청구서 링크는 새 탭(target=_blank rel=noopener) + 
   };
   const html = V.revPayerDetail(data);
   assert.match(html, /<a href="\/invoices\/1" target="_blank" rel="noopener"/, "청구서 링크 새 탭");
-  // ↗는 이름 칸 끝(청구번호 뒤) — 스탭 상세와 같은 규칙.
-  assert.match(html, /OMG-202607-018<\/span> ↗/, "이름 칸 끝에 ↗");
+  // ↗는 이름 칸 끝 — 스탭 상세와 같은 규칙(세부가 없으면 프로젝트명 바로 뒤).
+  assert.match(html, /프로젝트A<\/span> ↗/, "이름 칸 끝에 ↗");
 });
 
-// 2026-07-20 사용자 요청: 스탭별이 마음에 들어 업체·개인별에도 같은 4칸 배치를 적용.
-test("revPayerDetail: 4칸 행 — 발행일(일만)·상태(짧은 배지)·프로젝트·청구번호·금액", () => {
+// 2026-07-20 사용자 요청: 업체·개인별도 스탭별과 **같은 내용**(날짜·종류·프로젝트·곡/세션날짜·금액).
+// 행 단위는 청구서 그대로 — 할인이 청구서 단위라 라인 합 ≠ 매출이기 때문(금액은 항상 청구서 매출).
+test("revPayerDetail: 4칸 행 — 발행일·일의 종류·프로젝트·세부·금액(스탭과 동일 내용)", () => {
   const data = {
     party: { id: 5, name: "도너츠컬처", kind: "company" },
     invoices: [
-      { id: 1, invoice_number: "OMG-202607-020", issued_date: "2026-07-16", amount: 220000, tax_amount: 20000, supply: 200000, tax_status: "계산서 발행", status: "발행", payer_kind: "company", project_title: "도너츠컬처 임단우" },
-      { id: 2, invoice_number: "OMG-202607-012", issued_date: "2026-07-06", amount: 220000, tax_amount: 20000, supply: 200000, tax_status: "입금완료", status: "발행", payer_kind: "company", project_title: "도너츠컬처 진혁" },
+      { id: 1, invoice_number: "OMG-202607-020", issued_date: "2026-07-16", amount: 220000, tax_amount: 20000, supply: 200000, tax_status: "계산서 발행", status: "발행", payer_kind: "company", project_title: "도너츠컬처 임단우", work_kind: "보컬녹음", work_detail: "2026-07-15", item_count: 1 },
+      { id: 2, invoice_number: "OMG-202607-012", issued_date: "2026-07-06", amount: 220000, tax_amount: 20000, supply: 200000, tax_status: "입금완료", status: "발행", payer_kind: "company", project_title: "에이비뮤직 선진", work_kind: "믹싱", work_detail: "Dreaming", item_count: 1 },
     ],
     supply: 400000, invoice_cnt: 2,
   };
   const html = V.revPayerDetail(data);
   assert.match(html, /class="rev-item /, "스탭 상세와 같은 그리드 행");
   assert.match(html, /rev-item-day[^>]*>16일</, "발행일은 '일'만");
-  assert.match(html, /rev-item-day[^>]*>6일</, "한 자리 일도 그대로");
-  // 상태는 짧은 배지(미발행/발행/입금) — '계산서 발행'은 칸에 안 들어간다(/invoices 넓은 표와 같은 이유).
-  assert.match(html, /rev-item-kind[^>]*>[\s\S]*?>발행</, "계산서 발행 → '발행'");
-  assert.match(html, /rev-item-kind[^>]*>[\s\S]*?>입금</, "입금완료 → '입금'");
-  assert.ok(!/계산서 발행<\/span>/.test(html), "긴 상태 라벨은 쓰지 않는다");
-  assert.match(html, /· OMG-202607-020/, "세부 = 청구번호(전체)");
+  assert.match(html, /rev-item-kind[^>]*>[\s\S]*?보컬녹음/, "가운데 칸 = 일의 종류(세션)");
+  assert.match(html, /rev-item-kind[^>]*>[\s\S]*?믹싱/, "가운데 칸 = 일의 종류(작업)");
+  assert.match(html, /· 7월 15일/, "세션은 세부 = 실제 세션 날짜");
+  assert.match(html, /· Dreaming/, "작업은 세부 = 곡 제목");
+  // 상태 배지·청구번호는 이 화면의 일이 아니다(미수는 청구 메뉴, 번호는 눌러 들어가면 있다).
+  assert.ok(!/OMG-202607-020/.test(html), "청구번호는 행에 없다");
+  assert.ok(!/>발행</.test(html) && !/>입금</.test(html), "상태 배지는 없다");
   assert.ok(!/ style="/.test(html), "서버 렌더 인라인 style 금지(CSP)");
+});
+
+test("revPayerDetail: 라인이 여럿이면 세부를 'N개 항목'으로 접는다", () => {
+  const html = V.revPayerDetail({
+    party: { id: 5, name: "회사", kind: "company" },
+    invoices: [{ id: 3, invoice_number: "OMG-1", issued_date: "2026-07-06", amount: 220000, tax_amount: 20000, supply: 200000, tax_status: "입금완료", status: "발행", payer_kind: "company", project_title: "도너츠컬처 진혁", work_kind: "믹싱", work_detail: "곡1", item_count: 2 }],
+    supply: 200000, invoice_cnt: 1,
+  });
+  assert.match(html, /· 2개 항목/, "여러 라인은 개수로 접는다");
+  assert.ok(!/곡1/.test(html), "첫 라인 세부로 오해하게 두지 않는다");
+});
+
+test("revPayerDetail: 곡 제목이 프로젝트명과 같으면 세부 생략 / 종류·세부가 비면 이름만", () => {
+  const same = V.revPayerDetail({
+    party: { id: 5, name: "회사", kind: "company" },
+    invoices: [{ id: 4, issued_date: "2026-07-06", amount: 110000, tax_amount: 10000, supply: 100000, tax_status: "입금완료", status: "발행", payer_kind: "company", project_title: "Inferno", work_kind: "믹싱", work_detail: "Inferno", item_count: 1 }],
+    supply: 100000, invoice_cnt: 1,
+  });
+  assert.ok(!/· Inferno/.test(same), "프로젝트명과 같은 곡 제목은 생략");
+  // 원본 작업·세션이 삭제돼 참조가 끊긴 청구서(수동 청구 포함) — 종류·세부 없이 이름만
+  const bare = V.revPayerDetail({
+    party: { id: 5, name: "회사", kind: "company" },
+    invoices: [{ id: 5, issued_date: "2026-07-06", amount: 110000, tax_amount: 10000, supply: 100000, tax_status: "입금완료", status: "발행", payer_kind: "company", project_title: "수동청구", work_kind: "", work_detail: "", item_count: 0 }],
+    supply: 100000, invoice_cnt: 1,
+  });
+  assert.match(bare, /수동청구<\/span> ↗/, "이름만 렌더");
 });
 
 test("revPayerDetail: 프로젝트가 없는 청구서는 '청구 #id'로 표시", () => {

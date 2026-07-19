@@ -148,8 +148,48 @@ function revenueForPayer(id, period) {
   const per = issuedInPeriodSql("i", period);
   // payer_kind = 결제자 kind(현금영수증/계산서 배지용 taxBadge가 inv.payer_kind를 읽음). 전 청구서가 이 party라 party.kind 동일.
   const invoices = db().prepare(`SELECT i.id, i.invoice_number, i.issued_date, i.amount, i.tax_amount, i.tax_status, i.status, (i.amount - i.tax_amount) AS supply, c.kind AS payer_kind, p.title AS project_title FROM invoices i JOIN parties c ON c.id = i.payer_id LEFT JOIN projects p ON p.id = i.project_id WHERE ${ISSUED} AND ${per} AND i.payer_id = ? ORDER BY i.issued_date DESC, i.id DESC`).all(Number(id));
+  // 각 청구서가 '무슨 일'이었는지(작업 종류/세션 종류 + 곡·세션날짜) — 스탭 상세와 같은 칸을 채우기 위해.
+  // 행 단위는 **청구서 그대로** 둔다(2026-07-20 사용자 결정): 할인이 청구서 단위라 라인 금액 합 ≠ 매출이고
+  // (실측 도너츠컬처 18건 중 17건이 할인, 30만 라인이 실제 매출 20만), 돈 화면에서 그 어긋남은 허용할 수 없다.
+  // 라인이 1개인 청구서가 대부분(17/18)이라 사실상 라인 단위와 같은 화면이 되고, 여러 개면 개수만 알린다.
+  attachWorkSummary(invoices);
   const supply = invoices.reduce((a, r) => a + (r.supply || 0), 0);
   return { party, invoices, supply, invoice_cnt: invoices.length };
+}
+
+/**
+ * 청구서 배열에 `work_kind`(종류)·`work_detail`(곡 제목 또는 세션 날짜 'YYYY-MM-DD')·`item_count`를 붙인다(제자리 변경).
+ * 첫 라인 기준 — 여러 라인이면 뷰가 '개 항목'으로 접는다. 원본 작업·세션이 삭제돼 참조가 끊긴 라인은
+ * 종류·세부가 빈 값이 되고(스냅샷 description은 형식이 제각각이라 칸으로 못 쪼갠다) 뷰가 알아서 생략한다.
+ */
+function attachWorkSummary(invoices) {
+  if (!invoices.length) return;
+  const ids = invoices.map((r) => Number(r.id));
+  const rows = db().prepare(`SELECT ii.invoice_id, ii.id AS item_id, ii.item_date,
+      t.task_type, tr.title AS track_title,
+      s.session_type, s.session_date
+    FROM invoice_items ii
+    LEFT JOIN track_tasks t ON t.id = ii.task_id
+    LEFT JOIN project_tracks tr ON tr.id = t.track_id
+    LEFT JOIN sessions s ON s.id = ii.session_id
+    WHERE ii.invoice_id IN (${ids.map(() => "?").join(",")})
+    ORDER BY ii.invoice_id, (ii.item_date IS NULL), ii.item_date, ii.id`).all(...ids);
+  const byInvoice = new Map();
+  rows.forEach((r) => {
+    const cur = byInvoice.get(r.invoice_id);
+    if (cur) { cur.count += 1; return; } // 첫 라인만 종류·세부로 쓴다(정렬이 항목 날짜순이라 첫 라인 = 가장 이른 항목)
+    byInvoice.set(r.invoice_id, { first: r, count: 1 });
+  });
+  const { taskTypeLabel } = require("../data"); // 지연 require(순환 회피)
+  invoices.forEach((inv) => {
+    const g = byInvoice.get(inv.id);
+    if (!g) { inv.work_kind = ""; inv.work_detail = ""; inv.item_count = 0; return; }
+    const f = g.first;
+    inv.item_count = g.count;
+    if (f.task_type) { inv.work_kind = taskTypeLabel(f.task_type); inv.work_detail = f.track_title || ""; }
+    else if (f.session_type) { inv.work_kind = f.session_type; inv.work_detail = f.session_date || ""; }
+    else { inv.work_kind = ""; inv.work_detail = ""; }
+  });
 }
 
 // 종류별 매출 구성(B4): 작업 종류(taskTypeLabel) + 세션 종류(session_type) 통합, 같은 라벨 합산.
