@@ -124,9 +124,9 @@ function revenueForStaff(id, period) {
   const manager = db().prepare("SELECT * FROM project_managers WHERE id = ?").get(Number(id));
   if (!manager) return null;
   const per = issuedInPeriodSql("i", period);
-  const tasks = db().prepare(`SELECT t.id, t.task_type, ii.amount AS amount, t.worker_rate, tr.title AS track_title, p.id AS project_id, p.title AS project_title, i.issued_date FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN project_tracks tr ON tr.id = t.track_id JOIN projects p ON p.id = tr.project_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id = ? ORDER BY i.issued_date DESC, p.title COLLATE NOCASE`).all(Number(id));
+  const tasks = db().prepare(`SELECT t.id, t.task_type, ii.amount AS amount, t.worker_rate, tr.title AS track_title, p.id AS project_id, p.title AS project_title, COALESCE(NULLIF(tr.artist, ''), p.artist) AS artist, i.issued_date FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN project_tracks tr ON tr.id = t.track_id JOIN projects p ON p.id = tr.project_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id = ? ORDER BY i.issued_date DESC, p.title COLLATE NOCASE`).all(Number(id));
   // payout = 그 세션에 배정된 전 엔지니어의 지급단가 합(모델 A: 리드가 전체를 흡수).
-  const sessions = db().prepare(`SELECT s.id, s.session_date, s.session_type, ii.amount AS amount, p.id AS project_id, p.title AS project_title, i.issued_date,
+  const sessions = db().prepare(`SELECT s.id, s.session_date, s.session_type, ii.amount AS amount, p.id AS project_id, p.title AS project_title, p.artist AS artist, i.issued_date,
       (SELECT COALESCE(SUM(se.worker_rate),0) FROM session_engineers se WHERE se.session_id = s.id) AS payout
     FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN projects p ON p.id = s.project_id JOIN invoices i ON i.id = ii.invoice_id
     WHERE ${ISSUED} AND ${per} AND s.engineer_name = ? ORDER BY i.issued_date DESC, s.session_date DESC`).all(manager.name);
@@ -147,7 +147,7 @@ function revenueForPayer(id, period) {
   if (!party) return null;
   const per = issuedInPeriodSql("i", period);
   // payer_kind = 결제자 kind(현금영수증/계산서 배지용 taxBadge가 inv.payer_kind를 읽음). 전 청구서가 이 party라 party.kind 동일.
-  const invoices = db().prepare(`SELECT i.id, i.invoice_number, i.issued_date, i.amount, i.tax_amount, i.tax_status, i.status, (i.amount - i.tax_amount) AS supply, c.kind AS payer_kind, p.title AS project_title FROM invoices i JOIN parties c ON c.id = i.payer_id LEFT JOIN projects p ON p.id = i.project_id WHERE ${ISSUED} AND ${per} AND i.payer_id = ? ORDER BY i.issued_date DESC, i.id DESC`).all(Number(id));
+  const invoices = db().prepare(`SELECT i.id, i.invoice_number, i.issued_date, i.amount, i.tax_amount, i.tax_status, i.status, (i.amount - i.tax_amount) AS supply, c.kind AS payer_kind, p.title AS project_title, p.artist AS artist FROM invoices i JOIN parties c ON c.id = i.payer_id LEFT JOIN projects p ON p.id = i.project_id WHERE ${ISSUED} AND ${per} AND i.payer_id = ? ORDER BY i.issued_date DESC, i.id DESC`).all(Number(id));
   // 각 청구서가 '무슨 일'이었는지(작업 종류/세션 종류 + 곡·세션날짜) — 스탭 상세와 같은 칸을 채우기 위해.
   // 행 단위는 **청구서 그대로** 둔다(2026-07-20 사용자 결정): 할인이 청구서 단위라 라인 금액 합 ≠ 매출이고
   // (실측 도너츠컬처 18건 중 17건이 할인, 30만 라인이 실제 매출 20만), 돈 화면에서 그 어긋남은 허용할 수 없다.
@@ -166,7 +166,7 @@ function attachWorkSummary(invoices) {
   if (!invoices.length) return;
   const ids = invoices.map((r) => Number(r.id));
   const rows = db().prepare(`SELECT ii.invoice_id, ii.id AS item_id, ii.item_date,
-      t.task_type, tr.title AS track_title,
+      t.task_type, tr.title AS track_title, NULLIF(tr.artist, '') AS track_artist,
       s.session_type, s.session_date
     FROM invoice_items ii
     LEFT JOIN track_tasks t ON t.id = ii.task_id
@@ -186,7 +186,7 @@ function attachWorkSummary(invoices) {
     if (!g) { inv.work_kind = ""; inv.work_detail = ""; inv.item_count = 0; return; }
     const f = g.first;
     inv.item_count = g.count;
-    if (f.task_type) { inv.work_kind = taskTypeLabel(f.task_type); inv.work_detail = f.track_title || ""; }
+    if (f.task_type) { inv.work_kind = taskTypeLabel(f.task_type); inv.work_detail = f.track_title || ""; if (f.track_artist) inv.artist = f.track_artist; }
     else if (f.session_type) { inv.work_kind = f.session_type; inv.work_detail = f.session_date || ""; }
     else { inv.work_kind = ""; inv.work_detail = ""; }
   });
