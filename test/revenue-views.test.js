@@ -250,6 +250,47 @@ test("revPayerDetail: 월별 그룹 + 월 매출 소계", () => {
   assert.match(html, /₩3,000,000/, "6월 소계");
 });
 
+// [최종 리뷰 지적 4] 스펙(§2)의 상세 총계 = "총 매출·건수·최근 거래"(스탭은 순이익 포함) — 최근 거래월 누락 보완.
+test("revStaffDetail: 요약 카드에 최근 거래월(가장 최신 발행일)", () => {
+  const data = {
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [
+      { id: 1, task_type: "mixing", amount: 500000, worker_rate: 0, track_title: "곡A", project_id: 9, project_title: "프로젝트A", issued_date: "2026-06-05" },
+    ],
+    sessions: [
+      { id: 11, session_date: "2026-07-10", session_type: "녹음", amount: 200000, payout: 50000, project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-25" },
+    ],
+    supply: 700000, payout: 50000, profit: 650000,
+  };
+  const html = V.revStaffDetail(data);
+  const summary = html.slice(0, html.indexOf("2026년 7월"));
+  assert.match(summary, /최근 2026\.7/, "요약 카드에 가장 최근(7월) 발행일 표기");
+});
+
+test("revStaffDetail: 항목이 없으면 요약 카드에 최근 거래 표기를 생략한다", () => {
+  const html = V.revStaffDetail({ manager: { id: 1, name: "김", user_id: 1 }, tasks: [], sessions: [], supply: 0, payout: 0, profit: 0 });
+  assert.ok(!/최근/.test(html), "항목이 없으면 '최근' 문구 자체가 없다");
+});
+
+test("revPayerDetail: 요약 카드에 최근 거래월(가장 최신 발행일)", () => {
+  const data = {
+    party: { id: 5, name: "도너츠컬처", kind: "company" },
+    invoices: [
+      { id: 1, invoice_number: "OMG-202607-018", issued_date: "2026-07-16", amount: 440000, tax_amount: 40000, supply: 400000, tax_status: "계산서 발행", status: "발행", payer_kind: "company", project_title: "프로젝트A" },
+      { id: 2, invoice_number: "OMG-202606-001", issued_date: "2026-06-18", amount: 3300000, tax_amount: 300000, supply: 3000000, tax_status: "계산서 발행", status: "발행", payer_kind: "company", project_title: "프로젝트B" },
+    ],
+    supply: 3400000, invoice_cnt: 2,
+  };
+  const html = V.revPayerDetail(data);
+  const summary = html.slice(0, html.indexOf("2026년 7월"));
+  assert.match(summary, /최근 2026\.7/, "요약 카드에 가장 최근(7월) 발행일 표기");
+});
+
+test("revPayerDetail: 청구서가 없으면 요약 카드에 최근 거래 표기를 생략한다", () => {
+  const html = V.revPayerDetail({ party: { id: 1, name: "회사", kind: "company" }, invoices: [], supply: 0, invoice_cnt: 0 });
+  assert.ok(!/최근/.test(html), "청구서가 없으면 '최근' 문구 자체가 없다");
+});
+
 test("revStaffDetail/revPayerDetail: 인라인 style 없음(CSP)", () => {
   const s = V.revStaffDetail({ manager: { id: 1, name: "김", user_id: 1 }, tasks: [], sessions: [], supply: 0, payout: 0, profit: 0 });
   const p = V.revPayerDetail({ party: { id: 1, name: "회사", kind: "company" }, invoices: [], supply: 0, invoice_cnt: 0 });

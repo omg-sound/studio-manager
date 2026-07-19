@@ -57,7 +57,7 @@ router.get("/", requireInvoice, (req, res) => {
     const right = data
       ? `<div class="mb-3">
            <h2 class="text-lg font-bold">${esc(data.party.name)}</h2>
-           <p class="text-sm text-muted">이 청구처의 기간 매출 기여(공급가).</p>
+           <p class="text-sm text-muted">이 청구처의 전체 매출 기여(공급가).</p>
          </div>${revPayerDetail(data)}`
       : emptyState("업체·개인을 선택하세요.", { card: true });
     content = contactPanes({

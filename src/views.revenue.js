@@ -238,11 +238,6 @@ function monthHeader(g, { profit = false } = {}) {
 function revStaffDetail(data) {
   const { taskTypeLabel } = require("./data");
   const { tasks, sessions, supply, payout, profit } = data;
-  const summary = `<div class="card flex flex-wrap gap-4 text-sm">
-    <span>총 매출 <b class="tabular text-fg">${formatKRW(supply)}</b></span>
-    <span>외주 지급 <b class="tabular text-fg">${formatKRW(payout)}</b></span>
-    <span class="font-semibold">순이익 <b class="tabular ${profitCls(profit)}">${formatKRW(profit)}</b></span>
-  </div>`;
   const items = [
     ...tasks.map((t) => ({
       ym: String(t.issued_date || "").slice(0, 7), date: String(t.issued_date || ""),
@@ -255,6 +250,14 @@ function revStaffDetail(data) {
       href: `/projects/${s.project_id}?tab=sessions`, amount: s.amount || 0, payout: s.payout || 0,
     })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  // 항목이 발행일 내림차순이라 첫 항목이 최근 거래(2026-07-19 스펙 §2 — 상단 총계에 최근 거래월 포함).
+  const last = items.length ? lastSeenLabel(items[0].date) : "";
+  const summary = `<div class="card flex flex-wrap gap-4 text-sm">
+    <span>총 매출 <b class="tabular text-fg">${formatKRW(supply)}</b></span>
+    <span>외주 지급 <b class="tabular text-fg">${formatKRW(payout)}</b></span>
+    <span class="font-semibold">순이익 <b class="tabular ${profitCls(profit)}">${formatKRW(profit)}</b></span>
+    ${last ? `<span class="text-muted">${esc(last)}</span>` : ""}
+  </div>`;
   if (!items.length) return `${summary}${emptyState("내역이 없습니다.", { card: true })}`;
   const groups = groupByMonth(items).map((g) => `${monthHeader(g, { profit: true })}
     ${listGroup({ rows: g.items.map((it) => listRow({
@@ -270,11 +273,13 @@ function revStaffDetail(data) {
 function revPayerDetail(data) {
   const { taxBadge } = require("./views.invoices");
   const { invoices, supply, invoice_cnt } = data;
-  const summary = `<div class="card flex flex-wrap gap-4 text-sm"><span>총 매출 기여 <b class="tabular text-fg">${formatKRW(supply)}</b></span><span>청구 ${invoice_cnt}건</span></div>`;
-  if (!invoices.length) return `${summary}${emptyState("발행 청구서가 없습니다.", { card: true })}`;
   // 방어적 정렬(발행일 내림차순) — revStaffDetail과 동일 수준: 데이터 레이어 SQL 정렬(ORDER BY issued_date DESC)이
   // 진실원천이지만, 그게 바뀌어도 같은 달이 여러 그룹으로 쪼개지는 조용한 회귀가 나지 않게 뷰에서도 보장한다.
   const sorted = [...invoices].sort((a, b) => (a.issued_date < b.issued_date ? 1 : a.issued_date > b.issued_date ? -1 : 0));
+  // 정렬된 배열의 첫 항목이 최근 거래(2026-07-19 스펙 §2 — 상단 총계에 최근 거래월 포함).
+  const last = sorted.length ? lastSeenLabel(sorted[0].issued_date) : "";
+  const summary = `<div class="card flex flex-wrap gap-4 text-sm"><span>총 매출 기여 <b class="tabular text-fg">${formatKRW(supply)}</b></span><span>청구 ${invoice_cnt}건</span>${last ? `<span class="text-muted">${esc(last)}</span>` : ""}</div>`;
+  if (!invoices.length) return `${summary}${emptyState("발행 청구서가 없습니다.", { card: true })}`;
   const items = sorted.map((inv) => ({ ym: String(inv.issued_date || "").slice(0, 7), amount: inv.supply || 0, payout: 0, inv }));
   const groups = groupByMonth(items).map((g) => `${monthHeader(g)}
     ${listGroup({ rows: g.items.map(({ inv }) => listRow({
