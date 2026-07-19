@@ -122,15 +122,22 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
 // ── 마스터-디테일 왼쪽 순위 목록(2026-07-19) ──
 // 선택은 URL 쿼리로만 표현하므로 JS 없음. 선택 행 강조는 연락처와 같은 규약(aria-current + tint)이되,
 // 연락처의 [data-contact-list] CSS는 셀렉터가 달라 안 걸리므로 클래스로 직접 준다(강조 하나에 CSS 표면을 늘리지 않는다).
-function revListRow({ href, selected, title, right, sub }) {
+// 2단 배치(2026-07-19 사용자 요청 '건수는 금액 밑으로·라벨은 이름 밑으로'): 왼쪽=이름/부가(배지·건수), 오른쪽=금액/부가.
+// 이름 옆 인라인 배지·이름 아래 전폭 한 줄이던 이전 구조는 배지가 이름 폭을 먹고 숫자가 좌우로 흩어져 스캔이 어려웠다.
+function revListRow({ href, selected, title, subLeft = "", right, subRight = "" }) {
   const cur = selected ? ` aria-current="page"` : "";
   const tint = selected ? " bg-primary/10 font-semibold" : "";
   return `<a href="${esc(href)}"${cur} class="block px-4 py-3 transition-colors hover:bg-surface active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40${tint}">
-      <div class="flex items-center justify-between gap-3">
-        <span class="min-w-0 truncate">${title}</span>
-        <span class="shrink-0 tabular text-sm font-semibold">${right}</span>
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="truncate">${title}</div>
+          ${subLeft ? `<div class="mt-0.5 truncate text-xs text-muted">${subLeft}</div>` : ""}
+        </div>
+        <div class="shrink-0 text-right">
+          <div class="tabular text-sm font-semibold">${right}</div>
+          ${subRight ? `<div class="mt-0.5 whitespace-nowrap text-xs text-muted">${subRight}</div>` : ""}
+        </div>
       </div>
-      <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
     </a>`;
 }
 
@@ -144,9 +151,11 @@ function revStaffList(rows, { year, month, selId = 0 }) {
   const list = listGroup({ rows: rows.map((r) => revListRow({
     href: `/revenue?tab=staff&staff=${Number(r.id)}&${qs}`,
     selected: Number(r.id) === Number(selId),
-    title: `${esc(r.name)}${r.is_external ? ` <span class="badge badge-neutral">외주</span>` : ""}`,
+    title: esc(r.name),
+    // 외주 배지는 이름 아래로(청구처 탭의 업체/개인 배지와 같은 규칙). 건수도 배지 줄에 함께 둔다.
+    subLeft: `${r.is_external ? `<span class="badge badge-neutral">외주</span> ` : ""}작업 ${r.task_cnt} · 세션 ${r.session_cnt}`,
     right: formatKRW(r.supply),
-    sub: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span> · 작업 ${r.task_cnt} · 세션 ${r.session_cnt}`,
+    subRight: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span>`,
   })) });
   return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
@@ -159,9 +168,10 @@ function revPayerList(rows, { year, month, selId = 0 }) {
   const list = listGroup({ rows: rows.map((r) => revListRow({
     href: `/revenue?tab=payer&payer=${Number(r.id)}&${qs}`,
     selected: Number(r.id) === Number(selId),
-    title: `${esc(r.name)} <span class="badge badge-neutral">${kindLabel(r.kind)}</span>`,
+    title: esc(r.name),
+    subLeft: `<span class="badge badge-neutral">${kindLabel(r.kind)}</span>`,
     right: formatKRW(r.supply),
-    sub: `청구 ${r.invoice_cnt}건`,
+    subRight: `청구 ${r.invoice_cnt}건`,
   })) });
   return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }

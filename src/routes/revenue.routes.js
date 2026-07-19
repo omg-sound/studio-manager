@@ -49,6 +49,7 @@ router.get("/", requireInvoice, (req, res) => {
       backLabel: "매출",
       widthKey: "revListW",
       heightClass: REV_PANE_H,
+      wideList: true,
     });
   } else if (tab === "payer") {
     const selId = Number(req.query.payer) || 0;
@@ -68,6 +69,7 @@ router.get("/", requireInvoice, (req, res) => {
       backLabel: "매출",
       widthKey: "revListW",
       heightClass: REV_PANE_H,
+      wideList: true,
     });
   } else {
     const summary = revenueSummary(period);

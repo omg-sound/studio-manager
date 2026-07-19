@@ -87,6 +87,31 @@ test("revPayerList: 패널 링크 + 구분 배지 + 청구 건수", () => {
   assert.match(html, /청구 2건/, "건수 subline");
 });
 
+// 2026-07-19 사용자 요청 배치: 왼쪽=이름 / 배지, 오른쪽=금액 / 건수.
+// DOM 등장 순서로 단언한다(클래스 문자열에 묶으면 사소한 스타일 변경에도 깨진다).
+test("revPayerList: 배지는 이름 아래, 건수는 금액 아래(등장 순서)", () => {
+  const html = V.revPayerList([{ id: 5, kind: "company", name: "도너츠컬처", supply: 300000, invoice_cnt: 2 }], { year: 2026, month: 7 });
+  const iName = html.indexOf("도너츠컬처");
+  const iBadge = html.indexOf("업체", iName);
+  const iAmount = html.indexOf("₩300,000");
+  const iCount = html.indexOf("청구 2건");
+  assert.ok(iName < iBadge, "이름 다음에 배지(이름 줄에 인라인이 아니다)");
+  assert.ok(iBadge < iAmount, "배지 다음에 금액");
+  assert.ok(iAmount < iCount, "금액 다음에 건수(금액 아래 줄)");
+});
+
+test("revStaffList: 외주 배지·건수는 이름 아래, 순이익은 매출 아래(등장 순서)", () => {
+  const html = V.revStaffList([{ id: 3, name: "김엔지", is_external: true, supply: 200000, profit: 150000, task_cnt: 2, session_cnt: 1 }], { year: 2026, month: 7 });
+  const iName = html.indexOf("김엔지");
+  const iBadge = html.indexOf("외주", iName);
+  const iCounts = html.indexOf("작업 2 · 세션 1");
+  const iSupply = html.indexOf("₩200,000");
+  const iProfit = html.indexOf("순이익");
+  assert.ok(iName < iBadge && iBadge < iCounts, "이름 → 외주 배지 → 건수");
+  assert.ok(iCounts < iSupply, "왼쪽 열이 끝난 뒤 매출");
+  assert.ok(iSupply < iProfit, "매출 다음 줄에 순이익");
+});
+
 test("revPayerList: 개인·그룹 구분 배지", () => {
   assert.match(V.revPayerList([{ id: 1, kind: "person", name: "김개인", supply: 1, invoice_cnt: 1 }], { year: 2026, month: 7 }), /개인/);
   assert.match(V.revPayerList([{ id: 2, kind: "group", name: "밴드", supply: 1, invoice_cnt: 1 }], { year: 2026, month: 7 }), /그룹/);

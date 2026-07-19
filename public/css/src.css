@@ -222,6 +222,9 @@
 /* 이름 목록 폭 드래그 조절(2026-07-18) — lg 이상만. 폭=CSS 변수(app.js가 갱신·저장). */
 @media (min-width: 1024px) {
   .cl-col-left { width: var(--cl-list-w, 18rem); }
+  /* 목록 기본 폭 넓게(2026-07-19 사용자 요청 — 매출 목록은 이름+금액+건수라 18rem이 좁다).
+     폴백만 바꾸므로 드래그 저장값(--cl-list-w)이 있으면 그쪽이 이긴다. */
+  .cl-panes.cl-list-wide .cl-col-left { width: var(--cl-list-w, 22rem); }
   /* 리사이저는 **선 없이** — 조절 가능함은 커서(col-resize)로만 알린다(2026-07-18 사용자 요청 — hover 파란 선도 제거). */
   .cl-resizer { flex: 0 0 auto; width: 9px; cursor: col-resize; align-self: stretch; }
   .cl-resizer:focus-visible { outline: none; }

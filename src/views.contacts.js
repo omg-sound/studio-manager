@@ -10,7 +10,7 @@ const { esc, personName, listGroup, copyable, dataTable } = require("./views");
  * (pageHeader의 back은 전 폭에서 보이므로 이건 lg:hidden이라야 데스크톱에서 중복되지 않는다.)
  * @param {{left:string, right:string, hasSelection:boolean, backHref?:string, backLabel?:string}} o
  */
-function contactPanes({ left, right, hasSelection, backHref = "", backLabel = "", widthKey = "clListW", heightClass = "lg:h-[calc(100vh-11rem)]" }) {
+function contactPanes({ left, right, hasSelection, backHref = "", backLabel = "", widthKey = "clListW", heightClass = "lg:h-[calc(100vh-11rem)]", wideList = false }) {
   const leftCls = hasSelection ? "hidden lg:flex" : "block lg:flex"; // lg에선 flex-col(검색 고정 + 목록 스크롤)
   const rightCls = hasSelection ? "block" : "hidden lg:block";
   const back = hasSelection && backHref
@@ -22,7 +22,10 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
   // 이름 목록 폭 = 드래그 조절(2026-07-18 사용자 요청). 폭은 CSS 변수 --cl-list-w(lg에서만·기본 18rem), app.js가
   // 리사이저 드래그로 갱신·localStorage 저장. 리사이저는 lg 이상만(모바일은 한 단이라 조절 불필요).
   // 높이·폭 저장 키는 화면별로 다를 수 있어 파라미터화(기본값 = 연락처 기준). 매출은 기간 컨트롤 줄이 하나 더 있어 더 낮은 높이를 넘긴다.
-  return `<div class="cl-panes lg:flex lg:gap-2 ${heightClass}" data-cl-panes data-cl-width-key="${esc(widthKey)}">
+  // wideList = 목록 **기본** 폭만 넓게(.cl-list-wide가 var 폴백을 22rem으로 교체). 저장키를 분리해도 CSS 기본값 18rem은
+  // .cl-col-left 한 규칙이라 화면 간 공유되므로, 매출처럼 이름+금액+건수를 담는 목록만 넓히려면 이 훅이 필요하다.
+  // 드래그 저장값(--cl-list-w)이 있으면 항상 그쪽이 이긴다(폴백은 미저장일 때만 쓰인다).
+  return `<div class="cl-panes${wideList ? " cl-list-wide" : ""} lg:flex lg:gap-2 ${heightClass}" data-cl-panes data-cl-width-key="${esc(widthKey)}">
       <div class="${leftCls} cl-col-left lg:shrink-0 lg:min-h-0 lg:flex-col">${left}</div>
       <div class="cl-resizer hidden lg:block" data-cl-resizer role="separator" aria-orientation="vertical" tabindex="0" aria-label="목록 폭 조절" title="드래그로 목록 폭 조절"></div>
       <div class="${rightCls} min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pl-2 lg:pr-1">${back}<div class="max-w-content">${right}</div></div>

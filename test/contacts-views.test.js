@@ -202,3 +202,10 @@ test("contactPanes: heightClass 기본값 유지 + 지정 시 교체", () => {
   assert.match(rev, /lg:h-\[calc\(100vh-15rem\)\]/, "지정 높이 반영");
   assert.ok(!/lg:h-\[calc\(100vh-11rem\)\]/.test(rev), "기본 높이는 함께 남지 않는다");
 });
+
+test("contactPanes: wideList로 목록 기본 폭 넓히기(기본은 미적용)", () => {
+  const def = contactPanes({ left: "L", right: "R", hasSelection: false });
+  assert.ok(!/cl-list-wide/.test(def), "기본은 좁은 폭(연락처·업체그룹 무변경)");
+  const wide = contactPanes({ left: "L", right: "R", hasSelection: false, wideList: true });
+  assert.match(wide, /class="cl-panes cl-list-wide /, "wideList면 .cl-list-wide 부착");
+});
