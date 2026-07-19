@@ -545,16 +545,19 @@ function listGroup({ rows, filterList = false }) {
 /**
  * 목록 행: 좌(주요 내용)·우(메타/금액) 2단 + 호버 강조. href가 있으면 링크 행, 없으면 정적 행.
  * `listGroup`과 함께 쓴다. 동적 텍스트는 호출부에서 esc 처리한 HTML을 left/right로 넘길 것.
- * @param {{href?:string, left:string, right?:string}} opts left/right=이미 빌드된 HTML 조각.
+ * @param {{href?:string, left:string, right?:string, newTab?:boolean}} opts left/right=이미 빌드된 HTML 조각.
+ *   newTab=true면 `target="_blank" rel="noopener"`(연락처 관례 — 마스터-디테일 패널 밖으로 나가는 링크는 새 탭.
+ *   기본값 false=기존 호출부 무변경). 라벨에 ↗ 표기는 호출부 책임(left에 미리 포함).
  * @returns {string} HTML — `px-4 py-3` 행(링크면 `<a>`, 아니면 `<div>`).
  */
-function listRow({ href, left, right = "" }) {
+function listRow({ href, left, right = "", newTab = false }) {
   const inner = `<div class="flex items-center justify-between gap-4 px-4 py-3">
       <div class="min-w-0">${left}</div>
       ${right ? `<div class="shrink-0 text-right">${right}</div>` : ""}
     </div>`;
   if (href) {
-    return `<a href="${esc(href)}" class="block transition-colors hover:bg-surface active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${inner}</a>`;
+    const outAttr = newTab ? ' target="_blank" rel="noopener"' : "";
+    return `<a href="${esc(href)}"${outAttr} class="block transition-colors hover:bg-surface active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">${inner}</a>`;
   }
   return `<div class="transition-colors hover:bg-surface active:bg-surface">${inner}</div>`;
 }

@@ -130,6 +130,27 @@ test("revenueByStaff/revenueForStaff: 다인 세션은 리드 엔지니어에게
   assert.equal(rows.find((r) => r.id === co), undefined, "공동 엔지니어는 별도 행으로 안 나타남(공급가 0 → 필터됨)");
 });
 
+test("revenueForStaff: 세션 행 payout — 다인 세션 전액을 리드가 흡수(모델 A), 항목 합 = 총계", () => {
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("세션지급사").lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('PD', 'task', 0)").run().lastInsertRowid;
+  const lead = db().prepare("INSERT INTO project_managers (name) VALUES ('지급리드')").run().lastInsertRowid;
+  const co = db().prepare("INSERT INTO project_managers (name) VALUES ('지급공동')").run().lastInsertRowid;
+  const sess = db().prepare("INSERT INTO sessions (project_id, session_type, session_date, engineer_name, status) VALUES (?, '녹음', '2026-08-08', '지급리드', '완료')").run(proj).lastInsertRowid;
+  db().prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)").run(sess, lead, 10000);
+  db().prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)").run(sess, co, 20000);
+  const inv = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'PT', 220000, 20000, '발행', '2026-08-08')").run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount) VALUES (?, ?, '녹음', 1, 200000, 200000)").run(inv, sess);
+
+  const data = D.revenueForStaff(lead);
+  const s = data.sessions.find((r) => r.id === sess);
+  assert.equal(s.payout, 30000, "그 세션 배정 전원의 지급단가 합(10000+20000)");
+  const taskPayoutSum = data.tasks.reduce((a, t) => a + (t.worker_rate || 0), 0);
+  const sessPayoutSum = data.sessions.reduce((a, r) => a + (r.payout || 0), 0);
+  assert.equal(taskPayoutSum + sessPayoutSum, data.payout, "항목별 지급 합 = 전체 지급");
+  assert.equal(data.supply - data.payout, data.profit, "순이익 정합");
+  assert.equal(D.revenueForStaff(co).sessions.length, 0, "공동 엔지니어에겐 세션이 안 잡힌다(모델 A)");
+});
+
 test("revenueByPayer: 결제자(업체/개인)별 공급가 기여·건수, 기간·kind", () => {
   const { payer } = seedInvoice({ issued: "2026-05-10", payerName: "기여도컴퍼니", amount: 330000, tax: 30000 });
   const rows = D.revenueByPayer({ year: 2026, month: 5 });
@@ -208,4 +229,49 @@ test("revenueByType: 작업+세션 종류별 매출 통합(라벨 합산·정렬
   assert.ok(mix && mix.amount === 200000, "믹싱(작업) 200000");
   assert.ok(rec && rec.amount === 100000, "녹음(세션) 100000");
   assert.ok(rows[0].amount >= rows[rows.length - 1].amount, "내림차순");
+});
+
+test("issuedInPeriodSql: 전체 기간 모드(년 없음/all) = 조건 없음", () => {
+  const { issuedInPeriodSql } = require("../src/data/revenue");
+  assert.equal(issuedInPeriodSql("i", undefined), "1=1");
+  assert.equal(issuedInPeriodSql("i", {}), "1=1");
+  assert.equal(issuedInPeriodSql("i", { year: "all" }), "1=1");
+  assert.equal(issuedInPeriodSql("i", { year: 2026, month: "all" }), "substr(i.issued_date,1,4) = '2026'");
+  assert.equal(issuedInPeriodSql("i", { year: 2026, month: 7 }), "substr(i.issued_date,1,7) = '2026-07'");
+});
+
+test("revenueByPayer: 기간 없이 호출하면 전 기간 누적 + last_issued(최근 발행일)", () => {
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("누적테스트사").lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('AP', 'task', 0)").run().lastInsertRowid;
+  const mk = (issued, amount, tax) => db()
+    .prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'AT', ?, ?, '발행', ?)")
+    .run(proj, payer, amount, tax, issued);
+  mk("2025-03-10", 1100000, 100000); // 공급가 100만
+  mk("2026-06-18", 2200000, 200000); // 공급가 200만
+
+  const all = D.revenueByPayer().find((r) => r.id === payer);
+  assert.equal(all.supply, 3000000, "전 기간 누적 공급가");
+  assert.equal(all.invoice_cnt, 2);
+  assert.equal(all.last_issued, "2026-06-18", "최근 발행일 = 두 건 중 최신");
+  const y2025 = D.revenueByPayer({ year: 2025, month: "all" }).find((r) => r.id === payer);
+  assert.equal(y2025.supply, 1000000, "연도 필터는 그대로 동작");
+});
+
+test("revenueByStaff: last_issued = 작업·세션 중 최신 발행일", () => {
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("스탭최근사").lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('SL', 'task', 0)").run().lastInsertRowid;
+  const mgr = db().prepare("INSERT INTO project_managers (name) VALUES ('최근엔지')").run().lastInsertRowid;
+  // 작업 라인(발행 2026-02-01)
+  const tr = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(proj).lastInsertRowid;
+  const task = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, engineer_id, worker_rate) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 100000, 100000, 'Completed', 1, ?, 0)").run(tr, mgr).lastInsertRowid;
+  const inv1 = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'S1', 110000, 10000, '발행', '2026-02-01')").run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?, ?, 'Mixing', 1, 100000, 100000)").run(inv1, task);
+  // 세션 라인(발행 2026-09-09) — 이쪽이 더 최신
+  const sess = db().prepare("INSERT INTO sessions (project_id, session_type, session_date, engineer_name, status) VALUES (?, '녹음', '2026-09-09', '최근엔지', '완료')").run(proj).lastInsertRowid;
+  const inv2 = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'S2', 220000, 20000, '발행', '2026-09-09')").run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount) VALUES (?, ?, '녹음', 1, 200000, 200000)").run(inv2, sess);
+
+  const row = D.revenueByStaff().find((r) => r.id === mgr);
+  assert.equal(row.last_issued, "2026-09-09", "작업·세션 중 최신");
+  assert.equal(row.supply, 300000, "전 기간 누적(작업 10만 + 세션 20만)");
 });
