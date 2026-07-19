@@ -93,7 +93,6 @@ function revTaxCard(tax) {
 
 // 개요 탭 — 대시보드 그리드: KPI 한 줄(선택 기간 2장=델타 배지·누적 2장=배지 없음) → [차트|세무] → [종류 구성|Top들].
 function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) {
-  const qs = periodQS({ year, month });
   const periodLabel = month === "all" ? `${year}년 전체` : `${year}년 ${Number(month)}월`;
   const c = summary.cmp;
   const deltas = (curKey, prevKey) => c.isYear
@@ -108,12 +107,23 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
   </div>`;
   const chart = `<div class="card"><div class="mb-1 text-sm font-semibold">${esc(year)}년 월별 매출·순이익</div>${revBarChart(summary.monthly)}</div>`;
   const typeSec = `<div><h2 class="mb-2 text-sm font-semibold text-muted">종류별 매출 구성</h2>${revTypeBreakdown(byType)}</div>`;
-  const mini = (rows, hrefFn, moreHref, moreLabel) => rows.length
-    ? `${rows.map((r) => `<a href="${hrefFn(r)}" class="row-link flex items-center justify-between gap-2 px-3 py-2"><span class="truncate font-medium">${esc(r.name)}</span><span class="tabular font-semibold">${formatKRW(r.supply)}</span></a>`).join("")}<div class="px-3 pb-2 pt-1 text-right"><a href="${moreHref}" class="text-xs text-primary hover:underline">${moreLabel} →</a></div>`
-    : `<div class="text-sm text-muted">내역이 없습니다.</div>`;
+  // 상위 5개는 바로, 나머지는 <details> 펼침(무JS·CSP 안전). 기간 렌즈가 개요에 있으므로
+  // "이 기간 누가 기여했나"를 여기서 전부 답한다 — 목록 탭은 누적 전용이라 '전체 보기' 링크는 없앴다
+  // (7월을 보다 눌렀는데 전체 누적이 열리면 링크가 거짓말이 된다).
+  const row = (r, hrefFn) => `<a href="${hrefFn(r)}" class="row-link flex items-center justify-between gap-2 px-3 py-2"><span class="truncate font-medium">${esc(r.name)}</span><span class="tabular font-semibold">${formatKRW(r.supply)}</span></a>`;
+  const mini = (rows, hrefFn) => {
+    if (!rows.length) return `<div class="text-sm text-muted">내역이 없습니다.</div>`;
+    const head = rows.slice(0, 5).map((r) => row(r, hrefFn)).join("");
+    const rest = rows.slice(5);
+    if (!rest.length) return head;
+    return `${head}<details class="border-t border-border/60">
+        <summary class="cursor-pointer px-3 py-2 text-xs text-primary hover:underline">전체 ${rows.length}곳 보기</summary>
+        <div class="divide-y divide-border border-t border-border/60">${rest.map((r) => row(r, hrefFn)).join("")}</div>
+      </details>`;
+  };
   const tops = `<div class="grid gap-4 sm:grid-cols-2">
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue?tab=staff&staff=${r.id}&${qs}`, `/revenue?tab=staff&${qs}`, "전체 보기")}</div></div>
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue?tab=payer&payer=${r.id}&${qs}`, `/revenue?tab=payer&${qs}`, "전체 보기")}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue?tab=staff&staff=${r.id}`)}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue?tab=payer&payer=${r.id}`)}</div></div>
   </div>`;
   const note = `<p class="mt-4 text-xs text-muted">매출 = 공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급. 스탭별 매출 합은 청구서 할인 시 총 매출과 다를 수 있음(라인 기준).</p>`;
   return `${kpis}
