@@ -28,24 +28,23 @@ router.get("/", requireInvoice, (req, res) => {
   const tab = ["overview", "staff", "payer"].includes(req.query.tab) ? req.query.tab : "overview";
   const years = revenueYears();
   let content;
-  let sel = null; // 기간 폼이 유지할 선택(있을 때만)
   if (tab === "staff") {
     const selId = Number(req.query.staff) || 0;
     // 삭제된 id 등 유효하지 않으면 data=null → 미선택 화면. 404를 던지지 않는다(패널 안이라 목록은 살아 있어야 한다).
-    const data = selId ? revenueForStaff(selId, period) : null;
-    if (data) sel = { name: "staff", id: selId };
-    const left = revStaffList(revenueByStaff(period), { ...period, selId: data ? selId : 0 });
+    // 목록 탭은 기간 없이 전체 누적(2026-07-19 기간 렌즈 분리) — period를 넘기지 않는다.
+    const data = selId ? revenueForStaff(selId) : null;
+    const left = revStaffList(revenueByStaff(), { selId: data ? selId : 0 });
     // 상세 뷰는 대상 이름을 렌더하지 않는다(기존엔 드릴다운 페이지의 pageHeader가 담당). 패널엔 pageHeader가 없어 여기서 붙인다.
     const right = data
       ? `<div class="mb-3">
            <h2 class="text-lg font-bold">${esc(data.manager.name)}</h2>
            <p class="text-sm text-muted">${data.manager.user_id ? "하우스 엔지니어" : "외주 작업자"}</p>
-         </div>${revStaffDetail(data, period)}`
+         </div>${revStaffDetail(data)}`
       : emptyState("스탭을 선택하세요.", { card: true });
     content = contactPanes({
       left, right,
       hasSelection: !!data,
-      backHref: `/revenue?tab=staff&${periodQS(period)}`,
+      backHref: `/revenue?tab=staff`,
       backLabel: "매출",
       widthKey: "revListW",
       heightClass: REV_PANE_H,
@@ -53,19 +52,18 @@ router.get("/", requireInvoice, (req, res) => {
     });
   } else if (tab === "payer") {
     const selId = Number(req.query.payer) || 0;
-    const data = selId ? revenueForPayer(selId, period) : null;
-    if (data) sel = { name: "payer", id: selId };
-    const left = revPayerList(revenueByPayer(period), { ...period, selId: data ? selId : 0 });
+    const data = selId ? revenueForPayer(selId) : null;
+    const left = revPayerList(revenueByPayer(), { selId: data ? selId : 0 });
     const right = data
       ? `<div class="mb-3">
            <h2 class="text-lg font-bold">${esc(data.party.name)}</h2>
            <p class="text-sm text-muted">이 청구처의 기간 매출 기여(공급가).</p>
-         </div>${revPayerDetail(data, period)}`
+         </div>${revPayerDetail(data)}`
       : emptyState("업체·개인을 선택하세요.", { card: true });
     content = contactPanes({
       left, right,
       hasSelection: !!data,
-      backHref: `/revenue?tab=payer&${periodQS(period)}`,
+      backHref: `/revenue?tab=payer`,
       backLabel: "매출",
       widthKey: "revListW",
       heightClass: REV_PANE_H,
@@ -73,13 +71,13 @@ router.get("/", requireInvoice, (req, res) => {
     });
   } else {
     const summary = revenueSummary(period);
-    const topStaff = revenueByStaff(period).slice(0, 5);
-    const topPayer = revenueByPayer(period).slice(0, 5);
+    const topStaff = revenueByStaff(period);
+    const topPayer = revenueByPayer(period);
     content = revOverview({ summary, topStaff, topPayer, byType: revenueByType(period), tax: revenueTax(period), ...period });
   }
   const body = `
     ${pageHeader({ title: "매출", desc: "공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급." })}
-    ${revPeriodControl({ ...period, years, tab, sel })}
+    ${tab === "overview" ? revPeriodControl({ ...period, years, tab }) : ""}
     ${revTabs({ tab, ...period })}
     <div class="mt-4">${content}</div>`;
   // 세 탭 모두 넓게. 스탭별·업체개인별은 마스터-디테일이라 남는 폭을 상세 패널이 쓴다(contactPanes 내부가

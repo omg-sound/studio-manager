@@ -55,11 +55,12 @@ test("revPeriodControl: select 변경 시 자동 제출(보기 버튼은 noscrip
   assert.ok(!/<button type="submit"[^>]*>보기<\/button>(?![\s\S]*<\/noscript>)/.test(html.replace(/<noscript>[\s\S]*?<\/noscript>/, "")), "noscript 밖에 보기 버튼 없음");
 });
 
-test("revPeriodControl: 선택된 대상을 hidden으로 실어 기간 변경 시 유지", () => {
-  const html = V.revPeriodControl({ year: 2026, month: 7, years: [2026], tab: "staff", sel: { name: "staff", id: 3 } });
-  assert.match(html, /<input type="hidden" name="staff" value="3"/, "선택 유지 hidden");
-  const none = V.revPeriodControl({ year: 2026, month: 7, years: [2026], tab: "overview" });
-  assert.ok(!/name="staff"/.test(none) && !/name="payer"/.test(none), "미선택·개요 탭은 hidden 없음");
+test("revTabs: 개요 링크만 기간을 싣는다(목록 탭은 누적이라 기간이 없다)", () => {
+  const html = V.revTabs({ tab: "payer", year: 2026, month: 7 });
+  // tabBar가 href를 esc()하므로 '&'는 '&amp;'로 렌더된다(다른 revTabs/revStaffList href 검증과 동일 규약).
+  assert.match(html, /href="\/revenue\?tab=overview&amp;year=2026&amp;month=7"/, "개요는 기간 유지");
+  assert.match(html, /href="\/revenue\?tab=staff"/, "스탭별은 기간 없음");
+  assert.match(html, /href="\/revenue\?tab=payer"/, "업체·개인별은 기간 없음");
 });
 
 test("revStaffList: 패널 링크(탭·id) + 순이익·건수 subline", () => {
@@ -185,6 +186,14 @@ test("revOverview: 상위 5개 + 나머지 펼침, '전체 보기' 링크 없음
   assert.match(html, /\/revenue\?tab=payer&payer=1"/, "행 링크는 기간 없는 상세 URL");
   assert.ok(!/전체 보기 →/.test(html), "옛 '전체 보기' 링크 없음");
   assert.ok(!/href="\/revenue\?tab=payer&year=/.test(html), "기간을 실은 목록 링크 없음");
+});
+
+test("revOverview: 스탭 펼침 라벨은 '명'(업체·개인 '곳'과 단위가 다르다)", () => {
+  const summary = { periodSupply: 0, periodProfit: 0, ytdSupply: 0, ytdProfit: 0, monthly: Array.from({length:12},(_,k)=>({month:k+1,supply:0,profit:0})), cmp: { isYear: false, prevPeriodSupply: 0, prevPeriodProfit: 0, prevYearSupply: 0, prevYearProfit: 0 } };
+  const staff = Array.from({ length: 7 }, (_, k) => ({ id: k + 1, name: `스탭${k + 1}`, supply: (7 - k) * 1000 }));
+  const html = V.revOverview({ summary, topStaff: staff, topPayer: [], byType: [], tax: { vatTotal: 0, payoutTotal: 0, withholding: { total: 0, net: 0 } }, year: 2026, month: 7 });
+  assert.match(html, /전체 7명 보기/, "스탭 펼침 라벨은 '명'");
+  assert.ok(!/전체 7곳 보기/.test(html), "업체 단위 '곳'이 섞이지 않음");
 });
 
 test("revOverview: 5개 이하면 펼침을 만들지 않는다", () => {

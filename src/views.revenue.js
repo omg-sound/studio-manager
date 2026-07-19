@@ -12,29 +12,29 @@ function profitCls(v) { return Number(v) < 0 ? "text-danger" : "text-success"; }
 // 셀렉트를 바꾸면 **바로 조회**된다(2026-07-19 사용자 요청 '보기 안 눌러도 바로 변경') — app.js가
 // [data-auto-submit] 폼의 select change에서 제출. '보기' 버튼은 <noscript>로만 남겨 JS가 없을 때만 보인다
 // (버튼을 항상 두면 JS 있는 환경에선 눌러도 아무 의미가 없는 죽은 컨트롤이 된다).
-function revPeriodControl({ year, month, years, tab, sel = null }) {
+// 년·월 셀렉트(GET 폼). **개요 탭 전용** — 목록 탭은 기간 없이 전체 누적이라 이 컨트롤을 쓰지 않는다.
+// 셀렉트를 바꾸면 바로 조회된다(app.js가 [data-auto-submit] 폼의 select change에서 제출).
+// '보기' 버튼은 <noscript>로만 남겨 JS가 없을 때만 보인다.
+function revPeriodControl({ year, month, years, tab }) {
   const yrs = years && years.length ? years : [Number(year)];
   const yOpts = yrs.map((y) => `<option value="${y}"${y === Number(year) ? " selected" : ""}>${y}년</option>`).join("");
   const mOpts = `<option value="all"${month === "all" ? " selected" : ""}>전체(연간)</option>` +
     MONTHS.map((m) => `<option value="${m}"${String(month) === String(m) ? " selected" : ""}>${m}월</option>`).join("");
-  // 선택된 스탭/청구처를 실어 보낸다 — 기간만 바꾸고 보던 대상은 유지(2026-07-19 사용자 결정).
-  const selHidden = sel && sel.id ? `<input type="hidden" name="${esc(sel.name)}" value="${Number(sel.id)}" />` : "";
   return `<form method="get" class="mb-4 flex flex-wrap items-center gap-2" data-auto-submit>
     <input type="hidden" name="tab" value="${esc(tab)}" />
-    ${selHidden}
     <select name="year" class="input w-auto">${yOpts}</select>
     <select name="month" class="input w-auto">${mOpts}</select>
     <noscript><button type="submit" class="btn-ghost btn-sm">보기</button></noscript>
   </form>`;
 }
 
-// 탭바(개요/스탭별/업체·개인별) — 기간 유지.
+// 탭바(개요/스탭별/업체·개인별). 기간은 개요 링크에만 — 목록 탭은 전체 누적이라 기간 개념이 없다.
 function revTabs({ tab, year, month }) {
   const qs = periodQS({ year, month });
   return tabBar({
     tabs: [{ key: "overview", label: "개요" }, { key: "staff", label: "스탭별" }, { key: "payer", label: "업체·개인별" }],
     activeKey: tab,
-    hrefFn: (k) => `/revenue?tab=${k}&${qs}`,
+    hrefFn: (k) => (k === "overview" ? `/revenue?tab=overview&${qs}` : `/revenue?tab=${k}`),
   });
 }
 
@@ -111,19 +111,20 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
   // "이 기간 누가 기여했나"를 여기서 전부 답한다 — 목록 탭은 누적 전용이라 '전체 보기' 링크는 없앴다
   // (7월을 보다 눌렀는데 전체 누적이 열리면 링크가 거짓말이 된다).
   const row = (r, hrefFn) => `<a href="${hrefFn(r)}" class="row-link flex items-center justify-between gap-2 px-3 py-2"><span class="truncate font-medium">${esc(r.name)}</span><span class="tabular font-semibold">${formatKRW(r.supply)}</span></a>`;
-  const mini = (rows, hrefFn) => {
+  // unit: 펼침 라벨의 개수 단위 — 스탭(사람)은 '명', 업체·개인은 '곳'(단위가 섞이면 어색하다, 2026-07-19).
+  const mini = (rows, hrefFn, unit) => {
     if (!rows.length) return `<div class="text-sm text-muted">내역이 없습니다.</div>`;
     const head = rows.slice(0, 5).map((r) => row(r, hrefFn)).join("");
     const rest = rows.slice(5);
     if (!rest.length) return head;
     return `${head}<details class="border-t border-border/60">
-        <summary class="cursor-pointer px-3 py-2 text-xs text-primary hover:underline">전체 ${rows.length}곳 보기</summary>
+        <summary class="cursor-pointer px-3 py-2 text-xs text-primary hover:underline">전체 ${rows.length}${unit} 보기</summary>
         <div class="divide-y divide-border border-t border-border/60">${rest.map((r) => row(r, hrefFn)).join("")}</div>
       </details>`;
   };
   const tops = `<div class="grid gap-4 sm:grid-cols-2">
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue?tab=staff&staff=${r.id}`)}</div></div>
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue?tab=payer&payer=${r.id}`)}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue?tab=staff&staff=${r.id}`, "명")}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue?tab=payer&payer=${r.id}`, "곳")}</div></div>
   </div>`;
   const note = `<p class="mt-4 text-xs text-muted">매출 = 공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급. 스탭별 매출 합은 청구서 할인 시 총 매출과 다를 수 있음(라인 기준).</p>`;
   return `${kpis}
