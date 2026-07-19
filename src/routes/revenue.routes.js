@@ -38,7 +38,8 @@ router.get("/", requireInvoice, (req, res) => {
     ${revPeriodControl({ ...period, years, tab })}
     ${revTabs({ tab, ...period })}
     <div class="mt-4">${content}</div>`;
-  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: true }));
+  // 개요(대시보드)만 넓게. 스탭별·업체·개인별은 단순 순위 표라 읽기 폭으로(내용 대비 넓으면 시선 분산·건수 열이 끝으로 몰림, 2026-07-19 사용자 요청).
+  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: tab === "overview" }));
 });
 
 // 스탭 드릴다운.

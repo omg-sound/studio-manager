@@ -125,7 +125,7 @@ function revStaffTable(rows, { year, month }) {
       { label: "스탭", primary: true, mCard: "tl" },
       { label: "매출", w: "w-[8rem]", right: true, nowrap: true, mCard: "tr" },
       { label: "순이익", w: "w-[8rem]", right: true, nowrap: true, mCard: "bl" },
-      { label: "건수", w: "w-[7rem]", nowrap: true, hide: "sm", mCard: "br" },
+      { label: "건수", w: "w-[8rem]", nowrap: true, hide: "sm", mCard: "br" },
     ],
     rows.map((r) => {
       const link = (inner, cls = "") => `<a href="/revenue/staff/${r.id}?${qs}" class="dt-link ${cls}">${inner}</a>`;
