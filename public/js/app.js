@@ -3016,7 +3016,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 // **포커스가 목록 안에 있을 때만** 가로챈다 — 오른쪽 상세를 보는 중엔 ↑↓가 평소대로 스크롤이어야 하므로.
 (function () {
   "use strict";
-  function listRoot() { return document.querySelector("[data-contact-list]"); }
+  function listRoot() { return document.querySelector("[data-nav-list]"); }
   // 실시간 필터로 숨겨진 행은 건너뛴다 — 보이는 행만 이동 대상.
   // 판정은 **인라인 style.display**로: 필터가 그렇게 숨기고(함정 #26), offsetParent는 레이아웃이 없는 jsdom에서 항상 null이라 못 쓴다.
   function visibleRows(root) {
@@ -3029,7 +3029,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var root = listRoot();
     if (!root) return;
     if (document.activeElement && document.activeElement !== document.body) return;
-    var cur = root.querySelector('[aria-current="true"]');
+    var cur = root.querySelector('[aria-current]');
     if (!cur) return;
     try { cur.focus({ preventScroll: true }); } catch (_e) { cur.focus(); }
     if (cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" }); // 목록 자체가 스크롤 영역이라 페이지는 안 튄다
@@ -3043,7 +3043,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var rows = visibleRows(root);
     if (!rows.length) return;
     var idx = rows.indexOf(e.target);
-    if (idx < 0) idx = rows.indexOf(root.querySelector('[aria-current="true"]'));
+    if (idx < 0) idx = rows.indexOf(root.querySelector('[aria-current]'));
     var next = idx < 0
       ? (e.key === "ArrowDown" ? rows[0] : rows[rows.length - 1])
       : rows[idx + (e.key === "ArrowDown" ? 1 : -1)];
@@ -3055,12 +3055,12 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 })();
 
 // ── 초성 인덱스 레일(iCloud식, 2026-07-18 사용자 요청) ──
-// 오른쪽 초성 레일([data-cho-rail])의 글자를 클릭·드래그하면 목록 스크롤 영역([data-contact-list])을
+// 오른쪽 초성 레일([data-cho-rail])의 글자를 클릭·드래그하면 목록 스크롤 영역([data-nav-list])을
 // 그 초성 섹션 헤더([data-cho-head])로 스크롤한다. 서버 렌더라 로드 시 1회 배선(초성 2개 이상일 때만 레일 존재).
 (function () {
   "use strict";
   var rail = document.querySelector("[data-cho-rail]");
-  var scroller = document.querySelector("[data-contact-list]");
+  var scroller = document.querySelector("[data-nav-list]");
   if (!rail || !scroller) return;
   function jump(key) {
     var head = scroller.querySelector('[data-cho-head="' + key + '"]'); // 값=단일 초성/영문/#, 이스케이프 불필요

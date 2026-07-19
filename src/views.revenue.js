@@ -130,8 +130,9 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
 }
 
 // ── 마스터-디테일 왼쪽 순위 목록(2026-07-19) ──
-// 선택은 URL 쿼리로만 표현하므로 JS 없음. 선택 행 강조는 연락처와 같은 규약(aria-current + tint)이되,
-// 연락처의 [data-contact-list] CSS는 셀렉터가 달라 안 걸리므로 클래스로 직접 준다(강조 하나에 CSS 표면을 늘리지 않는다).
+// 선택은 URL 쿼리로만 표현하므로 JS 없음(이동 자체는 링크). 선택 행 강조는 연락처와 같은 규약(aria-current + tint).
+// tint는 클래스로 직접 주고, [data-nav-list] a[aria-current] CSS(포커스 링 제거·hover 시 tint 유지)도 함께 걸린다
+// — 2026-07-19 마커를 붙이며 그 셀렉터를 aria-current 값 무관으로 넓혔다(연락처 "true" / 매출 "page" 둘 다 매칭).
 // 2단 배치(2026-07-19 사용자 요청 '건수는 금액 밑으로·라벨은 이름 밑으로'): 왼쪽=이름/부가(배지·건수), 오른쪽=금액/부가.
 // 이름 옆 인라인 배지·이름 아래 전폭 한 줄이던 이전 구조는 배지가 이름 폭을 먹고 숫자가 좌우로 흩어져 스캔이 어려웠다.
 function revListRow({ href, selected, title, subLeft = "", right, subRight = "" }) {
@@ -161,7 +162,11 @@ function lastSeenLabel(ymd) {
 // 스탭 순위 목록(왼쪽 마스터) — 기간 없는 전체 누적(2026-07-19 렌즈 분리: 목록=전체, 드릴다운=기간).
 // listGroup의 .card는 overflow-hidden이라 contactPanes의 고정 높이 패널 안에서 넘친 행이 잘리고
 // 스크롤바도 없다(2026-07-19 최종 리뷰 지적 — 연락처 contactNameList와 동일하게 lg:overflow-y-auto 래퍼로 감싼다).
-// data-contact-list 마커는 붙이지 않는다 — 그건 연락처 전용 키보드 이동(↑↓) IIFE의 마커라 매출에도 붙으면 의도치 않게 동작한다.
+// data-nav-list = 키보드 이동 마커(로드 시 선택 행 포커스+scrollIntoView, ↑↓로 앞뒤 이동).
+// 2026-07-19 사용자 요청('업체 선택하면 목록이 맨 위로 간다·화살표로 다니고 싶다')으로 매출에도 부착 —
+// 마커 이름이 옛 data-contact-list에서 일반화된 이유가 이것이다(연락처·업체그룹·매출 3화면 공용).
+// 선택 행 포커스가 스크롤 위치 문제도 함께 푼다: 서버 렌더라 선택=페이지 재로드인데, 포커스가
+// 그 행을 scrollIntoView해 목록이 보던 위치를 유지한다(마커가 없으면 스크롤이 0으로 돌아간다).
 function revStaffList(rows, { selId = 0 } = {}) {
   if (!rows.length) return emptyState("매출 기여가 있는 스탭이 없습니다.", { card: true });
   const list = listGroup({ rows: rows.map((r) => {
@@ -176,7 +181,7 @@ function revStaffList(rows, { selId = 0 } = {}) {
       subRight: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span>`,
     });
   }) });
-  return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
+  return `<div data-nav-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
 // 업체·개인 순위 목록(왼쪽 마스터) — 기간 없는 전체 누적. 스크롤 래퍼는 revStaffList와 동일 이유.
@@ -194,7 +199,7 @@ function revPayerList(rows, { selId = 0 } = {}) {
       subRight: `청구 ${r.invoice_cnt}건`,
     });
   }) });
-  return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
+  return `<div data-nav-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
 // "2026-07" → "2026년 7월". ym이 비면(발행일 없는 항목 — 현재 ISSUED 가드로 도달 불가하나 방어) 안전 문구.

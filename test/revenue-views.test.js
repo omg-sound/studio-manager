@@ -146,8 +146,11 @@ test("revStaffList/revPayerList: 목록 반환에 내부 스크롤 래퍼(lg:ove
   const pEmpty = V.revPayerList([], {});
   assert.ok(!/lg:overflow-y-auto/.test(sEmpty), "빈 스탭 목록엔 스크롤 래퍼 없음");
   assert.ok(!/lg:overflow-y-auto/.test(pEmpty), "빈 업체·개인 목록엔 스크롤 래퍼 없음");
-  // 연락처 전용 키보드 이동 마커(data-contact-list)는 매출에 붙지 않아야 한다(그 IIFE가 의도치 않게 동작하는 것 방지).
-  assert.ok(!/data-contact-list/.test(s) && !/data-contact-list/.test(p), "연락처 전용 마커 미부착");
+  // 키보드 이동 마커(data-nav-list) 부착 — 로드 시 선택 행 포커스로 스크롤 위치가 유지되고 ↑↓ 이동이 된다
+  // (2026-07-19 사용자 요청). 옛 연락처 전용 이름(data-contact-list)은 3화면 공용이 되며 일반화됐다.
+  assert.match(s, /data-nav-list/, "스탭 목록: 키보드 이동 마커");
+  assert.match(p, /data-nav-list/, "업체·개인 목록: 키보드 이동 마커");
+  assert.ok(!/data-contact-list/.test(s) && !/data-contact-list/.test(p), "옛 마커 이름은 남지 않음");
 });
 
 test("revStaffList/revPayerList: 기간 없는 href + 최근 거래월 표기", () => {

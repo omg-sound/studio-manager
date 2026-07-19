@@ -59,11 +59,12 @@ function contactNameList({ rows, selectedId = null, hrefFn }) {
   const rail = keys.length > 1
     ? `<div class="cl-rail" data-cho-rail aria-hidden="true">${keys.map((k) => `<button type="button" class="cl-rail-item" data-cho-jump="${esc(k)}" tabindex="-1">${esc(k)}</button>`).join("")}</div>`
     : "";
-  // data-contact-list = app.js 키보드 이동 마커(선택 행 포커스 + ↑↓로 앞뒤 사람 이동, 2026-07-17 사용자 요청).
+  // data-nav-list = app.js 키보드 이동 마커(선택 행 포커스 + ↑↓로 앞뒤 이동, 2026-07-17 사용자 요청).
+  // 이름이 일반적인 이유: 연락처·업체그룹·매출 순위 목록이 같은 동작을 공유한다(2026-07-19 매출 추가 시 개명).
   // lg: 왼쪽 열(flex-col) 안에서 **검색은 위에 고정, 목록만 flex-1로 남은 높이를 채워 내부 스크롤**(contactPanes 고정 높이 영역과 함께 동작).
   // 모바일(<lg)은 flex-1/overflow가 없어 페이지와 함께 흐른다(한 단이라 그대로). 레일은 이 relative 래퍼 기준 절대배치.
   return `<div class="cl-listwrap relative lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-      <div data-contact-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>
+      <div data-nav-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${listGroup({ rows: items, filterList: true })}</div>
       ${rail}
     </div>`;
 }
