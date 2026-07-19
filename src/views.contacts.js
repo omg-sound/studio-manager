@@ -35,9 +35,11 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
 /**
  * 이름만 있는 마스터 목록(애플 연락처식). 소속·역할·전화를 넣지 않는 게 요점 — 폭 경쟁이 사라진다.
  * `listGroup({filterList:true})`가 app.js 실시간 필터 계약(data-filter-list/data-filter-empty)을 제공한다.
- * @param {{rows:object[], selectedId?:number|null, hrefFn:(row:object)=>string}} o
+ * @param {{rows:object[], selectedId?:number|null, hrefFn:(row:object)=>string, keyFn?:(row:object)=>string}} o
+ *   keyFn = **초성 그룹 키**(기본 = 표시명). 업체 목록은 법인 표기를 뗀 상호를 넘겨 정렬과 같은 키를 쓴다
+ *   (2026-07-20 — 정렬과 초성이 다른 규칙이면 목록 순서와 헤더가 어긋난다). 표시는 항상 원래 이름.
  */
-function contactNameList({ rows, selectedId = null, hrefFn }) {
+function contactNameList({ rows, selectedId = null, hrefFn, keyFn = null }) {
   const { chosungOf } = require("./lib/chosung"); // 지연 require
   // 초성별 그룹 헤더(iCloud식) — 목록은 이미 이름순 정렬이라 같은 초성이 연속. 초성이 바뀌는 지점에 sticky 헤더 삽입.
   // 헤더는 <div>(키보드 이동은 <a>만 순회해 자연히 건너뜀). 검색 중엔 실시간 필터가 헤더 텍스트도 안 맞아 함께 숨김(iCloud와 동일).
@@ -45,7 +47,7 @@ function contactNameList({ rows, selectedId = null, hrefFn }) {
   const keys = []; // 레일용: 등장 순서의 distinct 초성
   let curKey = null;
   rows.forEach((c) => {
-    const key = chosungOf(personName(c));
+    const key = chosungOf(keyFn ? keyFn(c) : personName(c));
     if (key !== curKey) {
       curKey = key;
       keys.push(key);

@@ -25,6 +25,7 @@ const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, errorPage, tabBar, searchBox, fileViewerPage } = require("../views");
 const { FILE_KINDS, fileKindLabel, clientFilesBlock, clientForm, clientReadView, clientEditPane } = require("../views.clients");
 const { contactPanes, contactNameList } = require("../views.contacts");
+const { coreCompanyName, byCompanyName } = require("../lib/company-name");
 
 const router = express.Router();
 
@@ -70,7 +71,10 @@ function renderClients(req, sel, rightHtml, backHref) {
   const all = listClients({});
   const companyCount = all.filter((c) => c.kind === "company").length;
   const groupCount = all.filter((c) => c.kind === "group").length;
+  // 업체는 법인 표기(주식회사·(주) 등)를 뗀 상호로 정렬한다(2026-07-20 사용자 요청). 그룹은 법인 표기가 없어 그대로.
+  // ⚠️ 정렬은 **capList(100개 상한) 전에** 끝나야 한다 — 상한 뒤에 정렬하면 잘린 뒤 순서라 틀린다.
   let rows = all.filter((c) => c.kind === group);
+  if (group === "company") rows = rows.slice().sort(byCompanyName);
   if (q) { const ql = q.toLowerCase(); rows = rows.filter((c) => String(c.name || "").toLowerCase().includes(ql)); }
   const keep = `?group=${group}${q ? "&q=" + encodeURIComponent(q) : ""}`;
 
@@ -90,7 +94,7 @@ function renderClients(req, sel, rightHtml, backHref) {
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/clients?group=${group}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
   const list = rows.length
-    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients/${c.id}${keep}` })
+    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients/${c.id}${keep}`, keyFn: group === "company" ? (c) => coreCompanyName(c.name) : null })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : group === "group"
