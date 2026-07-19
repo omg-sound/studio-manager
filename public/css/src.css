@@ -333,6 +333,31 @@
    tint(bg-primary/10)를 hover에서도 그대로 재지정해 안정적으로 유지. */
 [data-nav-list] a[aria-current]:hover { background-color: rgb(var(--color-primary) / 0.1); }
 
+/* ── 매출 스탭 상세 항목 행(2026-07-19 사용자 요청 '항목별로 나눠') ──
+   발행일 | 종류 | 프로젝트·세부 | 금액 4칸 정렬. 표 헤더는 두지 않는다(월 그룹마다 반복되면 시끄럽고
+   내용만으로 각 칸이 읽힌다). 이름 칸만 유연(1fr)이라 넘치면 …로 잘리고 나머지는 고정 폭.
+   ⚠️ 폭을 서버 렌더 인라인 style로 주면 CSP style-src에 막혀 조용히 무시된다(함정 #27) → 여기서 준다. */
+.rev-item {
+  display: grid;
+  /* 칸 폭은 고정 — 행마다 별도 grid라 max-content로 두면 행 간 정렬이 어긋난다.
+     종류 5.5rem = '오디오편집'(5자)까지 여유. 더 긴 커스텀 작업 종류는 …로 잘리고 title로 읽힌다. */
+  grid-template-columns: 2.5rem 5.5rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+.rev-item-day { text-align: right; }
+.rev-item-amt { text-align: right; white-space: nowrap; }
+/* 좁은 화면(<640) — 날짜·종류를 한 줄로 묶고 이름·금액을 아래로: 4칸이 들어가기엔 좁다. */
+@media (max-width: 639.98px) {
+  .rev-item {
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+    row-gap: 0.15rem;
+  }
+  .rev-item-kind { grid-column: 2; }
+  .rev-item-name { grid-column: 2 / -1; }
+  .rev-item-amt { grid-row: 1; grid-column: 3; }
+}
+
 /* ── 청구 목록 = 데스크톱 넓은 표(2026-07-16 사용자 요청, bookipi 참고) ──
    ≥640px = 진짜 표(컬럼 정렬), <640px = 각 행을 카드로 접음(td[data-label]→::before 라벨).
    행(데이터 셀)을 누르면 상세로 이동(.inv-cell-link). 체크박스·처리 열은 링크 아님. */
