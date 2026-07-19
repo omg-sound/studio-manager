@@ -8,10 +8,6 @@ function periodQS({ year, month }) { return `year=${Number(year)}&month=${month 
 // 순이익 색: 음수(외주지급>매출)면 danger, 아니면 success.
 function profitCls(v) { return Number(v) < 0 ? "text-danger" : "text-success"; }
 
-// 년·월 셀렉트(GET 폼). 탭·기간·선택 대상 유지.
-// 셀렉트를 바꾸면 **바로 조회**된다(2026-07-19 사용자 요청 '보기 안 눌러도 바로 변경') — app.js가
-// [data-auto-submit] 폼의 select change에서 제출. '보기' 버튼은 <noscript>로만 남겨 JS가 없을 때만 보인다
-// (버튼을 항상 두면 JS 있는 환경에선 눌러도 아무 의미가 없는 죽은 컨트롤이 된다).
 // 년·월 셀렉트(GET 폼). **개요 탭 전용** — 목록 탭은 기간 없이 전체 누적이라 이 컨트롤을 쓰지 않는다.
 // 셀렉트를 바꾸면 바로 조회된다(app.js가 [data-auto-submit] 폼의 select change에서 제출).
 // '보기' 버튼은 <noscript>로만 남겨 JS가 없을 때만 보인다.

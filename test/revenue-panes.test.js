@@ -16,6 +16,13 @@ test("매출 마스터-디테일 라우트 계약: 구 드릴다운 리다이렉
   const payerId = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', '도너츠컬처')").run().lastInsertRowid;
   // revenueByPayer()가 목록에 실으려면 발행 청구서가 있어야 한다(발행 청구서 없는 청구처는 목록에서 빠진다).
   db().prepare("INSERT INTO invoices (title, payer_id, amount, tax_amount, status, issued_date) VALUES ('테스트 청구', ?, 110000, 10000, '발행', '2026-01-15')").run(payerId);
+  // revenueByStaff()도 마찬가지로 supply>0인 스탭만 목록에 싣는다(revenue.test.js seedInvoice와 동일 패턴) —
+  // 담당자가 청구 라인(작업)을 하나도 안 가지면 마스터 목록에 아예 안 나타나 aria-current 결속 검증이 불가능하다.
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('P', 'task', 0)").run().lastInsertRowid;
+  const trk = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(proj).lastInsertRowid;
+  const taskId = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, engineer_id) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 100000, 100000, 'Completed', 1, ?)").run(trk, mgrId).lastInsertRowid;
+  const staffInv = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, '스탭 청구', 110000, 10000, '발행', '2026-01-15')").run(proj, payerId).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?, ?, 'Mixing', 1, 100000, 100000)").run(staffInv, taskId);
 
   const server = require("../src/server");
   await new Promise((r) => (server.listening ? r() : server.once("listening", r)));
@@ -56,7 +63,9 @@ test("매출 마스터-디테일 라우트 계약: 구 드릴다운 리다이렉
     const { status, html } = await get(`/revenue?tab=staff&staff=${mgrId}&year=2026&month=6`);
     assert.equal(status, 200);
     assert.match(html, /김엔지/, "선택된 스탭 이름 렌더");
-    assert.match(html, /aria-current="page"/, "선택 행 강조");
+    // aria-current="page"는 같은 화면의 tabBar(활성 탭)도 렌더하므로, 그 문자열만으로는
+    // 목록 행의 선택 강조 로직이 깨져도 통과한다 — 반드시 그 행의 href(?staff=<id>)에 결속.
+    assert.match(html, new RegExp(`href="[^"]*staff=${mgrId}"[^>]*aria-current="page"`), "선택한 그 행에 강조가 붙는다");
     assert.ok(!/name="staff"/.test(html), "목록 탭엔 기간 폼 자체가 없어 hidden staff 없음");
   });
 
@@ -64,7 +73,8 @@ test("매출 마스터-디테일 라우트 계약: 구 드릴다운 리다이렉
     const { status, html } = await get(`/revenue?tab=payer&payer=${payerId}&year=2026&month=6`);
     assert.equal(status, 200);
     assert.match(html, /도너츠컬처/, "선택된 청구처 이름 렌더");
-    assert.match(html, /aria-current="page"/, "선택 행 강조");
+    // 같은 이유(위 스탭 서브테스트 주석 참조)로 tabBar와 구분되게 그 행의 href(?payer=<id>)에 결속.
+    assert.match(html, new RegExp(`href="[^"]*payer=${payerId}"[^>]*aria-current="page"`), "선택한 그 행에 강조가 붙는다");
     assert.ok(!/name="payer"/.test(html), "목록 탭엔 기간 폼 자체가 없어 hidden payer 없음");
   });
 
