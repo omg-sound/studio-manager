@@ -15,9 +15,14 @@ const { db } = require("../db");
 // 발행 청구서 조건(별칭 i). issued_date NULL·미발행 제외.
 const ISSUED = "i.status <> '미발행' AND i.issued_date IS NOT NULL";
 
-// 발행일 기간 조건 SQL. year·month는 라우트에서 정수 파싱(month='all' 연간). 정수/고정문자열만 보간(주입 안전).
-function issuedInPeriodSql(alias, { year, month }) {
-  const y = Number(year);
+// 발행일 기간 조건 SQL. period 없음/year 없음/year==='all' = 전체 기간(조건 없음).
+// ISSUED가 이미 issued_date IS NOT NULL을 포함하므로 '1=1'이어도 발행일 없는 행은 안 섞인다.
+// year·month는 라우트에서 정수 파싱(month='all' 연간). 정수/고정문자열만 보간(주입 안전).
+function issuedInPeriodSql(alias, period) {
+  const p = period || {};
+  if (!p.year || p.year === "all") return "1=1";
+  const y = Number(p.year);
+  const month = p.month;
   if (month === "all" || month == null || month === "") return `substr(${alias}.issued_date,1,4) = '${y}'`;
   const ym = `${y}-${String(Number(month)).padStart(2, "0")}`;
   return `substr(${alias}.issued_date,1,7) = '${ym}'`;
@@ -88,13 +93,14 @@ function revenueTax({ year, month }) {
 }
 
 // 스탭(엔지니어)별 매출·순이익. 작업=engineer_id·세션=engineer_name 라인 기준(공급가). 순이익=매출−외주지급.
-function revenueByStaff({ year, month }) {
+// period 없으면 전 기간 누적. last_issued=작업·세션 중 최신 발행일.
+function revenueByStaff(period) {
   const { listProjectManagers } = require("../data");
-  const per = issuedInPeriodSql("i", { year, month });
+  const per = issuedInPeriodSql("i", period);
   const q = (sql) => db().prepare(sql).all();
-  const taskRev = q(`SELECT t.engineer_id AS id, COALESCE(SUM(ii.amount),0) AS supply, COUNT(*) AS cnt FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id IS NOT NULL GROUP BY t.engineer_id`);
+  const taskRev = q(`SELECT t.engineer_id AS id, COALESCE(SUM(ii.amount),0) AS supply, COUNT(*) AS cnt, MAX(i.issued_date) AS last_issued FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id IS NOT NULL GROUP BY t.engineer_id`);
   const taskPay = q(`SELECT t.engineer_id AS id, COALESCE(SUM(t.worker_rate),0) AS payout FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id IS NOT NULL GROUP BY t.engineer_id`);
-  const sessRev = q(`SELECT s.engineer_name AS name, COALESCE(SUM(ii.amount),0) AS supply, COUNT(*) AS cnt FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name IS NOT NULL GROUP BY s.engineer_name`);
+  const sessRev = q(`SELECT s.engineer_name AS name, COALESCE(SUM(ii.amount),0) AS supply, COUNT(*) AS cnt, MAX(i.issued_date) AS last_issued FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name IS NOT NULL GROUP BY s.engineer_name`);
   const sessPay = q(`SELECT s.engineer_name AS name, COALESCE(SUM(se.worker_rate),0) AS payout FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name IS NOT NULL GROUP BY s.engineer_name`);
   const trById = new Map(taskRev.map((r) => [r.id, r]));
   const tpById = new Map(taskPay.map((r) => [r.id, r.payout]));
@@ -102,11 +108,12 @@ function revenueByStaff({ year, month }) {
   const spByName = new Map(sessPay.map((r) => [r.name, r.payout]));
   return listProjectManagers({ includeInactive: true })
     .map((m) => {
-      const tr = trById.get(m.id) || { supply: 0, cnt: 0 };
-      const sr = srByName.get(m.name) || { supply: 0, cnt: 0 };
+      const tr = trById.get(m.id) || { supply: 0, cnt: 0, last_issued: null };
+      const sr = srByName.get(m.name) || { supply: 0, cnt: 0, last_issued: null };
       const supply = (tr.supply || 0) + (sr.supply || 0);
       const payout = (tpById.get(m.id) || 0) + (spByName.get(m.name) || 0);
-      return { id: m.id, name: m.name, is_external: !m.user_id, supply, profit: supply - payout, task_cnt: tr.cnt || 0, session_cnt: sr.cnt || 0 };
+      const last = [tr.last_issued, sr.last_issued].filter(Boolean).sort().pop() || null;
+      return { id: m.id, name: m.name, is_external: !m.user_id, supply, profit: supply - payout, task_cnt: tr.cnt || 0, session_cnt: sr.cnt || 0, last_issued: last };
     })
     .filter((r) => r.supply > 0)
     .sort((a, b) => b.supply - a.supply);
@@ -125,10 +132,10 @@ function revenueForStaff(id, { year, month }) {
   return { manager, tasks, sessions, supply, payout, profit: supply - payout };
 }
 
-// 결제자(업체·개인)별 매출 기여(공급가)·건수.
-function revenueByPayer({ year, month }) {
-  const per = issuedInPeriodSql("i", { year, month });
-  return db().prepare(`SELECT i.payer_id AS id, c.kind, c.name, COALESCE(SUM(i.amount - i.tax_amount),0) AS supply, COUNT(*) AS invoice_cnt FROM invoices i JOIN parties c ON c.id = i.payer_id WHERE ${ISSUED} AND ${per} AND i.payer_id IS NOT NULL GROUP BY i.payer_id ORDER BY supply DESC`).all();
+// 결제자(업체·개인)별 매출 기여(공급가)·건수·최근 발행일. period 없으면 전 기간 누적.
+function revenueByPayer(period) {
+  const per = issuedInPeriodSql("i", period);
+  return db().prepare(`SELECT i.payer_id AS id, c.kind, c.name, COALESCE(SUM(i.amount - i.tax_amount),0) AS supply, COUNT(*) AS invoice_cnt, MAX(i.issued_date) AS last_issued FROM invoices i JOIN parties c ON c.id = i.payer_id WHERE ${ISSUED} AND ${per} AND i.payer_id IS NOT NULL GROUP BY i.payer_id ORDER BY supply DESC`).all();
 }
 
 // 결제자 상세(기간 발행 청구서 목록 + 공급가 합계).
