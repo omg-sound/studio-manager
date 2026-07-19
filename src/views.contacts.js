@@ -37,9 +37,11 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
  * `listGroup({filterList:true})`가 app.js 실시간 필터 계약(data-filter-list/data-filter-empty)을 제공한다.
  * @param {{rows:object[], selectedId?:number|null, hrefFn:(row:object)=>string, keyFn?:(row:object)=>string}} o
  *   keyFn = **초성 그룹 키**(기본 = 표시명). 업체 목록은 법인 표기를 뗀 상호를 넘겨 정렬과 같은 키를 쓴다
- *   (2026-07-20 — 정렬과 초성이 다른 규칙이면 목록 순서와 헤더가 어긋난다). 표시는 항상 원래 이름.
+ *   (2026-07-20 — 정렬과 초성이 다른 규칙이면 목록 순서와 헤더가 어긋난다).
+ *   labelFn = 행 라벨을 **이미 esc된 HTML**로 그린다(기본 = esc(표시명)). 업체 목록이 법인 표기만 옅게 칠하는 데 쓴다 —
+ *   글자는 그대로라 실시간 필터(textContent 매칭)와 검색은 영향받지 않는다.
  */
-function contactNameList({ rows, selectedId = null, hrefFn, keyFn = null }) {
+function contactNameList({ rows, selectedId = null, hrefFn, keyFn = null, labelFn = null }) {
   const { chosungOf } = require("./lib/chosung"); // 지연 require
   // 초성별 그룹 헤더(iCloud식) — 목록은 이미 이름순 정렬이라 같은 초성이 연속. 초성이 바뀌는 지점에 sticky 헤더 삽입.
   // 헤더는 <div>(키보드 이동은 <a>만 순회해 자연히 건너뜀). 검색 중엔 실시간 필터가 헤더 텍스트도 안 맞아 함께 숨김(iCloud와 동일).
@@ -55,7 +57,7 @@ function contactNameList({ rows, selectedId = null, hrefFn, keyFn = null }) {
     }
     const active = Number(selectedId) === Number(c.id);
     const cls = active ? "bg-primary/10 font-semibold text-fg" : "text-fg";
-    items.push(`<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${esc(personName(c))}</a>`);
+    items.push(`<a href="${esc(hrefFn(c))}" class="row-link block truncate px-3 py-2 text-sm ${cls}"${active ? ' aria-current="true"' : ""}>${labelFn ? labelFn(c) : esc(personName(c))}</a>`);
   });
   // 오른쪽 초성 인덱스 레일(스크롤쪽) — 클릭/드래그로 그 초성 섹션으로 이동(app.js [data-cho-rail], lg 이상만).
   const rail = keys.length > 1

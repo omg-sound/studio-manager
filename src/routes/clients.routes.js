@@ -25,7 +25,18 @@ const { safePath } = require("../lib/nav"); // ?return= 복귀 경로 검증(공
 const { layout, pageHeader, esc, personLabel, personName, flashBanner, emptyState, errorPage, tabBar, searchBox, fileViewerPage } = require("../views");
 const { FILE_KINDS, fileKindLabel, clientFilesBlock, clientForm, clientReadView, clientEditPane } = require("../views.clients");
 const { contactPanes, contactNameList } = require("../views.contacts");
-const { coreCompanyName, byCompanyName } = require("../lib/company-name");
+const { coreCompanyName, byCompanyName, splitCompanyName } = require("../lib/company-name");
+
+// 업체 목록 라벨 — 법인 표기(주식회사·(주) 등)만 옅게, **자리는 그대로**(2026-07-20 사용자 결정).
+// 눈이 회색을 건너뛰고 실제 상호에 걸리게 해서 초성 헤더(정렬 기준)와의 인지 부조화를 줄인다.
+// 글자 자체는 원본 그대로라 실시간 필터·검색은 '주식회사'로도 계속 찾힌다.
+function companyLabelHtml(c) {
+  const { pre, core, post } = splitCompanyName(c.name);
+  // text-muted(투명도 없이) — /60을 쓰면 대비가 약 3.8:1로 WCAG AA(4.5:1) 미달이다(다크에서 실측).
+  // 이 저장소는 muted 대비 AA를 지켜왔고, 본문이 near-white라 muted만으로도 충분히 물러나 보인다.
+  const dim = (t) => (t ? `<span class="text-muted">${esc(t)}</span>` : "");
+  return `${dim(pre)}${esc(core)}${dim(post)}`;
+}
 
 const router = express.Router();
 
@@ -94,7 +105,7 @@ function renderClients(req, sel, rightHtml, backHref) {
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/clients?group=${group}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
   const list = rows.length
-    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients/${c.id}${keep}`, keyFn: group === "company" ? (c) => coreCompanyName(c.name) : null })
+    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients/${c.id}${keep}`, keyFn: group === "company" ? (c) => coreCompanyName(c.name) : null, labelFn: group === "company" ? companyLabelHtml : null })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : group === "group"
