@@ -54,6 +54,11 @@ test("revStaffTable: 매출·순이익·건수 컬럼 + 상세 링크(기간 보
   assert.match(html, /₩150,000/, "순이익 표시");
 });
 
+test("revStaffTable: 음수 순이익(외주지급>매출)은 danger 색(초록 아님)", () => {
+  const html = V.revStaffTable([{ id: 4, name: "적자엔지", is_external: true, supply: 100000, profit: -50000, task_cnt: 1, session_cnt: 0 }], { year: 2026, month: 7 });
+  assert.match(html, /text-danger">-₩50,000/, "음수 순이익 = text-danger");
+});
+
 test("revPayerTable: 업체/개인 배지 + 매출 기여 + 상세 링크", () => {
   const html = V.revPayerTable([{ id: 5, kind: "company", name: "도너츠컬처", supply: 300000, invoice_cnt: 2 }], { year: 2026, month: 7 });
   assert.match(html, /도너츠컬처/);

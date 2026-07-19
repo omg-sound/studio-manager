@@ -86,7 +86,7 @@ router.get("/", requireStaff, asyncHandler(async (req, res) => {
     // 스튜디오 운영 / 구글 연동 / 문서·청구 / 알림. 상단 앵커 네비로 점프.
     const groups = [
       { id: "ops", label: "스튜디오 운영", html: roomsSection() + studioHoursSection() + defaultBookerSection() },
-      { id: "google", label: "구글 연동", html: (await studioCalendarSection()) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
+      { id: "google", label: "구글 연동", html: (await studioCalendarSection(isChief(req.user))) + driveStorageSection() + googleContactsSection(isChief(req.user)) },
       { id: "docs", label: "문서 · 청구", html: studioInfoSection() },
       { id: "alerts", label: "알림", html: alertWebhookSection(isChief(req.user)) + alertEmailSection(isChief(req.user)) },
     ];

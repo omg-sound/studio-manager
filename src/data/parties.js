@@ -176,7 +176,9 @@ function updateParty(id, b = {}) {
   // 우선순위: 명시 name(폼엔 없음) > 성+이름 > 기존 name(레거시 단일필드·이름 없는 부분수정 보존) > 활동명/호칭(resolveDisplayName 폴백).
   const fullName = `${String(pick("family_name") || "").trim()}${String(pick("given_name") || "").trim()}`;
   const name = resolveDisplayName({ ...b, activity_name: activityName, name: String(b.name || "").trim() || fullName || cur.name });
-  const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (activityName ? 1 : cur.is_artist);
+  // 그룹은 '그룹명=단일 정체성'이 불변식(group_activity_name_sync_v1) — 이름을 고치면 활동명도 따라가게 데이터층에서 강제(라우트 누락 대비, 감사 L1). 솔로는 본명≠활동명이 정상이라 제외.
+  const activityNameFinal = cur.kind === "group" ? name : activityName;
+  const isArtist = b.is_artist != null ? (b.is_artist ? 1 : 0) : (activityNameFinal ? 1 : cur.is_artist);
   const contactPartyId = b.contact_party_id !== undefined ? (b.contact_party_id ? Number(b.contact_party_id) : null) : (cur.contact_party_id || null);
   const jobTitle = pick("job_title");
   // 호칭이 비어 있을 때만 직책에서 파생(기존 호칭 존중 — 대표자 '대표님' 자동 부여와 같은 규칙, 2026-07-10).
@@ -185,7 +187,7 @@ function updateParty(id, b = {}) {
     `UPDATE parties SET name=?, activity_name=?, is_artist=?, phone=?, email=?, memo=?,
        family_name=?, given_name=?, honorific=?, department=?, job_title=?, cash_receipt_no=?, contact_party_id=?, activity_form=? WHERE id=?`
   ).run(
-    name, activityName, isArtist,
+    name, activityNameFinal, isArtist,
     pick("phone", formatPhone), pick("email"), pick("memo"),
     pick("family_name"), pick("given_name"), honorific,
     pick("department"), jobTitle, pick("cash_receipt_no", formatPhone), contactPartyId, pick("activity_form"), Number(id)
@@ -221,6 +223,7 @@ function deleteParty(id) {
     d.prepare("DELETE FROM company_owners WHERE party_id = ? OR company_id = ?").run(pid, pid);
     d.prepare("UPDATE parties SET owner_party_id = NULL WHERE owner_party_id = ?").run(pid);
     d.prepare("UPDATE parties SET group_id = NULL WHERE group_id = ?").run(pid); // 그룹 삭제 시 멤버 소속 해제
+    d.prepare("UPDATE parties SET contact_party_id = NULL WHERE contact_party_id = ?").run(pid); // 그룹 담당자로 지정된 사람 삭제 시 댕글링 참조 방지(감사 M1)
     d.prepare("DELETE FROM parties WHERE id = ?").run(pid);
     for (const cid of ownedCompanies) syncCompanyOwnerColumns(cid);
     d.exec("COMMIT;");
@@ -297,8 +300,8 @@ function deleteAffiliation(affId) {
 function syncCompanyAffiliation(personId, companyName, title) {
   const n = String(companyName || "").trim();
   if (!n) return null;
-  const row = db().prepare("SELECT id FROM parties WHERE name = ? AND kind = 'company' ORDER BY id LIMIT 1").get(n);
-  const orgId = row ? row.id : createCompany({ name: n, roles: "소속사/레이블" });
+  // 정규화 매칭(공백·대소문자 무시)으로 회사 재사용 — raw 정확일치는 "뮤직팜"≠"뮤직 팜"으로 중복 업체를 만든다(감사 M2, '뮤직팜 3중 등록' 버그 클래스).
+  const orgId = ensureCompanyParty(n, "소속사/레이블");
   const cur = currentAffiliation(personId);
   if (!cur || cur.org_id !== orgId) addAffiliation(personId, { org_id: orgId, title, closeCurrent: true });
   return orgId;

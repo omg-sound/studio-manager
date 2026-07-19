@@ -200,6 +200,36 @@ test("그룹 소속사: 멤버 상속·따르던 멤버 전파·개별 오버라
   assert.ok(rosterC.includes(g) && rosterC.includes(kim), "레이블C 소속에 그룹·김");
 });
 
+// ── 회귀(2026-07-19 전수 점검): 그룹 담당자로 지정된 사람 삭제 시 parties.contact_party_id 댕글링 방지(M1) ──
+test("deleteParty: 그룹 담당자로 지정된 사람 삭제 → 그룹 contact_party_id NULL(댕글링 없음)", () => {
+  const g = D.createGroup({ name: "담당자테스트그룹" });
+  const mgr = D.createPerson({ name: "그룹담당" });
+  D.updateParty(g, { contact_party_id: mgr });
+  assert.equal(D.getParty(g).contact_party_id, mgr, "그룹 담당자 지정됨");
+  D.deleteParty(mgr);
+  assert.equal(D.getParty(g).contact_party_id, null, "담당자 삭제 후 contact_party_id NULL(존재 안 하는 id 참조 안 함)");
+});
+
+// ── 회귀(2026-07-19 전수 점검): syncCompanyAffiliation 정규화 매칭 — 공백만 다른 회사명은 중복 업체 안 만든다(M2) ──
+test("syncCompanyAffiliation: '뮤직팜' vs '뮤직 팜' 정규화 매칭 — 중복 company party 없음", () => {
+  const co = D.createCompany({ name: "뮤직팜", roles: "소속사/레이블" });
+  const p = D.createPerson({ name: "소속인물" });
+  const before = D.listClients({ group: "company" }).length;
+  D.syncCompanyAffiliation(p, "뮤직 팜", "매니저"); // 공백만 다름 → 기존 회사 재사용해야 함
+  const after = D.listClients({ group: "company" }).length;
+  assert.equal(after, before, "새 회사 생성 안 됨(정규화 매칭)");
+  assert.equal(D.currentAffiliation(p).org_id, co, "기존 '뮤직팜'에 소속 연결");
+});
+
+// ── 회귀(2026-07-19 전수 점검): 그룹 이름 수정 시 activity_name 자동 동기화(L1 — 라우트 누락 대비 데이터층 강제) ──
+test("updateParty(group): 이름만 바꿔도 activity_name 동기화(옛이름 잔존 방지)", () => {
+  const g = D.createGroup({ name: "옛그룹명" });
+  D.updateParty(g, { name: "새그룹명" }); // activity_name 미전송
+  const row = D.getParty(g);
+  assert.equal(row.name, "새그룹명", "이름 갱신");
+  assert.equal(row.activity_name, "새그룹명", "그룹 activity_name = name(단일 정체성)");
+});
+
 // ── 회귀: 클라이언트 상세 '연결된 프로젝트' — 제작사/소속사/아티스트로 연결된 프로젝트를 찾는다 ──
 // (버그: clients.routes가 listProjectsForParty에 party '객체'를 넘겨 Number(obj)=NaN → 매칭 0.
 //  호출부는 c.id를 넘겨야 함. 아래는 쿼리 계약 + 객체 인자 함정을 문서화한다.)

@@ -5,6 +5,8 @@ const { esc, formatKRW, tabBar, dataTable, emptyState, listGroup, listRow } = re
 const MONTHS = Array.from({ length: 12 }, (_, k) => k + 1);
 // 기간 쿼리 문자열(링크·폼 유지). month은 숫자 또는 'all'.
 function periodQS({ year, month }) { return `year=${Number(year)}&month=${month === "all" ? "all" : Number(month)}`; }
+// 순이익 색: 음수(외주지급>매출)면 danger, 아니면 success.
+function profitCls(v) { return Number(v) < 0 ? "text-danger" : "text-success"; }
 
 // 년·월 셀렉트 + 보기 버튼(무JS GET 폼). 탭·기간 유지.
 function revPeriodControl({ year, month, years, tab }) {
@@ -94,9 +96,9 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
   const kpi = (label, value, tone, delta) => `<div class="card"><div class="text-sm text-muted">${label}</div><div class="tabular text-xl font-bold ${tone}">${formatKRW(value)}</div>${delta || ""}</div>`;
   const kpis = `<div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
     ${kpi(`${esc(periodLabel)} 매출`, summary.periodSupply, "text-fg", deltas("periodSupply", "Supply"))}
-    ${kpi(`${esc(periodLabel)} 순이익`, summary.periodProfit, "text-success", deltas("periodProfit", "Profit"))}
+    ${kpi(`${esc(periodLabel)} 순이익`, summary.periodProfit, profitCls(summary.periodProfit), deltas("periodProfit", "Profit"))}
     ${kpi("올해 누적 매출", summary.ytdSupply, "text-fg", "")}
-    ${kpi("올해 누적 순이익", summary.ytdProfit, "text-success", "")}
+    ${kpi("올해 누적 순이익", summary.ytdProfit, profitCls(summary.ytdProfit), "")}
   </div>`;
   const chart = `<div class="card"><div class="mb-1 text-sm font-semibold">${esc(year)}년 월별 매출·순이익</div>${revBarChart(summary.monthly)}</div>`;
   const typeSec = `<div><h2 class="mb-2 text-sm font-semibold text-muted">종류별 매출 구성</h2>${revTypeBreakdown(byType)}</div>`;
@@ -131,7 +133,7 @@ function revStaffTable(rows, { year, month }) {
       return { cells: [
         link(`${esc(r.name)}${badge}`, "font-medium"),
         link(formatKRW(r.supply), "tabular font-semibold"),
-        link(formatKRW(r.profit), "tabular text-success"),
+        link(formatKRW(r.profit), `tabular ${profitCls(r.profit)}`),
         link(`작업 ${r.task_cnt} · 세션 ${r.session_cnt}`, "text-muted"),
       ] };
     })
@@ -169,7 +171,7 @@ function revStaffDetail(data, { year, month }) {
   const summary = `<div class="card mb-4 flex flex-wrap gap-4 text-sm">
     <span>매출 <b class="tabular text-fg">${formatKRW(supply)}</b></span>
     <span>외주 지급 <b class="tabular text-fg">${formatKRW(payout)}</b></span>
-    <span class="font-semibold">순이익 <b class="tabular text-success">${formatKRW(profit)}</b></span>
+    <span class="font-semibold">순이익 <b class="tabular ${profitCls(profit)}">${formatKRW(profit)}</b></span>
   </div>`;
   const taskRows = tasks.length ? listGroup({ rows: tasks.map((t) => listRow({ href: `/projects/${t.project_id}?tab=tracks`, left: `<span class="font-medium">${esc(taskTypeLabel(t.task_type))}</span> <span class="text-xs text-muted">· ${esc(t.project_title)} / ${esc(t.track_title)} · ${esc(String(t.issued_date))}</span>`, right: formatKRW(t.amount) })) }) : emptyState("작업 없음", { card: true });
   const sessRows = sessions.length ? listGroup({ rows: sessions.map((s) => listRow({ href: `/projects/${s.project_id}?tab=sessions`, left: `<span class="font-medium">${esc(s.session_date)} ${esc(s.session_type)}</span> <span class="text-xs text-muted">· ${esc(s.project_title)}</span>`, right: formatKRW(s.amount) })) }) : emptyState("세션 없음", { card: true });

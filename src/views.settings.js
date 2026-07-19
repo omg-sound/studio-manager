@@ -257,7 +257,7 @@ function driveStorageSection() {
 }
 
 /** 스튜디오 캘린더(구글) 선택 섹션 — 세션 겹침 검사 대상. */
-async function studioCalendarSection() {
+async function studioCalendarSection(chief = false) {
   const title = `<div>
       <h2 class="text-sm font-semibold">스튜디오 캘린더 (구글)</h2>
       ${explain(`<span class="text-fg font-medium">세션을 예약하면 이 캘린더에 일정이 자동 생성·수정·삭제됩니다.</span> <span class="text-warning font-medium">'사용 안 함'으로 두면 캘린더 자동 연동이 꺼집니다</span> — 구글 캘린더로 넘기려면 반드시 스튜디오 캘린더를 선택하세요. <span class="text-muted">스튜디오 전용 캘린더를 권장</span>합니다(개인 일정과 섞이지 않게).`)}
@@ -283,8 +283,8 @@ async function studioCalendarSection() {
           </select>
           <button class="btn-primary shrink-0" type="submit">저장</button>
         </form>`;
-      if (current) {
-        // 이미 만들어진 캘린더 일정의 제목·설명을 현재 로직(예: 아티스트 먼저 표기)으로 다시 맞춘다 — 1회성 관리 액션.
+      if (current && chief) {
+        // 이미 만들어진 캘린더 일정의 제목·설명을 현재 로직(예: 아티스트 먼저 표기)으로 다시 맞춘다 — 1회성 관리 액션(치프 전용 라우트, resync는 requireChief).
         inner += `<form method="post" action="/settings/resync-calendar" class="mt-2 border-t border-border pt-3" data-confirm="예정된(취소 제외) 세션의 캘린더 일정을 지금 로직으로 전부 다시 씁니다. 계속할까요?">
             <button class="btn-ghost btn-sm" type="submit">기존 캘린더 일정 다시 동기화</button>
             <p class="mt-1 text-xs text-muted">제목·설명 표기 방식을 바꾼 뒤(예: 아티스트 표기 순서) 이미 등록된 일정에도 반영하고 싶을 때 누르세요.</p>

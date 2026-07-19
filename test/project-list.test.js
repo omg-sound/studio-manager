@@ -238,6 +238,22 @@ test("project_contacts: set/list + 연결 프로젝트 + 관계자", () => {
   assert.deepStrictEqual(D.listProjectContacts(pid).map((x) => x.id), [p2], "교체 반영");
 });
 
+// 회귀(2026-07-19 전수 점검): 세션↔파생작업(레거시 track_tasks.session_id)이 함께 있으면 예산 이중계상 금지.
+// sessionAmountsByProject ②(미청구 세션)에 NOT EXISTS(track_tasks WHERE session_id=s.id) 가드가 빠져 있으면
+// 그 세션 금액이 task_total과 session_amount_total에 동시에 잡혀 예산이 2배로 표시됐다(다른 소비처엔 모두 있는 가드).
+test("예산: 세션에서 전환된 작업(session_id)이 있으면 그 세션은 session_amount_total에서 제외(이중계상 없음)", () => {
+  const info = db().prepare("INSERT INTO projects (title, project_type) VALUES ('이중계상테스트', 'session')").run();
+  const pid = Number(info.lastInsertRowid);
+  const ri = Number(db().prepare("INSERT INTO rate_items (name, base_minutes, base_price, extra_minutes, extra_price) VALUES ('보컬녹음', 210, 300000, 60, 100000)").run().lastInsertRowid);
+  const sid = Number(db().prepare("INSERT INTO sessions (project_id, session_type, session_date, start_time, end_time, status, rate_item_id) VALUES (?, '녹음', '2026-07-10', '13:00', '16:30', '예정', ?)").run(pid, ri).lastInsertRowid);
+  const tr = Number(db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡', 'Music')").run(pid).lastInsertRowid);
+  // 이 세션에서 전환된 레거시 작업(session_id 세팅) — 300,000원.
+  db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, session_id) VALUES (?, 'Mixing', 'Fixed_Per_Track', 1, 300000, 300000, 'Completed', 0, ?)").run(tr, sid);
+  const p = D.listProjects({ role: "chief" }, {}).find((r) => r.id === pid);
+  assert.equal(p.session_amount_total, 0, "세션은 파생작업이 있어 session_amount_total에서 제외(작업 쪽으로만 계상)");
+  assert.equal(p.task_total, 300000, "작업 300,000만 예산에 — 세션과 합쳐 600,000으로 부풀지 않음");
+});
+
 test("projectSummaryHtml: 편집자면 목록 펼침 세션에 완료 토글(?open= 복귀)", () => {
   const y = Number(todayYmd().slice(0, 4));
   const summary = { sessions: [{ id: 42, session_date: `${y + 1}-07-15`, start_time: "14:00", end_time: "17:30", session_type: "녹음", status: "예정" }], tracks: [], taskTypes: [] };

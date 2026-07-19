@@ -59,7 +59,8 @@ function sessionAmountsByProject(projectIds) {
          AND s.rate_item_id IS NOT NULL
          AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
          AND s.status <> '취소'
-         AND s.waived = 0`
+         AND s.waived = 0
+         AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)`
     )
     .all(...projectIds);
   for (const row of rows) {
