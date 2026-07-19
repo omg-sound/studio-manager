@@ -3024,15 +3024,45 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     for (var i = 0; i < all.length; i++) if (all[i].style.display !== "none") out.push(all[i]);
     return out;
   }
-  // 선택된 사람이 있으면 그 행에 포커스 — 클릭·이동 직후 바로 ↑↓가 먹게(사용자가 이미 다른 곳을 잡고 있으면 뺏지 않음).
+  // 스크롤 보존 키 = **화면 단위**(첫 경로 조각 + 탭). pathname 전체를 쓰면 안 된다 —
+  // 연락처·업체그룹은 상세로 갈 때 /contacts → /contacts/24로 pathname이 바뀌어 매번 새 키가 되고 복원이 안 된다.
+  // 매출은 pathname이 같고 tab만 다르므로 tab을 키에 넣어 스탭별·업체개인별 위치를 따로 기억한다.
+  function scrollKey() {
+    var seg = location.pathname.split("/")[1] || "root";
+    var tab = new URLSearchParams(location.search).get("tab") || "";
+    return "navScroll:" + seg + (tab ? ":" + tab : "");
+  }
+  function saveScroll() {
+    var root = listRoot();
+    if (!root) return;
+    try { sessionStorage.setItem(scrollKey(), String(root.scrollTop)); } catch (_e) {}
+  }
+  // 행 클릭·↑↓ 이동은 곧 페이지 재로드다 — 떠나기 전에 목록 스크롤을 저장한다(캡처 단계라 이동보다 먼저).
+  document.addEventListener("click", function (e) {
+    if (!listRoot()) return;
+    if (e.target && e.target.closest && e.target.closest("[data-nav-list] a")) saveScroll();
+  }, true);
+
+  // 선택된 행에 포커스 — 클릭·이동 직후 바로 ↑↓가 먹게(사용자가 이미 다른 곳을 잡고 있으면 뺏지 않음).
   function focusSelected() {
     var root = listRoot();
     if (!root) return;
-    if (document.activeElement && document.activeElement !== document.body) return;
+    // ① 떠나기 전 위치 복원 — 선택해도 목록이 '보던 자리' 그대로 있게.
+    // 이게 없으면 목록이 0에서 시작하고 아래 scrollIntoView가 **보이게 만드는 최소한만** 움직여
+    // 선택 행이 목록 맨 아래에 딱 붙는다(2026-07-20 사용자 리포트 — 실측으로 재현·확인).
+    var saved = null;
+    try { saved = sessionStorage.getItem(scrollKey()); } catch (_e) {}
+    if (saved !== null) root.scrollTop = Number(saved) || 0;
     var cur = root.querySelector('[aria-current]');
     if (!cur) return;
-    try { cur.focus({ preventScroll: true }); } catch (_e) { cur.focus(); }
-    if (cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" }); // 목록 자체가 스크롤 영역이라 페이지는 안 튄다
+    if (!document.activeElement || document.activeElement === document.body) {
+      try { cur.focus({ preventScroll: true }); } catch (_e) { cur.focus(); }
+    }
+    // ② 복원해도 선택 행이 안 보이는 경우에만 최소 이동 — ↑↓로 가장자리를 넘었을 때, URL로 직접 들어왔을 때.
+    var rr = root.getBoundingClientRect(), cr = cur.getBoundingClientRect();
+    if (cr.top < rr.top || cr.bottom > rr.bottom) {
+      if (cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" }); // 목록 자체가 스크롤 영역이라 페이지는 안 튄다
+    }
   }
   document.addEventListener("keydown", function (e) {
     if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중(함정 #18)
