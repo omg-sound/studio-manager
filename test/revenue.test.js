@@ -275,3 +275,50 @@ test("revenueByStaff: last_issued = 작업·세션 중 최신 발행일", () => 
   assert.equal(row.last_issued, "2026-09-09", "작업·세션 중 최신");
   assert.equal(row.supply, 300000, "전 기간 누적(작업 10만 + 세션 20만)");
 });
+
+// 2026-07-20: 업체·개인별 상세가 스탭별과 같은 내용(종류·곡/세션날짜)을 보여주려면 청구서마다
+// '무슨 일이었는지'가 필요하다. 행 단위는 청구서 그대로 두므로(할인이 청구서 단위) 금액은 불변.
+test("revenueForPayer: 청구서마다 work_kind·work_detail·item_count 파생(작업/세션)", () => {
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("일내용사").lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('WP','task',0)").run().lastInsertRowid;
+
+  // ① 작업 라인 1개(곡 제목)
+  const tr = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡가', 'Music')").run(proj).lastInsertRowid;
+  const task = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced) VALUES (?, 'Mixing','Fixed_Per_Track',1,100000,100000,'Completed',1)").run(tr).lastInsertRowid;
+  const inv1 = db().prepare("INSERT INTO invoices (project_id,payer_id,title,amount,tax_amount,status,issued_date) VALUES (?,?,'W1',110000,10000,'발행','2026-07-16')").run(proj,payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount, item_date) VALUES (?,?,'Mixing',1,100000,100000,'2026-07-16')").run(inv1,task);
+
+  // ② 세션 라인 1개(세션 날짜)
+  const sess = db().prepare("INSERT INTO sessions (project_id, session_type, session_date, status) VALUES (?, '녹음', '2026-07-15', '완료')").run(proj).lastInsertRowid;
+  const inv2 = db().prepare("INSERT INTO invoices (project_id,payer_id,title,amount,tax_amount,status,issued_date) VALUES (?,?,'W2',220000,20000,'발행','2026-07-10')").run(proj,payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount, item_date) VALUES (?,?,'녹음',1,200000,200000,'2026-07-15')").run(inv2,sess);
+
+  // ③ 라인 2개(개수만 알린다)
+  const tr2 = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡나', 'Music')").run(proj).lastInsertRowid;
+  const task2 = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced) VALUES (?, 'Mixing','Fixed_Per_Track',1,50000,50000,'Completed',1)").run(tr2).lastInsertRowid;
+  const task3 = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced) VALUES (?, 'Mixing','Fixed_Per_Track',1,50000,50000,'Completed',1)").run(tr2).lastInsertRowid;
+  const inv3 = db().prepare("INSERT INTO invoices (project_id,payer_id,title,amount,tax_amount,status,issued_date) VALUES (?,?,'W3',110000,10000,'발행','2026-07-05')").run(proj,payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount, item_date) VALUES (?,?,'Mixing',1,50000,50000,'2026-07-05')").run(inv3,task2);
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount, item_date) VALUES (?,?,'Mixing',1,50000,50000,'2026-07-06')").run(inv3,task3);
+
+  const d = D.revenueForPayer(payer);
+  const byId = new Map(d.invoices.map((r) => [r.id, r]));
+  assert.equal(byId.get(inv1).work_kind, D.taskTypeLabel("Mixing"), "작업 = 작업 종류 라벨");
+  assert.equal(byId.get(inv1).work_detail, "곡가", "작업 세부 = 곡 제목");
+  assert.equal(byId.get(inv1).item_count, 1);
+  assert.equal(byId.get(inv2).work_kind, "녹음", "세션 = 세션 종류");
+  assert.equal(byId.get(inv2).work_detail, "2026-07-15", "세션 세부 = 세션 날짜(뷰가 '7월 15일'로 포맷)");
+  assert.equal(byId.get(inv3).item_count, 2, "라인 개수");
+  // 금액은 청구서 기준 그대로 — 행 단위를 안 바꿨으므로 총계 불변
+  assert.equal(d.supply, 100000 + 200000 + 100000, "매출은 청구서 공급가 합(불변)");
+});
+
+test("revenueForPayer: 라인이 없는 청구서(수동 청구)는 종류·세부가 빈 값", () => {
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("수동청구사").lastInsertRowid;
+  const inv = db().prepare("INSERT INTO invoices (project_id,payer_id,title,amount,tax_amount,status,issued_date) VALUES (NULL,?,'M',110000,10000,'발행','2026-07-01')").run(payer).lastInsertRowid;
+  const d = D.revenueForPayer(payer);
+  const row = d.invoices.find((r) => r.id === inv);
+  assert.equal(row.work_kind, "");
+  assert.equal(row.work_detail, "");
+  assert.equal(row.item_count, 0);
+});
