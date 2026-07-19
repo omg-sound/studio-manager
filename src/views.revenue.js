@@ -109,62 +109,14 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
     ? `${rows.map((r) => `<a href="${hrefFn(r)}" class="row-link flex items-center justify-between gap-2 px-3 py-2"><span class="truncate font-medium">${esc(r.name)}</span><span class="tabular font-semibold">${formatKRW(r.supply)}</span></a>`).join("")}<div class="px-3 pb-2 pt-1 text-right"><a href="${moreHref}" class="text-xs text-primary hover:underline">${moreLabel} →</a></div>`
     : `<div class="text-sm text-muted">내역이 없습니다.</div>`;
   const tops = `<div class="grid gap-4 sm:grid-cols-2">
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue/staff/${r.id}?${qs}`, `/revenue?tab=staff&${qs}`, "전체 보기")}</div></div>
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue/payer/${r.id}?${qs}`, `/revenue?tab=payer&${qs}`, "전체 보기")}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue?tab=staff&staff=${r.id}&${qs}`, `/revenue?tab=staff&${qs}`, "전체 보기")}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue?tab=payer&payer=${r.id}&${qs}`, `/revenue?tab=payer&${qs}`, "전체 보기")}</div></div>
   </div>`;
   const note = `<p class="mt-4 text-xs text-muted">매출 = 공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급. 스탭별 매출 합은 청구서 할인 시 총 매출과 다를 수 있음(라인 기준).</p>`;
   return `${kpis}
     <div class="mb-4 grid gap-4 lg:grid-cols-[2fr_1fr]">${chart}${revTaxCard(tax)}</div>
     <div class="grid gap-4 lg:grid-cols-2">${typeSec}${tops}</div>
     ${note}`;
-}
-
-// 스탭 순위 표.
-function revStaffTable(rows, { year, month }) {
-  if (!rows.length) return emptyState("이 기간 매출이 있는 스탭이 없습니다.", { card: true });
-  const qs = periodQS({ year, month });
-  return dataTable(
-    [
-      { label: "스탭", primary: true, mCard: "tl" },
-      { label: "매출", w: "w-[8rem]", right: true, nowrap: true, mCard: "tr" },
-      { label: "순이익", w: "w-[8rem]", right: true, nowrap: true, mCard: "bl" },
-      { label: "건수", w: "w-[8rem]", nowrap: true, hide: "sm", mCard: "br" },
-    ],
-    rows.map((r) => {
-      const link = (inner, cls = "") => `<a href="/revenue/staff/${r.id}?${qs}" class="dt-link ${cls}">${inner}</a>`;
-      const badge = r.is_external ? ` <span class="badge badge-neutral">외주</span>` : "";
-      return { cells: [
-        link(`${esc(r.name)}${badge}`, "font-medium"),
-        link(formatKRW(r.supply), "tabular font-semibold"),
-        link(formatKRW(r.profit), `tabular ${profitCls(r.profit)}`),
-        link(`작업 ${r.task_cnt} · 세션 ${r.session_cnt}`, "text-muted"),
-      ] };
-    })
-  );
-}
-
-// 업체·개인 순위 표.
-function revPayerTable(rows, { year, month }) {
-  if (!rows.length) return emptyState("이 기간 매출이 있는 업체·개인이 없습니다.", { card: true });
-  const qs = periodQS({ year, month });
-  const kindLabel = (k) => (k === "person" ? "개인" : k === "group" ? "그룹" : "업체");
-  return dataTable(
-    [
-      { label: "청구처", primary: true, mCard: "tl" },
-      { label: "구분", w: "w-[5rem]", hide: "sm", mCard: "bl" },
-      { label: "매출 기여", w: "w-[9rem]", right: true, nowrap: true, mCard: "tr" },
-      { label: "청구 건수", w: "w-[6rem]", right: true, nowrap: true, hide: "sm", mCard: "br" },
-    ],
-    rows.map((r) => {
-      const link = (inner, cls = "") => `<a href="/revenue/payer/${r.id}?${qs}" class="dt-link ${cls}">${inner}</a>`;
-      return { cells: [
-        link(esc(r.name), "font-medium"),
-        link(`<span class="badge badge-neutral">${kindLabel(r.kind)}</span>`),
-        link(formatKRW(r.supply), "tabular font-semibold"),
-        link(String(r.invoice_cnt), "tabular text-muted"),
-      ] };
-    })
-  );
 }
 
 // ── 마스터-디테일 왼쪽 순위 목록(2026-07-19) ──
@@ -251,4 +203,4 @@ function revPayerDetail(data, { year, month }) {
   return `${summary}${table}`;
 }
 
-module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffTable, revPayerTable, revStaffList, revPayerList, revStaffDetail, revPayerDetail };
+module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail };

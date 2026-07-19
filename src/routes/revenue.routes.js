@@ -4,7 +4,7 @@ const { requireInvoice } = require("../auth");
 const { revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer, revenueYears, revenueByType, revenueTax } = require("../data");
 const { revPeriodControl, revTabs, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail } = require("../views.revenue");
 const { contactPanes } = require("../views.contacts");
-const { layout, pageHeader, esc, errorPage, emptyState } = require("../views");
+const { layout, pageHeader, esc, emptyState } = require("../views");
 const { todayYmd } = require("../lib/date");
 
 const router = express.Router();
@@ -85,27 +85,12 @@ router.get("/", requireInvoice, (req, res) => {
   res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: true }));
 });
 
-// 스탭 드릴다운.
+// 구 드릴다운 경로 → 패널 URL 302(북마크·기존 링크 호환). 상세로 가는 길은 하나로 유지한다.
 router.get("/staff/:id", requireInvoice, (req, res) => {
-  const period = parsePeriod(req);
-  const data = revenueForStaff(Number(req.params.id), period);
-  if (!data) return res.status(404).send(errorPage({ code: 404, title: "스탭을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const desc = data.manager.user_id ? "하우스 엔지니어" : "외주 작업자";
-  const body = `
-    ${pageHeader({ title: data.manager.name, desc, back: { href: `/revenue?tab=staff&${periodQS(period)}`, label: "매출" } })}
-    ${revStaffDetail(data, period)}`;
-  res.send(layout({ title: data.manager.name, user: req.user, current: "/revenue", body }));
+  res.redirect(302, `/revenue?tab=staff&staff=${Number(req.params.id)}&${periodQS(parsePeriod(req))}`);
 });
-
-// 결제자(업체·개인) 드릴다운.
 router.get("/payer/:id", requireInvoice, (req, res) => {
-  const period = parsePeriod(req);
-  const data = revenueForPayer(Number(req.params.id), period);
-  if (!data) return res.status(404).send(errorPage({ code: 404, title: "청구처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const body = `
-    ${pageHeader({ title: data.party.name, desc: "이 청구처의 기간 매출 기여(공급가).", back: { href: `/revenue?tab=payer&${periodQS(period)}`, label: "매출" } })}
-    ${revPayerDetail(data, period)}`;
-  res.send(layout({ title: data.party.name, user: req.user, current: "/revenue", body }));
+  res.redirect(302, `/revenue?tab=payer&payer=${Number(req.params.id)}&${periodQS(parsePeriod(req))}`);
 });
 
 module.exports = router;
