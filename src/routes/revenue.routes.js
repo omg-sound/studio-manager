@@ -87,10 +87,10 @@ router.get("/", requireInvoice, (req, res) => {
 
 // 구 드릴다운 경로 → 패널 URL 302(북마크·기존 링크 호환). 상세로 가는 길은 하나로 유지한다.
 router.get("/staff/:id", requireInvoice, (req, res) => {
-  res.redirect(302, `/revenue?tab=staff&staff=${Number(req.params.id)}&${periodQS(parsePeriod(req))}`);
+  res.redirect(302, `/revenue?tab=staff&staff=${Number(req.params.id) || 0}&${periodQS(parsePeriod(req))}`);
 });
 router.get("/payer/:id", requireInvoice, (req, res) => {
-  res.redirect(302, `/revenue?tab=payer&payer=${Number(req.params.id)}&${periodQS(parsePeriod(req))}`);
+  res.redirect(302, `/revenue?tab=payer&payer=${Number(req.params.id) || 0}&${periodQS(parsePeriod(req))}`);
 });
 
 module.exports = router;
