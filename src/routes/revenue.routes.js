@@ -2,8 +2,9 @@
 const express = require("express");
 const { requireInvoice } = require("../auth");
 const { revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer, revenueYears, revenueByType, revenueTax } = require("../data");
-const { revPeriodControl, revTabs, revOverview, revStaffTable, revPayerTable, revStaffDetail, revPayerDetail } = require("../views.revenue");
-const { layout, pageHeader, esc, errorPage } = require("../views");
+const { revPeriodControl, revTabs, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail } = require("../views.revenue");
+const { contactPanes } = require("../views.contacts");
+const { layout, pageHeader, esc, emptyState } = require("../views");
 const { todayYmd } = require("../lib/date");
 
 const router = express.Router();
@@ -17,16 +18,57 @@ function parsePeriod(req) {
 }
 function periodQS({ year, month }) { return `year=${year}&month=${month === "all" ? "all" : month}`; }
 
-// 매출 메인(탭: 개요/스탭별/업체·개인별).
+// 패널 고정 높이 = 뷰포트 − 상단(py-6 + pageHeader + 기간 컨트롤 + 탭바). 연락처(11rem)보다 기간 컨트롤 줄만큼 낮다.
+// ⚠️ Tailwind는 소스 리터럴만 스캔하므로 동적 조립 금지(함정 #27). 값은 브라우저 실측으로 확정(Task 6).
+const REV_PANE_H = "lg:h-[calc(100vh-15.5rem)]";
+
+// 매출 메인(탭: 개요/스탭별/업체·개인별). 스탭별·업체개인별은 마스터-디테일(왼쪽 순위 목록 + 오른쪽 상세 패널).
 router.get("/", requireInvoice, (req, res) => {
   const period = parsePeriod(req);
   const tab = ["overview", "staff", "payer"].includes(req.query.tab) ? req.query.tab : "overview";
   const years = revenueYears();
   let content;
+  let sel = null; // 기간 폼이 유지할 선택(있을 때만)
   if (tab === "staff") {
-    content = revStaffTable(revenueByStaff(period), period);
+    const selId = Number(req.query.staff) || 0;
+    // 삭제된 id 등 유효하지 않으면 data=null → 미선택 화면. 404를 던지지 않는다(패널 안이라 목록은 살아 있어야 한다).
+    const data = selId ? revenueForStaff(selId, period) : null;
+    if (data) sel = { name: "staff", id: selId };
+    const left = revStaffList(revenueByStaff(period), { ...period, selId: data ? selId : 0 });
+    // 상세 뷰는 대상 이름을 렌더하지 않는다(기존엔 드릴다운 페이지의 pageHeader가 담당). 패널엔 pageHeader가 없어 여기서 붙인다.
+    const right = data
+      ? `<div class="mb-3">
+           <h2 class="text-lg font-bold">${esc(data.manager.name)}</h2>
+           <p class="text-sm text-muted">${data.manager.user_id ? "하우스 엔지니어" : "외주 작업자"}</p>
+         </div>${revStaffDetail(data, period)}`
+      : emptyState("스탭을 선택하세요.", { card: true });
+    content = contactPanes({
+      left, right,
+      hasSelection: !!data,
+      backHref: `/revenue?tab=staff&${periodQS(period)}`,
+      backLabel: "매출",
+      widthKey: "revListW",
+      heightClass: REV_PANE_H,
+    });
   } else if (tab === "payer") {
-    content = revPayerTable(revenueByPayer(period), period);
+    const selId = Number(req.query.payer) || 0;
+    const data = selId ? revenueForPayer(selId, period) : null;
+    if (data) sel = { name: "payer", id: selId };
+    const left = revPayerList(revenueByPayer(period), { ...period, selId: data ? selId : 0 });
+    const right = data
+      ? `<div class="mb-3">
+           <h2 class="text-lg font-bold">${esc(data.party.name)}</h2>
+           <p class="text-sm text-muted">이 청구처의 기간 매출 기여(공급가).</p>
+         </div>${revPayerDetail(data, period)}`
+      : emptyState("업체·개인을 선택하세요.", { card: true });
+    content = contactPanes({
+      left, right,
+      hasSelection: !!data,
+      backHref: `/revenue?tab=payer&${periodQS(period)}`,
+      backLabel: "매출",
+      widthKey: "revListW",
+      heightClass: REV_PANE_H,
+    });
   } else {
     const summary = revenueSummary(period);
     const topStaff = revenueByStaff(period).slice(0, 5);
@@ -35,34 +77,20 @@ router.get("/", requireInvoice, (req, res) => {
   }
   const body = `
     ${pageHeader({ title: "매출", desc: "공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급." })}
-    ${revPeriodControl({ ...period, years, tab })}
+    ${revPeriodControl({ ...period, years, tab, sel })}
     ${revTabs({ tab, ...period })}
     <div class="mt-4">${content}</div>`;
-  // 개요(대시보드)만 넓게. 스탭별·업체·개인별은 단순 순위 표라 읽기 폭으로(내용 대비 넓으면 시선 분산·건수 열이 끝으로 몰림, 2026-07-19 사용자 요청).
-  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: tab === "overview" }));
+  // 세 탭 모두 넓게. 스탭별·업체개인별은 마스터-디테일이라 남는 폭을 상세 패널이 쓴다(contactPanes 내부가
+  // 오른쪽을 max-w-content로 감싸 읽기 폭은 그대로 보장 — 2026-07-19, 698c596의 읽기 폭 결정을 대체).
+  res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: true }));
 });
 
-// 스탭 드릴다운.
+// 구 드릴다운 경로 → 패널 URL 302(북마크·기존 링크 호환). 상세로 가는 길은 하나로 유지한다.
 router.get("/staff/:id", requireInvoice, (req, res) => {
-  const period = parsePeriod(req);
-  const data = revenueForStaff(Number(req.params.id), period);
-  if (!data) return res.status(404).send(errorPage({ code: 404, title: "스탭을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const desc = data.manager.user_id ? "하우스 엔지니어" : "외주 작업자";
-  const body = `
-    ${pageHeader({ title: data.manager.name, desc, back: { href: `/revenue?tab=staff&${periodQS(period)}`, label: "매출" } })}
-    ${revStaffDetail(data, period)}`;
-  res.send(layout({ title: data.manager.name, user: req.user, current: "/revenue", body }));
+  res.redirect(302, `/revenue?tab=staff&staff=${Number(req.params.id) || 0}&${periodQS(parsePeriod(req))}`);
 });
-
-// 결제자(업체·개인) 드릴다운.
 router.get("/payer/:id", requireInvoice, (req, res) => {
-  const period = parsePeriod(req);
-  const data = revenueForPayer(Number(req.params.id), period);
-  if (!data) return res.status(404).send(errorPage({ code: 404, title: "청구처를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const body = `
-    ${pageHeader({ title: data.party.name, desc: "이 청구처의 기간 매출 기여(공급가).", back: { href: `/revenue?tab=payer&${periodQS(period)}`, label: "매출" } })}
-    ${revPayerDetail(data, period)}`;
-  res.send(layout({ title: data.party.name, user: req.user, current: "/revenue", body }));
+  res.redirect(302, `/revenue?tab=payer&payer=${Number(req.params.id) || 0}&${periodQS(parsePeriod(req))}`);
 });
 
 module.exports = router;

@@ -10,7 +10,7 @@ const { esc, personName, listGroup, copyable, dataTable } = require("./views");
  * (pageHeader의 back은 전 폭에서 보이므로 이건 lg:hidden이라야 데스크톱에서 중복되지 않는다.)
  * @param {{left:string, right:string, hasSelection:boolean, backHref?:string, backLabel?:string}} o
  */
-function contactPanes({ left, right, hasSelection, backHref = "", backLabel = "" }) {
+function contactPanes({ left, right, hasSelection, backHref = "", backLabel = "", widthKey = "clListW", heightClass = "lg:h-[calc(100vh-11rem)]" }) {
   const leftCls = hasSelection ? "hidden lg:flex" : "block lg:flex"; // lg에선 flex-col(검색 고정 + 목록 스크롤)
   const rightCls = hasSelection ? "block" : "hidden lg:block";
   const back = hasSelection && backHref
@@ -21,7 +21,8 @@ function contactPanes({ left, right, hasSelection, backHref = "", backLabel = ""
   // 높이=100vh-9.5rem(상단 py-6 + pageHeader + 탭). flex 자식은 stretch로 전체 높이를 채우고 min-h-0로 내부 스크롤 허용. 좌측은 flex-col(검색 고정 + 목록만 스크롤).
   // 이름 목록 폭 = 드래그 조절(2026-07-18 사용자 요청). 폭은 CSS 변수 --cl-list-w(lg에서만·기본 18rem), app.js가
   // 리사이저 드래그로 갱신·localStorage 저장. 리사이저는 lg 이상만(모바일은 한 단이라 조절 불필요).
-  return `<div class="cl-panes lg:flex lg:gap-2 lg:h-[calc(100vh-11rem)]" data-cl-panes>
+  // 높이·폭 저장 키는 화면별로 다를 수 있어 파라미터화(기본값 = 연락처 기준). 매출은 기간 컨트롤 줄이 하나 더 있어 더 낮은 높이를 넘긴다.
+  return `<div class="cl-panes lg:flex lg:gap-2 ${heightClass}" data-cl-panes data-cl-width-key="${esc(widthKey)}">
       <div class="${leftCls} cl-col-left lg:shrink-0 lg:min-h-0 lg:flex-col">${left}</div>
       <div class="cl-resizer hidden lg:block" data-cl-resizer role="separator" aria-orientation="vertical" tabindex="0" aria-label="목록 폭 조절" title="드래그로 목록 폭 조절"></div>
       <div class="${rightCls} min-w-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pl-2 lg:pr-1">${back}<div class="max-w-content">${right}</div></div>

@@ -8,14 +8,17 @@ function periodQS({ year, month }) { return `year=${Number(year)}&month=${month 
 // 순이익 색: 음수(외주지급>매출)면 danger, 아니면 success.
 function profitCls(v) { return Number(v) < 0 ? "text-danger" : "text-success"; }
 
-// 년·월 셀렉트 + 보기 버튼(무JS GET 폼). 탭·기간 유지.
-function revPeriodControl({ year, month, years, tab }) {
+// 년·월 셀렉트 + 보기 버튼(무JS GET 폼). 탭·기간·선택 대상 유지.
+function revPeriodControl({ year, month, years, tab, sel = null }) {
   const yrs = years && years.length ? years : [Number(year)];
   const yOpts = yrs.map((y) => `<option value="${y}"${y === Number(year) ? " selected" : ""}>${y}년</option>`).join("");
   const mOpts = `<option value="all"${month === "all" ? " selected" : ""}>전체(연간)</option>` +
     MONTHS.map((m) => `<option value="${m}"${String(month) === String(m) ? " selected" : ""}>${m}월</option>`).join("");
+  // 선택된 스탭/청구처를 실어 보낸다 — 기간만 바꾸고 보던 대상은 유지(2026-07-19 사용자 결정).
+  const selHidden = sel && sel.id ? `<input type="hidden" name="${esc(sel.name)}" value="${Number(sel.id)}" />` : "";
   return `<form method="get" class="mb-4 flex flex-wrap items-center gap-2">
     <input type="hidden" name="tab" value="${esc(tab)}" />
+    ${selHidden}
     <select name="year" class="input w-auto">${yOpts}</select>
     <select name="month" class="input w-auto">${mOpts}</select>
     <button type="submit" class="btn-ghost btn-sm">보기</button>
@@ -106,8 +109,8 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
     ? `${rows.map((r) => `<a href="${hrefFn(r)}" class="row-link flex items-center justify-between gap-2 px-3 py-2"><span class="truncate font-medium">${esc(r.name)}</span><span class="tabular font-semibold">${formatKRW(r.supply)}</span></a>`).join("")}<div class="px-3 pb-2 pt-1 text-right"><a href="${moreHref}" class="text-xs text-primary hover:underline">${moreLabel} →</a></div>`
     : `<div class="text-sm text-muted">내역이 없습니다.</div>`;
   const tops = `<div class="grid gap-4 sm:grid-cols-2">
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue/staff/${r.id}?${qs}`, `/revenue?tab=staff&${qs}`, "전체 보기")}</div></div>
-    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue/payer/${r.id}?${qs}`, `/revenue?tab=payer&${qs}`, "전체 보기")}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">스탭별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topStaff, (r) => `/revenue?tab=staff&staff=${r.id}&${qs}`, `/revenue?tab=staff&${qs}`, "전체 보기")}</div></div>
+    <div><h2 class="mb-2 text-sm font-semibold text-muted">업체·개인별 매출</h2><div class="card p-0 overflow-hidden divide-y divide-border">${mini(topPayer, (r) => `/revenue?tab=payer&payer=${r.id}&${qs}`, `/revenue?tab=payer&${qs}`, "전체 보기")}</div></div>
   </div>`;
   const note = `<p class="mt-4 text-xs text-muted">매출 = 공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급. 스탭별 매출 합은 청구서 할인 시 총 매출과 다를 수 있음(라인 기준).</p>`;
   return `${kpis}
@@ -116,52 +119,51 @@ function revOverview({ summary, topStaff, topPayer, byType, tax, year, month }) 
     ${note}`;
 }
 
-// 스탭 순위 표.
-function revStaffTable(rows, { year, month }) {
-  if (!rows.length) return emptyState("이 기간 매출이 있는 스탭이 없습니다.", { card: true });
-  const qs = periodQS({ year, month });
-  return dataTable(
-    [
-      { label: "스탭", primary: true, mCard: "tl" },
-      { label: "매출", w: "w-[8rem]", right: true, nowrap: true, mCard: "tr" },
-      { label: "순이익", w: "w-[8rem]", right: true, nowrap: true, mCard: "bl" },
-      { label: "건수", w: "w-[8rem]", nowrap: true, hide: "sm", mCard: "br" },
-    ],
-    rows.map((r) => {
-      const link = (inner, cls = "") => `<a href="/revenue/staff/${r.id}?${qs}" class="dt-link ${cls}">${inner}</a>`;
-      const badge = r.is_external ? ` <span class="badge badge-neutral">외주</span>` : "";
-      return { cells: [
-        link(`${esc(r.name)}${badge}`, "font-medium"),
-        link(formatKRW(r.supply), "tabular font-semibold"),
-        link(formatKRW(r.profit), `tabular ${profitCls(r.profit)}`),
-        link(`작업 ${r.task_cnt} · 세션 ${r.session_cnt}`, "text-muted"),
-      ] };
-    })
-  );
+// ── 마스터-디테일 왼쪽 순위 목록(2026-07-19) ──
+// 선택은 URL 쿼리로만 표현하므로 JS 없음. 선택 행 강조는 연락처와 같은 규약(aria-current + tint)이되,
+// 연락처의 [data-contact-list] CSS는 셀렉터가 달라 안 걸리므로 클래스로 직접 준다(강조 하나에 CSS 표면을 늘리지 않는다).
+function revListRow({ href, selected, title, right, sub }) {
+  const cur = selected ? ` aria-current="page"` : "";
+  const tint = selected ? " bg-primary/10 font-semibold" : "";
+  return `<a href="${esc(href)}"${cur} class="block px-4 py-3 transition-colors hover:bg-surface active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40${tint}">
+      <div class="flex items-center justify-between gap-3">
+        <span class="min-w-0 truncate">${title}</span>
+        <span class="shrink-0 tabular text-sm font-semibold">${right}</span>
+      </div>
+      <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
+    </a>`;
 }
 
-// 업체·개인 순위 표.
-function revPayerTable(rows, { year, month }) {
+// 스탭 순위 목록(왼쪽 마스터).
+// listGroup의 .card는 overflow-hidden이라 contactPanes의 고정 높이 패널 안에서 넘친 행이 잘리고
+// 스크롤바도 없다(2026-07-19 최종 리뷰 지적 — 연락처 contactNameList와 동일하게 lg:overflow-y-auto 래퍼로 감싼다).
+// data-contact-list 마커는 붙이지 않는다 — 그건 연락처 전용 키보드 이동(↑↓) IIFE의 마커라 매출에도 붙으면 의도치 않게 동작한다.
+function revStaffList(rows, { year, month, selId = 0 }) {
+  if (!rows.length) return emptyState("이 기간 매출이 있는 스탭이 없습니다.", { card: true });
+  const qs = periodQS({ year, month });
+  const list = listGroup({ rows: rows.map((r) => revListRow({
+    href: `/revenue?tab=staff&staff=${Number(r.id)}&${qs}`,
+    selected: Number(r.id) === Number(selId),
+    title: `${esc(r.name)}${r.is_external ? ` <span class="badge badge-neutral">외주</span>` : ""}`,
+    right: formatKRW(r.supply),
+    sub: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span> · 작업 ${r.task_cnt} · 세션 ${r.session_cnt}`,
+  })) });
+  return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
+}
+
+// 업체·개인 순위 목록(왼쪽 마스터). 스크롤 래퍼는 revStaffList와 동일 이유.
+function revPayerList(rows, { year, month, selId = 0 }) {
   if (!rows.length) return emptyState("이 기간 매출이 있는 업체·개인이 없습니다.", { card: true });
   const qs = periodQS({ year, month });
   const kindLabel = (k) => (k === "person" ? "개인" : k === "group" ? "그룹" : "업체");
-  return dataTable(
-    [
-      { label: "청구처", primary: true, mCard: "tl" },
-      { label: "구분", w: "w-[5rem]", hide: "sm", mCard: "bl" },
-      { label: "매출 기여", w: "w-[9rem]", right: true, nowrap: true, mCard: "tr" },
-      { label: "청구 건수", w: "w-[6rem]", right: true, nowrap: true, hide: "sm", mCard: "br" },
-    ],
-    rows.map((r) => {
-      const link = (inner, cls = "") => `<a href="/revenue/payer/${r.id}?${qs}" class="dt-link ${cls}">${inner}</a>`;
-      return { cells: [
-        link(esc(r.name), "font-medium"),
-        link(`<span class="badge badge-neutral">${kindLabel(r.kind)}</span>`),
-        link(formatKRW(r.supply), "tabular font-semibold"),
-        link(String(r.invoice_cnt), "tabular text-muted"),
-      ] };
-    })
-  );
+  const list = listGroup({ rows: rows.map((r) => revListRow({
+    href: `/revenue?tab=payer&payer=${Number(r.id)}&${qs}`,
+    selected: Number(r.id) === Number(selId),
+    title: `${esc(r.name)} <span class="badge badge-neutral">${kindLabel(r.kind)}</span>`,
+    right: formatKRW(r.supply),
+    sub: `청구 ${r.invoice_cnt}건`,
+  })) });
+  return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
 // 스탭 드릴다운.
@@ -206,4 +208,4 @@ function revPayerDetail(data, { year, month }) {
   return `${summary}${table}`;
 }
 
-module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffTable, revPayerTable, revStaffDetail, revPayerDetail };
+module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail };
