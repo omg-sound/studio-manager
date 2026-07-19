@@ -240,8 +240,8 @@ function monthHeader(g, { profit = false } = {}) {
 
 // "2026-01-31" → "1월 31일"(세션 실제 날짜 — 발행월과 다른 달일 수 있어 월까지 쓴다).
 function sessionDayLabel(ymd) {
-  if (!ymd) return "";
-  const s = String(ymd);
+  const s = String(ymd || "");
+  if (s.length < 10) return ""; // 형식이 다르면 'NaN월 NaN일' 대신 생략(issuedDayLabel과 같은 방어)
   return `${Number(s.slice(5, 7))}월 ${Number(s.slice(8, 10))}일`;
 }
 
@@ -259,7 +259,7 @@ function issuedDayLabel(ymd) {
 function staffItemRow(it) {
   return `<a href="${esc(it.href)}" target="_blank" rel="noopener" class="rev-item row-link px-4 py-3">
       <span class="rev-item-day tabular text-xs text-muted">${esc(issuedDayLabel(it.date))}</span>
-      <span class="rev-item-kind truncate text-sm">${esc(it.kind)}</span>
+      <span class="rev-item-kind truncate text-sm" title="${esc(it.kind)}">${esc(it.kind)}</span>
       <span class="rev-item-name min-w-0 truncate text-sm">
         <span class="font-medium">${esc(it.project)}</span>${it.detail ? ` <span class="text-muted">· ${esc(it.detail)}</span>` : ""} ↗
       </span>
