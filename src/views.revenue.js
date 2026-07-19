@@ -164,6 +164,48 @@ function revPayerTable(rows, { year, month }) {
   );
 }
 
+// ── 마스터-디테일 왼쪽 순위 목록(2026-07-19) ──
+// 선택은 URL 쿼리로만 표현하므로 JS 없음. 선택 행 강조는 연락처와 같은 규약(aria-current + tint)이되,
+// 연락처의 [data-contact-list] CSS는 셀렉터가 달라 안 걸리므로 클래스로 직접 준다(강조 하나에 CSS 표면을 늘리지 않는다).
+function revListRow({ href, selected, title, right, sub }) {
+  const cur = selected ? ` aria-current="page"` : "";
+  const tint = selected ? " bg-primary/10 font-semibold" : "";
+  return `<a href="${esc(href)}"${cur} class="block px-4 py-3 transition-colors hover:bg-surface active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40${tint}">
+      <div class="flex items-center justify-between gap-3">
+        <span class="min-w-0 truncate">${title}</span>
+        <span class="shrink-0 tabular text-sm font-semibold">${right}</span>
+      </div>
+      <div class="mt-0.5 truncate text-xs text-muted">${sub}</div>
+    </a>`;
+}
+
+// 스탭 순위 목록(왼쪽 마스터).
+function revStaffList(rows, { year, month, selId = 0 }) {
+  if (!rows.length) return emptyState("이 기간 매출이 있는 스탭이 없습니다.", { card: true });
+  const qs = periodQS({ year, month });
+  return listGroup({ rows: rows.map((r) => revListRow({
+    href: `/revenue?tab=staff&staff=${Number(r.id)}&${qs}`,
+    selected: Number(r.id) === Number(selId),
+    title: `${esc(r.name)}${r.is_external ? ` <span class="badge badge-neutral">외주</span>` : ""}`,
+    right: formatKRW(r.supply),
+    sub: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span> · 작업 ${r.task_cnt} · 세션 ${r.session_cnt}`,
+  })) });
+}
+
+// 업체·개인 순위 목록(왼쪽 마스터).
+function revPayerList(rows, { year, month, selId = 0 }) {
+  if (!rows.length) return emptyState("이 기간 매출이 있는 업체·개인이 없습니다.", { card: true });
+  const qs = periodQS({ year, month });
+  const kindLabel = (k) => (k === "person" ? "개인" : k === "group" ? "그룹" : "업체");
+  return listGroup({ rows: rows.map((r) => revListRow({
+    href: `/revenue?tab=payer&payer=${Number(r.id)}&${qs}`,
+    selected: Number(r.id) === Number(selId),
+    title: `${esc(r.name)} <span class="badge badge-neutral">${kindLabel(r.kind)}</span>`,
+    right: formatKRW(r.supply),
+    sub: `청구 ${r.invoice_cnt}건`,
+  })) });
+}
+
 // 스탭 드릴다운.
 function revStaffDetail(data, { year, month }) {
   const { taskTypeLabel } = require("./data");
@@ -206,4 +248,4 @@ function revPayerDetail(data, { year, month }) {
   return `${summary}${table}`;
 }
 
-module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffTable, revPayerTable, revStaffDetail, revPayerDetail };
+module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffTable, revPayerTable, revStaffList, revPayerList, revStaffDetail, revPayerDetail };

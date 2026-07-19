@@ -47,22 +47,50 @@ test("revPeriodControl: 년·월 셀렉트 + 탭·기간 유지 GET 폼", () => 
   assert.match(html, /name="tab" value="staff"/, "현재 탭 유지");
 });
 
-test("revStaffTable: 매출·순이익·건수 컬럼 + 상세 링크(기간 보존)", () => {
-  const html = V.revStaffTable([{ id: 3, name: "김엔지", is_external: false, supply: 200000, profit: 150000, task_cnt: 2, session_cnt: 1 }], { year: 2026, month: 7 });
+test("revStaffList: 패널 링크(탭·기간·id) + 순이익·건수 subline", () => {
+  const html = V.revStaffList([{ id: 3, name: "김엔지", is_external: false, supply: 200000, profit: 150000, task_cnt: 2, session_cnt: 1 }], { year: 2026, month: 7 });
   assert.match(html, /김엔지/);
-  assert.match(html, /\/revenue\/staff\/3\?year=2026&month=7/, "상세 링크 기간 보존");
+  // revListRow가 esc(href)를 쓰므로 렌더 결과의 &는 &amp;다(올바른 HTML — 브라우저가 디코드한다).
+  assert.match(html, /href="\/revenue\?tab=staff&amp;staff=3&amp;year=2026&amp;month=7"/, "패널 URL(탭·기간·선택 id)");
   assert.match(html, /₩150,000/, "순이익 표시");
+  assert.match(html, /작업 2 · 세션 1/, "건수 subline");
 });
 
-test("revStaffTable: 음수 순이익(외주지급>매출)은 danger 색(초록 아님)", () => {
-  const html = V.revStaffTable([{ id: 4, name: "적자엔지", is_external: true, supply: 100000, profit: -50000, task_cnt: 1, session_cnt: 0 }], { year: 2026, month: 7 });
+test("revStaffList: 선택 행만 aria-current", () => {
+  const rows = [
+    { id: 3, name: "김엔지", is_external: false, supply: 200000, profit: 150000, task_cnt: 1, session_cnt: 0 },
+    { id: 4, name: "이엔지", is_external: true, supply: 100000, profit: 90000, task_cnt: 1, session_cnt: 0 },
+  ];
+  const html = V.revStaffList(rows, { year: 2026, month: 7, selId: 4 });
+  assert.equal((html.match(/aria-current="page"/g) || []).length, 1, "선택 행 하나만");
+  assert.match(html, /staff=4&amp;[^>]*aria-current="page"/, "선택된 id 행에 붙는다");
+});
+
+test("revStaffList: 음수 순이익(외주지급>매출)은 danger 색(초록 아님)", () => {
+  const html = V.revStaffList([{ id: 4, name: "적자엔지", is_external: true, supply: 100000, profit: -50000, task_cnt: 1, session_cnt: 0 }], { year: 2026, month: 7 });
   assert.match(html, /text-danger">-₩50,000/, "음수 순이익 = text-danger");
+  assert.match(html, /외주/, "외주 배지");
 });
 
-test("revPayerTable: 업체/개인 배지 + 매출 기여 + 상세 링크", () => {
-  const html = V.revPayerTable([{ id: 5, kind: "company", name: "도너츠컬처", supply: 300000, invoice_cnt: 2 }], { year: 2026, month: 7 });
+test("revPayerList: 패널 링크 + 구분 배지 + 청구 건수", () => {
+  const html = V.revPayerList([{ id: 5, kind: "company", name: "도너츠컬처", supply: 300000, invoice_cnt: 2 }], { year: 2026, month: 7 });
   assert.match(html, /도너츠컬처/);
-  assert.match(html, /\/revenue\/payer\/5\?year=2026&month=7/, "상세 링크");
+  assert.match(html, /href="\/revenue\?tab=payer&amp;payer=5&amp;year=2026&amp;month=7"/, "패널 URL");
+  assert.match(html, /업체/, "구분 배지");
+  assert.match(html, /청구 2건/, "건수 subline");
+});
+
+test("revPayerList: 개인·그룹 구분 배지", () => {
+  assert.match(V.revPayerList([{ id: 1, kind: "person", name: "김개인", supply: 1, invoice_cnt: 1 }], { year: 2026, month: 7 }), /개인/);
+  assert.match(V.revPayerList([{ id: 2, kind: "group", name: "밴드", supply: 1, invoice_cnt: 1 }], { year: 2026, month: 7 }), /그룹/);
+});
+
+test("revStaffList/revPayerList: 빈 기간은 emptyState, 인라인 style 없음(함정 #27)", () => {
+  const s = V.revStaffList([], { year: 2026, month: 7 });
+  const p = V.revPayerList([], { year: 2026, month: 7 });
+  assert.match(s, /매출이 있는 스탭이 없습니다/);
+  assert.match(p, /매출이 있는 업체·개인이 없습니다/);
+  assert.ok(!/ style="/.test(s) && !/ style="/.test(p), "서버 렌더 인라인 style 금지");
 });
 
 test("revOverview: 대시보드 그리드 + KPI 델타(선택 기간만) + 명칭 '스탭별 매출'/'업체·개인별 매출'", () => {
