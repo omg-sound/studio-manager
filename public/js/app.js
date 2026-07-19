@@ -3146,3 +3146,17 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     try { localStorage.removeItem(KEY); } catch (_e) {}
   });
 })();
+
+// ── 필터 폼 자동 제출(2026-07-19 사용자 요청 '보기 안 눌러도 바로 변경') ──
+// [data-auto-submit] 폼 안의 select를 바꾸면 즉시 제출한다(매출 기간 컨트롤). 서버 렌더 GET 폼이라
+// 제출=그 조건으로 페이지 재로드. '보기' 버튼은 <noscript>에만 있어 JS가 있으면 보이지 않는다.
+// select의 change는 값이 확정된 뒤에만 발생하므로 IME 가드가 필요 없다(텍스트 입력이 아니다).
+(function () {
+  "use strict";
+  document.addEventListener("change", function (e) {
+    var el = e.target;
+    if (!el || !el.matches || !el.matches("select")) return;
+    var form = el.closest("form[data-auto-submit]");
+    if (form) form.submit();
+  });
+})();

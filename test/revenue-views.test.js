@@ -47,6 +47,13 @@ test("revPeriodControl: 년·월 셀렉트 + 탭·기간 유지 GET 폼", () => 
   assert.match(html, /name="tab" value="staff"/, "현재 탭 유지");
 });
 
+test("revPeriodControl: select 변경 시 자동 제출(보기 버튼은 noscript 폴백)", () => {
+  const html = V.revPeriodControl({ year: 2026, month: 7, years: [2026], tab: "staff" });
+  assert.match(html, /<form[^>]*data-auto-submit/, "app.js 자동 제출 계약 마커");
+  assert.match(html, /<noscript><button type="submit"[^>]*>보기<\/button><\/noscript>/, "보기 버튼은 noscript 안에만");
+  assert.ok(!/<button type="submit"[^>]*>보기<\/button>(?![\s\S]*<\/noscript>)/.test(html.replace(/<noscript>[\s\S]*?<\/noscript>/, "")), "noscript 밖에 보기 버튼 없음");
+});
+
 test("revPeriodControl: 선택된 대상을 hidden으로 실어 기간 변경 시 유지", () => {
   const html = V.revPeriodControl({ year: 2026, month: 7, years: [2026], tab: "staff", sel: { name: "staff", id: 3 } });
   assert.match(html, /<input type="hidden" name="staff" value="3"/, "선택 유지 hidden");
