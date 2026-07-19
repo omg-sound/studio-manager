@@ -1539,3 +1539,42 @@ test("연락처 ↑↓: 한글 IME 조합 중에는 무시(함정 #18)", () => {
   doc.activeElement.dispatchEvent(new win.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, isComposing: true }));
   assert.deepEqual(clicked, [], "조합 중 방향키는 이동 안 함");
 });
+
+// ── 마스터-디테일 목록 스크롤 보존(2026-07-20 사용자 리포트 '선택하면 목록 맨 아래로 간다') ──
+// 원인: 선택=페이지 재로드라 목록이 0에서 시작하고, scrollIntoView({block:"nearest"})가 **보이게 만드는
+// 최소한만** 움직여 선택 행이 아래 가장자리에 붙었다. → 떠나기 전 scrollTop을 저장하고 로드 시 복원한다.
+// jsdom엔 레이아웃이 없어 위치 계산(② 폴백)은 못 재고, **저장·복원 배선**만 검증한다.
+test("nav-list: 행 클릭 시 목록 스크롤을 저장한다(화면+탭 단위 키)", () => {
+  const html = `<div data-nav-list style="overflow:auto">
+      <a href="/revenue?tab=payer&payer=1">A</a>
+      <a href="/revenue?tab=payer&payer=2" aria-current="page">B</a>
+    </div>`;
+  const { win, doc } = mountDom(html, { url: "http://localhost/revenue?tab=payer" });
+  doc.querySelector("[data-nav-list]").scrollTop = 900;
+  doc.querySelectorAll("[data-nav-list] a")[0].click();
+  assert.equal(win.sessionStorage.getItem("navScroll:revenue:payer"), "900", "화면(revenue)+탭(payer) 키로 저장");
+});
+
+test("nav-list: 로드 시 저장된 스크롤을 복원한다", () => {
+  const html = `<div data-nav-list style="overflow:auto">
+      <a href="/revenue?tab=payer&payer=1">A</a>
+      <a href="/revenue?tab=payer&payer=2" aria-current="page">B</a>
+    </div>`;
+  const { doc } = mountDom(html, {
+    url: "http://localhost/revenue?tab=payer&payer=2",
+    session: { "navScroll:revenue:payer": "742" },
+  });
+  assert.equal(doc.querySelector("[data-nav-list]").scrollTop, 742, "저장된 위치로 복원");
+});
+
+test("nav-list: 스탭별과 업체개인별은 스크롤 위치를 따로 기억한다", () => {
+  const html = `<div data-nav-list><a href="/x" aria-current="page">A</a></div>`;
+  const staff = mountDom(html, { url: "http://localhost/revenue?tab=staff" });
+  staff.doc.querySelector("[data-nav-list]").scrollTop = 100;
+  staff.doc.querySelector("[data-nav-list] a").click();
+  const payer = mountDom(html, { url: "http://localhost/revenue?tab=payer" });
+  payer.doc.querySelector("[data-nav-list]").scrollTop = 500;
+  payer.doc.querySelector("[data-nav-list] a").click();
+  assert.equal(staff.win.sessionStorage.getItem("navScroll:revenue:staff"), "100");
+  assert.equal(payer.win.sessionStorage.getItem("navScroll:revenue:payer"), "500", "탭별로 따로 기억");
+});
