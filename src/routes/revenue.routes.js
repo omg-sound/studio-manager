@@ -20,7 +20,7 @@ function periodQS({ year, month }) { return `year=${year}&month=${month === "all
 
 // 패널 고정 높이 = 뷰포트 − 상단(py-6 + pageHeader + 기간 컨트롤 + 탭바). 연락처(11rem)보다 기간 컨트롤 줄만큼 낮다.
 // ⚠️ Tailwind는 소스 리터럴만 스캔하므로 동적 조립 금지(함정 #27). 값은 브라우저 실측으로 확정(Task 6).
-const REV_PANE_H = "lg:h-[calc(100vh-15rem)]";
+const REV_PANE_H = "lg:h-[calc(100vh-15.5rem)]";
 
 // 매출 메인(탭: 개요/스탭별/업체·개인별). 스탭별·업체개인별은 마스터-디테일(왼쪽 순위 목록 + 오른쪽 상세 패널).
 router.get("/", requireInvoice, (req, res) => {
