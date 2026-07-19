@@ -190,8 +190,9 @@ function revPayerList(rows, { selId = 0 } = {}) {
   return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
-// "2026-07" → "2026년 7월"
+// "2026-07" → "2026년 7월". ym이 비면(발행일 없는 항목 — 현재 ISSUED 가드로 도달 불가하나 방어) 안전 문구.
 function monthLabel(ym) {
+  if (!ym) return "발행일 미상";
   const [y, m] = String(ym).split("-");
   return `${y}년 ${Number(m)}월`;
 }
@@ -251,8 +252,9 @@ function revStaffDetail(data) {
   const groups = groupByMonth(items).map((g) => `${monthHeader(g, { profit: true })}
     ${listGroup({ rows: g.items.map((it) => listRow({
       href: it.href,
-      left: `<span class="badge badge-neutral">${esc(it.kind)}</span> <span class="font-medium">${esc(it.label)}</span> <span class="text-xs text-muted">· ${esc(it.sub)}</span>`,
+      left: `<span class="badge badge-neutral">${esc(it.kind)}</span> <span class="font-medium">${esc(it.label)} ↗</span> <span class="text-xs text-muted">· ${esc(it.sub)}</span>`,
       right: formatKRW(it.amount),
+      newTab: true,
     })) })}`).join("");
   return `${summary}${groups}`;
 }
@@ -263,16 +265,20 @@ function revPayerDetail(data) {
   const { invoices, supply, invoice_cnt } = data;
   const summary = `<div class="card flex flex-wrap gap-4 text-sm"><span>총 매출 기여 <b class="tabular text-fg">${formatKRW(supply)}</b></span><span>청구 ${invoice_cnt}건</span></div>`;
   if (!invoices.length) return `${summary}${emptyState("발행 청구서가 없습니다.", { card: true })}`;
-  const items = invoices.map((inv) => ({ ym: String(inv.issued_date || "").slice(0, 7), amount: inv.supply || 0, payout: 0, inv }));
+  // 방어적 정렬(발행일 내림차순) — revStaffDetail과 동일 수준: 데이터 레이어 SQL 정렬(ORDER BY issued_date DESC)이
+  // 진실원천이지만, 그게 바뀌어도 같은 달이 여러 그룹으로 쪼개지는 조용한 회귀가 나지 않게 뷰에서도 보장한다.
+  const sorted = [...invoices].sort((a, b) => (a.issued_date < b.issued_date ? 1 : a.issued_date > b.issued_date ? -1 : 0));
+  const items = sorted.map((inv) => ({ ym: String(inv.issued_date || "").slice(0, 7), amount: inv.supply || 0, payout: 0, inv }));
   const groups = groupByMonth(items).map((g) => `${monthHeader(g)}
     ${listGroup({ rows: g.items.map(({ inv }) => listRow({
       href: `/invoices/${inv.id}`,
-      left: `<span class="font-medium">${esc(inv.project_title || `청구 #${inv.id}`)}</span>
+      left: `<span class="font-medium">${esc(inv.project_title || `청구 #${inv.id}`)} ↗</span>
              <span class="text-xs text-muted">· ${esc(String(inv.issued_date).slice(0, 10))}${inv.invoice_number ? ` · ${esc(inv.invoice_number)}` : ""}</span>
              <span class="ml-1">${taxBadge(inv)}</span>`,
       right: formatKRW(inv.supply),
+      newTab: true,
     })) })}`).join("");
   return `${summary}${groups}`;
 }
 
-module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail };
+module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail, groupByMonth };

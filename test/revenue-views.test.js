@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const V = require("../src/views.revenue");
+const { formatKRW } = require("../src/views");
 
 test("revBarChart: 월당 매출·순이익 2막대 + 범례, 인라인 style 없음", () => {
   const monthly = Array.from({ length: 12 }, (_, k) => ({ month: k + 1, supply: k === 6 ? 1000000 : 0, profit: k === 6 ? 700000 : 0 }));
@@ -240,4 +241,89 @@ test("revStaffDetail/revPayerDetail: 인라인 style 없음(CSP)", () => {
   const s = V.revStaffDetail({ manager: { id: 1, name: "김", user_id: 1 }, tasks: [], sessions: [], supply: 0, payout: 0, profit: 0 });
   const p = V.revPayerDetail({ party: { id: 1, name: "회사", kind: "company" }, invoices: [], supply: 0, invoice_cnt: 0 });
   assert.ok(!/ style="/.test(s) && !/ style="/.test(p));
+});
+
+// [리뷰 지적 1] 매출 패널 밖으로 나가는 링크(프로젝트·청구서)는 새 탭 — 연락처 마스터-디테일과 동일 규칙
+// (백링크 없는 패널이라 같은 탭에서 나가면 보던 목록으로 못 돌아온다).
+test("revStaffDetail: 프로젝트 링크는 새 탭(target=_blank rel=noopener) + 라벨에 ↗", () => {
+  const data = {
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [{ id: 1, task_type: "mixing", amount: 500000, worker_rate: 0, track_title: "곡A", project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-20" }],
+    sessions: [], supply: 500000, payout: 0, profit: 500000,
+  };
+  const html = V.revStaffDetail(data);
+  assert.match(html, /<a href="\/projects\/9\?tab=tracks" target="_blank" rel="noopener"/, "프로젝트 링크 새 탭");
+  assert.match(html, /mixing ↗/, "라벨(작업 종류)에 ↗ 표기(연락처 관례)");
+});
+
+test("revPayerDetail: 청구서 링크는 새 탭(target=_blank rel=noopener) + 라벨에 ↗", () => {
+  const data = {
+    party: { id: 5, name: "도너츠컬처", kind: "company" },
+    invoices: [{ id: 1, invoice_number: "OMG-202607-018", issued_date: "2026-07-16", amount: 440000, tax_amount: 40000, supply: 400000, tax_status: "계산서 발행", status: "발행", payer_kind: "company", project_title: "프로젝트A" }],
+    supply: 400000, invoice_cnt: 1,
+  };
+  const html = V.revPayerDetail(data);
+  assert.match(html, /<a href="\/invoices\/1" target="_blank" rel="noopener"/, "청구서 링크 새 탭");
+  assert.match(html, /프로젝트A ↗/, "라벨에 ↗ 표기");
+});
+
+// [리뷰 지적 2] revPayerDetail도 revStaffDetail처럼 groupByMonth 호출 전 방어적 정렬을 갖는다 —
+// 데이터 레이어 SQL 정렬(issued_date DESC)이 바뀌어도(혹은 호출부가 순서를 실수로 흩트려도) 같은 달이
+// 여러 그룹으로 쪼개지지 않아야 한다.
+test("revPayerDetail: invoices 배열이 발행일순이 아니어도 같은 달은 한 그룹으로 묶인다", () => {
+  const data = {
+    party: { id: 5, name: "도너츠컬처", kind: "company" },
+    invoices: [
+      // 일부러 뒤섞은 순서(7월 → 6월 → 7월)
+      { id: 1, invoice_number: "A", issued_date: "2026-07-05", amount: 110000, tax_amount: 10000, supply: 100000, tax_status: "발행", status: "발행", payer_kind: "company", project_title: "P1" },
+      { id: 2, invoice_number: "B", issued_date: "2026-06-20", amount: 220000, tax_amount: 20000, supply: 200000, tax_status: "발행", status: "발행", payer_kind: "company", project_title: "P2" },
+      { id: 3, invoice_number: "C", issued_date: "2026-07-16", amount: 330000, tax_amount: 30000, supply: 300000, tax_status: "발행", status: "발행", payer_kind: "company", project_title: "P3" },
+    ],
+    supply: 600000, invoice_cnt: 3,
+  };
+  const html = V.revPayerDetail(data);
+  // "2026년 7월" 헤더가 정확히 한 번만 등장해야(뒤섞인 입력이 두 그룹으로 쪼개지면 두 번 등장) — 7월 소계도 합산(40만).
+  assert.equal((html.match(/2026년 7월/g) || []).length, 1, "뒤섞인 입력이어도 7월 그룹은 하나");
+  assert.match(html, /₩400,000/, "7월 소계(10만+30만) 정확히 합산");
+});
+
+// [리뷰 지적 3] monthLabel의 빈 ym 가드 — 현재는 ISSUED 조건(issued_date IS NOT NULL)이 막아 도달 불가하지만,
+// 값이 없을 때 "년 NaN월" 대신 안전한 문구를 반환해야 한다.
+test("revStaffDetail: issued_date가 비어도(방어) '년 NaN월' 대신 안전 문구", () => {
+  const data = {
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [{ id: 1, task_type: "mixing", amount: 100000, worker_rate: 0, track_title: "곡A", project_id: 9, project_title: "프로젝트A", issued_date: null }],
+    sessions: [], supply: 100000, payout: 0, profit: 100000,
+  };
+  const html = V.revStaffDetail(data);
+  assert.doesNotMatch(html, /NaN/, "NaN이 렌더되지 않는다");
+  assert.match(html, /발행일 미상/, "안전 문구로 폴백");
+});
+
+// [리뷰 지적 4] "월 소계의 합 = 총계" 불변식. groupByMonth를 export해 뷰가 실제로 쓰는 함수의 결과로 검증하고,
+// 렌더된 HTML에도 그 소계 금액이 그대로 나타나는지(뷰가 이 함수를 실제로 쓰는지)까지 함께 확인한다.
+test("revStaffDetail: 월 소계의 합 = 요약 카드 총 매출·순이익(불변식)", () => {
+  const data = {
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [
+      { id: 1, task_type: "mixing", amount: 500000, worker_rate: 0, track_title: "곡A", project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-20" },
+      { id: 2, task_type: "mixing", amount: 300000, worker_rate: 0, track_title: "곡B", project_id: 9, project_title: "프로젝트A", issued_date: "2026-06-05" },
+    ],
+    sessions: [
+      { id: 11, session_date: "2026-07-10", session_type: "녹음", amount: 200000, payout: 50000, project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-25" },
+    ],
+    supply: 1000000, payout: 50000, profit: 950000,
+  };
+  const items = [
+    ...data.tasks.map((t) => ({ ym: String(t.issued_date).slice(0, 7), amount: t.amount, payout: t.worker_rate })),
+    ...data.sessions.map((s) => ({ ym: String(s.issued_date).slice(0, 7), amount: s.amount, payout: s.payout })),
+  ];
+  const groups = V.groupByMonth(items);
+  const supplySum = groups.reduce((a, g) => a + g.supply, 0);
+  const profitSum = groups.reduce((a, g) => a + (g.supply - g.payout), 0);
+  assert.equal(supplySum, data.supply, "월 소계 매출 합 = 총 매출");
+  assert.equal(profitSum, data.profit, "월 소계 순이익 합 = 총 순이익");
+  // 뷰가 실제로 groupByMonth 결과를 렌더에 쓰는지 — 각 그룹의 소계 금액이 렌더된 HTML에 그대로 나타나야 한다.
+  const html = V.revStaffDetail(data);
+  groups.forEach((g) => assert.match(html, new RegExp(formatKRW(g.supply).replace(/[₩,]/g, "\\$&")), `그룹(${g.ym}) 소계 ${formatKRW(g.supply)}가 렌더에 등장`));
 });
