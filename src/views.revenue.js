@@ -238,6 +238,15 @@ function monthHeader(g, { profit = false } = {}) {
     </div>`;
 }
 
+// 행의 이름 = **아티스트**(2026-07-20 사용자 요청 '프로젝트명 말고 아티스트명으로 — 프로젝트명은 크게 중요치 않다').
+// 프로젝트명이 '회사명 + 아티스트'를 반복하는 경우가 많아(예: '더블유엠코퍼레이션 차가을') 아티스트가 더 짧고 정확하다.
+// 다중 아티스트는 프로젝트 목록과 같은 규칙으로 '첫 외 N'(projectArtistOnly 재사용).
+// 아티스트가 비면 프로젝트명으로 폴백한다(실측 프로덕션 92/92가 아티스트를 갖지만 계약상 빈 값이 가능).
+function rowName(artist, projectTitle) {
+  const { projectArtistOnly } = require("./views.projects"); // 지연 require(순환 회피)
+  return projectArtistOnly({ artist }) || projectTitle || "";
+}
+
 // "2026-01-31" → "1월 31일"(세션 실제 날짜 — 발행월과 다른 달일 수 있어 월까지 쓴다).
 function sessionDayLabel(ymd) {
   const s = String(ymd || "");
@@ -281,7 +290,8 @@ function payerItemDetail(inv) {
   if (!d) return "";
   // 세션이면 'YYYY-MM-DD' → '7월 15일', 작업이면 곡 제목(프로젝트명과 같으면 중복이라 생략).
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return sessionDayLabel(d);
-  return d === inv.project_title ? "" : d;
+  // 표시 이름(아티스트)과 같을 때만 생략 — 프로젝트명과 비교하면 안 보이는 값 때문에 곡 제목이 사라진다.
+  return d === rowName(inv.artist, inv.project_title) ? "" : d;
 }
 
 // 스탭 상세 — 월별 그룹(최신 월 우선). 월 안에서 작업·세션을 **섞어** 날짜순으로 둔다
@@ -297,14 +307,15 @@ function revStaffDetail(data) {
   const items = [
     ...tasks.map((t) => ({
       ym: String(t.issued_date || "").slice(0, 7), date: String(t.issued_date || ""),
-      kind: taskTypeLabel(t.task_type), project: t.project_title,
-      // 곡 제목이 프로젝트명과 같으면 같은 말 두 번(예: 'Inferno / Inferno') — 생략.
-      detail: t.track_title && t.track_title !== t.project_title ? t.track_title : "",
+      kind: taskTypeLabel(t.task_type), project: rowName(t.artist, t.project_title),
+      // 곡 제목이 **화면에 뜨는 이름**과 같으면 같은 말 두 번 — 생략. 프로젝트명이 아니라 표시 이름과 비교해야 한다
+      // (이름이 아티스트로 바뀐 뒤 프로젝트명과 비교하면, 안 보이는 값과 같다는 이유로 곡 제목이 사라진다).
+      detail: t.track_title && t.track_title !== rowName(t.artist, t.project_title) ? t.track_title : "",
       href: `/projects/${t.project_id}?tab=tracks`, amount: t.amount || 0, payout: t.worker_rate || 0,
     })),
     ...sessions.map((s) => ({
       ym: String(s.issued_date || "").slice(0, 7), date: String(s.issued_date || ""),
-      kind: s.session_type, project: s.project_title, detail: sessionDayLabel(s.session_date),
+      kind: s.session_type, project: rowName(s.artist, s.project_title), detail: sessionDayLabel(s.session_date),
       href: `/projects/${s.project_id}?tab=sessions`, amount: s.amount || 0, payout: s.payout || 0,
     })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -347,7 +358,7 @@ function revPayerDetail(data) {
       href: `/invoices/${inv.id}`,
       date: inv.issued_date,
       mid: `<span title="${esc(inv.work_kind || "")}">${esc(inv.work_kind || "")}</span>`,
-      name: inv.project_title || `청구 #${inv.id}`,
+      name: rowName(inv.artist, inv.project_title) || `청구 #${inv.id}`,
       detail: payerItemDetail(inv),
       amount: inv.supply,
     })) })}`).join("");
