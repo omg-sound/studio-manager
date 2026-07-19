@@ -187,3 +187,18 @@ test("contactExtras: 대표 업체·담당자 연동도 새 탭", () => {
   assert.ok(anchors.length > 0, "대표 업체 링크 존재");
   anchors.forEach((a) => assert.match(a, /target="_blank" rel="noopener"/, `새 탭: ${a}`));
 });
+
+test("contactPanes: widthKey 기본값 clListW, 지정하면 그 키를 data 속성으로", () => {
+  const def = contactPanes({ left: "L", right: "R", hasSelection: false });
+  assert.match(def, /data-cl-width-key="clListW"/, "기본 키 = clListW(연락처·업체그룹 무변경)");
+  const rev = contactPanes({ left: "L", right: "R", hasSelection: false, widthKey: "revListW" });
+  assert.match(rev, /data-cl-width-key="revListW"/, "지정 키 반영");
+});
+
+test("contactPanes: heightClass 기본값 유지 + 지정 시 교체", () => {
+  const def = contactPanes({ left: "L", right: "R", hasSelection: false });
+  assert.match(def, /lg:h-\[calc\(100vh-11rem\)\]/, "기본 높이 = 연락처 기준");
+  const rev = contactPanes({ left: "L", right: "R", hasSelection: false, heightClass: "lg:h-[calc(100vh-15rem)]" });
+  assert.match(rev, /lg:h-\[calc\(100vh-15rem\)\]/, "지정 높이 반영");
+  assert.ok(!/lg:h-\[calc\(100vh-11rem\)\]/.test(rev), "기본 높이는 함께 남지 않는다");
+});

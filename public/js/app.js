@@ -3094,14 +3094,15 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
 
 // ── 이름 목록 폭 드래그 조절(2026-07-18 사용자 요청) ──
 // 목록↔상세 사이 리사이저([data-cl-resizer])를 드래그하면 왼쪽 목록 폭(CSS 변수 --cl-list-w)을 조절하고
-// localStorage에 저장(연락처·업체·그룹 공유). 키보드 ←→로도 조절(a11y). lg 이상에서만 리사이저가 보인다.
+// localStorage에 저장(키=data-cl-width-key — 연락처·업체그룹은 clListW 공유, 매출은 revListW로 분리).
+// 키보드 ←→로도 조절(a11y). lg 이상에서만 리사이저가 보인다.
 (function () {
   "use strict";
   var panes = document.querySelector("[data-cl-panes]");
   var handle = panes && panes.querySelector("[data-cl-resizer]");
   var left = panes && panes.querySelector(".cl-col-left");
   if (!panes || !handle || !left) return;
-  var KEY = "clListW", MIN = 180, MAX = 560;
+  var KEY = panes.getAttribute("data-cl-width-key") || "clListW", MIN = 180, MAX = 560;
   function apply(px) {
     px = Math.max(MIN, Math.min(px, MAX));
     panes.style.setProperty("--cl-list-w", px + "px");
