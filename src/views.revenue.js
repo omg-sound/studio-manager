@@ -238,20 +238,56 @@ function monthHeader(g, { profit = false } = {}) {
     </div>`;
 }
 
+// "2026-01-31" → "1월 31일"(세션 실제 날짜 — 발행월과 다른 달일 수 있어 월까지 쓴다).
+function sessionDayLabel(ymd) {
+  if (!ymd) return "";
+  const s = String(ymd);
+  return `${Number(s.slice(5, 7))}월 ${Number(s.slice(8, 10))}일`;
+}
+
+// "2026-03-08" → "8일"(월 헤더에 년·월이 이미 있으므로 일만 — 칸을 좁혀 이름에 폭을 준다).
+function issuedDayLabel(ymd) {
+  const s = String(ymd || "");
+  return s.length >= 10 ? `${Number(s.slice(8, 10))}일` : "";
+}
+
+/**
+ * 스탭 상세 항목 행 — 발행일·종류·프로젝트(·세부)·금액 4칸 정렬(2026-07-19 사용자 요청 '항목별로 나눠').
+ * 폭은 `.rev-item` CSS 그리드가 잡는다(서버 렌더 인라인 style은 CSP에 막혀 조용히 무시된다 — 함정 #27).
+ * 월 그룹이 여럿이라 표 헤더는 두지 않는다(그룹마다 반복되면 시끄럽고, 내용만으로 각 칸이 무엇인지 읽힌다).
+ */
+function staffItemRow(it) {
+  return `<a href="${esc(it.href)}" target="_blank" rel="noopener" class="rev-item row-link px-4 py-3">
+      <span class="rev-item-day tabular text-xs text-muted">${esc(issuedDayLabel(it.date))}</span>
+      <span class="rev-item-kind truncate text-sm">${esc(it.kind)}</span>
+      <span class="rev-item-name min-w-0 truncate text-sm">
+        <span class="font-medium">${esc(it.project)}</span>${it.detail ? ` <span class="text-muted">· ${esc(it.detail)}</span>` : ""} ↗
+      </span>
+      <span class="rev-item-amt tabular text-sm font-semibold">${formatKRW(it.amount)}</span>
+    </a>`;
+}
+
 // 스탭 상세 — 월별 그룹(최신 월 우선). 월 안에서 작업·세션을 **섞어** 날짜순으로 둔다
 // (2026-07-19 사용자 확정: 월별 리듬이 목적인데 종류로 먼저 가르면 리듬이 두 번 쪼개진다).
 function revStaffDetail(data) {
   const { taskTypeLabel } = require("./data");
   const { tasks, sessions, supply, payout, profit } = data;
+  // 종류(kind) = 실제 일의 종류. '작업'/'세션' 배지는 안 붙인다(2026-07-19 사용자 확정) —
+  // 작업은 믹싱·보컬튠·스템제작, 세션은 녹음·공연·촬영이라 종류만으로 구분되고 배지는 자리만 먹는다.
+  // detail = "여럿 중 어느 것"을 답하는 자리: 후반작업은 곡 제목, 세션은 실제 세션 날짜.
+  //   세션 날짜가 여기 오는 이유 — 주 날짜는 **발행일**(매출 기준·월 그룹과 일치)인데, 앵콜 공연 이틀치가
+  //   한 청구서에 묶이면 발행일만으론 두 행이 완전히 같아져 몇 건인지도 구분이 안 된다(실데이터 확인).
   const items = [
     ...tasks.map((t) => ({
       ym: String(t.issued_date || "").slice(0, 7), date: String(t.issued_date || ""),
-      kind: "작업", label: taskTypeLabel(t.task_type), sub: `${t.project_title} / ${t.track_title}`,
+      kind: taskTypeLabel(t.task_type), project: t.project_title,
+      // 곡 제목이 프로젝트명과 같으면 같은 말 두 번(예: 'Inferno / Inferno') — 생략.
+      detail: t.track_title && t.track_title !== t.project_title ? t.track_title : "",
       href: `/projects/${t.project_id}?tab=tracks`, amount: t.amount || 0, payout: t.worker_rate || 0,
     })),
     ...sessions.map((s) => ({
       ym: String(s.issued_date || "").slice(0, 7), date: String(s.issued_date || ""),
-      kind: "세션", label: `${s.session_date} ${s.session_type}`, sub: s.project_title,
+      kind: s.session_type, project: s.project_title, detail: sessionDayLabel(s.session_date),
       href: `/projects/${s.project_id}?tab=sessions`, amount: s.amount || 0, payout: s.payout || 0,
     })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -265,12 +301,7 @@ function revStaffDetail(data) {
   </div>`;
   if (!items.length) return `${summary}${emptyState("내역이 없습니다.", { card: true })}`;
   const groups = groupByMonth(items).map((g) => `${monthHeader(g, { profit: true })}
-    ${listGroup({ rows: g.items.map((it) => listRow({
-      href: it.href,
-      left: `<span class="badge badge-neutral">${esc(it.kind)}</span> <span class="font-medium">${esc(it.label)} ↗</span> <span class="text-xs text-muted">· ${esc(it.sub)}</span>`,
-      right: formatKRW(it.amount),
-      newTab: true,
-    })) })}`).join("");
+    ${listGroup({ rows: g.items.map(staffItemRow) })}`).join("");
   return `${summary}${groups}`;
 }
 

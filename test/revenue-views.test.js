@@ -302,7 +302,7 @@ test("revStaffDetail/revPayerDetail: 인라인 style 없음(CSP)", () => {
 
 // [리뷰 지적 1] 매출 패널 밖으로 나가는 링크(프로젝트·청구서)는 새 탭 — 연락처 마스터-디테일과 동일 규칙
 // (백링크 없는 패널이라 같은 탭에서 나가면 보던 목록으로 못 돌아온다).
-test("revStaffDetail: 프로젝트 링크는 새 탭(target=_blank rel=noopener) + 라벨에 ↗", () => {
+test("revStaffDetail: 프로젝트 링크는 새 탭(target=_blank rel=noopener) + 이름 끝에 ↗", () => {
   const data = {
     manager: { id: 3, name: "김엔지", user_id: 1 },
     tasks: [{ id: 1, task_type: "mixing", amount: 500000, worker_rate: 0, track_title: "곡A", project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-20" }],
@@ -310,7 +310,37 @@ test("revStaffDetail: 프로젝트 링크는 새 탭(target=_blank rel=noopener)
   };
   const html = V.revStaffDetail(data);
   assert.match(html, /<a href="\/projects\/9\?tab=tracks" target="_blank" rel="noopener"/, "프로젝트 링크 새 탭");
-  assert.match(html, /mixing ↗/, "라벨(작업 종류)에 ↗ 표기(연락처 관례)");
+  // ↗는 이름 칸 끝(2026-07-19 재배치) — 종류 뒤에 붙이면 종류와 프로젝트가 갈린다.
+  assert.match(html, /곡A<\/span> ↗/, "이름 칸 끝에 ↗");
+});
+
+// 2026-07-19 사용자 요청: 항목별로 칸을 나누고 날짜는 작게, 종류(믹싱·녹음·공연)를 보여준다.
+test("revStaffDetail: 4칸 행 — 발행일(일만)·종류·프로젝트·세부·금액", () => {
+  const data = {
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [{ id: 1, task_type: "mixing", amount: 800000, worker_rate: 0, track_title: "가끔", project_id: 9, project_title: "차가을", issued_date: "2026-07-16" }],
+    sessions: [{ id: 11, session_date: "2026-01-31", session_type: "공연", amount: 1500000, payout: 0, project_id: 8, project_title: "서울앵콜", issued_date: "2026-07-08" }],
+    supply: 2300000, payout: 0, profit: 2300000,
+  };
+  const html = V.revStaffDetail(data);
+  assert.match(html, /class="rev-item /, "그리드 행 클래스");
+  assert.match(html, /rev-item-day[^>]*>16일</, "발행일은 '일'만(월 헤더에 년·월이 있다)");
+  assert.match(html, /rev-item-kind[^>]*>mixing</, "작업은 작업 종류");
+  assert.match(html, /rev-item-kind[^>]*>공연</, "세션은 세션 종류");
+  assert.ok(!/badge-neutral">작업</.test(html) && !/badge-neutral">세션</.test(html), "'작업'/'세션' 배지는 없다(종류로 구분된다)");
+  assert.match(html, /1월 31일/, "세션 세부 = 실제 세션 날짜(발행월과 다를 수 있어 월까지)");
+  assert.match(html, /· 가끔/, "작업 세부 = 곡 제목");
+  assert.ok(!/ style="/.test(html), "서버 렌더 인라인 style 금지(CSP)");
+});
+
+test("revStaffDetail: 곡 제목이 프로젝트명과 같으면 세부를 생략한다", () => {
+  const data = {
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [{ id: 1, task_type: "mixing", amount: 1, worker_rate: 0, track_title: "Inferno", project_id: 9, project_title: "Inferno", issued_date: "2026-07-16" }],
+    sessions: [], supply: 1, payout: 0, profit: 1,
+  };
+  const html = V.revStaffDetail(data);
+  assert.equal((html.match(/Inferno/g) || []).length, 1, "같은 이름을 두 번 쓰지 않는다");
 });
 
 test("revPayerDetail: 청구서 링크는 새 탭(target=_blank rel=noopener) + 라벨에 ↗", () => {
