@@ -135,30 +135,35 @@ function revListRow({ href, selected, title, right, sub }) {
 }
 
 // 스탭 순위 목록(왼쪽 마스터).
+// listGroup의 .card는 overflow-hidden이라 contactPanes의 고정 높이 패널 안에서 넘친 행이 잘리고
+// 스크롤바도 없다(2026-07-19 최종 리뷰 지적 — 연락처 contactNameList와 동일하게 lg:overflow-y-auto 래퍼로 감싼다).
+// data-contact-list 마커는 붙이지 않는다 — 그건 연락처 전용 키보드 이동(↑↓) IIFE의 마커라 매출에도 붙으면 의도치 않게 동작한다.
 function revStaffList(rows, { year, month, selId = 0 }) {
   if (!rows.length) return emptyState("이 기간 매출이 있는 스탭이 없습니다.", { card: true });
   const qs = periodQS({ year, month });
-  return listGroup({ rows: rows.map((r) => revListRow({
+  const list = listGroup({ rows: rows.map((r) => revListRow({
     href: `/revenue?tab=staff&staff=${Number(r.id)}&${qs}`,
     selected: Number(r.id) === Number(selId),
     title: `${esc(r.name)}${r.is_external ? ` <span class="badge badge-neutral">외주</span>` : ""}`,
     right: formatKRW(r.supply),
     sub: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span> · 작업 ${r.task_cnt} · 세션 ${r.session_cnt}`,
   })) });
+  return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
-// 업체·개인 순위 목록(왼쪽 마스터).
+// 업체·개인 순위 목록(왼쪽 마스터). 스크롤 래퍼는 revStaffList와 동일 이유.
 function revPayerList(rows, { year, month, selId = 0 }) {
   if (!rows.length) return emptyState("이 기간 매출이 있는 업체·개인이 없습니다.", { card: true });
   const qs = periodQS({ year, month });
   const kindLabel = (k) => (k === "person" ? "개인" : k === "group" ? "그룹" : "업체");
-  return listGroup({ rows: rows.map((r) => revListRow({
+  const list = listGroup({ rows: rows.map((r) => revListRow({
     href: `/revenue?tab=payer&payer=${Number(r.id)}&${qs}`,
     selected: Number(r.id) === Number(selId),
     title: `${esc(r.name)} <span class="badge badge-neutral">${kindLabel(r.kind)}</span>`,
     right: formatKRW(r.supply),
     sub: `청구 ${r.invoice_cnt}건`,
   })) });
+  return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
 // 스탭 드릴다운.
