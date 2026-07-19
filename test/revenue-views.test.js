@@ -193,3 +193,51 @@ test("revStaffTable/revPayerTable: 제거됨(상세 경로 단일화)", () => {
   assert.equal(V.revStaffTable, undefined);
   assert.equal(V.revPayerTable, undefined);
 });
+
+test("revStaffDetail: 월별 그룹 + 월 안에서 작업·세션이 날짜순으로 섞인다", () => {
+  const data = {
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [
+      { id: 1, task_type: "mixing", amount: 500000, worker_rate: 0, track_title: "곡A", project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-20" },
+      { id: 2, task_type: "mixing", amount: 300000, worker_rate: 0, track_title: "곡B", project_id: 9, project_title: "프로젝트A", issued_date: "2026-06-05" },
+    ],
+    sessions: [
+      { id: 11, session_date: "2026-07-10", session_type: "녹음", amount: 200000, payout: 50000, project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-25" },
+    ],
+    supply: 1000000, payout: 50000, profit: 950000,
+  };
+  const html = V.revStaffDetail(data);
+  assert.match(html, /2026년 7월/, "7월 그룹 헤더");
+  assert.match(html, /2026년 6월/, "6월 그룹 헤더");
+  // 7월 그룹이 6월보다 먼저(최신 월 우선)
+  assert.ok(html.indexOf("2026년 7월") < html.indexOf("2026년 6월"), "최신 월 우선");
+  // 7월 안에서 세션(발행 7-25)이 작업(발행 7-20)보다 먼저 = 섞여서 날짜순
+  const jul = html.slice(html.indexOf("2026년 7월"), html.indexOf("2026년 6월"));
+  assert.ok(jul.indexOf("녹음") < jul.indexOf("곡A"), "월 안에서 작업·세션이 종류가 아니라 날짜순으로 섞인다");
+  // 월 소계: 7월 매출 70만(50만+20만), 순이익 65만(-5만)
+  assert.match(jul, /₩700,000/, "7월 매출 소계");
+  assert.match(jul, /₩650,000/, "7월 순이익 소계");
+});
+
+test("revPayerDetail: 월별 그룹 + 월 매출 소계", () => {
+  const data = {
+    party: { id: 5, name: "도너츠컬처", kind: "company" },
+    invoices: [
+      { id: 1, invoice_number: "OMG-202607-018", issued_date: "2026-07-16", amount: 440000, tax_amount: 40000, supply: 400000, tax_status: "계산서 발행", status: "발행", payer_kind: "company", project_title: "프로젝트A" },
+      { id: 2, invoice_number: "OMG-202606-001", issued_date: "2026-06-18", amount: 3300000, tax_amount: 300000, supply: 3000000, tax_status: "계산서 발행", status: "발행", payer_kind: "company", project_title: "프로젝트B" },
+    ],
+    supply: 3400000, invoice_cnt: 2,
+  };
+  const html = V.revPayerDetail(data);
+  assert.match(html, /2026년 7월/);
+  assert.match(html, /2026년 6월/);
+  assert.ok(html.indexOf("2026년 7월") < html.indexOf("2026년 6월"), "최신 월 우선");
+  assert.match(html, /₩400,000/, "7월 소계");
+  assert.match(html, /₩3,000,000/, "6월 소계");
+});
+
+test("revStaffDetail/revPayerDetail: 인라인 style 없음(CSP)", () => {
+  const s = V.revStaffDetail({ manager: { id: 1, name: "김", user_id: 1 }, tasks: [], sessions: [], supply: 0, payout: 0, profit: 0 });
+  const p = V.revPayerDetail({ party: { id: 1, name: "회사", kind: "company" }, invoices: [], supply: 0, invoice_cnt: 0 });
+  assert.ok(!/ style="/.test(s) && !/ style="/.test(p));
+});

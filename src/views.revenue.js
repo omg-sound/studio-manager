@@ -1,6 +1,6 @@
 "use strict";
 // 매출 전용 뷰(2026-07-19) — 기간 컨트롤·탭·KPI·SVG 바 차트·순위 표·드릴다운.
-const { esc, formatKRW, tabBar, dataTable, emptyState, listGroup, listRow } = require("./views");
+const { esc, formatKRW, tabBar, emptyState, listGroup, listRow } = require("./views");
 
 const MONTHS = Array.from({ length: 12 }, (_, k) => k + 1);
 // 기간 쿼리 문자열(링크·폼 유지). month은 숫자 또는 'all'.
@@ -190,46 +190,89 @@ function revPayerList(rows, { selId = 0 } = {}) {
   return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
-// 스탭 드릴다운.
-function revStaffDetail(data, { year, month }) {
+// "2026-07" → "2026년 7월"
+function monthLabel(ym) {
+  const [y, m] = String(ym).split("-");
+  return `${y}년 ${Number(m)}월`;
+}
+
+// 발행일 내림차순 배열을 월별로 묶는다(입력 순서 유지 = 최신 월 먼저).
+// 각 항목은 {ym, amount, payout} 를 가져야 한다. 월 소계를 함께 계산한다.
+function groupByMonth(items) {
+  const out = [];
+  let cur = null;
+  items.forEach((it) => {
+    if (!cur || cur.ym !== it.ym) {
+      cur = { ym: it.ym, items: [], supply: 0, payout: 0 };
+      out.push(cur);
+    }
+    cur.items.push(it);
+    cur.supply += it.amount || 0;
+    cur.payout += it.payout || 0;
+  });
+  return out;
+}
+
+// 월 그룹 헤더(월 이름 + 소계). profit=true면 순이익 소계도 함께.
+function monthHeader(g, { profit = false } = {}) {
+  const p = g.supply - g.payout;
+  return `<div class="mt-4 flex items-baseline justify-between border-b border-border/60 pb-1">
+      <h3 class="text-sm font-semibold">${esc(monthLabel(g.ym))}</h3>
+      <div class="tabular text-sm">
+        <span class="font-semibold">${formatKRW(g.supply)}</span>
+        ${profit ? `<span class="ml-2 text-xs text-muted">순이익 <span class="${profitCls(p)}">${formatKRW(p)}</span></span>` : ""}
+      </div>
+    </div>`;
+}
+
+// 스탭 상세 — 월별 그룹(최신 월 우선). 월 안에서 작업·세션을 **섞어** 날짜순으로 둔다
+// (2026-07-19 사용자 확정: 월별 리듬이 목적인데 종류로 먼저 가르면 리듬이 두 번 쪼개진다).
+function revStaffDetail(data) {
   const { taskTypeLabel } = require("./data");
-  const { manager, tasks, sessions, supply, payout, profit } = data;
-  const summary = `<div class="card mb-4 flex flex-wrap gap-4 text-sm">
-    <span>매출 <b class="tabular text-fg">${formatKRW(supply)}</b></span>
+  const { tasks, sessions, supply, payout, profit } = data;
+  const summary = `<div class="card flex flex-wrap gap-4 text-sm">
+    <span>총 매출 <b class="tabular text-fg">${formatKRW(supply)}</b></span>
     <span>외주 지급 <b class="tabular text-fg">${formatKRW(payout)}</b></span>
     <span class="font-semibold">순이익 <b class="tabular ${profitCls(profit)}">${formatKRW(profit)}</b></span>
   </div>`;
-  const taskRows = tasks.length ? listGroup({ rows: tasks.map((t) => listRow({ href: `/projects/${t.project_id}?tab=tracks`, left: `<span class="font-medium">${esc(taskTypeLabel(t.task_type))}</span> <span class="text-xs text-muted">· ${esc(t.project_title)} / ${esc(t.track_title)} · ${esc(String(t.issued_date))}</span>`, right: formatKRW(t.amount) })) }) : emptyState("작업 없음", { card: true });
-  const sessRows = sessions.length ? listGroup({ rows: sessions.map((s) => listRow({ href: `/projects/${s.project_id}?tab=sessions`, left: `<span class="font-medium">${esc(s.session_date)} ${esc(s.session_type)}</span> <span class="text-xs text-muted">· ${esc(s.project_title)}</span>`, right: formatKRW(s.amount) })) }) : emptyState("세션 없음", { card: true });
-  return `${summary}<h2 class="mb-2 mt-4 text-sm font-semibold text-muted">작업 (${tasks.length})</h2>${taskRows}<h2 class="mb-2 mt-4 text-sm font-semibold text-muted">세션 (${sessions.length})</h2>${sessRows}`;
+  const items = [
+    ...tasks.map((t) => ({
+      ym: String(t.issued_date || "").slice(0, 7), date: String(t.issued_date || ""),
+      kind: "작업", label: taskTypeLabel(t.task_type), sub: `${t.project_title} / ${t.track_title}`,
+      href: `/projects/${t.project_id}?tab=tracks`, amount: t.amount || 0, payout: t.worker_rate || 0,
+    })),
+    ...sessions.map((s) => ({
+      ym: String(s.issued_date || "").slice(0, 7), date: String(s.issued_date || ""),
+      kind: "세션", label: `${s.session_date} ${s.session_type}`, sub: s.project_title,
+      href: `/projects/${s.project_id}?tab=sessions`, amount: s.amount || 0, payout: s.payout || 0,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  if (!items.length) return `${summary}${emptyState("내역이 없습니다.", { card: true })}`;
+  const groups = groupByMonth(items).map((g) => `${monthHeader(g, { profit: true })}
+    ${listGroup({ rows: g.items.map((it) => listRow({
+      href: it.href,
+      left: `<span class="badge badge-neutral">${esc(it.kind)}</span> <span class="font-medium">${esc(it.label)}</span> <span class="text-xs text-muted">· ${esc(it.sub)}</span>`,
+      right: formatKRW(it.amount),
+    })) })}`).join("");
+  return `${summary}${groups}`;
 }
 
-// 결제자 드릴다운(기간 발행 청구서 — 공급가). 청구서로 새 탭 링크.
-function revPayerDetail(data, { year, month }) {
+// 청구처 상세 — 월별 그룹(최신 월 우선). 월 소계는 매출(공급가)만(청구처엔 외주지급 개념이 없다).
+function revPayerDetail(data) {
   const { taxBadge } = require("./views.invoices");
   const { invoices, supply, invoice_cnt } = data;
-  const summary = `<div class="card mb-4 flex flex-wrap gap-4 text-sm"><span>매출 기여 <b class="tabular text-fg">${formatKRW(supply)}</b></span><span>청구 ${invoice_cnt}건</span></div>`;
-  if (!invoices.length) return `${summary}${emptyState("이 기간 발행 청구서가 없습니다.", { card: true })}`;
-  const table = dataTable(
-    [
-      { label: "발행일", w: "w-[6.5rem]", nowrap: true, mCard: "tr" },
-      { label: "청구번호", w: "w-[10rem]", nowrap: true, hide: "md", mobileHide: true },
-      { label: "청구", primary: true, mCard: "tl" },
-      { label: "상태", w: "w-[7rem]", mCard: "bl" },
-      { label: "매출(공급가)", w: "w-[8rem]", right: true, nowrap: true, mCard: "br" },
-    ],
-    invoices.map((inv) => {
-      const link = (inner, cls = "") => `<a href="/invoices/${inv.id}" target="_blank" rel="noopener" class="dt-link ${cls}">${inner}</a>`;
-      return { cells: [
-        inv.issued_date ? link(esc(String(inv.issued_date).slice(0, 10)), "text-muted") : `<span class="text-muted">—</span>`,
-        inv.invoice_number ? link(esc(inv.invoice_number), "text-xs text-muted") : `<span class="text-muted">—</span>`,
-        link(esc(inv.project_title || `청구 #${inv.id}`), "font-medium"),
-        taxBadge(inv),
-        link(formatKRW(inv.supply), "tabular font-semibold"),
-      ] };
-    })
-  );
-  return `${summary}${table}`;
+  const summary = `<div class="card flex flex-wrap gap-4 text-sm"><span>총 매출 기여 <b class="tabular text-fg">${formatKRW(supply)}</b></span><span>청구 ${invoice_cnt}건</span></div>`;
+  if (!invoices.length) return `${summary}${emptyState("발행 청구서가 없습니다.", { card: true })}`;
+  const items = invoices.map((inv) => ({ ym: String(inv.issued_date || "").slice(0, 7), amount: inv.supply || 0, payout: 0, inv }));
+  const groups = groupByMonth(items).map((g) => `${monthHeader(g)}
+    ${listGroup({ rows: g.items.map(({ inv }) => listRow({
+      href: `/invoices/${inv.id}`,
+      left: `<span class="font-medium">${esc(inv.project_title || `청구 #${inv.id}`)}</span>
+             <span class="text-xs text-muted">· ${esc(String(inv.issued_date).slice(0, 10))}${inv.invoice_number ? ` · ${esc(inv.invoice_number)}` : ""}</span>
+             <span class="ml-1">${taxBadge(inv)}</span>`,
+      right: formatKRW(inv.supply),
+    })) })}`).join("");
+  return `${summary}${groups}`;
 }
 
 module.exports = { revPeriodControl, revTabs, revBarChart, revDeltaBadge, revTypeBreakdown, revTaxCard, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail };
