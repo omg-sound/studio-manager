@@ -47,6 +47,13 @@ test("revPeriodControl: 년·월 셀렉트 + 탭·기간 유지 GET 폼", () => 
   assert.match(html, /name="tab" value="staff"/, "현재 탭 유지");
 });
 
+test("revPeriodControl: 선택된 대상을 hidden으로 실어 기간 변경 시 유지", () => {
+  const html = V.revPeriodControl({ year: 2026, month: 7, years: [2026], tab: "staff", sel: { name: "staff", id: 3 } });
+  assert.match(html, /<input type="hidden" name="staff" value="3"/, "선택 유지 hidden");
+  const none = V.revPeriodControl({ year: 2026, month: 7, years: [2026], tab: "overview" });
+  assert.ok(!/name="staff"/.test(none) && !/name="payer"/.test(none), "미선택·개요 탭은 hidden 없음");
+});
+
 test("revStaffList: 패널 링크(탭·기간·id) + 순이익·건수 subline", () => {
   const html = V.revStaffList([{ id: 3, name: "김엔지", is_external: false, supply: 200000, profit: 150000, task_cnt: 2, session_cnt: 1 }], { year: 2026, month: 7 });
   assert.match(html, /김엔지/);

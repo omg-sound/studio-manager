@@ -8,14 +8,17 @@ function periodQS({ year, month }) { return `year=${Number(year)}&month=${month 
 // 순이익 색: 음수(외주지급>매출)면 danger, 아니면 success.
 function profitCls(v) { return Number(v) < 0 ? "text-danger" : "text-success"; }
 
-// 년·월 셀렉트 + 보기 버튼(무JS GET 폼). 탭·기간 유지.
-function revPeriodControl({ year, month, years, tab }) {
+// 년·월 셀렉트 + 보기 버튼(무JS GET 폼). 탭·기간·선택 대상 유지.
+function revPeriodControl({ year, month, years, tab, sel = null }) {
   const yrs = years && years.length ? years : [Number(year)];
   const yOpts = yrs.map((y) => `<option value="${y}"${y === Number(year) ? " selected" : ""}>${y}년</option>`).join("");
   const mOpts = `<option value="all"${month === "all" ? " selected" : ""}>전체(연간)</option>` +
     MONTHS.map((m) => `<option value="${m}"${String(month) === String(m) ? " selected" : ""}>${m}월</option>`).join("");
+  // 선택된 스탭/청구처를 실어 보낸다 — 기간만 바꾸고 보던 대상은 유지(2026-07-19 사용자 결정).
+  const selHidden = sel && sel.id ? `<input type="hidden" name="${esc(sel.name)}" value="${Number(sel.id)}" />` : "";
   return `<form method="get" class="mb-4 flex flex-wrap items-center gap-2">
     <input type="hidden" name="tab" value="${esc(tab)}" />
+    ${selHidden}
     <select name="year" class="input w-auto">${yOpts}</select>
     <select name="month" class="input w-auto">${mOpts}</select>
     <button type="submit" class="btn-ghost btn-sm">보기</button>
