@@ -1,7 +1,7 @@
 "use strict";
 process.env.NODE_ENV = "test";
 process.env.DEV_LOGIN = "1";
-process.env.PORT = String(4700 + (process.pid % 300)); // 다른 대역과 충돌 방지(contacts-panes 4500대·smoke 3900~4399대)
+process.env.PORT = String(5000 + (process.pid % 200)); // 다른 서버 테스트와 겹치지 않는 대역(contacts-panes 4500~4799·clients-panes 4800~4999·smoke 3900~4399)
 const { tempDbPath, cleanupDb } = require("./helpers");
 process.env.DB_PATH = tempDbPath();
 
