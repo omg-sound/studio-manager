@@ -144,38 +144,49 @@ function revListRow({ href, selected, title, subLeft = "", right, subRight = "" 
     </a>`;
 }
 
-// 스탭 순위 목록(왼쪽 마스터).
+// "2026-07-16" → "2026.7"(목록의 최근 거래월 표기). 값 없으면 빈 문자열.
+function lastSeenLabel(ymd) {
+  if (!ymd) return "";
+  const s = String(ymd);
+  return `최근 ${s.slice(0, 4)}.${Number(s.slice(5, 7))}`;
+}
+
+// 스탭 순위 목록(왼쪽 마스터) — 기간 없는 전체 누적(2026-07-19 렌즈 분리: 목록=전체, 드릴다운=기간).
 // listGroup의 .card는 overflow-hidden이라 contactPanes의 고정 높이 패널 안에서 넘친 행이 잘리고
 // 스크롤바도 없다(2026-07-19 최종 리뷰 지적 — 연락처 contactNameList와 동일하게 lg:overflow-y-auto 래퍼로 감싼다).
 // data-contact-list 마커는 붙이지 않는다 — 그건 연락처 전용 키보드 이동(↑↓) IIFE의 마커라 매출에도 붙으면 의도치 않게 동작한다.
-function revStaffList(rows, { year, month, selId = 0 }) {
-  if (!rows.length) return emptyState("이 기간 매출이 있는 스탭이 없습니다.", { card: true });
-  const qs = periodQS({ year, month });
-  const list = listGroup({ rows: rows.map((r) => revListRow({
-    href: `/revenue?tab=staff&staff=${Number(r.id)}&${qs}`,
-    selected: Number(r.id) === Number(selId),
-    title: esc(r.name),
-    // 외주 배지는 이름 아래로(청구처 탭의 업체/개인 배지와 같은 규칙). 건수도 배지 줄에 함께 둔다.
-    subLeft: `${r.is_external ? `<span class="badge badge-neutral">외주</span> ` : ""}작업 ${r.task_cnt} · 세션 ${r.session_cnt}`,
-    right: formatKRW(r.supply),
-    subRight: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span>`,
-  })) });
+function revStaffList(rows, { selId = 0 } = {}) {
+  if (!rows.length) return emptyState("매출 기여가 있는 스탭이 없습니다.", { card: true });
+  const list = listGroup({ rows: rows.map((r) => {
+    const last = lastSeenLabel(r.last_issued);
+    return revListRow({
+      href: `/revenue?tab=staff&staff=${Number(r.id)}`,
+      selected: Number(r.id) === Number(selId),
+      title: esc(r.name),
+      // 외주 배지는 이름 아래로(청구처 탭의 업체/개인 배지와 같은 규칙). 건수·최근 거래월도 배지 줄에 함께 둔다.
+      subLeft: `${r.is_external ? `<span class="badge badge-neutral">외주</span> ` : ""}작업 ${r.task_cnt} · 세션 ${r.session_cnt}${last ? ` · ${esc(last)}` : ""}`,
+      right: formatKRW(r.supply),
+      subRight: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span>`,
+    });
+  }) });
   return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
-// 업체·개인 순위 목록(왼쪽 마스터). 스크롤 래퍼는 revStaffList와 동일 이유.
-function revPayerList(rows, { year, month, selId = 0 }) {
-  if (!rows.length) return emptyState("이 기간 매출이 있는 업체·개인이 없습니다.", { card: true });
-  const qs = periodQS({ year, month });
+// 업체·개인 순위 목록(왼쪽 마스터) — 기간 없는 전체 누적. 스크롤 래퍼는 revStaffList와 동일 이유.
+function revPayerList(rows, { selId = 0 } = {}) {
+  if (!rows.length) return emptyState("매출 기여가 있는 업체·개인이 없습니다.", { card: true });
   const kindLabel = (k) => (k === "person" ? "개인" : k === "group" ? "그룹" : "업체");
-  const list = listGroup({ rows: rows.map((r) => revListRow({
-    href: `/revenue?tab=payer&payer=${Number(r.id)}&${qs}`,
-    selected: Number(r.id) === Number(selId),
-    title: esc(r.name),
-    subLeft: `<span class="badge badge-neutral">${kindLabel(r.kind)}</span>`,
-    right: formatKRW(r.supply),
-    subRight: `청구 ${r.invoice_cnt}건`,
-  })) });
+  const list = listGroup({ rows: rows.map((r) => {
+    const last = lastSeenLabel(r.last_issued);
+    return revListRow({
+      href: `/revenue?tab=payer&payer=${Number(r.id)}`,
+      selected: Number(r.id) === Number(selId),
+      title: esc(r.name),
+      subLeft: `<span class="badge badge-neutral">${kindLabel(r.kind)}</span>${last ? ` · ${esc(last)}` : ""}`,
+      right: formatKRW(r.supply),
+      subRight: `청구 ${r.invoice_cnt}건`,
+    });
+  }) });
   return `<div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
