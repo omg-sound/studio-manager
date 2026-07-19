@@ -130,6 +130,27 @@ test("revenueByStaff/revenueForStaff: 다인 세션은 리드 엔지니어에게
   assert.equal(rows.find((r) => r.id === co), undefined, "공동 엔지니어는 별도 행으로 안 나타남(공급가 0 → 필터됨)");
 });
 
+test("revenueForStaff: 세션 행 payout — 다인 세션 전액을 리드가 흡수(모델 A), 항목 합 = 총계", () => {
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company', ?)").run("세션지급사").lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('PD', 'task', 0)").run().lastInsertRowid;
+  const lead = db().prepare("INSERT INTO project_managers (name) VALUES ('지급리드')").run().lastInsertRowid;
+  const co = db().prepare("INSERT INTO project_managers (name) VALUES ('지급공동')").run().lastInsertRowid;
+  const sess = db().prepare("INSERT INTO sessions (project_id, session_type, session_date, engineer_name, status) VALUES (?, '녹음', '2026-08-08', '지급리드', '완료')").run(proj).lastInsertRowid;
+  db().prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)").run(sess, lead, 10000);
+  db().prepare("INSERT INTO session_engineers (session_id, manager_id, worker_rate) VALUES (?, ?, ?)").run(sess, co, 20000);
+  const inv = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, status, issued_date) VALUES (?, ?, 'PT', 220000, 20000, '발행', '2026-08-08')").run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, session_id, description, quantity, unit_price, amount) VALUES (?, ?, '녹음', 1, 200000, 200000)").run(inv, sess);
+
+  const data = D.revenueForStaff(lead);
+  const s = data.sessions.find((r) => r.id === sess);
+  assert.equal(s.payout, 30000, "그 세션 배정 전원의 지급단가 합(10000+20000)");
+  const taskPayoutSum = data.tasks.reduce((a, t) => a + (t.worker_rate || 0), 0);
+  const sessPayoutSum = data.sessions.reduce((a, r) => a + (r.payout || 0), 0);
+  assert.equal(taskPayoutSum + sessPayoutSum, data.payout, "항목별 지급 합 = 전체 지급");
+  assert.equal(data.supply - data.payout, data.profit, "순이익 정합");
+  assert.equal(D.revenueForStaff(co).sessions.length, 0, "공동 엔지니어에겐 세션이 안 잡힌다(모델 A)");
+});
+
 test("revenueByPayer: 결제자(업체/개인)별 공급가 기여·건수, 기간·kind", () => {
   const { payer } = seedInvoice({ issued: "2026-05-10", payerName: "기여도컴퍼니", amount: 330000, tax: 30000 });
   const rows = D.revenueByPayer({ year: 2026, month: 5 });

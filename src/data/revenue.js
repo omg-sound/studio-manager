@@ -119,16 +119,19 @@ function revenueByStaff(period) {
     .sort((a, b) => b.supply - a.supply);
 }
 
-// 스탭 상세(기간 작업·세션 + 순이익).
-function revenueForStaff(id, { year, month }) {
+// 스탭 상세(기간 작업·세션 + 순이익). 세션 행에 payout(그 세션 전 엔지니어 지급단가 합)을 파생 — 월 소계 순이익 산정용.
+function revenueForStaff(id, period) {
   const manager = db().prepare("SELECT * FROM project_managers WHERE id = ?").get(Number(id));
   if (!manager) return null;
-  const per = issuedInPeriodSql("i", { year, month });
+  const per = issuedInPeriodSql("i", period);
   const tasks = db().prepare(`SELECT t.id, t.task_type, ii.amount AS amount, t.worker_rate, tr.title AS track_title, p.id AS project_id, p.title AS project_title, i.issued_date FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN project_tracks tr ON tr.id = t.track_id JOIN projects p ON p.id = tr.project_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id = ? ORDER BY i.issued_date DESC, p.title COLLATE NOCASE`).all(Number(id));
-  const sessions = db().prepare(`SELECT s.id, s.session_date, s.session_type, ii.amount AS amount, p.id AS project_id, p.title AS project_title, i.issued_date FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN projects p ON p.id = s.project_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name = ? ORDER BY i.issued_date DESC, s.session_date DESC`).all(manager.name);
-  const sessPayout = db().prepare(`SELECT COALESCE(SUM(se.worker_rate),0) AS v FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN session_engineers se ON se.session_id = s.id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND s.engineer_name = ?`).get(manager.name).v;
+  // payout = 그 세션에 배정된 전 엔지니어의 지급단가 합(모델 A: 리드가 전체를 흡수).
+  const sessions = db().prepare(`SELECT s.id, s.session_date, s.session_type, ii.amount AS amount, p.id AS project_id, p.title AS project_title, i.issued_date,
+      (SELECT COALESCE(SUM(se.worker_rate),0) FROM session_engineers se WHERE se.session_id = s.id) AS payout
+    FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN projects p ON p.id = s.project_id JOIN invoices i ON i.id = ii.invoice_id
+    WHERE ${ISSUED} AND ${per} AND s.engineer_name = ? ORDER BY i.issued_date DESC, s.session_date DESC`).all(manager.name);
   const supply = tasks.reduce((a, t) => a + (t.amount || 0), 0) + sessions.reduce((a, s) => a + (s.amount || 0), 0);
-  const payout = tasks.reduce((a, t) => a + (t.worker_rate || 0), 0) + sessPayout;
+  const payout = tasks.reduce((a, t) => a + (t.worker_rate || 0), 0) + sessions.reduce((a, s) => a + (s.payout || 0), 0);
   return { manager, tasks, sessions, supply, payout, profit: supply - payout };
 }
 
@@ -139,10 +142,10 @@ function revenueByPayer(period) {
 }
 
 // 결제자 상세(기간 발행 청구서 목록 + 공급가 합계).
-function revenueForPayer(id, { year, month }) {
+function revenueForPayer(id, period) {
   const party = db().prepare("SELECT * FROM parties WHERE id = ?").get(Number(id));
   if (!party) return null;
-  const per = issuedInPeriodSql("i", { year, month });
+  const per = issuedInPeriodSql("i", period);
   // payer_kind = 결제자 kind(현금영수증/계산서 배지용 taxBadge가 inv.payer_kind를 읽음). 전 청구서가 이 party라 party.kind 동일.
   const invoices = db().prepare(`SELECT i.id, i.invoice_number, i.issued_date, i.amount, i.tax_amount, i.tax_status, i.status, (i.amount - i.tax_amount) AS supply, c.kind AS payer_kind, p.title AS project_title FROM invoices i JOIN parties c ON c.id = i.payer_id LEFT JOIN projects p ON p.id = i.project_id WHERE ${ISSUED} AND ${per} AND i.payer_id = ? ORDER BY i.issued_date DESC, i.id DESC`).all(Number(id));
   const supply = invoices.reduce((a, r) => a + (r.supply || 0), 0);
