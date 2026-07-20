@@ -250,8 +250,10 @@
    행 전체가 이동 링크(모든 셀=<a>), 오른쪽 끝 .proj-toggle(비인터랙티브 span)만 클릭 시 <details> 펼침(2026-07-18). */
 .proj-thead, .proj-summary {
   display: grid;
-  /* 아티스트·제작사·프로젝트 = 유연(넘치면 … 로 자름) / PM·다음세션·금액·작성일·⌄ = 고정 폭. */
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 6rem 2rem;
+  /* 제작사·아티스트·프로젝트 = 유연(넘치면 … 로 자름) / PM·다음세션·금액·작성일·⌄ = 고정 폭.
+     2026-07-20 사용자 요청으로 제작사↔아티스트 순서를 맞바꾸며 **폭 값도 함께 옮겼다** —
+     fr은 자리에 붙으므로 순서만 바꾸면 상호(긴 편)가 좁은 칸을, 아티스트명(짧은 편)이 넓은 칸을 쓰게 된다. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 6rem 2rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
@@ -291,15 +293,15 @@
 /* 좁아지면 우측 열부터 숨긴다(2026-07-16 사용자 '줄어들때 PM·금액·작성일 숨기며 줄여도 됨'):
    작성일 <1280 → 금액 <1024 → PM <820. 열을 숨기면 grid 열도 함께 줄여 남는 셀이 늘어난다. */
 @media (max-width: 1279.98px) {
-  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 2rem; }
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 2rem; }
   .pt-created, .pt-h-created { display: none; }
 }
 @media (max-width: 1023.98px) {
-  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 5.5rem 8.5rem 2rem; }
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.3fr) 5.5rem 8.5rem 2rem; }
   .pt-amount, .pt-h-amount { display: none; }
 }
 @media (max-width: 819.98px) {
-  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) 8.5rem 2rem; }
+  .proj-thead, .proj-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.3fr) 8.5rem 2rem; }
   .pt-pm, .pt-h-pm { display: none; }
 }
 
@@ -312,6 +314,7 @@
     gap: 0.125rem; position: relative;
   }
   .pt-cell { display: block; white-space: normal; }
+  /* 제작사가 DOM상 먼저지만 여기서 숨으므로 카드 첫 줄은 그대로 아티스트(굵게)다. */
   .pt-company, .pt-pm { display: none; } /* 제작사·PM만 숨김 */
   .pt-artist { font-weight: 600; font-size: 0.9375rem; padding-right: 1.5rem; }
   .pt-title { font-size: 0.8125rem; color: rgb(var(--color-muted)); }

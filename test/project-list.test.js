@@ -83,13 +83,26 @@ test("projectArtistLabel/SubLabel: 다중·중복·폴백", () => {
 test("projectListRow: 헤더 + 행 컬럼 정렬(같은 grid 열)", () => {
   const head = views.projectTableHead();
   assert.match(head, /class="proj-thead">/);
-  for (const label of ["아티스트", "제작사", "프로젝트", "PM", "다음 세션", "금액", "작성일"]) {
-    assert.match(head, new RegExp(`<span class="pt-h[^"]*">${label}</span>`), `헤더 항목명: ${label}`);
-  }
-  // 행 셀 순서 = 헤더 순서
+  // 헤더에 적힌 **실제 순서**를 뽑아 행 셀과 대조한다 — 기대 목록을 손으로 적어두면
+  // 열 순서를 바꿀 때 두 곳을 같이 고쳐야 하고, 한쪽만 고치면 통과해버린다.
+  const headLabels = [...head.matchAll(/<span class="pt-h[^"]*">([^<]+)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(headLabels, ["제작사", "아티스트", "프로젝트", "PM", "다음 세션", "금액", "작성일"]);
+
   const html = views.projectListRow(pRow({ next_session_date: "2099-01-01" }), emptySummary, { tab: "active" });
-  const order = ["아티스트", "제작사", "프로젝트", "PM", "다음 세션", "금액", "작성일"].map((l) => html.indexOf(`data-label="${l}"`));
+  const order = headLabels.map((l) => html.indexOf(`data-label="${l}"`));
+  order.forEach((i, n) => assert.ok(i >= 0, `행에 ${headLabels[n]} 셀이 있다`));
   for (let i = 1; i < order.length; i++) assert.ok(order[i - 1] < order[i], `컬럼 순서 ${i}`);
+});
+
+// 2026-07-20 사용자 요청 '제작사와 아티스트 순서를 바꿔줘'.
+test("projectListRow: 제작사가 아티스트보다 앞(폭 값도 함께 옮겨야 상호가 넓은 칸을 쓴다)", () => {
+  const html = views.projectListRow(pRow({}), emptySummary, { tab: "active" });
+  assert.ok(html.indexOf('data-label="제작사"') < html.indexOf('data-label="아티스트"'));
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "public/css/src.css"), "utf8");
+  // fr은 자리에 붙는다 — 순서만 바꾸고 폭을 그대로 두면 긴 상호가 좁은 칸(0.9fr)에 들어가 더 잘린다.
+  assert.match(css, /grid-template-columns: minmax\(0, 1fr\) minmax\(0, 0\.9fr\) minmax\(0, 1\.3fr\)/,
+    "첫 열(제작사)이 둘째 열(아티스트)보다 넓다");
+  assert.ok(!/grid-template-columns: minmax\(0, 0\.9fr\) minmax\(0, 1fr\)/.test(css), "옛 폭 순서 잔존 없음(반응형 단계 포함)");
 });
 
 test("projectRowHref: 목록 상태(탭·검색·mine)를 return으로 실어 보낸다(상세 백링크 복귀)", () => {

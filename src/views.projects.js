@@ -132,7 +132,8 @@ function projectArtistOnly(p) {
 function projectTableHead() {
   const th = (label, cls = "") => `<span class="pt-h ${cls}">${esc(label)}</span>`;
   // 헤더 클래스(pt-h-pm/amount/created)는 좁을 때 해당 열을 행 셀과 함께 CSS로 숨기기 위함.
-  return `<div class="proj-thead">${th("아티스트")}${th("제작사")}${th("프로젝트")}${th("PM", "pt-h-pm")}${th("다음 세션")}${th("금액", "pt-h-amount")}${th("작성일", "pt-h-created")}<span aria-hidden="true"></span></div>`;
+  // 열 순서 = 제작사 → 아티스트(2026-07-20 사용자 요청으로 맞바꿈).
+  return `<div class="proj-thead">${th("제작사")}${th("아티스트")}${th("프로젝트")}${th("PM", "pt-h-pm")}${th("다음 세션")}${th("금액", "pt-h-amount")}${th("작성일", "pt-h-created")}<span aria-hidden="true"></span></div>`;
 }
 
 /**
@@ -161,8 +162,8 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   return `
     <details class="proj-row group/proj"${isOpen ? " open" : ""} id="proj-${p.id}">
       <summary class="proj-summary">
-        ${cellLink(artist || dash, "pt-artist font-medium", "아티스트")}
         ${cellLink(company || dash, "pt-company text-muted", "제작사")}
+        ${cellLink(artist || dash, "pt-artist font-medium", "아티스트")}
         ${cellLink(title, "pt-title", "프로젝트")}
         ${cellLink(pm || dash, "pt-pm text-muted", "PM")}
         ${cellLink(next, "pt-next", "다음 세션")}
