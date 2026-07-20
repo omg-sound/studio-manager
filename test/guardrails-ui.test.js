@@ -192,10 +192,12 @@ test("가드: 사용자 노출 문자열에 '클라이언트'가 없다", () => 
   assert.deepEqual(offenders, [], "화면 문구에 '클라이언트' 잔존:\n" + offenders.join("\n"));
 });
 
-// 2026-07-20 사용자 요청 '사업자등록증 열기 — 사이드탭 없이 PDF 자체로 하나만, 작게 나와서 별로'.
-// PDF를 최상위로 열면 크롬이 전체 뷰어(왼쪽 썸네일 사이드탭)를 띄워 좁은 팝업에서 본문이 45%로 쪼그라든다.
-// iframe 안에 두면 사이드탭 없는 간이 뷰어로 그려진다. ⚠️<embed>/<object>는 CSP object-src 'none'에 막힌다.
-test("첨부 뷰어: PDF는 iframe(embed/object 금지 — CSP object-src 'none')", () => {
+// 2026-07-20 사용자 요청 '사업자등록증 열기 — 작게 나와서 별로'(원 요청엔 '사이드탭 없이'도 있었다).
+// PDF를 최상위로 열면 45%로 쪼그라들어 iframe + #view=FitH로 폭을 맞춘다.
+// ⚠️<embed>/<object>는 CSP object-src 'none'에 막힌다.
+// ⚠️**사이드탭은 이 방법으로 안 없어졌다**(사용자 확인) — 크롬이 사이드탭 열림 상태를 브라우저별로 기억한다.
+//   그래서 이 테스트가 잠그는 건 '사이드탭 제거'가 아니라 **폭 맞춤 + CSP 안전한 태그** 두 가지다.
+test("첨부 뷰어: PDF는 iframe + 폭 맞춤(embed/object 금지 — CSP object-src 'none')", () => {
   const { fileViewerPage } = require("../src/views");
   const pdf = fileViewerPage({ title: "사업자등록증", rawUrl: "/clients/3/files/biz_license/raw", pdf: true });
   assert.match(pdf, /<iframe src="\/clients\/3\/files\/biz_license\/raw#view=FitH"/, "iframe + 폭 맞춤");

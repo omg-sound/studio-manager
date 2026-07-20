@@ -498,7 +498,7 @@ router.post("/:id/files/:kind", requireChief, upload.single("file"), asyncHandle
 }));
 
 // ── 첨부 서류 인증 다운로드(치프 인증 후 프록시 — 공개 URL 없음) ──
-// ── 첨부 서류 뷰어(팝업 전용, 2026-07-08) — 이미지·PDF가 팝업 창을 꽉 채우게(PDF는 iframe으로 감싸 사이드탭 없는 간이 뷰어, 2026-07-20).
+// ── 첨부 서류 뷰어(팝업 전용, 2026-07-08) — 이미지·PDF가 팝업 창을 꽉 채우게(PDF는 iframe+#view=FitH로 폭 맞춤, 2026-07-20).
 router.get("/:id/files/:kind/view", requireChief, (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
