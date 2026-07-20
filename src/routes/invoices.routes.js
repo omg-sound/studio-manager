@@ -119,11 +119,14 @@ router.get("/", requireBilling, (req, res) => {
 
   // 상단 개요 3장(2026-07-18 사용자 요청): 미수금 합계 · 이번 달 발행액 · 올해 발행액. 탭(건수)과 안 겹치게 금액만.
   // '발행액'=발행(청구) 기준 발생주의(입금 아님·부가세 포함) — 매출(공급가·VAT 제외)은 매출 화면 전용(2026-07-19).
-  const statCard = (label, value, tone = "text-fg") => `<div class="card flex items-center justify-between gap-3">
-      <span class="text-sm text-muted">${label}</span>
-      <span class="tabular text-lg font-bold ${tone}">${formatKRW(value)}</span>
+  // ⚠️ 카드 안에서 라벨은 줄이고(min-w-0 + 줄바꿈 허용) 금액은 안 줄인다(shrink-0) — 금액이 잘리면 못 읽는다.
+  const statCard = (label, value, tone = "text-fg") => `<div class="card flex items-center justify-between gap-2">
+      <span class="min-w-0 text-sm text-muted">${label}</span>
+      <span class="tabular shrink-0 text-lg font-bold ${tone}">${formatKRW(value)}</span>
     </div>`;
-  const overview = `<div class="mb-4 grid gap-3 sm:grid-cols-3">
+  // 3열은 **lg부터**(2026-07-20 메인터넌스 실측): 사이드바가 나타나는 sm(640)~md 구간은 본문이 ~396px뿐이라
+  // 3열이면 카드 한 칸이 124px로 쪼그라들어 금액(₩6,800,000 = 109px)이 카드 밖으로 삐져나갔다(640px에서 47px 넘침).
+  const overview = `<div class="mb-4 grid gap-3 lg:grid-cols-3">
       ${statCard("미수금 합계", totalDue, totalDue > 0 ? "text-danger" : "text-fg")}
       ${statCard(`이번 달 발행액 <span class="font-normal opacity-70">· ${esc(String(Number(thisMonth.slice(5, 7))))}월</span>`, thisMonthIssued)}
       ${statCard(`올해 발행액 <span class="font-normal opacity-70">· ${esc(thisYear)}</span>`, thisYearIssued)}
