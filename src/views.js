@@ -14,11 +14,17 @@ const { PROJECT_SERVICE_LABELS, ROLE_LABELS } = require("./config");
  * `/css/app.css?v=...`처럼 붙여, CSS가 바뀌면 브라우저가 옛 캐시 대신 새 파일을 받게 한다.
  * (함정: 캐시 버스팅이 없으면 배포해도 브라우저가 옛 CSS를 써서 레이아웃이 깨져 보인다.)
  */
+// ⚠️ 버전 계산에 **URL로 내보내는 정적 파일을 전부** 넣는다(2026-07-20). 예전엔 app.css·app.js만 봐서
+// theme-init.js나 viewer.js만 고치면 버전이 그대로였다 — 캐시가 1시간일 땐 곧 만료돼 티가 안 났지만,
+// 같은 날 캐시를 1년 immutable로 올리면서 **그 파일이 영영 갱신 안 되는** 위험으로 바뀌었다.
+// 새 정적 파일을 layout에서 참조하기 시작하면 이 목록에도 반드시 추가할 것(guardrails-ui 계약으로 잠금).
+const ASSET_FILES = ["css/app.css", "js/app.js", "js/theme-init.js", "js/viewer.js"];
 const ASSET_VERSION = (() => {
   try {
-    const css = fs.statSync(path.join(__dirname, "../public/css/app.css"));
-    const js = fs.statSync(path.join(__dirname, "../public/js/app.js"));
-    return Math.floor(Math.max(css.mtimeMs, js.mtimeMs)).toString(36) + "-" + (css.size + js.size).toString(36);
+    const stats = ASSET_FILES.map((f) => fs.statSync(path.join(__dirname, "../public", f)));
+    const mtime = Math.max(...stats.map((s) => s.mtimeMs));
+    const size = stats.reduce((a, s) => a + s.size, 0);
+    return Math.floor(mtime).toString(36) + "-" + size.toString(36);
   } catch (_e) {
     return Date.now().toString(36);
   }
