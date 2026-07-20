@@ -213,7 +213,13 @@ const WORDMARK = `<span class="font-display text-[17px] font-semibold text-fg">O
 const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <!-- ⚠️ Noto Serif KR 제외(2026-07-20 성능 점검). 이 스타일시트는 **렌더를 막는** 서드파티 요청인데,
+       실측에서 Noto Serif KR 하나가 그 CSS의 93%(286KB/305KB)를 차지했다. 세리프를 실제로 쓰는 건
+       Claude 팔레트뿐이고(나머지 넷은 --font-serif를 시스템/Pretendard로 덮어씀) 기본 팔레트는 Linear라,
+       대부분의 페이지 로드에서 한 글자도 안 쓰이고 버려지고 있었다. 제거 후 압축 기준 70KB → ~5KB.
+       Claude 팔레트의 **한글** 제목만 시스템 세리프로 내려온다(라틴은 Source Serif 4가 그대로 담당).
+       CSS 스택의 "Noto Serif KR" 이름은 남겨 둔다 — 로컬에 설치된 사용자는 계속 그 글꼴로 본다. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
   <!-- Pretendard: Inter에 없는 한글 글리프 담당(본문 한글). CSP style-src(cdn.jsdelivr.net) 허용은 server.js에서 처리. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />`;
 
