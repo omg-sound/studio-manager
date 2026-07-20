@@ -149,8 +149,9 @@ const NAV = [
   { href: "/invoices", label: "청구", key: "invoices", access: "billing", group: "billing" },
   { href: "/contacts", label: "연락처", key: "contacts", access: "editor", group: "manage" },
   { href: "/clients", label: "업체·그룹", key: "clients", access: "editor", group: "manage" },
-  { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
+  // 청구 그룹 순서 = **돈의 흐름**(청구 → 매출 → 정산): 외주 작업자는 '정산'이라 매출 뒤에 온다(2026-07-20 사용자 요청).
   { href: "/revenue", label: "매출", key: "revenue", access: "invoice", group: "billing" },
+  { href: "/workers", label: "외주 작업자", key: "workers", access: "invoice", group: "billing" },
   { href: "/settings", label: "환경설정", key: "settings", access: "staff", group: "manage" },
 ];
 
