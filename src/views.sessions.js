@@ -550,9 +550,13 @@ function sessionCardModal(s, { canEdit = false } = {}) {
   // 앞뒤 일정과 견주며 볼 수 있다. 바깥 레이어는 투명하게 남겨 **바깥 클릭 닫기**만 담당한다.
   // 실제 좌표는 app.js가 칩 위치를 재서 넣는다(서버 인라인 style은 CSP에 막힌다 — 함정 #27).
   // 좁은 화면(<640)은 붙일 여백이 없어 app.js가 가운데로 되돌린다.
+  // 바깥 레이어는 **클릭을 통과시킨다**(`pointer-events-none`, 2026-07-20 사용자 요청 '창을 닫고 다른 일정을 눌러야 하는데
+  // 바로 다른 일정을 눌러 내용을 띄울 수 있게'): 전체를 덮은 채로 두면 다른 칩 클릭이 그 레이어에 먹혀 두 번 눌러야 했다.
+  // 그래서 바깥 클릭 닫기는 레이어가 아니라 document 리스너가 맡고, 레이어는 좌표계 역할만 한다.
+  // `data-modal`도 뗐다 — 그게 붙으면 스크롤 잠금 옵저버가 배경을 얼려, 통과시키려고 만든 상호작용을 다시 막는다(✕는 app.js가 직접 배선).
   return `
-    <div data-modal data-session-modal class="fixed inset-0 z-50">
-      <div class="card absolute w-[21rem] max-w-[calc(100vw-2rem)] shadow-xl" data-session-pop>
+    <div data-session-modal class="pointer-events-none fixed inset-0 z-50">
+      <div class="card pointer-events-auto absolute w-[21rem] max-w-[calc(100vw-2rem)] shadow-xl" data-session-pop>
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">

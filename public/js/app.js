@@ -1037,38 +1037,66 @@
     pop.style.top = Math.round(clamp(top, EDGE, Math.max(EDGE, vh - h - EDGE))) + "px";
   }
 
+  // 열려 있는 팝오버는 **하나뿐**이다 — 다른 칩을 누르면 닫고 새로 연다(구글 캘린더처럼 연달아 훑어볼 수 있게).
+  var open = null; // { modal, anchor }
+
+  function close() {
+    if (!open) return;
+    if (open.modal.parentNode) open.modal.parentNode.removeChild(open.modal);
+    open = null;
+  }
+
+  function reposition() {
+    if (!open) return;
+    var pop = open.modal.querySelector("[data-session-pop]");
+    if (pop) place(pop, open.anchor);
+  }
+
+  // 함정 #25: click의 target은 mousedown·mouseup의 공통 조상이라, 팝오버 안에서 텍스트를 드래그해
+  // 바깥에서 손을 떼면 target이 팝오버 밖이 돼 '바깥 클릭'으로 오인된다 → 시작 지점도 함께 본다.
+  var mdInsidePop = false;
+  document.addEventListener("mousedown", function (e) {
+    mdInsidePop = Boolean(e.target.closest && e.target.closest("[data-session-pop]"));
+  });
+
   document.addEventListener("click", function (e) {
     var el = e.target.closest && e.target.closest("[data-session-card]");
-    if (!el) return;
+    if (!el) {
+      // 바깥 클릭 닫기 — 레이어가 클릭을 통과시키므로(pointer-events-none) 여기서 판정한다.
+      // 팝오버 **안**에서 눌렀거나 시작한 건 제외(폼·링크·드래그가 살아 있어야 한다). ✕는 아래에서 따로 닫는다.
+      if (open && !mdInsidePop && !e.target.closest("[data-session-pop]")) close();
+      return;
+    }
     e.preventDefault();
     var url = el.getAttribute("data-session-card");
     if (!url) return;
+    close(); // 이전 팝오버를 먼저 치운다 — 두 개가 겹쳐 뜨지 않게
     fetch(url, { headers: { "X-Requested-With": "fetch" } })
       .then(function (r) { return r.ok ? r.text() : null; })
       .then(function (html) {
         if (!html) return;
         var wrap = document.createElement("div");
         wrap.innerHTML = html;
-        var modal = wrap.firstElementChild; // [data-modal] → 스크롤 잠금 옵저버·data-modal-close(✕) 자동 처리
+        var modal = wrap.firstElementChild;
         if (!modal) return;
+        close(); // fetch 사이에 다른 칩을 눌렀을 수 있다(응답 순서 역전 방지)
         var pop = modal.querySelector("[data-session-pop]");
         // 재는 동안 안 보이게 — 안 그러면 (0,0)에 한 프레임 그려졌다 제자리로 튄다.
         if (pop) pop.style.visibility = "hidden";
         document.body.appendChild(modal);
+        open = { modal: modal, anchor: el };
         if (pop) { place(pop, el); pop.style.visibility = ""; }
-
-        function close() { if (modal.parentNode) modal.parentNode.removeChild(modal); document.removeEventListener("keydown", onKey); }
-        // 바깥 클릭 닫기(함정 #25: mousedown도 바깥에서 시작했는지 확인해 드래그-아웃 오작동 방지).
-        var mdOutside = false;
-        modal.addEventListener("mousedown", function (ev) { mdOutside = ev.target === modal; });
-        modal.addEventListener("click", function (ev) { if (ev.target === modal && mdOutside) close(); });
-        function onKey(ev) { if (ev.key === "Escape") close(); }
-        document.addEventListener("keydown", onKey);
-        // 스크롤·리사이즈로 칩이 움직이면 좌표가 어긋난다 — 스크롤 잠금이 있어 주로 리사이즈만 해당.
-        window.addEventListener("resize", function () { if (pop && modal.parentNode) place(pop, el); });
+        // ✕ — 공용 [data-modal] 핸들러는 이 팝오버에 안 붙는다(스크롤 잠금을 피하려 data-modal을 뗐다).
+        var x = modal.querySelector("[data-modal-close]");
+        if (x) x.addEventListener("click", close);
       })
       .catch(function () {});
   });
+
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  // 배경이 얼지 않으므로(스크롤 잠금 없음) 스크롤·리사이즈로 칩이 움직이면 팝오버도 따라가야 한다.
+  window.addEventListener("resize", reposition);
+  window.addEventListener("scroll", reposition, true);
 })();
 
 // 할인 폼([data-discount-form]): 정률(%) → 정액(원) 자동변환 + 공급가/할인/과세표준/VAT/총액 미리보기 갱신.
