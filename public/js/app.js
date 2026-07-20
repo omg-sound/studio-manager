@@ -1005,10 +1005,38 @@
   });
 })();
 
-// 캘린더 세션 팝오버([data-session-card], 2026-07-11): 칩 클릭 → GET .../card 조각을 중앙 모달로.
+// 캘린더 세션 팝오버([data-session-card], 2026-07-11): 칩 클릭 → GET .../card 조각을 띄운다.
+// **위치 = 클릭한 칩 옆**(구글 캘린더식, 2026-07-20 사용자 요청 — 이전엔 어두운 배경 + 화면 가운데).
 // 완료는 조각 안 폼 POST(리로드) — 서베이(캘린더)에서 안 떠나고 처리. 무JS면 링크 폴백(프로젝트 세션 탭).
 (function () {
   "use strict";
+  var GAP = 8;   // 칩과 팝오버 사이 간격
+  var EDGE = 8;  // 화면 가장자리 최소 여백
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
+
+  /**
+   * 칩 옆에 붙인다 — 오른쪽 우선, 안 들어가면 왼쪽, 그것도 안 되면 화면 안으로 밀어넣는다.
+   * 세로는 칩 중앙에 맞추되 위아래로 잘리지 않게 가둔다. 서버가 좌표를 못 넣으므로(CSP) 여기서 계산한다.
+   */
+  function place(pop, anchor) {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var w = pop.offsetWidth, h = pop.offsetHeight;
+    // 좁은 화면은 칩 옆에 붙일 가로 여백 자체가 없다 → 가운데(이전 동작)로 되돌린다.
+    if (vw < 640) {
+      pop.style.left = clamp((vw - w) / 2, EDGE, Math.max(EDGE, vw - w - EDGE)) + "px";
+      pop.style.top = clamp((vh - h) / 2, EDGE, Math.max(EDGE, vh - h - EDGE)) + "px";
+      return;
+    }
+    var r = anchor.getBoundingClientRect();
+    var left = r.right + GAP;
+    if (left + w > vw - EDGE) left = r.left - GAP - w;     // 오른쪽에 안 들어가면 왼쪽으로
+    left = clamp(left, EDGE, Math.max(EDGE, vw - w - EDGE)); // 양쪽 다 빠듯하면 화면 안으로
+    var top = r.top + r.height / 2 - h / 2;                  // 칩 중앙 기준
+    pop.style.left = Math.round(left) + "px";
+    pop.style.top = Math.round(clamp(top, EDGE, Math.max(EDGE, vh - h - EDGE))) + "px";
+  }
+
   document.addEventListener("click", function (e) {
     var el = e.target.closest && e.target.closest("[data-session-card]");
     if (!el) return;
@@ -1023,11 +1051,21 @@
         wrap.innerHTML = html;
         var modal = wrap.firstElementChild; // [data-modal] → 스크롤 잠금 옵저버·data-modal-close(✕) 자동 처리
         if (!modal) return;
+        var pop = modal.querySelector("[data-session-pop]");
+        // 재는 동안 안 보이게 — 안 그러면 (0,0)에 한 프레임 그려졌다 제자리로 튄다.
+        if (pop) pop.style.visibility = "hidden";
         document.body.appendChild(modal);
-        // 배경 클릭 닫기(함정 #25: mousedown도 배경에서 시작했는지 확인해 드래그-아웃 오작동 방지).
-        var mdOnBackdrop = false;
-        modal.addEventListener("mousedown", function (ev) { mdOnBackdrop = ev.target === modal; });
-        modal.addEventListener("click", function (ev) { if (ev.target === modal && mdOnBackdrop && modal.parentNode) modal.parentNode.removeChild(modal); });
+        if (pop) { place(pop, el); pop.style.visibility = ""; }
+
+        function close() { if (modal.parentNode) modal.parentNode.removeChild(modal); document.removeEventListener("keydown", onKey); }
+        // 바깥 클릭 닫기(함정 #25: mousedown도 바깥에서 시작했는지 확인해 드래그-아웃 오작동 방지).
+        var mdOutside = false;
+        modal.addEventListener("mousedown", function (ev) { mdOutside = ev.target === modal; });
+        modal.addEventListener("click", function (ev) { if (ev.target === modal && mdOutside) close(); });
+        function onKey(ev) { if (ev.key === "Escape") close(); }
+        document.addEventListener("keydown", onKey);
+        // 스크롤·리사이즈로 칩이 움직이면 좌표가 어긋난다 — 스크롤 잠금이 있어 주로 리사이즈만 해당.
+        window.addEventListener("resize", function () { if (pop && modal.parentNode) place(pop, el); });
       })
       .catch(function () {});
   });

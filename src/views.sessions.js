@@ -545,11 +545,14 @@ function sessionCardModal(s, { canEdit = false } = {}) {
     : s.status === "취소"
     ? `<form method="post" action="/sessions/${s.id}/status"><input type="hidden" name="status" value="예정" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-muted" type="submit">일정 취소 해제</button></form>`
     : `<form method="post" action="/sessions/${s.id}/status" data-confirm="이 세션을 취소할까요? 구글 캘린더에는 '(취소)' 표시로 남습니다."><input type="hidden" name="status" value="취소" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-danger" type="submit">일정 취소</button></form>`;
-  // 모달 위치 = 전체 화면 가운데가 아니라 콘텐츠(캘린더) 영역 가운데(2026-07-11 사용자 요청):
-  // 데스크톱은 사이드바(sm:w-56=14rem) 폭만큼 왼쪽을 비워(sm:left-64) 캘린더 열 안에서 중앙 정렬. 모바일(드로어)은 left-0 전폭.
+  // 위치 = **클릭한 칩 옆**(구글 캘린더식 팝오버, 2026-07-20 사용자 요청 — 이전엔 배경을 어둡게 깔고 화면 가운데였다).
+  // 어두운 배경을 걷어낸 이유: 팝오버는 캘린더를 '가리는' 게 아니라 '덧붙이는' 것이라, 뒤 일정이 보여야
+  // 앞뒤 일정과 견주며 볼 수 있다. 바깥 레이어는 투명하게 남겨 **바깥 클릭 닫기**만 담당한다.
+  // 실제 좌표는 app.js가 칩 위치를 재서 넣는다(서버 인라인 style은 CSP에 막힌다 — 함정 #27).
+  // 좁은 화면(<640)은 붙일 여백이 없어 app.js가 가운데로 되돌린다.
   return `
-    <div data-modal data-session-modal class="fixed inset-y-0 right-0 left-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:left-64">
-      <div class="card w-full max-w-md">
+    <div data-modal data-session-modal class="fixed inset-0 z-50">
+      <div class="card absolute w-[21rem] max-w-[calc(100vw-2rem)] shadow-xl" data-session-pop>
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
