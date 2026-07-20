@@ -811,7 +811,10 @@ function systemTab(chief) {
     : `<p class="text-sm text-muted">기록이 없습니다 — 로그인·접속과 막힌 로그인 시도가 여기 남습니다.</p>`}
     </section>`;
 
-  return warnCard + integrations + backupCard + dataCard + appCard + auditCard + accessCard;
+  // ⚠️ **접속·로그인 카드는 치프 전용**(2026-07-20 메인터넌스): /settings는 requireStaff라 스태프도 이 탭에 들어온다.
+  // IP를 넣기 전(변경 이력만 있던 시절)엔 무해했지만, 이제 이 카드는 **대표·치프의 접속 IP·기기와
+  // 로그인 거부 이메일**을 180일치 보여준다 — 알림 웹훅·계정 관리와 같은 등급(치프)으로 올린다.
+  return warnCard + integrations + backupCard + dataCard + appCard + auditCard + (chief ? accessCard : "");
 }
 
 module.exports = {

@@ -86,7 +86,7 @@ function workerPayoutCard({ worker, summary: s, canPay = false }) {
       <div class="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 sm:grid-cols-3">
         ${stat("누적 지급", formatKRW(s.paidTotal))}
         ${stat("최근 지급", s.lastPaidMonth ? esc(monthDot(s.lastPaidMonth)) : '<span class="text-muted">—</span>')}
-        ${stat("참여", `작업 ${s.taskCnt} · 세션 ${s.sessionCnt}`)}
+        ${stat("정산 대상", `작업 ${s.taskCnt} · 세션 ${s.sessionCnt}`)}
       </div>
     </div>`;
 }

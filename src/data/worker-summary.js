@@ -13,11 +13,15 @@
 const { listTasksForWorker } = require("./parties");
 const { listSessionPayoutsForWorker } = require("./sessions");
 const { listWorkerFiles } = require("./worker-files");
+const { kstYmd } = require("../lib/date"); // created_at은 UTC — 정렬 기준을 KST 달력 날짜로(2026-07-20)
 
 /**
  * @param {object} worker project_managers 행(외주)
  * @returns {{unpaidAmt:number, unpaidCount:number, paidTotal:number, lastPaidMonth:string,
  *            taskCnt:number, sessionCnt:number, hasAccount:boolean, hasFiles:boolean, items:object[]}}
+ *   ⚠️ sessionCnt = **정산 대상**(session_engineers 배정분)이지 '참여'가 아니다 — 상세 탭의 `참여 내역 N`은
+ *   레거시 engineer_name 폴백까지 포함하는 `listSessionsForWorker`라 더 클 수 있다(2026-07-20 메인터넌스에서
+ *   카드 라벨을 '참여' → '정산 대상'으로 교정: 한 화면에 두 숫자가 다르면 어느 쪽이 맞는지 알 수 없다).
  *   items = 미지급 항목(최근순) — 카드 미리보기용. 라벨 조립은 뷰 책임(여기선 원값만).
  */
 function workerPayoutSummary(worker) {
@@ -32,7 +36,7 @@ function workerPayoutSummary(worker) {
   const items = [
     ...tasks.map((t) => ({
       kind: "task", id: t.id, rate: t.worker_rate || 0, paid: !!t.worker_paid, paidDate: t.worker_paid_date || "",
-      project: t.project_title || "", label: t.task_type || "", date: String(t.created_at || "").slice(0, 10),
+      project: t.project_title || "", label: t.task_type || "", date: kstYmd(t.created_at), // 상세 정산 탭(sortDate)과 같은 기준
     })),
     ...sessions.map((s) => ({
       kind: "session", id: s.session_id != null ? s.session_id : s.id, rate: s.worker_rate || 0, paid: !!s.worker_paid, paidDate: s.worker_paid_date || "",

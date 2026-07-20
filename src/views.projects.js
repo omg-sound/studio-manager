@@ -134,10 +134,13 @@ function projectTableHead() {
   // 열 순서 = 제작사 → 아티스트(2026-07-20 사용자 요청으로 맞바꿈).
   // **항목명 클릭 = 정렬**(2026-07-20 사용자 요청): 청구 목록과 같은 공용 코어(app.js wireSortHeaders)를 쓴다.
   // key는 행 셀의 data-sort-key와 짝이고(인덱스가 아니라 key로 찾으므로 열이 숨어도 안전), type은 비교 방식.
+  // ⚠️`aria-sort`는 columnheader/rowheader/gridcell 롤에서만 유효하다 — role="button"에 붙이면 화살표는
+  // 보이는데 **정렬 상태가 음성으로 안 읽힌다**(2026-07-20 메인터넌스). 헤더 줄을 표 시맨틱으로 올린다
+  // (청구 목록은 진짜 <th>라 원래 정상이었다). 시각·CSS는 그대로.
   const th = (label, key, type = "text", cls = "") =>
-    `<span class="pt-h pt-sortable ${cls}" data-sort-key="${key}" data-sort-type="${type}" role="button" tabindex="0" aria-sort="none">${esc(label)}<span class="pt-sort-arrow" aria-hidden="true"></span></span>`;
+    `<span class="pt-h pt-sortable ${cls}" data-sort-key="${key}" data-sort-type="${type}" role="columnheader" tabindex="0" aria-sort="none">${esc(label)}<span class="pt-sort-arrow" aria-hidden="true"></span></span>`;
   // 작성일이 맨 앞(2026-07-20 사용자 요청). 좁아지면 여전히 **작성일부터** 숨는다(자리만 앞으로 온 것).
-  return `<div class="proj-thead">${th("작성일", "created", "date", "pt-h-created")}${th("제작사", "company")}${th("아티스트", "artist")}${th("프로젝트", "title")}${th("PM", "pm", "text", "pt-h-pm")}${th("다음 세션", "next", "date")}${th("금액", "amount", "num", "pt-h-amount")}<span aria-hidden="true"></span></div>`;
+  return `<div class="proj-thead" role="row">${th("작성일", "created", "date", "pt-h-created")}${th("제작사", "company")}${th("아티스트", "artist")}${th("프로젝트", "title")}${th("PM", "pm", "text", "pt-h-pm")}${th("다음 세션", "next", "date")}${th("금액", "amount", "num", "pt-h-amount")}<span aria-hidden="true"></span></div>`;
 }
 
 /**

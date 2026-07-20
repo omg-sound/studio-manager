@@ -82,7 +82,7 @@ test("projectArtistLabel/SubLabel: 다중·중복·폴백", () => {
 
 test("projectListRow: 헤더 + 행 컬럼 정렬(같은 grid 열)", () => {
   const head = views.projectTableHead();
-  assert.match(head, /class="proj-thead">/);
+  assert.match(head, /class="proj-thead"[^>]*>/);
   // 헤더에 적힌 **실제 순서**를 뽑아 행 셀과 대조한다 — 기대 목록을 손으로 적어두면
   // 열 순서를 바꿀 때 두 곳을 같이 고쳐야 하고, 한쪽만 고치면 통과해버린다.
   const headLabels = [...head.matchAll(/aria-sort="none">([^<]+)</g)].map((m) => m[1]);
@@ -362,7 +362,10 @@ test("projectTableHead: 모든 항목명이 정렬 헤더(key·type·aria-sort·
   expected.forEach(([key, type]) => {
     assert.match(head, new RegExp(`data-sort-key="${key}" data-sort-type="${type}"`), `${key}=${type}`);
   });
-  assert.match(head, /role="button" tabindex="0" aria-sort="none"/, "키보드 접근 + 초기 정렬 없음");
+  // role=columnheader — aria-sort는 columnheader/rowheader/gridcell에서만 유효하다(2026-07-20 메인터넌스:
+  // role="button"에 붙어 있어 화살표는 보이는데 정렬 상태가 음성으로 안 읽혔다).
+  assert.match(head, /role="columnheader" tabindex="0" aria-sort="none"/, "표 헤더 시맨틱 + 키보드 접근 + 초기 정렬 없음");
+  assert.match(head, /class="proj-thead" role="row"/, "헤더 줄은 row");
 });
 
 test("projectListRow: 셀마다 헤더와 같은 key + 정렬 원값(보이는 텍스트로는 못 푸는 열들)", () => {
@@ -390,7 +393,7 @@ test("projectListRow: 값이 없는 칸은 정렬값도 빈 문자열(화면의 
 // 2026-07-20 사용자 요청 '작성일을 가장 앞으로'.
 test("projectTableHead/Row: 작성일이 맨 앞(폭도 함께 앞으로 — 6rem 고정 열)", () => {
   const head = views.projectTableHead();
-  assert.match(head, /proj-thead"><span[^>]*data-sort-key="created"/, "헤더 첫 항목 = 작성일");
+  assert.match(head, /proj-thead"[^>]*><span[^>]*data-sort-key="created"/, "헤더 첫 항목 = 작성일");
   const html = views.projectListRow(pRow({ created_at: "2026-07-03" }), emptySummary, { tab: "active" });
   const i = (k) => html.indexOf(`data-sort-key="${k}"`);
   ["company", "artist", "title", "pm", "next", "amount"].forEach((k) => {

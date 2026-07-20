@@ -205,6 +205,32 @@ function setSessionEngineers(sessionId, assignments) {
   d.prepare("UPDATE sessions SET engineer_name = ? WHERE id = ?").run(first ? first.name : null, sessionId);
 }
 
+/**
+ * 담당자 **이름 변경 시 세션 스냅샷(`sessions.engineer_name`) 동기화**(2026-07-20 메인터넌스에서 발견).
+ *
+ * 매출 스탭 축은 세션을 **이름 문자열로** 매칭한다(`revenue.js` — `GROUP BY s.engineer_name`).
+ * 그런데 이름 변경 라우트는 `track_tasks.engineer_name`만 갱신하고 있어, 개명하는 순간
+ * **그 사람의 세션 매출이 스탭별 화면에서 통째로 사라졌다**(실측: 60만 → 0, session_cnt 1 → 0).
+ * 총계는 이름을 안 보므로 그대로여서 '스탭별 합 ≠ 총계'로만 드러난다.
+ * (정산 `/workers`는 `session_engineers.manager_id`(id)로 매칭해 무사했다.)
+ *
+ * 대상 = ①이 담당자가 배정된 세션 + ②배정 기록이 없는 레거시 세션 중 옛 이름이 그대로인 것.
+ * 동명이인의 세션을 건드리지 않도록 ①은 배정으로, ②는 이름으로만 좁힌다.
+ * @returns {number} 갱신된 세션 수
+ */
+function syncSessionEngineerName(managerId, oldName, newName) {
+  const id = Number(managerId);
+  const from = String(oldName || "");
+  const to = String(newName || "");
+  if (!id || !from || !to || from === to) return 0;
+  return db().prepare(
+    `UPDATE sessions SET engineer_name = @to
+      WHERE engineer_name = @from
+        AND (id IN (SELECT session_id FROM session_engineers WHERE manager_id = @id)
+             OR NOT EXISTS (SELECT 1 FROM session_engineers se WHERE se.session_id = sessions.id))`
+  ).run({ to, from, id }).changes;
+}
+
 /** 세션의 담당 엔지니어(담당자 마스터 + 세션별 지급단가/지급상태) 목록. */
 function listSessionEngineers(sessionId) {
   return db()
@@ -563,6 +589,7 @@ function getSessionCard(_user, id) {
 }
 
 module.exports = {
+  syncSessionEngineerName,
   listSessionsForProject,
   getSessionForUser,
   sessionAttendeeEmails,

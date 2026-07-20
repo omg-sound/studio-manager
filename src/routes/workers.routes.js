@@ -7,7 +7,7 @@ const { requireInvoice, requireChief, isChief } = require("../auth");
 const {
   listProjectManagers, getWorker, listTasksForWorker, listSessionsForWorker, setTaskPayout, taskTypeLabel, syncManagerToParty, ensurePartyForManager, formatPhone,
   listWorkerFiles, getWorkerFile, upsertWorkerFile, deleteWorkerFile,
-  listSessionPayoutsForWorker, setSessionEngineerPayout, workerPayoutSummary,
+  listSessionPayoutsForWorker, setSessionEngineerPayout, workerPayoutSummary, syncSessionEngineerName,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
@@ -156,6 +156,7 @@ router.post("/:id/delete", requireChief, (req, res) => {
 router.post("/:id/edit", requireChief, (req, res) => {
   const id = Number(req.params.id);
   const name = String(req.body.worker_name != null ? req.body.worker_name : req.body.name || "").trim(); // 폼 필드=worker_name(자동완성 회피)
+  const prevName = (getWorker(id) || {}).name || ""; // 세션 스냅샷 동기화에 옛 이름이 필요(아래)
   if (name) {
     db()
       .prepare(
@@ -172,6 +173,9 @@ router.post("/:id/edit", requireChief, (req, res) => {
         id
       );
     db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, id); // 이름 변경 시 작업 스냅샷 동기화(정산 매칭 유지)
+    // 세션 스냅샷도 함께 — 매출 스탭 축이 세션을 **이름으로** 매칭해서, 이게 없으면 개명 순간
+    // 그 사람의 세션 매출이 스탭별 화면에서 사라진다(2026-07-20 메인터넌스 실측).
+    if (prevName && prevName !== name) syncSessionEngineerName(id, prevName, name);
     syncManagerToParty(id); // 전화·이메일 → 연동 연락처 동기화
     ensurePartyForManager(id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
   }

@@ -143,9 +143,21 @@ test("ui-guardrail: 금액성 입력(name에 price/amount/_rate)은 MONEY 정규
 // company 미검색(회사 이름으로 담당자 찾기). 서버 임베드 키와 app.js 소비 키를 양쪽에서 고정.
 test("ui-guardrail: personCombo 옵션 JSON 키 ↔ app.js 검색·표시 소비 정합", () => {
   const views = read(path.join("src", "views.js"));
+  // ⚠️ **개수가 아니라 자리로 검사한다**(2026-07-20 메인터넌스 — 뮤테이션으로 결함 증명):
+  // 예전엔 파일 전체에서 `alt:` 개수가 2 이상이면 통과했는데, companyCombo에도 `alt:`가 있어
+  // **personCombo 두 자리 중 하나에서 키를 지워도 통과**했다. 그건 이 가드가 막으려던 바로 그 드리프트다.
+  // → 두 임베드 함수의 **본문을 각각 잘라내** 그 안에 키가 있는지 본다.
+  const bodyOf = (fnName) => {
+    const start = views.indexOf(`function ${fnName}(`);
+    assert.ok(start >= 0, `${fnName} 함수를 찾지 못함(개명됐다면 이 가드도 갱신할 것)`);
+    const next = views.indexOf("\nfunction ", start + 1);
+    return views.slice(start, next < 0 ? views.length : next);
+  };
+  const sites = { personCombo: bodyOf("personCombo"), personComboOptionsScript: bodyOf("personComboOptionsScript") };
   for (const key of ["alt:", "honorific:", "phone:", "email:", "company:", "job_title:", "group:"]) {
-    const count = (views.match(new RegExp(escRe(key), "g")) || []).length;
-    assert.ok(count >= 2, `views.js 옵션 매핑 2곳(personCombo 인라인·공유 스크립트)에 ${key} 임베드 (현재 ${count})`);
+    for (const [name, body] of Object.entries(sites)) {
+      assert.ok(body.includes(key), `${name}의 옵션 임베드에 ${key} 누락 — 한쪽만 빠지면 검색·표시가 반쪽이 된다`);
+    }
   }
   assert.ok(/o\.alt/.test(APP), "app.js 검색이 활동명(alt) 매칭");
   assert.ok(/o\.company/.test(APP), "app.js 검색이 소속 회사(company) 매칭");

@@ -121,4 +121,28 @@ function kstDateTime(v) {
   return `${kstYmd(v)} ${hh}:${mi}`;
 }
 
-module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, formatYmdCombo, cleanTime, timeToMin, minutesBetween, kstDate, kstYmd, kstDateTime };
+/** DB UTC 타임스탬프 → KST 시각 'HH:MM:SS'. 시각이 없으면 "". */
+function kstHms(v) {
+  const d = kstDate(v);
+  if (!d) return "";
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
+}
+
+/**
+ * **KST 날짜 + KST 시각 → DB에 넣을 UTC 타임스탬프**('YYYY-MM-DD HH:MM:SS').
+ * 화면이 KST로 보여주는 값을 사용자가 그대로 저장할 때 쓴다 — 이게 없으면 표시(+9h)와 저장(그대로)이
+ * 어긋나 **저장할 때마다 하루씩 밀린다**(2026-07-20 실측: 작성일 편집을 안 고치고 눌러도 20→21→22일).
+ * @param {string} kstYmdStr 'YYYY-MM-DD'(KST 기준 날짜)
+ * @param {string} [kstTime] 'HH:MM:SS'(KST 기준 시각, 기본 자정)
+ */
+function utcStampFromKst(kstYmdStr, kstTime = "00:00:00") {
+  const t = /^\d{2}:\d{2}(:\d{2})?$/.test(String(kstTime || "")) ? (kstTime.length === 5 ? `${kstTime}:00` : kstTime) : "00:00:00";
+  const ms = Date.parse(`${kstYmdStr}T${t}Z`) - KST_OFFSET_MIN * 60000;
+  if (Number.isNaN(ms)) return `${kstYmdStr} 00:00:00`;
+  const d = new Date(ms);
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
+}
+
+module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, formatYmdCombo, cleanTime, timeToMin, minutesBetween, kstDate, kstYmd, kstDateTime, kstHms, utcStampFromKst };

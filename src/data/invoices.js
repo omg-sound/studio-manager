@@ -11,7 +11,7 @@
  */
 
 const { db } = require("../db");
-const { todayYmd, formatYmdShort } = require("../lib/date");
+const { todayYmd, formatYmdShort, kstYmd } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
 const { RENTAL_SESSION_TYPES } = require("../config");
 const RENTAL_IN = RENTAL_SESSION_TYPES.map((t) => `'${t}'`).join(", "); // SQL IN절(정적 config 값 — 인젝션 무관)
@@ -353,7 +353,9 @@ function computeInvoiceDraft(user, { projectId, taskIds, sessionIds, clientId, i
   // 세션=session_date(실제 일정), 작업=생성일(작업 자체엔 일정 개념이 없어 created_at으로 근사).
   const items = [];
   for (const t of tasks) {
-    items.push({ task_id: t.id, session_id: null, track_title: t.track_title, task_type: t.task_type, description: `${t.track_title} - ${taskTypeLabel(t.task_type)}`, quantity: t.quantity, unit_price: t.unit_price, amount: t.total_price, item_date: String(t.created_at || "").slice(0, 10) || null });
+    // item_date: created_at은 UTC라 kstYmd로 KST 달력 날짜를 쓴다 — 세션 라인(session_date)과 같은 기준이라야
+    // 한 청구서 안에서 작업·세션 라인이 하루 어긋나지 않는다(2026-07-20 메인터넌스).
+    items.push({ task_id: t.id, session_id: null, track_title: t.track_title, task_type: t.task_type, description: `${t.track_title} - ${taskTypeLabel(t.task_type)}`, quantity: t.quantity, unit_price: t.unit_price, amount: t.total_price, item_date: kstYmd(t.created_at) || null });
   }
   for (const { session, calc, amount } of billSessions) {
     // 형식 = "7월 8일 아티스트명 보컬녹음"(2026-07-08 사용자 요청 — '녹음 세션' 접두·소요시간 제거, 날짜·아티스트·단가 항목명만).

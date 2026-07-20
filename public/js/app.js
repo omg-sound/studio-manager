@@ -1071,8 +1071,10 @@ function sortCellValue(cell) {
 
   function close() {
     if (!open) return;
+    var anchor = open.anchor; // 닫으면 열었던 칩으로 포커스 복귀(키보드 사용자가 캘린더 처음으로 튕기지 않게)
     if (open.modal.parentNode) open.modal.parentNode.removeChild(open.modal);
     open = null;
+    try { if (anchor && anchor.focus) anchor.focus(); } catch (_e) {}
   }
 
   function reposition() {
@@ -1093,7 +1095,7 @@ function sortCellValue(cell) {
     if (!el) {
       // 바깥 클릭 닫기 — 레이어가 클릭을 통과시키므로(pointer-events-none) 여기서 판정한다.
       // 팝오버 **안**에서 눌렀거나 시작한 건 제외(폼·링크·드래그가 살아 있어야 한다). ✕는 아래에서 따로 닫는다.
-      if (open && !mdInsidePop && !e.target.closest("[data-session-pop]")) close();
+      if (open && !mdInsidePop && !(e.target.closest && e.target.closest("[data-session-pop]"))) close();
       return;
     }
     e.preventDefault();
@@ -1114,7 +1116,7 @@ function sortCellValue(cell) {
         if (pop) pop.style.visibility = "hidden";
         document.body.appendChild(modal);
         open = { modal: modal, anchor: el };
-        if (pop) { place(pop, el); pop.style.visibility = ""; }
+        if (pop) { place(pop, el); pop.style.visibility = ""; try { pop.focus(); } catch (_e) {} } // 포커스를 옮겨야 키보드로 [완료]·[일정 취소]에 닿는다
         // ✕ — 공용 [data-modal] 핸들러는 이 팝오버에 안 붙는다(스크롤 잠금을 피하려 data-modal을 뗐다).
         var x = modal.querySelector("[data-modal-close]");
         if (x) x.addEventListener("click", close);
@@ -1122,7 +1124,10 @@ function sortCellValue(cell) {
       .catch(function () {});
   });
 
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.isComposing || e.keyCode === 229) return; // 한글 조합 취소 Escape가 팝오버까지 닫지 않게(함정 #18)
+    if (e.key === "Escape") close();
+  });
   // 배경이 얼지 않으므로(스크롤 잠금 없음) 스크롤·리사이즈로 칩이 움직이면 팝오버도 따라가야 한다.
   window.addEventListener("resize", reposition);
   window.addEventListener("scroll", reposition, true);

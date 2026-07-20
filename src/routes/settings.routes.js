@@ -29,6 +29,7 @@ const {
   formatPhone,
   getParty,
   setPartyGoogleRef,
+  syncSessionEngineerName,
 } = require("../data");
 const { layout, pageHeader, esc, flashBanner } = require("../views");
 const {
@@ -352,10 +353,16 @@ router.post("/users/:id/edit", requireChief, (req, res) => {
   const name = String(req.body.user_name != null ? req.body.user_name : req.body.name || "").trim(); // 폼 필드=user_name(자동완성 회피)
   if (name) db().prepare("UPDATE users SET name = ? WHERE id = ?").run(name, id);
   syncUserToManager(findUserById(id)); // users.name·email·active → 작업 담당자(project_managers) 동기화
-  const mgr = db().prepare("SELECT id FROM project_managers WHERE user_id = ?").get(id);
+  const mgr = db().prepare("SELECT id, name FROM project_managers WHERE user_id = ?").get(id);
+  const prevMgrName = mgr ? mgr.name || "" : ""; // 세션 스냅샷 동기화에 옛 이름 필요
   if (mgr) {
     db().prepare("UPDATE project_managers SET phone = ? WHERE id = ?").run(formatPhone(req.body.phone), mgr.id);
-    if (name) db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, mgr.id); // 이름 변경 시 기존 작업 스냅샷 동기화(헤더 표시·매출 매칭) — 외주와 동일
+    if (name) {
+      db().prepare("UPDATE track_tasks SET engineer_name = ? WHERE engineer_id = ?").run(name, mgr.id); // 이름 변경 시 기존 작업 스냅샷 동기화(헤더 표시·매출 매칭) — 외주와 동일
+      // 세션 스냅샷도 함께(2026-07-20 메인터넌스) — 매출 스탭 축이 세션을 이름으로 매칭해서,
+      // 이게 없으면 개명 순간 그 사람의 세션 매출이 스탭별 화면에서 사라진다.
+      if (prevMgrName && prevMgrName !== name) syncSessionEngineerName(mgr.id, prevMgrName, name);
+    }
     syncManagerToParty(mgr.id); // 전화 → 연동 연락처 동기화(하우스는 이메일 제외)
     ensurePartyForManager(mgr.id); // 미연결이면 연락처 생성·연결(+성·이름 백필)
   }

@@ -73,7 +73,7 @@ const {
   unbilledInvoiceForm,
   sessionInvoicedModal,
 } = require("../views.projects");
-const { isValidYmd } = require("../lib/date");
+const { isValidYmd, kstHms, utcStampFromKst } = require("../lib/date");
 const { parseMoney, formatBizNo } = require("../lib/forms");
 const { notifyInvoiceIssued } = require("../notify");
 
@@ -339,8 +339,9 @@ router.post("/:id/created-at", requireChief, (req, res) => {
   const date = String(req.body.created_at || "").trim();
   const p = db().prepare("SELECT created_at FROM projects WHERE id = ?").get(id);
   if (p && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    const timePart = String(p.created_at || "").slice(10); // " HH:MM:SS"(있으면 보존해 같은 날 정렬 안정)
-    db().prepare("UPDATE projects SET created_at = ? WHERE id = ?").run(date + (timePart || " 00:00:00"), id);
+    // 폼이 보여준 값은 **KST 날짜**(kstYmd)이고 DB는 UTC다 — 그대로 이어붙이면 저장할 때마다 하루씩 밀린다
+    // (2026-07-20 메인터넌스 실측: 아무것도 안 고치고 [저장]만 눌러도 20→21→22일). KST 시각을 보존한 채 UTC로 되돌린다.
+    db().prepare("UPDATE projects SET created_at = ? WHERE id = ?").run(utcStampFromKst(date, kstHms(p.created_at) || "00:00:00"), id);
   }
   const back = safePath(req.body.return);
   if (back) return res.redirect(back);

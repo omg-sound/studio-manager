@@ -556,7 +556,7 @@ function sessionCardModal(s, { canEdit = false } = {}) {
   // `data-modal`도 뗐다 — 그게 붙으면 스크롤 잠금 옵저버가 배경을 얼려, 통과시키려고 만든 상호작용을 다시 막는다(✕는 app.js가 직접 배선).
   return `
     <div data-session-modal class="pointer-events-none fixed inset-0 z-50">
-      <div class="card pointer-events-auto absolute w-[21rem] max-w-[calc(100vw-2rem)] shadow-xl" data-session-pop>
+      <div class="card pointer-events-auto absolute w-[21rem] max-w-[calc(100vw-2rem)] shadow-xl" data-session-pop role="dialog" aria-label="세션 상세" tabindex="-1">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
