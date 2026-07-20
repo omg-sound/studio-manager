@@ -5,6 +5,7 @@
 const { COMPANY_ROLES } = require("./config");
 const { esc, pageHeader, explain, dirtyActionRow, personCombo, companyCombo, personName, personLabel, copyable, formatKRW, dataTable } = require("./views");
 const { contactOptions, listOrgContacts, listCompanyOwners, listClients } = require("./data");
+const { kstYmd } = require("./lib/date"); // DB는 UTC — 표시는 KST(2026-07-20)
 
 /** 첨부 서류 종류 목록(화이트리스트). 라우트(업로드·뷰어 검증)도 이 배열을 import해 공유(중복 정의 금지). */
 const FILE_KINDS = [
@@ -40,7 +41,7 @@ function clientProjectList(projects) {
     projects.map((p) => {
       const link = (inner, cls = "") => `<a href="/projects/${p.id}"${OUT} class="dt-link ${cls}">${inner}</a>`;
       return { cells: [
-        link(esc(String(p.created_at || "").slice(0, 10)), "text-muted"),
+        link(esc(kstYmd(p.created_at)), "text-muted"),
         p.artist ? link(esc(p.artist), "font-medium") : DT_DASH,
         link(esc(p.title || ""), "text-muted"),
       ] };

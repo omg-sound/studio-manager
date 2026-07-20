@@ -22,7 +22,7 @@ const { activeBackend } = storage;
 const { asyncHandler } = require("../lib/async");
 const { layout, pageHeader, esc, formatBytes, emptyState, dateCombo } = require("../views");
 const { deliverablesSection, deliverableRow, linkStatus } = require("../views.deliverables");
-const { todayYmd, isValidYmd, formatYmdShort } = require("../lib/date");
+const { todayYmd, isValidYmd, formatYmdShort, kstYmd } = require("../lib/date");
 
 const router = express.Router();
 
@@ -68,7 +68,7 @@ router.get("/deliverables", requireStaff, (req, res) => {
             <div class="truncate text-xs text-muted">${esc(dv.project_title || "프로젝트 없음")}${dv.client_name ? " · " + esc(dv.client_name) : ""}</div>
           </div>
           <div class="shrink-0 text-right text-xs">
-            <div class="text-muted">${esc(formatBytes(dv.file_size))} · ${esc((dv.created_at || "").slice(0, 10))}</div>
+            <div class="text-muted">${esc(formatBytes(dv.file_size))} · ${esc(kstYmd(dv.created_at))}</div>
             <div class="${st.cls}">${st.label}${admin ? ` · ${dv.download_count}회` : ""}</div>
           </div>
         </a>`;

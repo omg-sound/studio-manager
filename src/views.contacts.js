@@ -2,6 +2,7 @@
 // 연락처 전용 뷰(2026-07-17 마스터-디테일 전환) — 왼쪽 이름 목록 + 오른쪽 읽기/편집 패널.
 // 옛 표(contactTable)는 소비처가 0이 되어 제거됨 — 연락처는 '비교'가 아니라 '찾기' 화면이라 열 폭 튜닝이 계속 실패했다(설계 문서 참조).
 const { esc, personName, listGroup, copyable, dataTable } = require("./views");
+const { kstYmd } = require("./lib/date"); // DB는 UTC — 표시는 KST(2026-07-20)
 
 /**
  * 2단 골격. lg 이상 = [이름 목록 18rem | 상세]. 미만 = 한 단(선택 여부로 한쪽만).
@@ -164,7 +165,7 @@ function contactReadView(p, { affs = [], group = null, projects = [], sessions =
             pr.artist ? link(esc(pr.artist), "font-medium") : dash,
             company ? link(esc(company), "text-muted") : dash,
             link(esc(pr.title), "font-medium"),
-            link(esc(String(pr.created_at || "").slice(0, 10)), "text-muted"),
+            link(esc(kstYmd(pr.created_at)), "text-muted"),
           ] };
         })
       );

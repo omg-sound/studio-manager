@@ -5,7 +5,7 @@
  */
 
 const { esc, formatBytes, emptyState, detailsChevron, dateCombo } = require("./views");
-const { todayYmd } = require("./lib/date");
+const { todayYmd, kstYmd } = require("./lib/date");
 
 const KIND_BADGE = {
   녹음본: "bg-primary/10 text-primary",
@@ -33,7 +33,7 @@ function kindBadge(kind) {
 
 /** 자료 한 행(관리자=관리 컨트롤, 클라이언트=다운로드만). */
 function deliverableRow(dv, { isAdmin, baseUrl }) {
-  const meta = `${dv.version ? esc(dv.version) + " · " : ""}${esc(formatBytes(dv.file_size))} · ${esc((dv.created_at || "").slice(0, 10))}`;
+  const meta = `${dv.version ? esc(dv.version) + " · " : ""}${esc(formatBytes(dv.file_size))} · ${esc(kstYmd(dv.created_at))}`;
   const status = linkStatus(dv);
   const shareUrl = dv.access_token ? `${baseUrl}/d/${dv.access_token}` : "";
 

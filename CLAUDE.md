@@ -194,6 +194,7 @@
   **`express.static`은 맨 뒤**(보호 HTML은 라우트, static은 css/js 자산만). 인증 우회 방지.
 - **작업 옵션/상태값 = 코드 상수**(`config.js`)가 단일 진실원천. DB CHECK 제약 금지(§2.8 마이그레이션 지옥 회피).
 - **돈=정수(원)**, 날짜=`"YYYY-MM-DD"` 문자열(`src/lib/date.js`).
+- **시간대: 저장=UTC · 표시=KST**(2026-07-20 사용자 요청 '시스템 시간대가 UTC인데 우리나라 시간으로'). SQLite `datetime('now')`가 **UTC**라 `created_at`·`audit_log.at`·`users.last_login`이 UTC로 쌓인다. **저장 형식은 그대로 두고**(표준·이식성·기존 데이터와 안 섞이게) **표시에서만 +9h** 한다 — `kstYmd(v)`(날짜)·`kstDateTime(v)`(시각까지)·`kstDate(v)`(Date 객체, lib/date.js). ⚠️이걸 안 쓰고 `created_at.slice(0,10)`으로 자르면 **KST 00:00~08:59에 만든 것이 하루 이르게** 보인다(실측: 개발 DB 프로젝트 7건이 그랬다). ⚠️**날짜만 있는 값(`session_date`·`issued_date`·`worker_paid_date`)에는 쓰지 않는다** — 그건 사용자가 고른 KST 날짜라 +9h를 먹이면 하루 밀린다(헬퍼도 길이 10 문자열은 그대로 통과시킨다). 적용처: 감사 로그(옛 `UTC` 라벨 제거)·프로젝트 목록 작성일·업체/연락처 상세의 프로젝트 표·자료 전달·외주 작업일. `todayYmd()`는 원래부터 KST 기준이라 '오늘' 판정·D-day는 영향 없고, 백업 시각은 이미 `toLocaleString(ko-KR, Asia/Seoul)`. `lastLoginLabel`은 경과 시간이 아니라 **KST 달력 날짜 차이**로 센다('오늘/어제'는 시계가 아니라 달력의 말 — 20시간 전이 어제인데 '오늘'로 나오던 것). 회귀=`format.test.js`.
 - **at-rest 암호화**(`db.encrypt/decrypt`, AES-256-GCM): Drive/Calendar refresh token 등 비밀.
 - **CSRF 방어**: `sameOriginRequest`가 비안전 메서드(POST/PUT/PATCH/DELETE)에서 Sec-Fetch-Site 헤더 없으면 기본 거부. Authorization 헤더 요청과 `/internal` cron 경로만 예외.
 - **OAuth 논스**: Google OAuth state에 랜덤 논스 포함 + httpOnly 쿠키 대조(로그인-CSRF 차단). `safeNext` 역슬래시(`\`) open-redirect 우회 차단.

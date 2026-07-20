@@ -27,6 +27,7 @@ const fs = require("fs");
 const path = require("path");
 const { backupDir } = require("./lib/maintenance");
 const { listAudit } = require("./lib/audit");
+const { kstDateTime, kstYmd, todayYmd } = require("./lib/date"); // DB는 UTC — 표시는 KST(2026-07-20)
 const { getState } = require("./db");
 
 const RATE_KIND_LABELS = { recording: "녹음", filming: "촬영", performance: "공연" };
@@ -491,12 +492,17 @@ function alertEmailSection(chief = true) {
     </div>`;
 }
 
-/** last_login(ISO UTC) → '오늘/어제/N일 전/미로그인' 상대 표시(계정 위생, 2026-07-09 관리 개선). */
+/**
+ * last_login(UTC) → '오늘/어제/N일 전/미로그인' 표시(계정 위생, 2026-07-09 관리 개선).
+ * ⚠️**KST 달력 날짜 차이**로 센다(2026-07-20) — 경과 시간(밀리초 나눗셈)으로 세면 20시간 전 로그인이
+ * 어제였는데도 '오늘'로 나온다. '오늘/어제'는 시계가 아니라 달력의 말이다.
+ */
 function lastLoginLabel(iso) {
   if (!iso) return "";
-  const then = new Date(String(iso).replace(" ", "T") + "Z").getTime();
-  if (!isFinite(then)) return "";
-  const days = Math.floor((Date.now() - then) / 86400000);
+  const day = kstYmd(iso);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return "";
+  const days = Math.round((Date.parse(`${todayYmd()}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86400000);
+  if (!isFinite(days)) return "";
   const label = days <= 0 ? "오늘" : days === 1 ? "어제" : `${days}일 전`;
   return `<span class="whitespace-nowrap">로그인 ${label}</span>`;
 }
@@ -784,7 +790,7 @@ function systemTab(chief) {
   // 접속 기록(사람×하루)이 삭제·청구 같은 파괴적 기록을 며칠 만에 창 밖으로 밀어낸다.
   // 보는 목적도 다르다 — 변경 이력은 '누가 뭘 바꿨나', 접속 기록은 '누가 언제 들어왔나'.
   const auditRow = (a) => `<div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border py-1.5 text-sm last:border-0">
-        <span class="shrink-0 tabular text-xs text-muted">${esc(String(a.at || "").replace("T", " ").slice(0, 16))} UTC</span>
+        <span class="shrink-0 tabular text-xs text-muted">${esc(kstDateTime(a.at))}</span>
         <span class="shrink-0 badge ${a.action === "auth.deny" ? "badge-warning" : "badge-neutral"}">${esc(Object.hasOwn(AUDIT_LABELS, a.action) ? AUDIT_LABELS[a.action] : a.action)}</span>
         <span class="min-w-0 flex-1 truncate">${esc(a.target || "")}${a.ip ? ` <span class="text-xs text-muted">· ${esc(a.ip)}</span>` : ""}</span>
         <span class="shrink-0 text-xs text-muted">${esc(a.user_email || "")}</span>

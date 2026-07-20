@@ -18,7 +18,7 @@ const { contactPanes } = require("../views.contacts"); // 2단 골격 공용(연
 const { workerNameList, workerPayoutCard, workerEmptyPane } = require("../views.workers");
 const { safePath } = require("../lib/nav");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
-const { formatYmdShort, todayYmd, isValidYmd } = require("../lib/date");
+const { formatYmdShort, todayYmd, isValidYmd, kstYmd } = require("../lib/date");
 const { withholding33 } = require("../lib/tax"); // 외주 원천징수 3.3% 표시(2026-07-09 사용자 요청)
 
 const router = express.Router();
@@ -200,7 +200,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
 
   // 정산·참여 내역 행의 항목 식별 정보(2026-07-06 사용자 리포트 — '정산할 때 어떤 항목인지 명확하지 않음'):
   // 프로젝트/트랙명만으론 부족해 아티스트·작업일을 덧붙인다(세션 행은 이미 날짜 있음, 작업 행에 통일).
-  const taskMeta = (t) => `<span class="text-xs text-muted"> · ${t.track_artist ? `${esc(t.track_artist)} · ` : ""}${esc(t.project_title)} / ${esc(t.track_title)} · ${esc(formatYmdShort(String(t.created_at || "").slice(0, 10)))}</span>`;
+  const taskMeta = (t) => `<span class="text-xs text-muted"> · ${t.track_artist ? `${esc(t.track_artist)} · ` : ""}${esc(t.project_title)} / ${esc(t.track_title)} · ${esc(formatYmdShort(kstYmd(t.created_at)))}</span>`;
 
   let content;
   if (tab === "payout") {
@@ -210,7 +210,7 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
       // 정산 재구성(2026-07-09 점검): ①이체 정보 ②합계 ③미지급(위·일괄 지급+지급일 소급) ④지급완료(지급월별 그룹 — 원천세 신고는 지급월 기준).
       // 작업·세션을 공통 아이템으로 통합해 한 목록에서 다룬다(worker_rate 기준, 고객청구는 작업만 참고 표기).
       const payItems = [
-        ...tasks.map((t) => ({ kind: "task", id: t.id, label: taskTypeLabel(t.task_type), metaHtml: taskMeta(t), rate: t.worker_rate || 0, paid: !!t.worker_paid, paidDate: t.worker_paid_date || "", clientPrice: t.total_price || 0, sortDate: String(t.created_at || "").slice(0, 10) })),
+        ...tasks.map((t) => ({ kind: "task", id: t.id, label: taskTypeLabel(t.task_type), metaHtml: taskMeta(t), rate: t.worker_rate || 0, paid: !!t.worker_paid, paidDate: t.worker_paid_date || "", clientPrice: t.total_price || 0, sortDate: kstYmd(t.created_at) })),
         ...sessionPayouts.map((x) => ({ kind: "session", id: x.session_id, label: `${x.session_type || "녹음"} 세션`, metaHtml: `<span class="text-xs text-muted"> · ${esc(x.project_title)} / ${esc(formatYmdShort(x.session_date))}</span>`, rate: x.worker_rate || 0, paid: !!x.worker_paid, paidDate: x.worker_paid_date || "", clientPrice: 0, sortDate: x.session_date || "" })),
       ];
       const payTotal = payItems.reduce((s2, x) => s2 + x.rate, 0);

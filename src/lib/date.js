@@ -86,4 +86,39 @@ function formatYmdCombo(s) {
   return `${y}. ${m}. ${d}. (${wd})`;
 }
 
-module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, formatYmdCombo, cleanTime, timeToMin, minutesBetween };
+/**
+ * DB 타임스탬프(UTC) → **한국 시간(KST)** 표시(2026-07-20 사용자 요청 '시스템 시간대가 UTC인데 우리나라 시간으로').
+ *
+ * SQLite `datetime('now')`는 **UTC**를 쓴다(`created_at`·`audit_log.at`·`users.last_login`).
+ * 그걸 그대로 자르면 **KST 00:00~08:59에 만든 것이 하루 이르게** 보인다(실측: 개발 DB 프로젝트 7건).
+ * 저장은 UTC 그대로 두고(표준·이식성) **표시에서만 +9h** 한다 — 저장 형식을 바꾸면 기존 데이터와 섞인다.
+ *
+ * @param {string} v 'YYYY-MM-DD HH:MM:SS' 또는 'YYYY-MM-DDTHH:MM:SS(.sss)(Z)'
+ * @returns {Date|null} 시각이 없는 날짜 문자열(길이 10)·빈 값·형식 불명은 null(호출부가 원본을 그대로 쓴다)
+ */
+function kstDate(v) {
+  const s = String(v || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s)) return null; // 날짜만 있으면 변환 대상 아님
+  const iso = s.replace(" ", "T");
+  const ms = Date.parse(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + "Z"); // 표기 없으면 UTC로 해석
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms + KST_OFFSET_MIN * 60000);
+}
+
+/** DB UTC 타임스탬프 → KST 날짜 'YYYY-MM-DD'. 시각이 없으면 원본 앞 10자(이미 날짜라 변환 불필요). */
+function kstYmd(v) {
+  const d = kstDate(v);
+  if (!d) return String(v || "").slice(0, 10);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** DB UTC 타임스탬프 → KST 'YYYY-MM-DD HH:MM'(감사 로그처럼 시각까지 보여주는 곳). */
+function kstDateTime(v) {
+  const d = kstDate(v);
+  if (!d) return String(v || "").replace("T", " ").slice(0, 16);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mi = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${kstYmd(v)} ${hh}:${mi}`;
+}
+
+module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, formatYmdCombo, cleanTime, timeToMin, minutesBetween, kstDate, kstYmd, kstDateTime };

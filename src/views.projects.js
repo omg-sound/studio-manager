@@ -17,7 +17,7 @@ const {
   dateCombo,
   pageHeader,
 } = require("./views");
-const { formatYmdShort, todayYmd } = require("./lib/date");
+const { formatYmdShort, todayYmd, kstYmd } = require("./lib/date");
 const {
   clientOptions,
   contactOptions,
@@ -169,7 +169,7 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   const amount = amt ? formatKRW(amt) : "";
   const billingBadge = tab === "billing" && Number(p.unbilled_cnt) > 0
     ? ` <span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span>` : "";
-  const created = p.created_at ? esc(String(p.created_at).slice(0, 10)) : "";
+  const created = p.created_at ? esc(kstYmd(p.created_at)) : ""; // DB는 UTC — KST로 변환해 표시(2026-07-20)
   const isOpen = openId != null && Number(p.id) === Number(openId);
   return `
     <details class="proj-row group/proj"${isOpen ? " open" : ""} id="proj-${p.id}" data-sort-row>
@@ -310,7 +310,7 @@ function projectMetaReadonly(p) {
 /** 관리자 메타 카드(프로젝트 탭): 편집 폼을 항상 펼쳐서 표시(접기 없음 — 한 프로젝트만 보이므로). */
 function projectMetaCard(p, err = "", { chief = false } = {}) {
   // 치프 전용 작성일(생성일) 편집 — 완료/청구 필요 탭 정렬(작성일순)에 영향. 목록에서 상세로 이동(2026-07-11).
-  const dateStr = esc(String(p.created_at || "").slice(0, 10));
+  const dateStr = esc(kstYmd(p.created_at));
   const createdEdit = chief
     ? `<form method="post" action="/projects/${p.id}/created-at" class="mb-3 flex items-center gap-2 border-b border-border/40 pb-3">
          <input type="hidden" name="return" value="/projects/${p.id}?tab=project" />
