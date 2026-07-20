@@ -12,6 +12,23 @@ let _db = null;
 /** SQLite 핸들(싱글톤). WAL 모드 + FK 활성화. PRAGMA는 두 드라이버 공통으로 exec 사용. */
 function db() {
   if (_db) return _db;
+  // ⚠️ 테스트가 **저장소 안 개발 DB를 여는 것**을 그 자리에서 막는다(2026-07-20 — CI가 69번 연속 적색이던 진짜 원인).
+  // 메커니즘: `.env`에 `DB_PATH=./data/app.db`가 있고 config가 dotenv로 그걸 읽는다 → 테스트가 DB_PATH를
+  // 따로 안 잡아도 **개발 DB(테이블이 다 있는)** 가 열려 통과한다. CI엔 `.env`도 `data/app.db`도 없어
+  // 빈 DB가 열리고 'no such table'로만 죽는다 — 로컬 실행으로는 절대 안 보이는 클래스다.
+  // 그래서 '경로가 비었나'가 아니라 **'저장소 안 DB인가'** 로 판정한다(테스트는 임시 경로를 쓴다).
+  // NODE_TEST_CONTEXT는 `node --test`가 각 테스트 프로세스에 넣는 값이라 앱·시드 스크립트엔 영향이 없다.
+  if (process.env.NODE_TEST_CONTEXT) {
+    const repoData = path.join(__dirname, "..", "data");
+    if (path.resolve(config.dbPath).startsWith(path.resolve(repoData))) {
+      throw new Error(
+        `테스트가 저장소 안 DB를 열려 합니다(${config.dbPath}) — 로컬에선 통과하고 CI에서만 깨집니다.\n` +
+        "  테스트 파일 맨 위(= src require보다 먼저)에 격리 셋업을 넣으세요:\n" +
+        '    const { tempDbPath, cleanupDb } = require("./helpers");\n' +
+        "    process.env.DB_PATH = tempDbPath();"
+      );
+    }
+  }
   fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
   const { driver, handle } = openDatabase(config.dbPath);
   _db = handle;

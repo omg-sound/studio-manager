@@ -1,6 +1,17 @@
 "use strict";
+// ⚠️ 격리 DB 셋업(2026-07-20 CI 적색 수리): 이 파일의 렌더 함수들은 **지연 조회로 DB를 건드린다**
+// (revStaffDetail→taskTypeLabel→task_types / clientEditPane→parties·company_owners).
+// DB_PATH를 안 잡으면 개발 머신에선 `./data/app.db`(테이블이 이미 있는 개발 DB)를 조용히 써서 통과하고,
+// **CI에는 그 파일이 없어 'no such table'로 실패**한다 — 로컬만 보고 푸시하면 안 보이는 클래스다.
+process.env.NODE_ENV = "test";
+const { tempDbPath, cleanupDb } = require("./helpers");
+process.env.DB_PATH = tempDbPath();
+
 const test = require("node:test");
 const assert = require("node:assert");
+const { init } = require("../src/db");
+init();
+test.after(() => cleanupDb(process.env.DB_PATH));
 const { clientReadView, clientEditPane } = require("../src/views.clients");
 
 const company = { id: 10, kind: "company", name: "(주)도너츠컬처", roles: "제작사", biz_no: "261-81-02922", address: "서울시", email: "note@daum.net", phone: "010-1111-2222" };
