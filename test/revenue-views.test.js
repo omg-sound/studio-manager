@@ -524,3 +524,17 @@ test("revPayerDetail: 이름은 아티스트(폴백·중복 규칙 동일)", () 
   assert.match(mk("", "도너츠컬처 임단우", ""), /font-medium">도너츠컬처 임단우</, "아티스트 없으면 프로젝트명");
   assert.match(mk("재호", "Inferno", "Inferno"), /· Inferno/, "프로젝트명과 같아도 곡 제목은 남는다");
 });
+
+// 2026-07-20 사용자 리포트 '월 아래 밑줄? 항목 위 뚜껑?' — 월 헤더 border-b와 바로 아래 카드 border-top이
+// 간격 0으로 맞붙어 2px 선처럼 보였다. 구분은 카드 경계 하나로 충분하다.
+test("월 헤더: border-b 없음(아래 카드 경계와 겹쳐 두 줄로 보인다)", () => {
+  const staff = V.revStaffDetail({
+    manager: { id: 3, name: "김엔지", user_id: 1 },
+    tasks: [{ id: 1, task_type: "mixing", amount: 500000, worker_rate: 0, track_title: "곡A", project_id: 9, project_title: "프로젝트A", issued_date: "2026-07-20" }],
+    sessions: [],
+    supply: 500000, payout: 0, profit: 500000,
+  });
+  const monthHead = staff.match(/<div class="mt-4[^"]*">/);
+  assert.ok(monthHead, "월 헤더가 있다");
+  assert.ok(!/border-b/.test(monthHead[0]), `월 헤더에 border-b 없음: ${monthHead[0]}`);
+});

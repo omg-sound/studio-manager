@@ -181,7 +181,8 @@ function revStaffList(rows, { selId = 0 } = {}) {
       subRight: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span>`,
     });
   }) });
-  return `<div data-nav-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
+  // data-nav-list 값 = 스크롤 보존 키(2026-07-20) — 탭별로 따로 기억해야 스탭별↔업체개인별이 섞이지 않는다.
+  return `<div data-nav-list="revenue:staff" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
 // 업체·개인 순위 목록(왼쪽 마스터) — 기간 없는 전체 누적. 스크롤 래퍼는 revStaffList와 동일 이유.
@@ -199,7 +200,7 @@ function revPayerList(rows, { selId = 0 } = {}) {
       subRight: `청구 ${r.invoice_cnt}건`,
     });
   }) });
-  return `<div data-nav-list class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
+  return `<div data-nav-list="revenue:payer" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }
 
 // "2026-07" → "2026년 7월". ym이 비면(발행일 없는 항목 — 현재 ISSUED 가드로 도달 불가하나 방어) 안전 문구.
@@ -229,7 +230,10 @@ function groupByMonth(items) {
 // 월 그룹 헤더(월 이름 + 소계). profit=true면 순이익 소계도 함께.
 function monthHeader(g, { profit = false } = {}) {
   const p = g.supply - g.payout;
-  return `<div class="mt-4 flex items-baseline justify-between border-b border-border/60 pb-1">
+  // ⚠️ 헤더에 border-b를 두지 않는다(2026-07-20 사용자 리포트 '월 아래 밑줄? 항목 위 뚜껑?'):
+  // 바로 아래 오는 항목 목록이 `.card`(border 1px)라 **간격 0으로 두 선이 맞붙어** 2px 선처럼 보였다.
+  // 구분은 카드 경계 하나로 충분하고, 월 헤더는 글자 굵기·여백으로 이미 구분된다.
+  return `<div class="mt-4 flex items-baseline justify-between pb-1">
       <h3 class="text-sm font-semibold">${esc(monthLabel(g.ym))}</h3>
       <div class="tabular text-sm">
         <span class="font-semibold">${formatKRW(g.supply)}</span>

@@ -3119,10 +3119,14 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     for (var i = 0; i < all.length; i++) if (all[i].style.display !== "none") out.push(all[i]);
     return out;
   }
-  // 스크롤 보존 키 = **화면 단위**(첫 경로 조각 + 탭). pathname 전체를 쓰면 안 된다 —
-  // 연락처·업체그룹은 상세로 갈 때 /contacts → /contacts/24로 pathname이 바뀌어 매번 새 키가 되고 복원이 안 된다.
-  // 매출은 pathname이 같고 tab만 다르므로 tab을 키에 넣어 스탭별·업체개인별 위치를 따로 기억한다.
+  // 스크롤 보존 키 = **서버가 찍어준 값**([data-nav-list="contacts:all"] 등).
+  // ⚠️URL로 만들면 안 된다(2026-07-20 사용자 리포트 '첫 선택 때만 스크롤이 튄다'): 목록은 `/contacts`(탭 쿼리 없음)인데
+  // 행 링크는 `/contacts/24?tab=all`이라 **첫 이동에서만 키가 달라져** 복원이 실패했다(둘째부터는 양쪽 다 ?tab=all이라 정상).
+  // 활성 탭의 기본값을 아는 건 서버뿐이라 서버가 키를 직접 준다. 값이 없으면 옛 URL 방식으로 폴백(다른 목록 호환).
   function scrollKey() {
+    var root = listRoot();
+    var stamped = root && root.getAttribute("data-nav-list");
+    if (stamped) return "navScroll:" + stamped;
     var seg = location.pathname.split("/")[1] || "root";
     var tab = new URLSearchParams(location.search).get("tab") || "";
     return "navScroll:" + seg + (tab ? ":" + tab : "");

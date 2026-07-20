@@ -105,7 +105,7 @@ function renderClients(req, sel, rightHtml, backHref) {
     ? `<div class="mb-3 text-sm text-muted">"${esc(q)}" 결과 ${rows.length}건 · <a href="/clients?group=${group}" class="text-primary hover:underline">전체 보기</a></div>`
     : "";
   const list = rows.length
-    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients/${c.id}${keep}`, keyFn: group === "company" ? (c) => coreCompanyName(c.name) : null, labelFn: group === "company" ? companyLabelHtml : null })
+    ? contactNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (c) => `/clients/${c.id}${keep}`, keyFn: group === "company" ? (c) => coreCompanyName(c.name) : null, labelFn: group === "company" ? companyLabelHtml : null, scrollKey: `clients:${group}` })
     : q
       ? emptyState(`"${esc(q)}" 검색 결과가 없습니다.`, { card: true, icon: "clients" })
       : group === "group"

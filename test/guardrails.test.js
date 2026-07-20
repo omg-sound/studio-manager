@@ -57,7 +57,9 @@ test("guardrail: datalist는 허용목록만(신규 콤보는 personCombo/compan
   for (const f of srcFiles()) {
     const lines = read(f).split("\n");
     lines.forEach((line, i) => {
-      const m = line.match(/list="([^"$]+)"/); // 템플릿 변수(list="${…}")는 제외
+      // ⚠️`(^|\s)`가 필요하다(2026-07-20 오탐 수정): 이게 없으면 `data-nav-list="revenue:staff"` 같은
+      // **다른 속성의 꼬리**를 datalist 참조로 오인한다. 템플릿 변수(list="${…}")는 [^"$]로 제외.
+      const m = line.match(/(?:^|\s)list="([^"$]+)"/);
       if (m && !ALLOWED.includes(m[1]) && !/role="listbox"/.test(line)) offenders.push(`${f}:${i + 1} list="${m[1]}"`);
     });
   }

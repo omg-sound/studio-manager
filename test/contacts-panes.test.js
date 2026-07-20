@@ -25,6 +25,26 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
   const cookie = (login.headers.getSetCookie() || []).map((c) => String(c).split(";")[0]).join("; ");
   const get = async (p) => { const r = await fetch(base + p, { headers: { cookie } }); return { status: r.status, html: await r.text() }; };
 
+  // 2026-07-20 사용자 리포트 '연락처에서 처음 선택할 때만 스크롤이 바뀐다'.
+  // 목록과 상세가 **같은 스크롤 키**를 받아야 첫 이동에서도 복원된다(app.js가 [data-nav-list] 값을 그대로 쓴다).
+  // 옛 방식(app.js가 URL로 키 생성)은 목록 `/contacts`(탭 쿼리 없음) ≠ 상세 `?tab=all`이라 첫 이동만 실패했다.
+  await t.test("스크롤 키: 목록과 상세가 같다(첫 이동에서도 복원)", async () => {
+    const keyOf = (html) => (html.match(/data-nav-list="([^"]*)"/) || [])[1];
+    const list = await get("/contacts");
+    const id = Number((list.html.match(/href="\/contacts\/(\d+)/) || [])[1]);
+    assert.ok(id, "행이 하나는 있어야 한다");
+    const detail = await get(`/contacts/${id}?tab=all`);
+    assert.equal(keyOf(list.html), "contacts:all", "목록도 활성 탭(기본 all)을 키에 담는다");
+    assert.equal(keyOf(detail.html), keyOf(list.html), "목록·상세 동일 키");
+  });
+
+  await t.test("스크롤 키: 탭이 다르면 키도 다르다(탭별로 따로 기억)", async () => {
+    const keyOf = (html) => (html.match(/data-nav-list="([^"]*)"/) || [])[1];
+    // 행이 없는 탭은 emptyState라 목록 자체가 없다(마커도 없음) → 행이 있는 탭으로 비교한다.
+    assert.equal(keyOf((await get("/contacts?tab=associate")).html), "contacts:associate");
+    assert.notEqual(keyOf((await get("/contacts?tab=associate")).html), keyOf((await get("/contacts")).html));
+  });
+
   await t.test("GET /contacts = 목록 + 빈 패널(선택 없음)", async () => {
     const { status, html } = await get("/contacts");
     assert.equal(status, 200);
@@ -237,3 +257,4 @@ test("연락처 2단: 목록/상세/편집 렌더 + 상한 없음", async (t) =>
   server.close();
   t.after(() => cleanupDb(process.env.DB_PATH, db()));
 });
+
