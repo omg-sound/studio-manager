@@ -135,6 +135,39 @@ function revenueForStaff(id, period) {
   return { manager, tasks, sessions, supply, payout, profit: supply - payout };
 }
 
+/**
+ * **미귀속** — 청구됐지만 어떤 스탭 행에도 안 잡히는 작업·세션.
+ *
+ * 왜: 스탭 축은 작업=engineer_id·세션=engineer_name으로 사람에 붙인다. 그 연결이 없으면 그 매출은
+ * 스탭별 화면 어디에도 안 뜨고 **조용히 사라진다**(2026-07-20 실DB 점검에서 세션 2건·65만원 발견).
+ * 총 매출(개요·업체개인별)에는 이미 들어 있으니 금액이 틀린 건 아니고, **'누가 한 일인지'만 비는 상태**다.
+ *
+ * 세션 조건에 `NOT IN (SELECT name FROM project_managers)`를 함께 두는 이유: 이름 문자열 매칭이라
+ * 담당자가 개명되면 세션의 옛 이름이 어느 담당자와도 안 맞아 같은 방식으로 증발한다(같은 날 고친 결함).
+ * 지금은 개명 시 세션 이름도 동기화하지만, 그 동기화가 다시 깨져도 여기 잡히도록 남겨 둔 안전망이다.
+ *
+ * 수동 청구서 라인(task_id·session_id 둘 다 없음)은 **제외**한다 — 일 기록 자체가 없어 사람에 붙을
+ * 대상이 아니고, 그건 업체·개인별 탭이 제자리다. 여기 목적은 '사람이 안 붙은 일'을 찾는 것.
+ *
+ * 반환 모양은 revenueForStaff와 같다(같은 상세 렌더러 revStaffDetail을 그대로 쓴다).
+ */
+function revenueUnattributed(period) {
+  const per = issuedInPeriodSql("i", period);
+  const tasks = db().prepare(`SELECT t.id, t.task_type, ii.amount AS amount, t.worker_rate, tr.title AS track_title, p.id AS project_id, p.title AS project_title, COALESCE(NULLIF(tr.artist, ''), p.artist) AS artist, i.issued_date FROM invoice_items ii JOIN track_tasks t ON t.id = ii.task_id JOIN project_tracks tr ON tr.id = t.track_id JOIN projects p ON p.id = tr.project_id JOIN invoices i ON i.id = ii.invoice_id WHERE ${ISSUED} AND ${per} AND t.engineer_id IS NULL ORDER BY i.issued_date DESC, p.title COLLATE NOCASE`).all();
+  const sessions = db().prepare(`SELECT s.id, s.session_date, s.session_type, ii.amount AS amount, p.id AS project_id, p.title AS project_title, p.artist AS artist, i.issued_date,
+      (SELECT COALESCE(SUM(se.worker_rate),0) FROM session_engineers se WHERE se.session_id = s.id) AS payout
+    FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id JOIN projects p ON p.id = s.project_id JOIN invoices i ON i.id = ii.invoice_id
+    WHERE ${ISSUED} AND ${per} AND (s.engineer_name IS NULL OR TRIM(s.engineer_name) = '' OR s.engineer_name NOT IN (SELECT name FROM project_managers))
+    ORDER BY i.issued_date DESC, s.session_date DESC`).all();
+  const supply = tasks.reduce((a, t) => a + (t.amount || 0), 0) + sessions.reduce((a, s) => a + (s.amount || 0), 0);
+  const payout = tasks.reduce((a, t) => a + (t.worker_rate || 0), 0) + sessions.reduce((a, s) => a + (s.payout || 0), 0);
+  const last = [...tasks, ...sessions].map((r) => r.issued_date).filter(Boolean).sort().pop() || null;
+  return {
+    tasks, sessions, supply, payout, profit: supply - payout,
+    task_cnt: tasks.length, session_cnt: sessions.length, last_issued: last,
+  };
+}
+
 // 결제자(업체·개인)별 매출 기여(공급가)·건수·최근 발행일. period 없으면 전 기간 누적.
 function revenueByPayer(period) {
   const per = issuedInPeriodSql("i", period);
@@ -212,6 +245,7 @@ module.exports = {
   revenueTax,
   revenueByStaff,
   revenueForStaff,
+  revenueUnattributed,
   revenueByPayer,
   revenueForPayer,
   revenueByType,

@@ -167,9 +167,12 @@ function lastSeenLabel(ymd) {
 // 마커 이름이 옛 data-contact-list에서 일반화된 이유가 이것이다(연락처·업체그룹·매출 3화면 공용).
 // 선택 행 포커스가 스크롤 위치 문제도 함께 푼다: 서버 렌더라 선택=페이지 재로드인데, 포커스가
 // 그 행을 scrollIntoView해 목록이 보던 위치를 유지한다(마커가 없으면 스크롤이 0으로 돌아간다).
-function revStaffList(rows, { selId = 0 } = {}) {
-  if (!rows.length) return emptyState("매출 기여가 있는 스탭이 없습니다.", { card: true });
-  const list = listGroup({ rows: rows.map((r) => {
+function revStaffList(rows, { selId = 0, unattributed = null } = {}) {
+  // 미귀속(담당 없는 작업·세션)은 사람이 아니므로 **순위에 끼우지 않고 맨 아래**에 붙인다 —
+  // 매출순으로 섞으면 '이번 달 1위'가 사람이 아닐 수 있고, 개요 Top 5도 오염된다(그쪽은 이 함수를 안 쓴다).
+  const unatt = unattributed && unattributed.supply > 0 ? unattributed : null;
+  if (!rows.length && !unatt) return emptyState("매출 기여가 있는 스탭이 없습니다.", { card: true });
+  const list = listGroup({ rows: [...rows.map((r) => {
     const last = lastSeenLabel(r.last_issued);
     return revListRow({
       href: `/revenue?tab=staff&staff=${Number(r.id)}`,
@@ -180,7 +183,14 @@ function revStaffList(rows, { selId = 0 } = {}) {
       right: formatKRW(r.supply),
       subRight: `순이익 <span class="${profitCls(r.profit)}">${formatKRW(r.profit)}</span>`,
     });
-  }) });
+  }), ...(unatt ? [revListRow({
+    href: `/revenue?tab=staff&staff=none`,
+    selected: String(selId) === "none",
+    title: `미귀속 <span class="badge badge-warning">담당 없음</span>`,
+    subLeft: `담당 엔지니어가 없어 스탭에 안 잡힘 · 작업 ${unatt.task_cnt} · 세션 ${unatt.session_cnt}`,
+    right: formatKRW(unatt.supply),
+    subRight: `순이익 <span class="${profitCls(unatt.profit)}">${formatKRW(unatt.profit)}</span>`,
+  })] : [])] });
   // data-nav-list 값 = 스크롤 보존 키(2026-07-20) — 탭별로 따로 기억해야 스탭별↔업체개인별이 섞이지 않는다.
   return `<div data-nav-list="revenue:staff" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">${list}</div>`;
 }

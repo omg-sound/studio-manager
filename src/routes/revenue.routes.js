@@ -1,7 +1,7 @@
 "use strict";
 const express = require("express");
 const { requireInvoice } = require("../auth");
-const { revenueSummary, revenueByStaff, revenueForStaff, revenueByPayer, revenueForPayer, revenueYears, revenueByType, revenueTax } = require("../data");
+const { revenueSummary, revenueByStaff, revenueForStaff, revenueUnattributed, revenueByPayer, revenueForPayer, revenueYears, revenueByType, revenueTax } = require("../data");
 const { revPeriodControl, revTabs, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail } = require("../views.revenue");
 const { contactPanes } = require("../views.contacts");
 const { layout, pageHeader, esc, emptyState } = require("../views");
@@ -29,18 +29,21 @@ router.get("/", requireInvoice, (req, res) => {
   const years = revenueYears();
   let content;
   if (tab === "staff") {
-    const selId = Number(req.query.staff) || 0;
+    // staff=none = 미귀속(담당 없는 작업·세션). 사람이 아니라 id가 없으므로 문자열 키로 구분한다.
+    const isNone = req.query.staff === "none";
+    const selId = isNone ? "none" : (Number(req.query.staff) || 0);
     // 삭제된 id 등 유효하지 않으면 data=null → 미선택 화면. 404를 던지지 않는다(패널 안이라 목록은 살아 있어야 한다).
     // 목록 탭은 기간 없이 전체 누적(2026-07-19 기간 렌즈 분리) — period를 넘기지 않는다.
-    const data = selId ? revenueForStaff(selId) : null;
-    const left = revStaffList(revenueByStaff(), { selId: data ? selId : 0 });
+    const unattributed = revenueUnattributed();
+    const data = isNone ? unattributed : (selId ? revenueForStaff(selId) : null);
+    const left = revStaffList(revenueByStaff(), { selId: data ? selId : 0, unattributed });
     // 상세 뷰는 대상 이름을 렌더하지 않는다(기존엔 드릴다운 페이지의 pageHeader가 담당). 패널엔 pageHeader가 없어 여기서 붙인다.
-    const right = data
-      ? `<div class="mb-3">
-           <h2 class="text-lg font-bold">${esc(data.manager.name)}</h2>
-           <p class="text-sm text-muted">${data.manager.user_id ? "하우스 엔지니어" : "외주 작업자"}</p>
-         </div>${revStaffDetail(data)}`
-      : emptyState("스탭을 선택하세요.", { card: true });
+    const head = (title, sub) => `<div class="mb-3"><h2 class="text-lg font-bold">${esc(title)}</h2><p class="text-sm text-muted">${esc(sub)}</p></div>`;
+    const right = isNone
+      ? `${head("미귀속", "담당 엔지니어가 지정되지 않아 스탭별 매출에 잡히지 않는 항목입니다. 세션·작업에 담당을 지정하면 그 스탭으로 옮겨갑니다.")}${revStaffDetail(data)}`
+      : data
+        ? `${head(data.manager.name, data.manager.user_id ? "하우스 엔지니어" : "외주 작업자")}${revStaffDetail(data)}`
+        : emptyState("스탭을 선택하세요.", { card: true });
     content = contactPanes({
       left, right,
       hasSelection: !!data,
