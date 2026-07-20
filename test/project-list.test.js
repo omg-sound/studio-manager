@@ -408,19 +408,25 @@ test("projectTableHead/Row: 작성일이 맨 앞(폭도 함께 앞으로 — 6re
 test("모바일 카드(<640): 이름은 왼쪽·숫자는 오른쪽 2열, 제작사도 표시", () => {
   const css = require("fs").readFileSync(require("path").join(__dirname, "..", "public/css/src.css"), "utf8");
   const mobile = css.slice(css.indexOf("@media (max-width: 639.98px)", css.indexOf(".proj-summary")));
-  assert.match(mobile, /grid-template-columns: minmax\(0, 1fr\) auto 1\.75rem/, "이름 | 숫자 | ⌄ 3열");
+  // ⌄가 제 열을 가지면 그 폭만큼 오른쪽 내용이 통째로 왼쪽으로 밀린다(2026-07-20 사용자 지적) → 2열 + ⌄는 첫 줄 한 칸.
+  assert.match(mobile, /grid-template-columns: minmax\(0, 1fr\) auto;/, "이름 | 숫자 2열");
   // 왼쪽 = 데스크톱 열 순서 그대로(작성일→제작사→아티스트→프로젝트)
   [["created", 1], ["company", 2], ["artist", 3], ["title", 4]].forEach(([k, r]) => {
     assert.match(mobile, new RegExp(`\\.pt-${k} \\{ grid-column: 1; grid-row: ${r};`), `왼쪽 ${r}번째 = ${k}`);
   });
   // 오른쪽 = 금액(굵게·우측정렬) → 다음 세션
-  assert.match(mobile, /\.pt-amount \{ grid-column: 2; grid-row: 1; text-align: right; font-weight: 600; \}/);
-  assert.match(mobile, /\.pt-next \{ grid-column: 2; grid-row: 2; text-align: right; \}/);
+  assert.match(mobile, /\.pt-amount \{ grid-column: 2; grid-row: 2; text-align: right; font-weight: 600; \}/);
+  assert.match(mobile, /\.pt-next \{ grid-column: 2; grid-row: 3; text-align: right; \}/);
   // 제작사는 카드에서도 보인다(옛 규칙은 PM과 함께 숨겼다) — PM만 숨김
   assert.match(mobile, /\.pt-pm \{ display: none; \}/);
   assert.ok(!/\.pt-company, \.pt-pm \{ display: none/.test(mobile), "제작사를 PM과 함께 숨기던 옛 규칙 잔존 없음");
-  // ⌄는 제 칸을 갖는다 — 절대배치로 두면 이제 금액 자리(오른쪽 위)와 겹친다.
-  assert.match(mobile, /\.proj-toggle \{ grid-column: 3; grid-row: 1; position: static; \}/);
+  // ⌄는 첫 줄 오른쪽 한 칸 — 절대배치면 금액과 겹치고, 제 열을 주면 오른쪽이 밀린다.
+  assert.match(mobile, /\.proj-toggle \{ grid-column: 2; grid-row: 1; position: static; justify-self: end; \}/);
+  // 줄 간격(2026-07-20 '작성일↔제작사↔아티스트가 멀다'): gap 0 + line-height 1.35
+  assert.match(mobile, /row-gap: 0;/);
+  assert.match(mobile, /line-height: 1\.35;/);
+  // 첫 줄 높이는 ⌄(1.75rem)가 정하므로 작은 날짜는 세로 가운데 — 위로 붙이면 아래가 12px 빈다.
+  assert.match(mobile, /\.pt-created \{ grid-column: 1; grid-row: 1; font-size: 0\.75rem; align-self: center; \}/);
   // 라벨 prefix 제거(자리가 이미 무엇인지 말해준다)
   assert.match(mobile, /\.pt-next::before, \.pt-amount::before, \.pt-created::before \{ content: none; \}/);
 });
