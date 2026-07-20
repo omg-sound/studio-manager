@@ -31,6 +31,15 @@ const { getState } = require("./db");
 
 const RATE_KIND_LABELS = { recording: "녹음", filming: "촬영", performance: "공연" };
 
+// 감사 로그 action → 화면 라벨(2026-07-20 인증 기록 추가와 함께). 여기 없는 action은 원문 그대로 보인다 —
+// 새 action을 추가할 때 이 맵을 안 고쳐도 화면이 깨지지 않게(라벨은 읽기 편의일 뿐 진실원천은 action 문자열).
+// 조회는 Object.hasOwn으로 — `AUDIT_LABELS["constructor"]`는 프로토타입 체인 때문에 함수 객체가 잡힌다.
+const AUDIT_LABELS = {
+  "auth.login": "구글 로그인",
+  "auth.access": "접속",
+  "auth.deny": "로그인 거부",
+};
+
 // 환경설정 그룹 카드 안의 섹션 블록(2026-07-09 사용자 요청 '스튜디오 운영·구글 연동이 자리를 너무 차지' —
 // 섹션마다 .card 하나씩(p-5 × N)이던 것을 그룹당 카드 1개 + border-t 구분으로 압축, 제목도 text-lg→text-sm).
 const SETTING_BLOCK = "space-y-3 border-t border-border pt-4 mt-4 first:mt-0 first:border-t-0 first:pt-0";
@@ -771,22 +780,32 @@ function systemTab(chief) {
       </div>
     </section>`;
 
-  // 감사 로그(최근 50) — 파괴적·재무 액션 추적(삭제 중심 정책 보완).
-  const audits = listAudit(50);
-  const auditRows = audits.length
-    ? audits.map((a) => `<div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border py-1.5 text-sm last:border-0">
+  // 감사 로그 — **두 카드로 분리**(2026-07-20): 각 목록이 최근 50건 고정이라 한 목록에 섞으면
+  // 접속 기록(사람×하루)이 삭제·청구 같은 파괴적 기록을 며칠 만에 창 밖으로 밀어낸다.
+  // 보는 목적도 다르다 — 변경 이력은 '누가 뭘 바꿨나', 접속 기록은 '누가 언제 들어왔나'.
+  const auditRow = (a) => `<div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border py-1.5 text-sm last:border-0">
         <span class="shrink-0 tabular text-xs text-muted">${esc(String(a.at || "").replace("T", " ").slice(0, 16))} UTC</span>
-        <span class="shrink-0 badge badge-neutral">${esc(a.action)}</span>
+        <span class="shrink-0 badge ${a.action === "auth.deny" ? "badge-warning" : "badge-neutral"}">${esc(Object.hasOwn(AUDIT_LABELS, a.action) ? AUDIT_LABELS[a.action] : a.action)}</span>
         <span class="min-w-0 flex-1 truncate">${esc(a.target || "")}</span>
         <span class="shrink-0 text-xs text-muted">${esc(a.user_email || "")}</span>
-      </div>`).join("")
-    : `<p class="text-sm text-muted">기록이 없습니다 — 삭제·역할 변경·지급·청구 상태 변경 같은 액션이 여기 남습니다.</p>`;
+      </div>`;
+
+  const audits = listAudit(50); // 기본 = 변경 이력(auth.* 제외)
   const auditCard = `<section class="card">
-      <h2 class="mb-2 text-sm font-semibold">감사 로그 <span class="text-xs font-normal text-muted">최근 ${audits.length}건 — 삭제·역할·지급·청구 상태</span></h2>
-      ${auditRows}
+      <h2 class="mb-2 text-sm font-semibold">변경 이력 <span class="text-xs font-normal text-muted">최근 ${audits.length}건 — 삭제·역할·지급·청구 상태</span></h2>
+      ${audits.length ? audits.map(auditRow).join("")
+    : `<p class="text-sm text-muted">기록이 없습니다 — 삭제·역할 변경·지급·청구 상태 변경 같은 액션이 여기 남습니다.</p>`}
     </section>`;
 
-  return warnCard + integrations + backupCard + dataCard + appCard + auditCard;
+  // 접속·로그인(2026-07-20 사용자 요청). 거부 시도는 지금까지 아무 데도 안 남아 이 카드의 실질 가치가 크다.
+  const access = listAudit(50, "auth");
+  const accessCard = `<section class="card">
+      <h2 class="mb-2 text-sm font-semibold">접속 · 로그인 <span class="text-xs font-normal text-muted">최근 ${access.length}건 — 접속은 사람당 하루 1건</span></h2>
+      ${access.length ? access.map(auditRow).join("")
+    : `<p class="text-sm text-muted">기록이 없습니다 — 로그인·접속과 막힌 로그인 시도가 여기 남습니다.</p>`}
+    </section>`;
+
+  return warnCard + integrations + backupCard + dataCard + appCard + auditCard + accessCard;
 }
 
 module.exports = {
