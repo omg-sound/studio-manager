@@ -250,10 +250,10 @@
    행 전체가 이동 링크(모든 셀=<a>), 오른쪽 끝 .proj-toggle(비인터랙티브 span)만 클릭 시 <details> 펼침(2026-07-18). */
 .proj-thead, .proj-summary {
   display: grid;
-  /* 제작사·아티스트·프로젝트 = 유연(넘치면 … 로 자름) / PM·다음세션·금액·작성일·⌄ = 고정 폭.
-     2026-07-20 사용자 요청으로 제작사↔아티스트 순서를 맞바꾸며 **폭 값도 함께 옮겼다** —
-     fr은 자리에 붙으므로 순서만 바꾸면 상호(긴 편)가 좁은 칸을, 아티스트명(짧은 편)이 넓은 칸을 쓰게 된다. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 6rem 2rem;
+  /* 작성일(맨 앞·2026-07-20 사용자 요청) · 제작사·아티스트·프로젝트 = 유연(넘치면 … 로 자름) / 나머지 = 고정 폭.
+     ⚠️열 순서를 바꾸면 **폭 값도 함께 옮긴다** — fr·rem은 자리에 붙으므로 순서만 바꾸면
+     엉뚱한 칸이 엉뚱한 폭을 쓴다(제작사↔아티스트 맞바꿈·작성일 앞으로 모두 해당). */
+  grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.3fr) 5.5rem 8.5rem 6.5rem 2rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
@@ -327,6 +327,9 @@
   .pt-cell { display: block; white-space: normal; }
   /* 제작사가 DOM상 먼저지만 여기서 숨으므로 카드 첫 줄은 그대로 아티스트(굵게)다. */
   .pt-company, .pt-pm { display: none; } /* 제작사·PM만 숨김 */
+  /* 작성일은 표에선 맨 앞(2026-07-20)이지만 **카드에선 맨 뒤**로 되돌린다 —
+     좁은 화면 카드의 첫 줄이 날짜면 무슨 프로젝트인지가 한 줄 밀린다. flex order로만 자리를 옮긴다(DOM은 그대로). */
+  .pt-created { order: 1; }
   .pt-artist { font-weight: 600; font-size: 0.9375rem; padding-right: 1.5rem; }
   .pt-title { font-size: 0.8125rem; color: rgb(var(--color-muted)); }
   .proj-summary .pt-cell:empty { display: none; } /* 값 없는 셀(빈 다음세션·금액) 생략 */

@@ -136,7 +136,8 @@ function projectTableHead() {
   // key는 행 셀의 data-sort-key와 짝이고(인덱스가 아니라 key로 찾으므로 열이 숨어도 안전), type은 비교 방식.
   const th = (label, key, type = "text", cls = "") =>
     `<span class="pt-h pt-sortable ${cls}" data-sort-key="${key}" data-sort-type="${type}" role="button" tabindex="0" aria-sort="none">${esc(label)}<span class="pt-sort-arrow" aria-hidden="true"></span></span>`;
-  return `<div class="proj-thead">${th("제작사", "company")}${th("아티스트", "artist")}${th("프로젝트", "title")}${th("PM", "pm", "text", "pt-h-pm")}${th("다음 세션", "next", "date")}${th("금액", "amount", "num", "pt-h-amount")}${th("작성일", "created", "date", "pt-h-created")}<span aria-hidden="true"></span></div>`;
+  // 작성일이 맨 앞(2026-07-20 사용자 요청). 좁아지면 여전히 **작성일부터** 숨는다(자리만 앞으로 온 것).
+  return `<div class="proj-thead">${th("작성일", "created", "date", "pt-h-created")}${th("제작사", "company")}${th("아티스트", "artist")}${th("프로젝트", "title")}${th("PM", "pm", "text", "pt-h-pm")}${th("다음 세션", "next", "date")}${th("금액", "amount", "num", "pt-h-amount")}<span aria-hidden="true"></span></div>`;
 }
 
 /**
@@ -173,13 +174,13 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   return `
     <details class="proj-row group/proj"${isOpen ? " open" : ""} id="proj-${p.id}" data-sort-row>
       <summary class="proj-summary">
+        ${cellLink(created, "pt-created tabular text-muted", "작성일", "created", created)}
         ${cellLink(company || dash, "pt-company text-muted", "제작사", "company", companyRaw)}
         ${cellLink(artist || dash, "pt-artist font-medium", "아티스트", "artist", artistRaw)}
         ${cellLink(title, "pt-title", "프로젝트", "title", titleRaw)}
         ${cellLink(pm || dash, "pt-pm text-muted", "PM", "pm", pmRaw)}
         ${cellLink(next, "pt-next", "다음 세션", "next", p.next_session_date || "")}
         ${cellLink(`${amount}${billingBadge}`, "pt-amount tabular", "금액", "amount", amt || "")}
-        ${cellLink(created, "pt-created tabular text-muted", "작성일", "created", created)}
         <span class="proj-toggle" aria-hidden="true" title="펼치기"><svg class="proj-chevron transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg></span>
       </summary>
       <div class="proj-expand border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>
