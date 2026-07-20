@@ -173,51 +173,80 @@
 
 // (프로젝트 목록 밀도 토글 폐지 2026-07-16 — 목록이 청구식 컬럼 표로 통일되며 좁게/넓게 개념 제거.)
 
-// 청구 목록 헤더 클릭 정렬(Finder식·client-side, 2026-07-18): [data-sort-key] th 클릭 → 로드된 <tr>을 셀
-//   [data-sort-value](없으면 textContent)로 즉시 재정렬. 첫 클릭=오름차순, 같은 열 다시=내림차순. aria-sort로 화살표.
-//   서버 기본 정렬(발행 최신순)은 로드 시 그대로 — 정렬은 클릭할 때만. 실시간 필터로 숨은 행은 순서만 바뀌고 display 유지.
+// ── 목록 헤더 클릭 정렬(Finder식·client-side) 공용 코어 ─────────────────────────────────
+// 청구 목록(표, 2026-07-18)과 프로젝트 목록(grid, 2026-07-20)이 함께 쓴다 — 정렬 규칙(빈 값 뒤로·타입별
+// 비교·방향 토글·aria-sort)이 두 벌이 되면 한쪽만 고쳐지므로 코어를 하나로 둔다. 구조 차이(표의 row.cells vs
+// grid의 [data-sort-key] 셀)만 호출부가 `io`로 메운다.
+// 마크업 계약: 헤더에 [data-sort-key]·[data-sort-type](num|date|text), 셀에 [data-sort-value](없으면 textContent).
+// 첫 클릭=오름차순, 같은 열 다시=내림차순. 서버 기본 정렬은 로드 시 그대로 — 정렬은 클릭할 때만(리로드 시 초기화).
+// 실시간 필터로 숨은 행은 순서만 바뀌고 display를 건드리지 않는다.
+function wireSortHeaders(headers, io) {
+  var cur = null, dir = 1; // dir: 1=오름차순, -1=내림차순
+  function apply(h) {
+    var type = h.getAttribute("data-sort-type") || "text";
+    if (cur === h) { dir = -dir; } else { cur = h; dir = 1; }
+    var rows = io.rows();
+    rows.sort(function (a, b) {
+      var va = io.value(a, h), vb = io.value(b, h);
+      if (va === "" && vb === "") return 0;
+      if (va === "") return 1; // 빈 값은 방향과 무관하게 뒤로
+      if (vb === "") return -1;
+      var cmp;
+      if (type === "num") cmp = parseFloat(va) - parseFloat(vb);
+      else if (type === "date") cmp = va < vb ? -1 : va > vb ? 1 : 0; // ISO(YYYY-MM-DD)는 문자열 비교로 시간순
+      else cmp = va.localeCompare(vb, "ko");
+      return cmp * dir;
+    });
+    rows.forEach(io.append);
+    headers.forEach(function (x) { x.setAttribute("aria-sort", "none"); });
+    h.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
+  }
+  headers.forEach(function (h) {
+    h.addEventListener("click", function () { apply(h); });
+    h.addEventListener("keydown", function (e) {
+      if (e.isComposing || e.keyCode === 229) return; // 함정 #18 IME 가드
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); apply(h); }
+    });
+  });
+}
+
+/** 셀 값 읽기 — [data-sort-value](정렬 원값: 상태 순위·정수 금액·ISO 날짜)가 있으면 그것, 없으면 보이는 텍스트. */
+function sortCellValue(cell) {
+  if (!cell) return "";
+  var v = cell.getAttribute("data-sort-value");
+  return v == null ? (cell.textContent || "").trim() : v;
+}
+
+// 청구 목록(표): 셀은 헤더의 DOM 인덱스로 찾는다.
 (function () {
   "use strict";
   Array.prototype.forEach.call(document.querySelectorAll(".inv-table"), function (table) {
     var thead = table.tHead;
     if (!thead) return;
     var headers = Array.prototype.slice.call(thead.querySelectorAll("th[data-sort-key]"));
+    var tbody = table.tBodies[0];
+    if (!headers.length || !tbody) return;
+    wireSortHeaders(headers, {
+      rows: function () { return Array.prototype.slice.call(tbody.rows); },
+      value: function (row, h) { return sortCellValue(row.cells[Array.prototype.indexOf.call(h.parentNode.children, h)]); },
+      append: function (r) { tbody.appendChild(r); },
+    });
+  });
+})();
+
+// 프로젝트 목록(grid, 2026-07-20 사용자 요청 '항목을 누르면 오름차순·내림차순 정렬'):
+// 행이 <tr>이 아니라 <details>라 셀을 인덱스가 아닌 **data-sort-key로 찾는다**(열이 CSS로 숨어도 안전).
+(function () {
+  "use strict";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-sort-rows]"), function (list) {
+    var head = list.querySelector(".proj-thead");
+    if (!head) return;
+    var headers = Array.prototype.slice.call(head.querySelectorAll("[data-sort-key]"));
     if (!headers.length) return;
-    var state = { key: null, dir: 1 }; // dir: 1=오름차순, -1=내림차순
-    function sortBy(th) {
-      var type = th.getAttribute("data-sort-type") || "text";
-      var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
-      var tbody = table.tBodies[0];
-      if (!tbody) return;
-      if (state.key === th) { state.dir = -state.dir; } else { state.key = th; state.dir = 1; }
-      function val(row) {
-        var cell = row.cells[idx];
-        if (!cell) return "";
-        var v = cell.getAttribute("data-sort-value");
-        return v == null ? (cell.textContent || "").trim() : v;
-      }
-      var rows = Array.prototype.slice.call(tbody.rows);
-      rows.sort(function (a, b) {
-        var va = val(a), vb = val(b);
-        if (va === "" && vb === "") return 0;
-        if (va === "") return 1; // 빈 값은 방향과 무관하게 뒤로
-        if (vb === "") return -1;
-        var cmp;
-        if (type === "num") cmp = parseFloat(va) - parseFloat(vb);
-        else if (type === "date") cmp = va < vb ? -1 : va > vb ? 1 : 0; // ISO(YYYY-MM-DD)는 문자열 비교로 시간순
-        else cmp = va.localeCompare(vb, "ko");
-        return cmp * state.dir;
-      });
-      rows.forEach(function (r) { tbody.appendChild(r); });
-      headers.forEach(function (h) { h.setAttribute("aria-sort", "none"); });
-      th.setAttribute("aria-sort", state.dir === 1 ? "ascending" : "descending");
-    }
-    headers.forEach(function (th) {
-      th.addEventListener("click", function () { sortBy(th); });
-      th.addEventListener("keydown", function (e) {
-        if (e.isComposing || e.keyCode === 229) return; // 함정 #18 IME 가드
-        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); sortBy(th); }
-      });
+    wireSortHeaders(headers, {
+      rows: function () { return Array.prototype.slice.call(list.querySelectorAll("[data-sort-row]")); },
+      value: function (row, h) { return sortCellValue(row.querySelector('[data-sort-key="' + h.getAttribute("data-sort-key") + '"]')); },
+      append: function (r) { list.appendChild(r); },
     });
   });
 })();

@@ -264,6 +264,17 @@
   color: rgb(var(--color-muted));
   border-bottom: 1px solid rgb(var(--color-border));
 }
+/* 항목명 클릭 정렬(2026-07-20 사용자 요청) — 청구 목록과 같은 손맛: 커서·호버·aria-sort 화살표.
+   정렬 상태 표기는 aria-sort 속성 하나로 하고(app.js가 토글) 화살표는 CSS가 그린다. */
+.pt-sortable { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 0.2rem; }
+.pt-sortable:hover { color: rgb(var(--color-fg)); }
+.pt-sortable:focus-visible { outline: 2px solid rgb(var(--color-primary) / 0.5); outline-offset: 2px; border-radius: 0.25rem; }
+.pt-h-amount.pt-sortable { justify-content: flex-start; }
+.pt-sort-arrow { display: inline-block; width: 0.7em; font-size: 0.7em; opacity: 0.75; }
+.pt-h[aria-sort="ascending"], .pt-h[aria-sort="descending"] { color: rgb(var(--color-fg)); }
+.pt-h[aria-sort="ascending"] .pt-sort-arrow::after { content: "▲"; }
+.pt-h[aria-sort="descending"] .pt-sort-arrow::after { content: "▼"; }
+
 .proj-row { border-bottom: 1px solid rgb(var(--color-border) / 0.6); }
 .proj-summary {
   cursor: pointer;

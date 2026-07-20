@@ -130,10 +130,13 @@ function projectArtistOnly(p) {
  * 컬럼: 아티스트 · 제작사 · 프로젝트 · PM · 다음 세션 · 금액 · 작성일 · [⌄].
  */
 function projectTableHead() {
-  const th = (label, cls = "") => `<span class="pt-h ${cls}">${esc(label)}</span>`;
   // 헤더 클래스(pt-h-pm/amount/created)는 좁을 때 해당 열을 행 셀과 함께 CSS로 숨기기 위함.
   // 열 순서 = 제작사 → 아티스트(2026-07-20 사용자 요청으로 맞바꿈).
-  return `<div class="proj-thead">${th("제작사")}${th("아티스트")}${th("프로젝트")}${th("PM", "pt-h-pm")}${th("다음 세션")}${th("금액", "pt-h-amount")}${th("작성일", "pt-h-created")}<span aria-hidden="true"></span></div>`;
+  // **항목명 클릭 = 정렬**(2026-07-20 사용자 요청): 청구 목록과 같은 공용 코어(app.js wireSortHeaders)를 쓴다.
+  // key는 행 셀의 data-sort-key와 짝이고(인덱스가 아니라 key로 찾으므로 열이 숨어도 안전), type은 비교 방식.
+  const th = (label, key, type = "text", cls = "") =>
+    `<span class="pt-h pt-sortable ${cls}" data-sort-key="${key}" data-sort-type="${type}" role="button" tabindex="0" aria-sort="none">${esc(label)}<span class="pt-sort-arrow" aria-hidden="true"></span></span>`;
+  return `<div class="proj-thead">${th("제작사", "company")}${th("아티스트", "artist")}${th("프로젝트", "title")}${th("PM", "pm", "text", "pt-h-pm")}${th("다음 세션", "next", "date")}${th("금액", "amount", "num", "pt-h-amount")}${th("작성일", "created", "date", "pt-h-created")}<span aria-hidden="true"></span></div>`;
 }
 
 /**
@@ -147,11 +150,19 @@ function projectTableHead() {
 function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = null, mine = false, listQuery = "" } = {}) {
   const href = projectRowHref(p, tab, listQuery);
   const dash = '<span class="text-muted">—</span>';
-  const cellLink = (val, cls, label) => `<a href="${href}" class="pt-cell proj-link ${cls}" data-label="${esc(label)}">${val}</a>`;
-  const artist = esc(projectArtistOnly(p));
-  const company = esc(String(p.client_name || "").trim());
-  const title = esc(String(p.title || "제목 없음").trim());
-  const pm = p.manager_name ? esc(p.manager_name) : "";
+  // sortVal = 정렬 원값(헤더 클릭 정렬). **항상 명시한다** — 보이는 텍스트로 정렬하면 틀리는 열이 많다:
+  // 금액 '₩1,200,000'(문자열 정렬 불가)·다음 세션 'D-3'(날짜순 아님)·빈 칸의 '—'(빈 값으로 안 쳐서 뒤로 안 감).
+  // app.js는 빈 문자열을 방향 무관 뒤로 보내므로, 값 없는 칸은 ""를 넘겨야 의도대로 놓인다.
+  const cellLink = (val, cls, label, key, sortVal) =>
+    `<a href="${href}" class="pt-cell proj-link ${cls}" data-label="${esc(label)}" data-sort-key="${key}" data-sort-value="${esc(String(sortVal == null ? "" : sortVal))}">${val}</a>`;
+  const artistRaw = projectArtistOnly(p);
+  const companyRaw = String(p.client_name || "").trim();
+  const titleRaw = String(p.title || "제목 없음").trim();
+  const pmRaw = p.manager_name ? String(p.manager_name) : "";
+  const artist = esc(artistRaw);
+  const company = esc(companyRaw);
+  const title = esc(titleRaw);
+  const pm = esc(pmRaw);
   const next = tab === "active" ? nextSessionLine(p) : ""; // 다음 세션·디데이 = 진행 중 탭만(완료·청구필요는 next_session_date 없음)
   const amt = projectAmount(p);
   const amount = amt ? formatKRW(amt) : "";
@@ -160,15 +171,15 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   const created = p.created_at ? esc(String(p.created_at).slice(0, 10)) : "";
   const isOpen = openId != null && Number(p.id) === Number(openId);
   return `
-    <details class="proj-row group/proj"${isOpen ? " open" : ""} id="proj-${p.id}">
+    <details class="proj-row group/proj"${isOpen ? " open" : ""} id="proj-${p.id}" data-sort-row>
       <summary class="proj-summary">
-        ${cellLink(company || dash, "pt-company text-muted", "제작사")}
-        ${cellLink(artist || dash, "pt-artist font-medium", "아티스트")}
-        ${cellLink(title, "pt-title", "프로젝트")}
-        ${cellLink(pm || dash, "pt-pm text-muted", "PM")}
-        ${cellLink(next, "pt-next", "다음 세션")}
-        ${cellLink(`${amount}${billingBadge}`, "pt-amount tabular", "금액")}
-        ${cellLink(created, "pt-created tabular text-muted", "작성일")}
+        ${cellLink(company || dash, "pt-company text-muted", "제작사", "company", companyRaw)}
+        ${cellLink(artist || dash, "pt-artist font-medium", "아티스트", "artist", artistRaw)}
+        ${cellLink(title, "pt-title", "프로젝트", "title", titleRaw)}
+        ${cellLink(pm || dash, "pt-pm text-muted", "PM", "pm", pmRaw)}
+        ${cellLink(next, "pt-next", "다음 세션", "next", p.next_session_date || "")}
+        ${cellLink(`${amount}${billingBadge}`, "pt-amount tabular", "금액", "amount", amt || "")}
+        ${cellLink(created, "pt-created tabular text-muted", "작성일", "created", created)}
         <span class="proj-toggle" aria-hidden="true" title="펼치기"><svg class="proj-chevron transition-transform group-open/proj:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4" /></svg></span>
       </summary>
       <div class="proj-expand border-t border-border/40 bg-elevated/40 px-4 py-3 text-xs leading-relaxed">${projectSummaryHtml(summary, { isAdmin, projectId: p.id, tab, mine })}</div>

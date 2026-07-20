@@ -249,7 +249,7 @@ router.get("/", requireAuth, (req, res) => {
     const limitQ = Number(req.query.limit) > 0 ? `&limit=${Number(req.query.limit)}` : "";
     const openQ = openId ? `&open=${openId}` : "";
     const listQuery = `/projects?tab=${tab}${keepQ}${limitQ}${openQ}`;
-    list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0">${projectTableHead()}${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine, listQuery })).join("")}</div>${cap.more}`;
+    list = `<div class="overflow-hidden rounded-lg border border-border/50 bg-surface [&>details:last-child]:border-b-0" data-sort-rows>${projectTableHead()}${cap.shown.map((p) => projectListRow(p, summaries[p.id], { tab, isAdmin, openId, mine, listQuery })).join("")}</div>${cap.more}`;
   }
 
   const action = canCreate ? newProjectMenu() : "";
