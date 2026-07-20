@@ -399,6 +399,28 @@ test("projectTableHead/Row: 작성일이 맨 앞(폭도 함께 앞으로 — 6re
   const css = require("fs").readFileSync(require("path").join(__dirname, "..", "public/css/src.css"), "utf8");
   // fr·rem은 자리에 붙는다 — 셀만 앞으로 옮기고 폭을 그대로 두면 작성일이 제작사 폭(1fr)을 먹는다.
   assert.match(css, /grid-template-columns: 6rem minmax\(0, 1fr\) minmax\(0, 0\.9fr\)/, "첫 열 = 작성일 고정 폭");
-  // 좁은 화면 카드에선 첫 줄이 날짜가 되지 않게 flex order로 뒤로 돌린다(DOM은 그대로).
-  assert.match(css, /\.pt-created \{ order: 1; \}/, "모바일 카드에선 작성일이 맨 뒤");
+  // 좁은 화면 카드(2026-07-20 2열 전환)에서도 작성일이 왼쪽 첫 줄 — 배치는 grid-row/column 명시라 DOM 순서와 무관.
+  assert.match(css, /\.pt-created \{ grid-column: 1; grid-row: 1;/, "카드에서도 작성일이 왼쪽 첫 줄");
+});
+
+// 2026-07-20 사용자 요청 '모바일만큼 좁을 때 오른쪽 공간을 좀더 쓰자' — 세로 한 줄 스택 → 2열 카드.
+// (측정: 390px에서 각 줄이 폭의 22%만 쓰고 78%가 비어 있었다.)
+test("모바일 카드(<640): 이름은 왼쪽·숫자는 오른쪽 2열, 제작사도 표시", () => {
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "public/css/src.css"), "utf8");
+  const mobile = css.slice(css.indexOf("@media (max-width: 639.98px)", css.indexOf(".proj-summary")));
+  assert.match(mobile, /grid-template-columns: minmax\(0, 1fr\) auto 1\.75rem/, "이름 | 숫자 | ⌄ 3열");
+  // 왼쪽 = 데스크톱 열 순서 그대로(작성일→제작사→아티스트→프로젝트)
+  [["created", 1], ["company", 2], ["artist", 3], ["title", 4]].forEach(([k, r]) => {
+    assert.match(mobile, new RegExp(`\\.pt-${k} \\{ grid-column: 1; grid-row: ${r};`), `왼쪽 ${r}번째 = ${k}`);
+  });
+  // 오른쪽 = 금액(굵게·우측정렬) → 다음 세션
+  assert.match(mobile, /\.pt-amount \{ grid-column: 2; grid-row: 1; text-align: right; font-weight: 600; \}/);
+  assert.match(mobile, /\.pt-next \{ grid-column: 2; grid-row: 2; text-align: right; \}/);
+  // 제작사는 카드에서도 보인다(옛 규칙은 PM과 함께 숨겼다) — PM만 숨김
+  assert.match(mobile, /\.pt-pm \{ display: none; \}/);
+  assert.ok(!/\.pt-company, \.pt-pm \{ display: none/.test(mobile), "제작사를 PM과 함께 숨기던 옛 규칙 잔존 없음");
+  // ⌄는 제 칸을 갖는다 — 절대배치로 두면 이제 금액 자리(오른쪽 위)와 겹친다.
+  assert.match(mobile, /\.proj-toggle \{ grid-column: 3; grid-row: 1; position: static; \}/);
+  // 라벨 prefix 제거(자리가 이미 무엇인지 말해준다)
+  assert.match(mobile, /\.pt-next::before, \.pt-amount::before, \.pt-created::before \{ content: none; \}/);
 });

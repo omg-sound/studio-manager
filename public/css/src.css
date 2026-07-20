@@ -316,27 +316,34 @@
   .pt-pm, .pt-h-pm { display: none; }
 }
 
-/* 모바일(<640px): thead 숨기고 아티스트(굵게)·프로젝트 + 값 라벨줄(제작사·PM 숨김·빈 셀 생략).
-   위 단계에서 숨긴 금액·작성일 셀은 카드에선 다시 표시(display:block이 뒤 소스라 이김). */
+/* 모바일(<640px) = **2열 카드**(2026-07-20 사용자 요청 '오른쪽 공간을 좀더 쓰자').
+   이전엔 값을 한 줄씩 세로로 쌓아 **각 줄이 폭의 22%만 쓰고 78%가 비었다**(390px 실측) → 행 130px.
+   왼쪽은 '무엇인가'(작성일→제작사→아티스트→프로젝트, **데스크톱 열 순서 그대로**),
+   오른쪽은 '얼마·언제'(금액→다음 세션, 우측 정렬)로 갈라 행 85px로 줄었다.
+   금액을 한 열에 모아 우측 정렬하면 세로로 훑을 때 자릿수가 맞아 비교가 된다(청구 목록 모바일 카드와 같은 방식).
+   배치는 **grid-row/column 명시**라 DOM 순서와 무관하다(작성일이 DOM 첫째여도 원하는 칸에 놓인다). */
 @media (max-width: 639.98px) {
   .proj-thead { display: none; }
   .proj-summary {
-    display: flex; flex-direction: column; align-items: stretch;
-    gap: 0.125rem; position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 1.75rem; /* 이름 | 숫자 | ⌄(.proj-toggle 폭과 동일) */
+    column-gap: 0.5rem; row-gap: 0.125rem;
+    align-items: start;
   }
   .pt-cell { display: block; white-space: normal; }
-  /* 제작사가 DOM상 먼저지만 여기서 숨으므로 카드 첫 줄은 그대로 아티스트(굵게)다. */
-  .pt-company, .pt-pm { display: none; } /* 제작사·PM만 숨김 */
-  /* 작성일은 표에선 맨 앞(2026-07-20)이지만 **카드에선 맨 뒤**로 되돌린다 —
-     좁은 화면 카드의 첫 줄이 날짜면 무슨 프로젝트인지가 한 줄 밀린다. flex order로만 자리를 옮긴다(DOM은 그대로). */
-  .pt-created { order: 1; }
-  .pt-artist { font-weight: 600; font-size: 0.9375rem; padding-right: 1.5rem; }
-  .pt-title { font-size: 0.8125rem; color: rgb(var(--color-muted)); }
+  .pt-pm { display: none; } /* PM만 숨김 — 제작사는 오른쪽 공간이 생기며 카드에도 되살렸다(사용자 요청) */
+  .pt-created { grid-column: 1; grid-row: 1; font-size: 0.75rem; }
+  /* 제작사는 약화(사용자 요청) — 아티스트가 카드의 주인이고 회사는 맥락이다. */
+  .pt-company { grid-column: 1; grid-row: 2; font-size: 0.8125rem; }
+  .pt-artist { grid-column: 1; grid-row: 3; font-weight: 600; font-size: 0.9375rem; }
+  .pt-title { grid-column: 1; grid-row: 4; font-size: 0.8125rem; color: rgb(var(--color-muted)); }
+  .pt-amount { grid-column: 2; grid-row: 1; text-align: right; font-weight: 600; }
+  .pt-next { grid-column: 2; grid-row: 2; text-align: right; }
   .proj-summary .pt-cell:empty { display: none; } /* 값 없는 셀(빈 다음세션·금액) 생략 */
-  .pt-next::before, .pt-amount::before, .pt-created::before {
-    content: attr(data-label) " · "; color: rgb(var(--color-muted)); font-size: 0.75rem;
-  }
-  .proj-toggle { position: absolute; top: 0.5rem; right: 0; }
+  /* 라벨 prefix 없음 — 자리(왼쪽/오른쪽·위/아래)가 이미 무엇인지 말해주고, 라벨은 좁은 칸을 먹는다. */
+  .pt-next::before, .pt-amount::before, .pt-created::before { content: none; }
+  /* ⌄는 절대배치를 그만두고 **제 칸(3열)**을 갖는다 — 오른쪽 위가 이제 금액 자리라 겹친다. */
+  .proj-toggle { grid-column: 3; grid-row: 1; position: static; }
 }
 
 /* ── 연락처 목록 선택 행 '두꺼운 선'의 진짜 원인 = focus-visible 링(2026-07-18 실측 확정) ──
