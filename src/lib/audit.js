@@ -5,6 +5,8 @@
  * 하드 삭제 중심 정책(관리 항목 삭제-only)의 보완: "누가 언제 뭘 지웠/바꿨나"를 추적해 실수 복기를 돕는다.
  * append-only 표시용이며 **절대 본 흐름을 막지 않는다**(fail-safe — 기록 실패는 무시).
  * 대상(target)은 짧은 요약 텍스트만(민감정보 금지 — 계좌·주민번호 등을 넣지 말 것).
+ * IP는 별도 `ip` 컬럼에 **인증 기록(auth.*)만** 남긴다(2026-07-20 사용자 요청) — target에 끼우면 200자 절단 대상이 되고
+ * 기존 요약과 섞인다. 180일 보존 정책(pruneAudit)이 그대로 적용된다.
  */
 const { db } = require("../db");
 
@@ -14,12 +16,25 @@ const { db } = require("../db");
  * @returns {boolean} 기록 성공 여부. **호출부는 무시해도 된다**(기존 호출부 전부 그렇다) — 실패해도 던지지 않는다.
  *   logAccessDaily만 이 값을 본다: 실패한 걸 성공으로 착각하고 캐시를 세우면 그날 접속이 영영 안 남기 때문.
  */
-function logAudit(user, action, target) {
+function logAudit(user, action, target, ip = null) {
   try {
-    db().prepare("INSERT INTO audit_log (user_email, action, target) VALUES (?, ?, ?)")
-      .run(user && user.email ? String(user.email) : null, String(action || ""), target != null ? String(target).slice(0, 200) : null);
+    db().prepare("INSERT INTO audit_log (user_email, action, target, ip) VALUES (?, ?, ?, ?)")
+      .run(user && user.email ? String(user.email) : null, String(action || ""), target != null ? String(target).slice(0, 200) : null,
+        ip != null ? String(ip).slice(0, 45) : null); // 45 = IPv6 최대 길이
     return true;
   } catch (_e) { return false; /* 표시용 — 기록 실패는 본 흐름 비차단 */ }
+}
+
+/**
+ * 요청의 클라이언트 IP(2026-07-20). Render 프록시 뒤라 `app.set("trust proxy", 1)`이 이미 걸려 있어
+ * `req.ip`가 X-Forwarded-For의 클라이언트 주소를 준다.
+ * IPv4-mapped IPv6(`::ffff:1.2.3.4`)은 읽기 쉽게 IPv4로 펴서 저장한다 — 같은 접속이 표기만 달라 다르게 보이지 않게.
+ */
+function clientIp(req) {
+  try {
+    const raw = String((req && req.ip) || "");
+    return raw.startsWith("::ffff:") ? raw.slice(7) : raw;
+  } catch (_e) { return ""; }
 }
 
 /**
@@ -68,7 +83,7 @@ function kstDay(now = Date.now()) {
   return { day, sinceUtc };
 }
 
-function logAccessDaily(user, device) {
+function logAccessDaily(user, device, ip = null) {
   try {
     if (!user || !user.email) return;
     const email = String(user.email);
@@ -82,7 +97,7 @@ function logAccessDaily(user, device) {
     // 캐시는 **기록에 성공했을 때만** 세운다 — 무조건 세우면 디스크 풀·SQLITE_BUSY로 INSERT가 조용히 실패했을 때
     // 캐시만 '기록됨'으로 남아 DB가 회복돼도 그 사람의 그날 접속이 영영 안 남는다.
     // (logAudit은 던지지 않고 false를 돌려주므로 반환값을 봐야 한다 — 안 보면 이 분기가 무의미해진다.)
-    if (logAudit(user, "auth.access", [role, device].filter(Boolean).join(" · "))) accessSeen.set(email, day);
+    if (logAudit(user, "auth.access", [role, device].filter(Boolean).join(" · "), ip)) accessSeen.set(email, day);
   } catch (_e) { /* 표시용 — 기록 실패는 본 흐름 비차단 */ }
 }
 
@@ -104,4 +119,4 @@ function pruneAudit({ days = 180, max = 20000 } = {}) {
   } catch (_e) { return { pruned: 0 }; }
 }
 
-module.exports = { logAudit, listAudit, pruneAudit, logAccessDaily, roleLabel, kstDay };
+module.exports = { logAudit, listAudit, pruneAudit, logAccessDaily, roleLabel, kstDay, clientIp };

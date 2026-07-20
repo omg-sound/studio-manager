@@ -3,7 +3,7 @@
 const jwt = require("jsonwebtoken");
 const { config } = require("./config");
 const { db } = require("./db");
-const { logAccessDaily } = require("./lib/audit"); // 접속 기록(하루 첫 1건, fail-safe)
+const { logAccessDaily, clientIp } = require("./lib/audit"); // 접속 기록(하루 첫 1건, fail-safe)
 const { deviceLabel } = require("./lib/user-agent"); // 기기 이름(브라우저/OS)
 
 // 인증 = 전원 Google 화이트리스트 로그인. 비밀번호(scrypt) 계정은 폐기됨.
@@ -141,7 +141,7 @@ function attachUser(req, _res, next) {
         // 접속 기록 — 사람당 하루 첫 1건(2026-07-20). 로그인 쿠키가 30일이라 '브라우저 켜서 ERP를 여는 것'은
         // 로그인 이벤트가 아니어서, 실제 사용 흔적은 여기서만 남길 수 있다. 역할은 **실제 역할**(user.role)로 —
         // 보기 모드 중이면 req.user.role이 축소돼 있어 그걸 쓰면 치프 접속이 스태프로 기록된다.
-        logAccessDaily(user, deviceLabel(req.get && req.get("user-agent")));
+        logAccessDaily(user, deviceLabel(req.get && req.get("user-agent")), clientIp(req));
       }
     } catch {
       /* 만료/위조 토큰은 무시 */

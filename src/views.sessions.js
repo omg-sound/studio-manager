@@ -363,15 +363,17 @@ function sessionRow(s, { isAdmin = false, managers = [], rateItems = [], rooms, 
             <button class="btn-ghost btn-xs ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "−"}</span>완료</button>
           </form>`
     : "";
-  // '취소' 토글: 예정·완료면 '취소'(확인 후 status=취소), 취소면 '취소 해제'(→예정). 취소는 캘린더에서 삭제하지 않고 '(취소)' 제목으로 남는다(2026-07-15).
+  // '일정 취소' 토글: 예정·완료면 '일정 취소'(확인 후 status=취소), 취소면 '일정 취소 해제'(→예정).
+  // 라벨이 그냥 '취소'였을 땐 모달 안에서 **닫기(X)와 헷갈렸다**(2026-07-20 사용자 지적) — 무엇을 취소하는지 목적어를 붙였다.
+  // 취소된 일정은 캘린더에서 삭제하지 않고 '(취소)' 제목으로 남는다(2026-07-15).
   const cancelToggle = s.status === "취소"
     ? `<form method="post" action="/sessions/${s.id}/status">
             <input type="hidden" name="status" value="예정" />
-            <button class="btn-ghost btn-xs text-muted" type="submit">취소 해제</button>
+            <button class="btn-ghost btn-xs text-muted" type="submit">일정 취소 해제</button>
           </form>`
     : `<form method="post" action="/sessions/${s.id}/status" data-confirm="이 세션을 취소할까요? 구글 캘린더에는 '(취소)' 표시로 남습니다.">
             <input type="hidden" name="status" value="취소" />
-            <button class="btn-ghost btn-xs text-danger" type="submit">취소</button>
+            <button class="btn-ghost btn-xs text-danger" type="submit">일정 취소</button>
           </form>`;
   return `
     <details class="group overflow-hidden rounded-lg border border-border bg-surface${s.status === "취소" ? " opacity-60" : ""}">
@@ -536,12 +538,13 @@ function sessionCardModal(s, { canEdit = false } = {}) {
          <button class="btn-ghost btn-sm ${isDone ? "border-success/40 bg-success/10 text-success" : "text-success"}" type="submit" aria-pressed="${isDone}"><span aria-hidden="true" class="inline-block w-3.5 text-center ${isDone ? "" : "opacity-60"}">${isDone ? "✓" : "−"}</span>완료</button>
        </form>`
     : "";
-  // 취소/취소 해제(편집자만) — 취소는 캘린더에서 삭제하지 않고 '(취소)' 제목으로 남긴다(2026-07-15).
+  // 일정 취소/해제(편집자만) — 라벨에 목적어를 붙인 이유는 sessionRow 쪽 주석 참조(2026-07-20).
+  // 취소는 캘린더에서 삭제하지 않고 '(취소)' 제목으로 남긴다(2026-07-15).
   const cancelForm = !canEdit
     ? ""
     : s.status === "취소"
-    ? `<form method="post" action="/sessions/${s.id}/status"><input type="hidden" name="status" value="예정" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-muted" type="submit">취소 해제</button></form>`
-    : `<form method="post" action="/sessions/${s.id}/status" data-confirm="이 세션을 취소할까요? 구글 캘린더에는 '(취소)' 표시로 남습니다."><input type="hidden" name="status" value="취소" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-danger" type="submit">취소</button></form>`;
+    ? `<form method="post" action="/sessions/${s.id}/status"><input type="hidden" name="status" value="예정" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-muted" type="submit">일정 취소 해제</button></form>`
+    : `<form method="post" action="/sessions/${s.id}/status" data-confirm="이 세션을 취소할까요? 구글 캘린더에는 '(취소)' 표시로 남습니다."><input type="hidden" name="status" value="취소" /><input type="hidden" name="return" value="${ret}" /><button class="btn-ghost btn-sm text-danger" type="submit">일정 취소</button></form>`;
   // 모달 위치 = 전체 화면 가운데가 아니라 콘텐츠(캘린더) 영역 가운데(2026-07-11 사용자 요청):
   // 데스크톱은 사이드바(sm:w-56=14rem) 폭만큼 왼쪽을 비워(sm:left-64) 캘린더 열 안에서 중앙 정렬. 모바일(드로어)은 left-0 전폭.
   return `

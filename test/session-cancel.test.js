@@ -28,12 +28,13 @@ test("sessionCardModal: 편집자 취소/취소 해제 버튼(상태별), 비편
   const modal = (status, canEdit) => sessionCardModal({ ...base, status, billing: null }, { title: "루나 · 뮤직팜", canEdit });
   const sched = modal("예정", true);
   assert.match(sched, /name="status" value="취소"/, "예정: status=취소 전송");
-  assert.match(sched, />취소<\/button>/, "예정: '취소' 버튼");
+  // 2026-07-20 사용자 지적: 모달 안에서 '취소'가 닫기(X)와 헷갈려 목적어를 붙였다.
+  assert.match(sched, />일정 취소<\/button>/, "예정: '일정 취소' 버튼(닫기와 구분되게 목적어 포함)");
   assert.match(sched, /data-confirm="이 세션을 취소할까요/, "예정: 취소 확인창");
   const cancelled = modal("취소", true);
   assert.match(cancelled, /name="status" value="예정"/, "취소: status=예정(되돌리기)");
-  assert.match(cancelled, /취소 해제/, "취소: '취소 해제' 버튼");
-  assert.doesNotMatch(modal("예정", false), />취소<\/button>/, "비편집자: 취소 버튼 없음");
+  assert.match(cancelled, /일정 취소 해제/, "취소: '일정 취소 해제' 버튼");
+  assert.doesNotMatch(modal("예정", false), />일정 취소<\/button>/, "비편집자: 일정 취소 버튼 없음");
 });
 
 test("sessionProjectCard: 취소된 세션 행은 흐리게(opacity-60), 예정은 아님", () => {

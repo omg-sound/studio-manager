@@ -314,7 +314,8 @@ function init() {
       at         TEXT NOT NULL DEFAULT (datetime('now')),
       user_email TEXT,                                    -- 실행 계정(표시용 스냅샷)
       action     TEXT NOT NULL,                           -- 예: invoice.delete / user.role / worker.payout
-      target     TEXT                                     -- 대상 요약(id·제목 등 짧은 텍스트)
+      target     TEXT,                                    -- 대상 요약(id·제목 등 짧은 텍스트)
+      ip         TEXT                                     -- 접속 IP — **인증 기록(auth.*)에만** 채운다(2026-07-20)
     );
 
     -- 세션 담당 디렉터(다대다) — 한 세션에 고객측 디렉터 여러 명. 단일 sessions.director_contact_id는 레거시 보존.
@@ -383,6 +384,10 @@ function init() {
 
   addColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
   addColumn("users", "last_login", "TEXT"); // 마지막 로그인 시각(ISO) — 계정 위생(안 쓰는 계정 식별, 2026-07-09 관리 개선)
+  // 접속 IP(2026-07-20 사용자 요청 '아이피도 남기자'). **인증 기록(auth.login/access/deny)에만** 채운다 —
+  // 파괴적·재무 액션은 이미 계정으로 추적되고, 감사 로그 target의 '민감정보 금지' 성격을 흐리지 않기 위해 별도 컬럼으로 뒀다
+  // (target에 끼우면 200자 절단 대상이 되고 기존 요약과 섞인다).
+  addColumn("audit_log", "ip", "TEXT");
   // 청구처(공급받는 자) 세금계산서 정보
   addColumn("clients", "biz_no", "TEXT");      // 사업자등록번호
   addColumn("clients", "owner_name", "TEXT");  // 대표자명

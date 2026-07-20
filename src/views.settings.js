@@ -786,7 +786,7 @@ function systemTab(chief) {
   const auditRow = (a) => `<div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-border py-1.5 text-sm last:border-0">
         <span class="shrink-0 tabular text-xs text-muted">${esc(String(a.at || "").replace("T", " ").slice(0, 16))} UTC</span>
         <span class="shrink-0 badge ${a.action === "auth.deny" ? "badge-warning" : "badge-neutral"}">${esc(Object.hasOwn(AUDIT_LABELS, a.action) ? AUDIT_LABELS[a.action] : a.action)}</span>
-        <span class="min-w-0 flex-1 truncate">${esc(a.target || "")}</span>
+        <span class="min-w-0 flex-1 truncate">${esc(a.target || "")}${a.ip ? ` <span class="text-xs text-muted">· ${esc(a.ip)}</span>` : ""}</span>
         <span class="shrink-0 text-xs text-muted">${esc(a.user_email || "")}</span>
       </div>`;
 

@@ -16,8 +16,8 @@ const {
 } = require("../auth");
 const { saveRefreshToken, setDriveAccountEmail } = require("../drive");
 const { layout, esc } = require("../views");
-const { logAudit, roleLabel } = require("../lib/audit"); // 로그인·거부 기록(fail-safe)
-const { deviceLabel } = require("../lib/user-agent"); // 기기 이름(브라우저/OS) — IP는 남기지 않는다
+const { logAudit, roleLabel, clientIp } = require("../lib/audit"); // 로그인·거부 기록(fail-safe)
+const { deviceLabel } = require("../lib/user-agent"); // 기기 이름(브라우저/OS) + 접속 IP(2026-07-20)
 
 const router = express.Router();
 
@@ -141,7 +141,7 @@ router.get("/auth/google/callback", async (req, res) => {
     const email = String(profile.email || "").trim().toLowerCase();
     // 이메일 미인증 구글 계정 거부(화이트리스트 신뢰 경계 하드닝). verified_email 누락(undefined)은 호환 위해 통과.
     if (profile.verified_email === false) {
-      logAudit({ email }, "auth.deny", `구글 미인증 계정 · ${deviceLabel(req.get("user-agent"))}`);
+      logAudit({ email }, "auth.deny", `구글 미인증 계정 · ${deviceLabel(req.get("user-agent"))}`, clientIp(req));
       return res.redirect("/login?err=" + encodeURIComponent("이메일이 인증되지 않은 구글 계정입니다."));
     }
 
@@ -153,7 +153,7 @@ router.get("/auth/google/callback", async (req, res) => {
       // (퇴사자 계정 재시도와 모르는 계정은 성격이 전혀 달라 구분할 가치가 있다).
       const known = findUserByEmail(email);
       const why = known ? "비활성 계정" : "미등록 계정";
-      logAudit({ email }, "auth.deny", `${why} · ${deviceLabel(req.get("user-agent"))}`);
+      logAudit({ email }, "auth.deny", `${why} · ${deviceLabel(req.get("user-agent"))}`, clientIp(req));
       return res.redirect("/login?err=" + encodeURIComponent("로그인이 허용되지 않은 계정입니다. 치프 엔지니어에게 등록을 요청하세요."));
     }
 
@@ -168,7 +168,7 @@ router.get("/auth/google/callback", async (req, res) => {
 
     setSessionCookie(res, user);
     touchLastLogin(user.id); // 마지막 로그인 기록(계정 위생 표시, fail-safe)
-    logAudit(user, "auth.login", [roleLabel(user.role), deviceLabel(req.get("user-agent"))].filter(Boolean).join(" · "));
+    logAudit(user, "auth.login", [roleLabel(user.role), deviceLabel(req.get("user-agent"))].filter(Boolean).join(" · "), clientIp(req));
     res.redirect(stateNext);
   } catch (e) {
     console.error("[oauth callback]", e);
