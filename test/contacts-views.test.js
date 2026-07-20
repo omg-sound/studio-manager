@@ -140,6 +140,25 @@ test("contactReadView: 세션이 있으면 세션 섹션 표시", () => {
   assert.match(html, /href="\/projects\/3\?tab=sessions"/);
 });
 
+// 2026-07-20 사용자 리포트 '연락처에 소속 그룹 나와야해'.
+// 편집 폼엔 groupCombo가 있고 그룹 상세엔 '멤버'가 보이는데 읽기 뷰에만 빠져 있어, 멤버의 연락처를 열면 그룹이 사라졌다.
+test("contactReadView: 소속 그룹이 있으면 그룹 상세로 가는 링크로 표시(새 탭)", () => {
+  const html = read({ group: { id: 77, name: "뉴진스", activity_name: "뉴진스" } });
+  assert.match(html, /소속 그룹/, "라벨 표시");
+  assert.match(html, /href="\/clients\/77"[^>]*target="_blank"/, "그룹 상세로 새 탭 링크(연락처 밖 링크 규약)");
+  assert.match(html, /뉴진스/);
+});
+
+test("contactReadView: 소속 그룹이 없으면 그 줄 자체가 없다(부서와 같은 규칙)", () => {
+  assert.ok(!/소속 그룹/.test(read()), "빈 값 줄로 자리 차지하지 않음");
+});
+
+test("contactReadView: 그룹 표시는 활동명 우선, 없으면 name 폴백", () => {
+  assert.match(read({ group: { id: 5, name: "본명그룹", activity_name: "활동명그룹" } }), /활동명그룹/);
+  const noAlt = read({ group: { id: 5, name: "이름만그룹", activity_name: "" } });
+  assert.match(noAlt, /이름만그룹/, "활동명 비면 name으로");
+});
+
 test("extras = 신뢰 HTML 삽입점 — 그대로 통과하되 사용자 데이터 esc는 contactExtras 책임", () => {
   // (1) extras 문자열은 읽기 뷰에 esc 없이 삽입된다(호출부가 만든 링크·배지 HTML이 살아야 하므로).
   const html = read({ extras: '<div id="trusted-extra">ok</div>' });

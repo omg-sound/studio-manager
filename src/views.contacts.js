@@ -94,7 +94,7 @@ function readRow(label, valueHtml) {
  * 편집은 별도 경로(editHref) — '상세=바로 편집'은 연락처에서만 '읽기 후 편집'으로 뒤집었다(클라이언트 상세는 그대로).
  * @param {string} [o.extras] 신뢰 HTML — esc 없이 그대로 삽입된다(호출부가 esc 책임). 사용자 입력을 그대로 흘려보내지 말 것.
  */
-function contactReadView(p, { affs = [], projects = [], sessions = [], invoices = [], editHref, extras = "" } = {}) {
+function contactReadView(p, { affs = [], group = null, projects = [], sessions = [], invoices = [], editHref, extras = "" } = {}) {
   const { classifyParty } = require("./data"); // 지연 require(순환 회피)
   const dash = '<span class="text-muted">—</span>';
   const cur = affs.find((a) => !a.ended_on);
@@ -127,8 +127,14 @@ function contactReadView(p, { affs = [], projects = [], sessions = [], invoices 
           <span class="shrink-0 text-xs text-muted">${esc(a.started_on || "?")} ~ ${esc(a.ended_on || "현재")}</span>
         </div>`).join("")}</div>`
     : "";
+  // 소속 그룹(개인 아티스트 → 그룹) — 편집 폼엔 groupCombo가 있는데 읽기 뷰에만 빠져 있었다(2026-07-20 사용자 리포트).
+  // 그룹 상세(업체·그룹)에는 '멤버'가 보이는데 그 멤버의 연락처엔 그룹이 안 보이던 비대칭. 값이 있을 때만 렌더(부서와 같은 규칙).
+  const groupLine = group
+    ? `<a href="/clients/${group.id}"${OUT} class="text-primary hover:underline">${esc(group.activity_name || group.name || "")} ↗</a>`
+    : "";
   const org = `<div class="card p-0">
       ${readRow("회사", orgLine)}
+      ${groupLine ? readRow("소속 그룹", groupLine) : ""}
       ${readRow("직책", p.job_title ? esc(p.job_title) : dash)}
       ${p.department ? readRow("부서", esc(p.department)) : ""}
       ${timeline ? `<div class="border-t border-border/60 pt-2"><div class="px-4 text-xs text-muted">소속 이력</div>${timeline}</div>` : ""}

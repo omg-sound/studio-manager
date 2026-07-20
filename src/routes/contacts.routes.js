@@ -23,6 +23,7 @@ const {
   syncPartyToManager,
   listGroupsForPicker,
   setPartyGroup,
+  groupOfParty,
 } = require("../data");
 const people = require("../people");
 const { asyncHandler } = require("../lib/async");
@@ -369,7 +370,8 @@ function readPaneFor(c) {
   const projects = listProjectsForParty(c.id);
   const sessions = listSessionsForParty(c.id);
   const invoices = listInvoicesForParty(c.id); // 이 사람이 청구처인 청구서(개인 현금영수증 결제 확인)
-  return contactReadView(c, { affs, projects, sessions, invoices, editHref: `/contacts/${c.id}/edit`, extras: contactExtras(c) });
+  const group = c.group_id ? groupOfParty(c.id) : null; // 소속 그룹(개인 아티스트) — group_id 없으면 조회 자체를 건너뜀
+  return contactReadView(c, { affs, group, projects, sessions, invoices, editHref: `/contacts/${c.id}/edit`, extras: contactExtras(c) });
 }
 
 /** 편집 패널 — 폼 + 소속 이력 인라인 편집 + 소속 추가/이직 + 삭제(옛 '상세 정보' 탭 내용을 그대로 이동). */
