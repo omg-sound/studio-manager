@@ -28,12 +28,14 @@ const tracks = require("./data/tracks"); // 트랙/작업 CRUD
 const invoicesMod = require("./data/invoices"); // 청구(금액 파생·채번·초안/생성/삭제·목록/통계)
 const dashboard = require("./data/dashboard"); // 대시보드 통계
 const sessions = require("./data/sessions"); // 세션(스튜디오 일정)
+const workerSummary = require("./data/worker-summary"); // 외주 정산 요약(작업+세션+첨부 합산)
 
 // 작업 종류 카탈로그: 공개 API는 아래 7함수만 재export(normalizeTaskTypeDb는 내부전용이므로 spread하지 않고 명시 나열).
 const { listTaskTypes, activeTaskTypes, taskTypeLabel, taskTypeUnitPrice, createTaskType, updateTaskType, moveTaskType, deleteTaskType } = taskTypes;
 
 module.exports = {
   ...parties, // src/data/parties.js — 당사자 통합(사람/조직/아티스트/담당자연동)
+  ...workerSummary, // src/data/worker-summary.js — 외주 정산 요약(workerPayoutSummary)
   ...rooms, // src/data/rooms.js
   ...rateItems, // src/data/rate-items.js
   ...rateCategories, // src/data/rate-categories.js

@@ -7,13 +7,15 @@ const { requireInvoice, requireChief, isChief } = require("../auth");
 const {
   listProjectManagers, getWorker, listTasksForWorker, listSessionsForWorker, setTaskPayout, taskTypeLabel, syncManagerToParty, ensurePartyForManager, formatPhone,
   listWorkerFiles, getWorkerFile, upsertWorkerFile, deleteWorkerFile,
-  listSessionPayoutsForWorker, setSessionEngineerPayout,
+  listSessionPayoutsForWorker, setSessionEngineerPayout, workerPayoutSummary,
 } = require("../data");
 const storage = require("../storage");
 const { asyncHandler } = require("../lib/async");
 const { logAudit } = require("../lib/audit"); // 파괴적·재무 액션 기록(fail-safe)
 const { buildUpload, decodeName, detectMimeFromFile } = require("../lib/attachments"); // 첨부 보안 로직 공용(2026-07-09 통합)
 const { layout, pageHeader, esc, flashBanner, emptyState, errorPage, formatKRW, tabBar, explain, fileViewerPage, copyable, dirtyActionRow, dateCombo } = require("../views");
+const { contactPanes } = require("../views.contacts"); // 2단 골격 공용(연락처·업체·매출과 동일)
+const { workerNameList, workerPayoutCard, workerEmptyPane } = require("../views.workers");
 const { safePath } = require("../lib/nav");
 const { TASK_STATUS_LABELS, TASK_STATUS_BADGE, SESSION_STATUS_BADGE } = require("../config");
 const { formatYmdShort, todayYmd, isValidYmd } = require("../lib/date");
@@ -87,57 +89,24 @@ function workerFileSection(w, fileMap, fileErr, fileOk = {}) {
   </section>`;
 }
 
-// ── 외주 작업자 목록(치프는 추가 폼도) ──
-router.get("/", requireInvoice, (req, res) => {
-  const workers = listProjectManagers({ includeInactive: true, externalOnly: true });
-  // 카드 밑 지급 요약 줄(2026-07-06 사용자 요청) — 미지급 건수·금액 한 줄(작업+세션 합산) + 오른쪽 끝 일괄 지급처리.
-  // 소수 외주 작업자 대상 N+1은 무해(listTasksForWorker/listSessionPayoutsForWorker 재사용, 페이지당 소수).
-  const list = workers.length
-    ? workers
-        .map((w) => {
-          const tasks = listTasksForWorker(w);
-          const sessionPayouts = listSessionPayoutsForWorker(w);
-          const unpaid = tasks.filter((t) => !t.worker_paid); // 0원(단가 미입력)도 지급 대상(2026-07-09 사용자 결정)
-          const unpaidSessions = sessionPayouts.filter((s) => !s.worker_paid);
-          const unpaidAmt = unpaid.reduce((s, t) => s + (t.worker_rate || 0), 0) + unpaidSessions.reduce((s, x) => s + (x.worker_rate || 0), 0);
-          const unpaidCount = unpaid.length + unpaidSessions.length;
-          // 미지급 항목 미리보기(2026-07-06 사용자 요청 — 건수·금액만으론 뭔지 몰라 대략 어떤 항목인지 한 줄 더).
-          // 작업 라벨에 날짜 추가(2026-07-06 후속 — 종류만으론 같은 종류 작업이 여럿일 때 구분이 안 돼 '정산할 때 어떤 항목인지 명확하지 않다'는 리포트).
-          // 프로젝트명 추가(2026-07-06 후속 — 어느 프로젝트 작업인지도 보여야 정산 시 헷갈리지 않음).
-          const itemLabels = [
-            ...unpaid.map((t) => `${t.project_title} · ${taskTypeLabel(t.task_type)} ${formatYmdShort(String(t.created_at || "").slice(0, 10))}`),
-            ...unpaidSessions.map((s) => `${s.project_title} · ${s.session_type || "녹음"} 세션 ${formatYmdShort(s.session_date)}`),
-          ];
-          const PREVIEW_MAX = 3;
-          const itemPreview = itemLabels.slice(0, PREVIEW_MAX).join(", ") + (itemLabels.length > PREVIEW_MAX ? ` 외 ${itemLabels.length - PREVIEW_MAX}건` : "");
-          const wh = withholding33(unpaidAmt); // 원천징수 3.3%(사업소득) — 표시 참고용(lib/tax)
-          const payoutBar = unpaidCount
-            ? `<div class="mt-1.5 border-t border-border pt-1.5 text-sm">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">미지급 <b class="text-danger">${formatKRW(unpaidAmt)}</b> (${unpaidCount}건)</span>
-                  <form method="post" action="/workers/${w.id}/payout-all" data-confirm="미지급 ${unpaidCount}건 · ${esc(formatKRW(unpaidAmt))}을 전부 지급 처리할까요? (원천세 3.3% ${esc(formatKRW(wh.total))} 제외 시 실지급 ${esc(formatKRW(wh.net))})">
-                    <button class="btn-ghost btn-xs text-primary" type="submit">지급 처리</button>
-                  </form>
-                </div>
-                ${wh.total ? `<div class="mt-0.5 text-xs text-muted">원천세 3.3% −${formatKRW(wh.total)} → 실지급 <b class="text-fg">${formatKRW(wh.net)}</b></div>` : ""}
-                <div class="mt-0.5 truncate text-xs text-muted">${esc(itemPreview)}</div>
-              </div>`
-            : "";
-          return `
-        <div class="card mb-2">
-          <a href="/workers/${w.id}?return=${encodeURIComponent(req.originalUrl)}" class="flex items-center justify-between gap-3 hover:opacity-80">
-            <div class="min-w-0">
-              <span class="font-semibold">${esc(w.name)}</span>
-              ${w.email || w.phone ? `<div class="mt-0.5 text-xs text-muted">${esc(w.email || "")}${w.email && w.phone ? " · " : ""}${esc(w.phone || "")}</div>` : ""}
-            </div>
-            <span class="shrink-0 text-xs text-muted">작업 · 정산 ›</span>
-          </a>
-          ${payoutBar}
-        </div>`;
-        })
-        .join("")
-    : emptyState(`등록된 외주 작업자가 없습니다.${isChief(req.user) ? " 아래에서 추가하세요." : ""}`, { card: true });
+// ── 외주 작업자 = 마스터-디테일(2026-07-20 사용자 결정) ──
+// 왼쪽 이름 목록은 늘 있고, 고르면 오른쪽에 **정산 카드 + 기존 3탭 상세**가 뜬다.
+// 전환 이유: 목록 카드가 이름·전화만 담아 폭을 다 쓰고 오른쪽이 비어 있었다(사용자 리포트).
+// 폭을 넓히는 대신 행의 내용을 채우고, 연락처·업체·매출과 같은 골격(contactPanes)으로 통일했다.
 
+/** 왼쪽 목록용 행 데이터 — 이름 + 정산 요약. 외주는 소수라 N+1 조회가 무해하다(기존 목록과 동일 전제). */
+function workerRows() {
+  return listProjectManagers({ includeInactive: true, externalOnly: true })
+    .map((w) => ({ worker: w, summary: workerPayoutSummary(w) }));
+}
+
+/** 2단 렌더(renderContacts/renderClients와 대칭) — 왼쪽 이름 목록, 오른쪽 rightHtml(없으면 안내). */
+function renderWorkers(req, sel, rightHtml) {
+  const rows = workerRows();
+  const left = rows.length
+    ? workerNameList({ rows, selectedId: sel ? sel.id : null, hrefFn: (w) => `/workers/${w.id}?return=${encodeURIComponent(req.originalUrl)}` })
+    : emptyState(`등록된 외주 작업자가 없습니다.${isChief(req.user) ? " 오른쪽에서 추가하세요." : ""}`, { card: true });
+  // 추가 폼은 **미선택일 때 오른쪽**에 둔다 — 왼쪽은 목록만 남겨 스캔을 방해하지 않는다.
   const addForm = `
     <form method="post" action="/workers" class="card mt-3 space-y-2">
       <div class="text-sm font-medium">외주 작업자 추가</div>
@@ -148,13 +117,16 @@ router.get("/", requireInvoice, (req, res) => {
       </div>
       <button class="btn-primary btn-sm" type="submit">추가</button>
     </form>`;
-
+  const right = rightHtml || `${workerEmptyPane()}${isChief(req.user) ? addForm : ""}`;
   const body = `
     ${flashBanner(req.query)}
     ${pageHeader({ title: "외주 작업자", desc: "로그인 없이 작업 담당자로 쓰는 외부 인력. 작업 히스토리·정산 관리." })}
-    ${list}
-    ${isChief(req.user) ? addForm : ""}`;
-  res.send(layout({ title: "외주 작업자", user: req.user, current: "/workers", body })); // 읽기 폭(2026-07-16)
+    ${contactPanes({ left, right, hasSelection: !!sel, backHref: safePath(req.query.return) || "/workers", backLabel: "외주 작업자" })}`;
+  return layout({ title: sel ? sel.name : "외주 작업자", user: req.user, current: "/workers", body, wide: true });
+}
+
+router.get("/", requireInvoice, (req, res) => {
+  res.send(renderWorkers(req, null));
 });
 
 router.post("/", requireChief, (req, res) => {
@@ -410,13 +382,21 @@ router.get("/:id", requireInvoice, asyncHandler(async (req, res) => {
   // 기본 정보 탭 = 정보 수정(펼침) + 첨부 서류(2026-07-09 사용자 요청 — 탭으로 분리, 이전엔 탭 위에 상시 노출).
   if (tab === "info") content = editForm + filesBlock;
 
-  const body = `
-    ${flashBanner(req.query)}
-    ${pageHeader({ title: w.name, desc: "외주 작업자", back: { href: safePath(req.query.return) || "/workers", label: "외주 작업자" }, action: isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?${unpaidForDelete > 0 ? esc(` ⚠️ 미지급 ${formatKRW(unpaidForDelete)} 기록이 함께 사라집니다.`) : ""}"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : "" })}
-    ${w.party_id ? `<div class="-mt-3 mb-3 text-sm"><span class="text-muted">연락처로 보기</span> <a href="/contacts/${w.party_id}" class="text-primary hover:underline">${esc(w.name)} ↗</a></div>` : ""}
-    ${tabBarHtml}
+  // 오른쪽 패널 = **정산 카드**(사용자 결정: '작업자를 선택하면 오른쪽에 정산 카드 상세') + 기존 3탭 상세.
+  // 카드는 탭과 무관하게 늘 위에 둔다 — 정산이 이 화면의 목적이고, 탭을 옮겨도 '얼마·보낼 수 있나'는 계속 보여야 한다.
+  const summary = workerPayoutSummary(w);
+  const right = `
+    <div class="mb-3 flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h1 class="truncate font-display text-2xl font-semibold text-fg">${esc(w.name)}</h1>
+        ${w.party_id ? `<div class="mt-0.5 text-sm"><span class="text-muted">연락처로 보기</span> <a href="/contacts/${w.party_id}" target="_blank" rel="noopener" class="text-primary hover:underline">${esc(w.name)} ↗</a></div>` : ""}
+      </div>
+      ${isChief(req.user) ? `<form method="post" action="/workers/${w.id}/delete" class="shrink-0" data-confirm="${esc(w.name)} 외주 작업자를 삭제할까요?${unpaidForDelete > 0 ? esc(` ⚠️ 미지급 ${formatKRW(unpaidForDelete)} 기록이 함께 사라집니다.`) : ""}"><button class="btn-ghost btn-sm text-danger" type="submit">작업자 삭제</button></form>` : ""}
+    </div>
+    ${workerPayoutCard({ worker: w, summary, canPay: true })}
+    <div class="mt-3">${tabBarHtml}</div>
     ${content}`;
-  res.send(layout({ title: w.name, user: req.user, current: "/workers", body }));
+  res.send(renderWorkers(req, w, right));
 }));
 
 // ── 작업 지급 처리/해제(정산) ──
