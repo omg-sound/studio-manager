@@ -786,15 +786,25 @@ function payerCombo({ selectedId = null, clientOptions = [], contactOptions = []
  * @param {{cls?:string, display?:string}} [opts]
  */
 /**
- * 첨부 이미지 전용 뷰어 문서(팝업용, 2026-07-08) — raw 이미지를 직접 열면 브라우저가 원본 크기로 좌상단에 붙여
- * 팝업(화면 50%)에 여백이 크게 남는다 → 이미지를 창에 꽉 채우는(object-contain) 단독 HTML로 감싼다.
- * CSP가 인라인 스타일을 막으므로 app.css 유틸 클래스 사용. PDF는 브라우저 내장 뷰어가 이미 꽉 채워 이 뷰어를 안 쓴다(라우트에서 raw 리다이렉트).
+ * 첨부 파일 전용 뷰어 문서(팝업용, 2026-07-08) — raw 파일을 직접 열면 브라우저가 원본 크기로 좌상단에 붙여
+ * 팝업(화면 50%)에 여백이 크게 남는다 → 창에 꽉 채우는 단독 HTML로 감싼다.
+ * CSP가 인라인 스타일을 막으므로 app.css 유틸 클래스 사용.
+ *
+ * **PDF는 `<iframe>`으로 감싼다**(2026-07-20 사용자 요청 '사이드탭 없이 PDF 자체로 하나만 — 작게 나와서 별로'):
+ * PDF를 최상위로 열면 크롬이 **전체 뷰어**(왼쪽 썸네일 사이드탭 + 툴바)를 띄워, 좁은 팝업에서 사이드탭이 폭을 먹고
+ * 본문이 45%로 쪼그라든다. 같은 PDF를 **문서 안에 끼우면(iframe) 크롬이 간이 뷰어**로 그려 사이드탭이 없다.
+ * `#view=FitH`로 폭에 맞춰 시작한다(크롬이 지원하는 열기 파라미터 — 미지원 환경에선 무시될 뿐 해롭지 않다).
+ * ⚠️`<embed>`/`<object>`는 CSP `object-src 'none'`에 막힌다 — iframe은 `default-src 'self'`로 허용된다.
+ * @param {boolean} [pdf] PDF 여부(호출부가 mime로 판정)
  */
-function fileViewerPage({ title, rawUrl }) {
+function fileViewerPage({ title, rawUrl, pdf = false }) {
+  const body = pdf
+    ? `<iframe src="${esc(rawUrl)}#view=FitH" title="${esc(title)}" data-viewer-pdf class="h-screen w-screen border-0"></iframe>`
+    : `<img src="${esc(rawUrl)}" alt="${esc(title)}" data-viewer-img class="h-screen w-screen object-contain" /><script src="/js/viewer.js?v=${ASSET_VERSION}" defer></script>`;
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(title)}</title><link rel="stylesheet" href="/css/app.css?v=${ASSET_VERSION}" /></head>
-<body class="bg-black"><img src="${esc(rawUrl)}" alt="${esc(title)}" data-viewer-img class="h-screen w-screen object-contain" /><script src="/js/viewer.js?v=${ASSET_VERSION}" defer></script></body></html>`;
+<body class="bg-black">${body}</body></html>`;
 }
 
 /**

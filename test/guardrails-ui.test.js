@@ -191,3 +191,31 @@ test("가드: 사용자 노출 문자열에 '클라이언트'가 없다", () => 
   });
   assert.deepEqual(offenders, [], "화면 문구에 '클라이언트' 잔존:\n" + offenders.join("\n"));
 });
+
+// 2026-07-20 사용자 요청 '사업자등록증 열기 — 사이드탭 없이 PDF 자체로 하나만, 작게 나와서 별로'.
+// PDF를 최상위로 열면 크롬이 전체 뷰어(왼쪽 썸네일 사이드탭)를 띄워 좁은 팝업에서 본문이 45%로 쪼그라든다.
+// iframe 안에 두면 사이드탭 없는 간이 뷰어로 그려진다. ⚠️<embed>/<object>는 CSP object-src 'none'에 막힌다.
+test("첨부 뷰어: PDF는 iframe(embed/object 금지 — CSP object-src 'none')", () => {
+  const { fileViewerPage } = require("../src/views");
+  const pdf = fileViewerPage({ title: "사업자등록증", rawUrl: "/clients/3/files/biz_license/raw", pdf: true });
+  assert.match(pdf, /<iframe src="\/clients\/3\/files\/biz_license\/raw#view=FitH"/, "iframe + 폭 맞춤");
+  assert.match(pdf, /class="h-screen w-screen border-0"/, "창을 꽉 채운다");
+  assert.ok(!/<embed|<object/.test(pdf), "embed/object는 CSP에 막혀 빈 화면이 된다");
+  // 이미지는 기존 경로 그대로(뷰어 스크립트가 창 크기를 원본 비율로 맞춘다)
+  const img = fileViewerPage({ title: "주민등록증", rawUrl: "/workers/1/files/id_card/raw" });
+  assert.match(img, /<img [^>]*data-viewer-img/);
+  assert.match(img, /viewer\.js/);
+  assert.ok(!/<iframe/.test(img), "이미지는 iframe으로 감싸지 않는다");
+});
+
+test("첨부 뷰어 라우트: PDF도 뷰어로 감싼다(옛 raw 리다이렉트 잔존 없음)", () => {
+  const fs = require("fs");
+  const path = require("path");
+  ["clients", "workers"].forEach((n) => {
+    const src = fs.readFileSync(path.join(__dirname, "..", "src", "routes", `${n}.routes.js`), "utf8");
+    // 한 줄 안에 뷰어 호출 + pdf 판정이 함께 있어야 한다(rawUrl 템플릿 리터럴에 }가 있어 블록 매칭은 못 쓴다).
+    const call = src.split("\n").find((l) => l.includes("fileViewerPage({"));
+    assert.ok(call && /pdf: \([a-z]+\.mime_type \|\| ""\)\.includes\("pdf"\)/.test(call), `${n}: mime로 pdf 판정 후 뷰어로`);
+    assert.ok(!/includes\("pdf"\)\) return res\.redirect/.test(src), `${n}: 옛 raw 리다이렉트 잔존 없음`);
+  });
+});

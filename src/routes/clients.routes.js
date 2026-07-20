@@ -395,7 +395,7 @@ router.post("/:id/files/:kind", requireEditor, upload.single("file"), asyncHandl
 }));
 
 // ── 첨부 서류 인증 다운로드(치프·스태프 인증 후 프록시 — 공개 URL 없음) ──
-// ── 첨부 서류 뷰어(팝업 전용, 2026-07-08) — 이미지가 팝업 창을 꽉 채우게. PDF는 내장 뷰어가 이미 꽉 채워 raw로 리다이렉트.
+// ── 첨부 서류 뷰어(팝업 전용, 2026-07-08) — 이미지·PDF가 팝업 창을 꽉 채우게(PDF는 iframe으로 감싸 사이드탭 없는 간이 뷰어, 2026-07-20).
 router.get("/:id/files/:kind/view", requireEditor, (req, res) => {
   const id = Number(req.params.id);
   const kind = req.params.kind;
@@ -403,9 +403,10 @@ router.get("/:id/files/:kind/view", requireEditor, (req, res) => {
   if (!meta) return res.status(404).send("파일을 찾을 수 없습니다.");
   const cf = getClientFile(id, kind);
   if (!cf) return res.status(404).send(errorPage({ code: 404, title: "파일이 없습니다", message: "아직 업로드된 파일이 없습니다.", user: req.user }));
-  if ((cf.mime_type || "").includes("pdf")) return res.redirect(`/clients/${id}/files/${kind}/raw`);
+  // PDF도 이 뷰어로 감싼다(2026-07-20) — raw로 리다이렉트하면 크롬 전체 뷰어(썸네일 사이드탭)가 떠서
+  // 좁은 팝업에선 본문이 45%로 쪼그라들었다. iframe 안이면 사이드탭 없는 간이 뷰어로 그려진다.
   res.setHeader("Cache-Control", "private, no-store");
-  res.send(fileViewerPage({ title: meta.label, rawUrl: `/clients/${id}/files/${kind}/raw` }));
+  res.send(fileViewerPage({ title: meta.label, rawUrl: `/clients/${id}/files/${kind}/raw`, pdf: (cf.mime_type || "").includes("pdf") }));
 });
 
 router.get("/:id/files/:kind/raw", requireEditor, asyncHandler(async (req, res) => {
