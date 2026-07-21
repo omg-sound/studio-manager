@@ -448,9 +448,12 @@ function sessionsSection({ project, rows, isAdmin, managers = [], rateItems = []
 }
 
 /** 캘린더 칩 색 — 목록 상태 배지와 같은 기조(예정=info, 완료=success, 취소=muted). */
-function calendarChipColor(status) {
-  if (status === "예정") return "bg-info/10 text-info";
-  return SESSION_STATUS_BADGE[status] || "bg-muted/10 text-muted";
+// 캘린더 칩의 상태 점(dot) 색(2026-07-21 사용자 요청 — 구글 캘린더식: 배경 채움 대신 색 점 + 글자).
+// 상태 의미 보존: 예정=primary·완료=success(초록)·취소=muted(회색). SESSION_STATUS_BADGE(배경 tint)와 별개.
+function calendarDotColor(status) {
+  if (status === "완료") return "bg-success";
+  if (status === "취소") return "bg-muted";
+  return "bg-primary"; // 예정 등 기본
 }
 
 /** 월 캘린더 그리드(YYYY-MM). 날짜별 세션을 셀에 배치하고 이전/다음 월로 이동. */
@@ -468,7 +471,7 @@ function monthCalendar(ym, sessions) {
 
   // 셀 경계는 개별 라운드 테두리·간격 대신 그리드 라인(border-b/border-r)으로 통합 — 카드·꾸밈 없이 화면 폭을 꽉 채운다(사용자 요청).
   let cells = "";
-  const CELL = "min-h-[104px] min-w-0 border-b border-r border-border/50 p-1";
+  const CELL = "min-h-[104px] min-w-0 border-b border-r border-border p-1"; // 선 진하게(2026-07-21 사용자 요청, 구글 캘린더식) — /50 반투명 제거
   for (let i = 0; i < startDow; i++) cells += `<div class="${CELL} bg-bg/30"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${y}-${pad2(mo)}-${pad2(d)}`;
@@ -479,8 +482,9 @@ function monthCalendar(ym, sessions) {
         // 칩 라벨 = 아티스트/회사/프로젝트(누구·무엇인지 식별). 시간은 데스크톱에서만(모바일은 좁아 내용이 가려짐 — 사용자 요청).
         const label = esc(String(s.artist || s.production_company || s.artist_company || s.project_title || s.session_type).trim());
         const t = s.start_time ? esc(s.start_time) : "";
+        // 구글 캘린더식 칩(2026-07-21 사용자 요청): 기본은 배경 없이 **색 점 + 글자**, 마우스 올리면 회색 하이라이트(hover:bg-muted/10).
         // data-session-card: app.js가 클릭 가로채 GET .../card 조각을 중앙 모달로(서베이 흐름 유지). 무JS 폴백=프로젝트 세션 탭 링크.
-        return `<a href="/projects/${s.project_id}?tab=sessions" data-session-card="/sessions/${s.id}/card" class="block truncate rounded ${calendarChipColor(s.status)} px-1.5 py-0.5 text-[11px] font-medium leading-snug hover:opacity-80 sm:text-xs${s.status === "취소" ? " opacity-60" : ""}" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}">${t ? `<span class="hidden font-normal opacity-70 sm:inline">${t} </span>` : ""}${label}</a>`;
+        return `<a href="/projects/${s.project_id}?tab=sessions" data-session-card="/sessions/${s.id}/card" class="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] leading-snug hover:bg-muted/10 sm:text-xs${s.status === "취소" ? " opacity-60" : ""}" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}"><span class="h-1.5 w-1.5 shrink-0 rounded-full ${calendarDotColor(s.status)}"></span><span class="min-w-0 truncate font-medium">${t ? `<span class="hidden font-normal text-muted sm:inline">${t} </span>` : ""}${label}</span></a>`;
       })
       .join("");
     cells += `<div class="${CELL} ${isToday ? "bg-primary/5" : ""}">
@@ -495,7 +499,7 @@ function monthCalendar(ym, sessions) {
   //   높이 기준 `calc(100vh-11rem)`: 격자 상단까지 실측 151px(≈9.4rem)+하단 여백 ≈1.5rem(REV_PANE_H와 같은 뷰포트-calc 패턴, 함정 #27 — 리터럴).
   //   lg 미만(모바일)은 flex·height 없이 자연 흐름 → 셀 min-h-[104px] 그대로(스크롤), 이전과 동일.
   const dowRow = dows
-    .map((d, i) => `<div class="border-b border-r border-border/50 py-1 text-center text-xs font-medium ${i === 0 ? "text-danger" : i === 6 ? "text-primary" : "text-muted"}">${d}</div>`)
+    .map((d, i) => `<div class="border-b border-r border-border py-1 text-center text-xs font-medium ${i === 0 ? "text-danger" : i === 6 ? "text-primary" : "text-muted"}">${d}</div>`)
     .join("");
   return `
     <div class="mb-3 flex items-center justify-between">
@@ -503,11 +507,11 @@ function monthCalendar(ym, sessions) {
       <h2 class="font-display text-lg font-semibold">${y}년 ${mo}월</h2>
       <a href="/sessions?view=calendar&month=${nextYm}" class="btn-ghost btn-sm">다음 ›</a>
     </div>
-    <div class="-mx-4 border-t border-border/50 sm:-mx-6 lg:flex lg:h-[calc(100vh-11rem)] lg:flex-col">
-      <div class="grid grid-cols-7 border-l border-border/50">
+    <div class="-mx-4 border-t border-border sm:-mx-6 lg:flex lg:h-[calc(100vh-11rem)] lg:flex-col">
+      <div class="grid grid-cols-7 border-l border-border">
         ${dowRow}
       </div>
-      <div class="grid grid-cols-7 border-l border-border/50 lg:flex-1 lg:auto-rows-[minmax(104px,1fr)]">
+      <div class="grid grid-cols-7 border-l border-border lg:flex-1 lg:auto-rows-[minmax(104px,1fr)]">
         ${cells}
       </div>
     </div>`;
