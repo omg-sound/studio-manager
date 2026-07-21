@@ -489,6 +489,11 @@ function monthCalendar(ym, sessions) {
     </div>`;
   }
   // 요일 헤더도 같은 그리드 라인. 컨테이너는 상·좌 테두리(border-t/border-l)로 격자 마감. -mx로 콘텐츠 패딩을 상쇄해 화면 끝까지.
+  // 세로 채움(2026-07-21 사용자 요청 '캘린더 아래 여백이 많다'): 요일 헤더와 날짜 격자를 **두 그리드로 분리**한다 —
+  //   한 그리드에 `auto-rows-fr`를 걸면 요일 헤더 줄까지 같이 늘어나기 때문. 헤더 그리드는 auto 높이,
+  //   날짜 그리드만 lg에서 `flex-1`(남는 높이 흡수)+`auto-rows-[minmax(104px,1fr)]`(주별 행이 균등 분배·104px 하한)로 채운다.
+  //   높이 기준 `calc(100vh-11rem)`: 격자 상단까지 실측 151px(≈9.4rem)+하단 여백 ≈1.5rem(REV_PANE_H와 같은 뷰포트-calc 패턴, 함정 #27 — 리터럴).
+  //   lg 미만(모바일)은 flex·height 없이 자연 흐름 → 셀 min-h-[104px] 그대로(스크롤), 이전과 동일.
   const dowRow = dows
     .map((d, i) => `<div class="border-b border-r border-border/50 py-1 text-center text-xs font-medium ${i === 0 ? "text-danger" : i === 6 ? "text-primary" : "text-muted"}">${d}</div>`)
     .join("");
@@ -498,9 +503,11 @@ function monthCalendar(ym, sessions) {
       <h2 class="font-display text-lg font-semibold">${y}년 ${mo}월</h2>
       <a href="/sessions?view=calendar&month=${nextYm}" class="btn-ghost btn-sm">다음 ›</a>
     </div>
-    <div class="-mx-4 border-t border-border/50 sm:-mx-6">
+    <div class="-mx-4 border-t border-border/50 sm:-mx-6 lg:flex lg:h-[calc(100vh-11rem)] lg:flex-col">
       <div class="grid grid-cols-7 border-l border-border/50">
         ${dowRow}
+      </div>
+      <div class="grid grid-cols-7 border-l border-border/50 lg:flex-1 lg:auto-rows-[minmax(104px,1fr)]">
         ${cells}
       </div>
     </div>`;
