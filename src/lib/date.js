@@ -145,4 +145,29 @@ function utcStampFromKst(kstYmdStr, kstTime = "00:00:00") {
   return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
 }
 
-module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, formatYmdCombo, cleanTime, timeToMin, minutesBetween, kstDate, kstYmd, kstDateTime, kstHms, utcStampFromKst };
+/**
+ * 월 캘린더 격자 셀 목록(YYYY-MM) — 구글 캘린더식으로 **앞뒤 달 날짜까지** 채운다(2026-07-21 사용자 요청).
+ * 첫 주는 1일 앞의 이전 달 말일들로, 마지막 주는 말일 뒤의 다음 달 초일들로 메워 항상 완전한 주(7칸 배수)를 만든다.
+ * **뷰(monthCalendar)와 데이터(sessionsForCalendar)가 이 하나를 공유**해야 격자 범위와 세션 조회 범위가 어긋나지 않는다.
+ * @returns {Array<{ymd:string, day:number, inMonth:boolean}>} 순서대로(일요일 시작). inMonth=false면 이웃 달 칸.
+ * 로컬 날짜 파트만 쓴다(toISOString 금지 — UTC라 KST에서 하루 밀린다, 함정 참조).
+ */
+function calendarMonthCells(ym) {
+  const [y, mo] = String(ym).split("-").map(Number);
+  const p2 = (n) => String(n).padStart(2, "0");
+  const startDow = new Date(y, mo - 1, 1).getDay(); // 0=일
+  const daysInMonth = new Date(y, mo, 0).getDate();
+  const weekRows = Math.ceil((startDow + daysInMonth) / 7);
+  const cells = [];
+  for (let i = 0; i < weekRows * 7; i++) {
+    const dt = new Date(y, mo - 1, 1 - startDow + i); // 1일 기준 오프셋 — Date가 월 경계를 알아서 넘긴다
+    cells.push({
+      ymd: `${dt.getFullYear()}-${p2(dt.getMonth() + 1)}-${p2(dt.getDate())}`,
+      day: dt.getDate(),
+      inMonth: dt.getMonth() + 1 === mo && dt.getFullYear() === y,
+    });
+  }
+  return cells;
+}
+
+module.exports = { todayYmd, ymd, isValidYmd, daysUntilYmd, ddayLabel, formatYmdShort, formatYmdCombo, cleanTime, timeToMin, minutesBetween, kstDate, kstYmd, kstDateTime, kstHms, utcStampFromKst, calendarMonthCells };

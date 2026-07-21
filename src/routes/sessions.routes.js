@@ -9,7 +9,7 @@ const {
   listRooms,
   upcomingSessions,
   pastSessions,
-  sessionsForMonth,
+  sessionsForCalendar,
   getSessionCard,
   getProjectForUser,
   getSessionForUser,
@@ -125,7 +125,7 @@ router.get("/sessions", requireAuth, (req, res) => {
   let content;
   if (view === "calendar") {
     const ym = /^\d{4}-\d{2}$/.test(req.query.month || "") ? req.query.month : todayYmd().slice(0, 7);
-    content = monthCalendar(ym, sessionsForMonth(req.user, ym)); // 카드 래퍼 없이 — 캘린더는 그리드 라인으로 화면 끝까지(full)
+    content = monthCalendar(ym, sessionsForCalendar(req.user, ym)); // 앞뒤 달 넘침 포함(구글식). 카드 래퍼 없이 — 그리드 라인으로 화면 끝까지(full)
   } else {
     const managers = editable ? listProjectManagers() : [];
     const rateItems = editable ? listRateItems() : [];

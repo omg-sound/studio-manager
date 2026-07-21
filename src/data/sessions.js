@@ -12,7 +12,7 @@
  */
 
 const { db } = require("../db");
-const { todayYmd, isValidYmd, cleanTime, timeToMin, minutesBetween } = require("../lib/date");
+const { todayYmd, isValidYmd, cleanTime, timeToMin, minutesBetween, calendarMonthCells } = require("../lib/date");
 const { parseMoney } = require("../lib/forms");
 const { normalizeSessionType, normalizeSessionStatus, RENTAL_SESSION_TYPES } = require("../config");
 const { getProjectForUser } = require("./projects"); // 무순환
@@ -577,6 +577,27 @@ function sessionsForMonth(_user, ym) {
     .map(withBilling());
 }
 
+/**
+ * 캘린더 격자에 보이는 **전 범위** 세션(앞뒤 달 넘침 포함, 2026-07-21). sessionsForMonth가 `LIKE 'YYYY-MM-%'`로
+ * 그 달만 주는 것과 달리, calendarMonthCells가 정한 첫 셀~끝 셀 사이를 BETWEEN으로 가져와 이웃 달 칸의 세션도 보이게 한다.
+ * 뷰(monthCalendar)와 **같은 헬퍼**로 범위를 정하므로 격자와 조회 범위가 항상 일치한다.
+ */
+function sessionsForCalendar(_user, ym) {
+  if (!/^\d{4}-\d{2}$/.test(String(ym || ""))) return [];
+  const cells = calendarMonthCells(ym);
+  const from = cells[0].ymd;
+  const to = cells[cells.length - 1].ymd;
+  return db()
+    .prepare(
+      `SELECT s.*, p.title AS project_title, p.artist, p.artist_company, p.production_company FROM sessions s
+       JOIN projects p ON p.id = s.project_id
+       WHERE s.session_date BETWEEN ? AND ?
+       ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
+    )
+    .all(from, to)
+    .map(withBilling());
+}
+
 /** 세션 카드(캘린더 팝오버) 단건 — sessionsForMonth와 동일 enrich(프로젝트 필드 조인 + billing). */
 function getSessionCard(_user, id) {
   const row = db()
@@ -609,5 +630,6 @@ module.exports = {
   upcomingSessions,
   pastSessions,
   sessionsForMonth,
+  sessionsForCalendar,
   getSessionCard,
 };

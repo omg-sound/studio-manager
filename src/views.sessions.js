@@ -4,7 +4,7 @@
 
 const { config, SESSION_TYPES, RENTAL_SESSION_TYPES, SESSION_STATUS_BADGE, SESSION_TYPE_RATE_KIND } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, explain, dirtyActionRow, personCombo, personComboOptionsScript, personComboCompanyScript, personLabel, dateCombo } = require("./views");
-const { formatYmdShort, ddayLabel, todayYmd, minutesBetween } = require("./lib/date");
+const { formatYmdShort, ddayLabel, todayYmd, minutesBetween, calendarMonthCells } = require("./lib/date");
 const { listRooms, getDefaultBooker, getProMinutes, contactOptions, partyOptions, listSessionDirectors, listSessionEngineers, listRateCategories, rateCategoryKind } = require("./data");
 
 /**
@@ -460,8 +460,6 @@ function calendarDotColor(status) {
 function monthCalendar(ym, sessions) {
   const [y, mo] = String(ym).split("-").map(Number);
   const pad2 = (n) => String(n).padStart(2, "0");
-  const startDow = new Date(y, mo - 1, 1).getDay(); // 0=일
-  const daysInMonth = new Date(y, mo, 0).getDate();
   const prevYm = mo === 1 ? `${y - 1}-12` : `${y}-${pad2(mo - 1)}`;
   const nextYm = mo === 12 ? `${y + 1}-01` : `${y}-${pad2(mo + 1)}`;
   const today = todayYmd();
@@ -470,28 +468,31 @@ function monthCalendar(ym, sessions) {
   const dows = ["일", "월", "화", "수", "목", "금", "토"];
 
   // 셀 경계는 개별 라운드 테두리·간격 대신 그리드 라인(border-b/border-r)으로 통합 — 카드·꾸밈 없이 화면 폭을 꽉 채운다(사용자 요청).
-  let cells = "";
+  // 셀 목록 = calendarMonthCells(앞뒤 달 넘침 포함, 2026-07-21 사용자 요청). 데이터(sessionsForCalendar)와 같은 헬퍼라 범위 일치.
   const CELL = "min-h-[104px] min-w-0 border-b border-r border-border p-1"; // 선 진하게(2026-07-21 사용자 요청, 구글 캘린더식) — /50 반투명 제거
-  for (let i = 0; i < startDow; i++) cells += `<div class="${CELL} bg-bg/30"></div>`;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = `${y}-${pad2(mo)}-${pad2(d)}`;
-    const ds = byDate[date] || [];
-    const isToday = date === today;
-    const items = ds
-      .map((s) => {
-        // 칩 라벨 = 아티스트/회사/프로젝트(누구·무엇인지 식별). 시간은 데스크톱에서만(모바일은 좁아 내용이 가려짐 — 사용자 요청).
-        const label = esc(String(s.artist || s.production_company || s.artist_company || s.project_title || s.session_type).trim());
-        const t = s.start_time ? esc(s.start_time) : "";
-        // 구글 캘린더식 칩(2026-07-21 사용자 요청): 기본은 배경 없이 **색 점 + 글자**, 마우스 올리면 회색 하이라이트(hover:bg-muted/10).
-        // data-session-card: app.js가 클릭 가로채 GET .../card 조각을 중앙 모달로(서베이 흐름 유지). 무JS 폴백=프로젝트 세션 탭 링크.
-        return `<a href="/projects/${s.project_id}?tab=sessions" data-session-card="/sessions/${s.id}/card" class="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] leading-snug hover:bg-muted/10 sm:text-xs${s.status === "취소" ? " opacity-60" : ""}" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}"><span class="h-1.5 w-1.5 shrink-0 rounded-full ${calendarDotColor(s.status)}"></span><span class="min-w-0 truncate font-medium">${t ? `<span class="hidden font-normal text-muted sm:inline">${t} </span>` : ""}${label}</span></a>`;
-      })
-      .join("");
-    cells += `<div class="${CELL} ${isToday ? "bg-primary/5" : ""}">
-      <div class="mb-0.5 text-center text-xs ${isToday ? "font-semibold text-primary" : "text-muted"}">${d}</div>
+  const cells = calendarMonthCells(ym)
+    .map(({ ymd: date, day, inMonth }) => {
+      const ds = byDate[date] || [];
+      const isToday = date === today;
+      const items = ds
+        .map((s) => {
+          // 칩 라벨 = 아티스트/회사/프로젝트(누구·무엇인지 식별). 시간은 데스크톱에서만(모바일은 좁아 내용이 가려짐 — 사용자 요청).
+          const label = esc(String(s.artist || s.production_company || s.artist_company || s.project_title || s.session_type).trim());
+          const t = s.start_time ? esc(s.start_time) : "";
+          // 구글 캘린더식 칩(2026-07-21 사용자 요청): 기본은 배경 없이 **색 점 + 글자**, 마우스 올리면 회색 하이라이트(hover:bg-muted/10).
+          // data-session-card: app.js가 클릭 가로채 GET .../card 조각을 중앙 모달로(서베이 흐름 유지). 무JS 폴백=프로젝트 세션 탭 링크.
+          return `<a href="/projects/${s.project_id}?tab=sessions" data-session-card="/sessions/${s.id}/card" class="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] leading-snug hover:bg-muted/10 sm:text-xs${s.status === "취소" ? " opacity-60" : ""}" title="${esc(s.session_type)} · ${esc(s.project_title || "")}${t ? " · " + t : ""}"><span class="h-1.5 w-1.5 shrink-0 rounded-full ${calendarDotColor(s.status)}"></span><span class="min-w-0 truncate font-medium">${t ? `<span class="hidden font-normal text-muted sm:inline">${t} </span>` : ""}${label}</span></a>`;
+        })
+        .join("");
+      // 이웃 달 칸: 흐린 배경 + 흐린 날짜(구글식). 세션은 그대로 보여준다(넘친 일정도 눈에 띄게).
+      const cellBg = isToday ? "bg-primary/5" : inMonth ? "" : "bg-muted/5";
+      const numCls = isToday ? "font-semibold text-primary" : inMonth ? "text-muted" : "text-muted/50";
+      return `<div class="${CELL} ${cellBg}">
+      <div class="mb-0.5 text-center text-xs ${numCls}">${day}</div>
       <div class="space-y-0.5">${items}</div>
     </div>`;
-  }
+    })
+    .join("");
   // 요일 헤더도 같은 그리드 라인. 컨테이너는 상·좌 테두리(border-t/border-l)로 격자 마감. -mx로 콘텐츠 패딩을 상쇄해 화면 끝까지.
   // 세로 채움(2026-07-21 사용자 요청 '캘린더 아래 여백이 많다'): 요일 헤더와 날짜 격자를 **두 그리드로 분리**한다 —
   //   한 그리드에 `auto-rows-fr`를 걸면 요일 헤더 줄까지 같이 늘어나기 때문. 헤더 그리드는 auto 높이,
