@@ -488,7 +488,7 @@ function monthCalendar(ym, sessions) {
       })
       .join("");
     cells += `<div class="${CELL} ${isToday ? "bg-primary/5" : ""}">
-      <div class="mb-0.5 text-xs ${isToday ? "font-semibold text-primary" : "text-muted"}">${d}</div>
+      <div class="mb-0.5 text-center text-xs ${isToday ? "font-semibold text-primary" : "text-muted"}">${d}</div>
       <div class="space-y-0.5">${items}</div>
     </div>`;
   }
@@ -502,10 +502,13 @@ function monthCalendar(ym, sessions) {
     .map((d, i) => `<div class="border-b border-r border-border py-1 text-center text-xs font-medium ${i === 0 ? "text-danger" : i === 6 ? "text-primary" : "text-muted"}">${d}</div>`)
     .join("");
   return `
-    <div class="mb-3 flex items-center justify-between">
-      <a href="/sessions?view=calendar&month=${prevYm}" class="btn-ghost btn-sm">‹ 이전</a>
+    <div class="mb-3 flex items-center gap-2">
+      <a href="/sessions?view=calendar&month=${today.slice(0, 7)}" class="btn-ghost btn-sm">오늘</a>
+      <div class="flex items-center gap-0.5">
+        <a href="/sessions?view=calendar&month=${prevYm}" class="btn-ghost btn-sm px-2" aria-label="이전 달">‹</a>
+        <a href="/sessions?view=calendar&month=${nextYm}" class="btn-ghost btn-sm px-2" aria-label="다음 달">›</a>
+      </div>
       <h2 class="font-display text-lg font-semibold">${y}년 ${mo}월</h2>
-      <a href="/sessions?view=calendar&month=${nextYm}" class="btn-ghost btn-sm">다음 ›</a>
     </div>
     <div class="-mx-4 border-t border-border sm:-mx-6 lg:flex lg:h-[calc(100vh-11rem)] lg:flex-col">
       <div class="grid grid-cols-7 border-l border-border">
