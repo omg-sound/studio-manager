@@ -519,6 +519,15 @@ function listInvoices(_user, { status, overdue, clientId } = {}) {
   return rows;
 }
 
+/** 전역 검색용 — 청구번호·청구처명·제목·아티스트 매칭(발행일 최신순). 93건 규모라 JS 필터로 충분(clients/suggest와 동일 패턴). */
+function searchInvoices(_user, q, limit = 5) {
+  const ql = String(q || "").trim().toLowerCase();
+  if (!ql) return [];
+  return listInvoices(_user, {})
+    .filter((i) => [i.invoice_number, i.client_name, i.title, i.project_artist].filter(Boolean).join(" ").toLowerCase().includes(ql))
+    .slice(0, limit);
+}
+
 /** 단건 인보이스(치프 전용 라우트에서 사용). */
 function getInvoiceForUser(_user, id) {
   const row = db()
@@ -588,6 +597,7 @@ module.exports = {
   deleteInvoice,
   listInvoices,
   getInvoiceForUser,
+  searchInvoices,
   invoiceStats,
   listInvoicesForProject,
   listPayments,

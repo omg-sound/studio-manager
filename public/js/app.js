@@ -2933,8 +2933,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var items = [], hi = -1, timer = null, ctrl = null, lastQ = null;
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); hi = -1; }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
+    // 선택 대상은 <a>만(카테고리 헤더 <div>는 건너뛴다 — 전역 검색 그룹 헤더). cat 없는 기존 suggest는 헤더 없이 그대로.
+    function links() { return pop.querySelectorAll("a"); }
     function setHi(i) {
-      var rs = pop.children;
+      var rs = links();
       if (!rs.length) { hi = -1; return; }
       hi = Math.max(0, Math.min(i, rs.length - 1));
       for (var k = 0; k < rs.length; k++) rs[k].classList.toggle("bg-elevated", k === hi);
@@ -2942,9 +2944,16 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     }
     function render() {
       if (!items.length) { pop.innerHTML = ""; hide(); return; }
-      pop.innerHTML = items.map(function (it) {
-        return '<a href="' + esc(it.href) + '" class="flex flex-col gap-0.5 px-3 py-2 hover:bg-elevated"><span class="truncate text-sm text-fg">' + esc(it.label) + "</span>" + (it.sub ? '<span class="truncate text-xs text-muted">' + esc(it.sub) + "</span>" : "") + "</a>";
-      }).join("");
+      var prevCat = null, html = "";
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (it.cat && it.cat !== prevCat) { // 카테고리 바뀌는 곳에 그룹 헤더(비선택)
+          html += '<div class="px-3 pt-2 pb-1 text-[11px] font-semibold text-muted" aria-hidden="true">' + esc(it.cat) + "</div>";
+          prevCat = it.cat;
+        }
+        html += '<a href="' + esc(it.href) + '" class="flex flex-col gap-0.5 px-3 py-2 hover:bg-elevated"><span class="truncate text-sm text-fg">' + esc(it.label) + "</span>" + (it.sub ? '<span class="truncate text-xs text-muted">' + esc(it.sub) + "</span>" : "") + "</a>";
+      }
+      pop.innerHTML = html;
       hi = -1; show();
     }
     function fetchSuggest() {
@@ -2966,11 +2975,34 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
       var open = !pop.classList.contains("hidden");
       if (e.key === "ArrowDown") { if (open) { e.preventDefault(); setHi(hi + 1); } }
       else if (e.key === "ArrowUp") { if (open) { e.preventDefault(); setHi(hi - 1); } }
-      else if (e.key === "Enter") { if (open && hi >= 0 && pop.children[hi]) { e.preventDefault(); pop.children[hi].click(); } } // 하이라이트 선택 이동, 없으면 폼 제출(전체 검색)
+      else if (e.key === "Enter") { var rs = links(); if (open && hi >= 0 && rs[hi]) { e.preventDefault(); rs[hi].click(); } } // 하이라이트 선택 이동, 없으면 폼 제출(전체 검색)
       else if (e.key === "Escape") { hide(); }
     });
     pop.addEventListener("mousedown", function (e) { e.preventDefault(); }); // 클릭 전 blur로 닫히는 것 방지
-    pop.addEventListener("mousemove", function (e) { var a = e.target.closest("a"); if (!a) return; var rs = pop.children; for (var k = 0; k < rs.length; k++) if (rs[k] === a) { setHi(k); break; } });
+    pop.addEventListener("mousemove", function (e) { var a = e.target.closest("a"); if (!a) return; var rs = links(); for (var k = 0; k < rs.length; k++) if (rs[k] === a) { setHi(k); break; } });
+  });
+})();
+
+// 전역 검색 단축키(2026-07-21): ⌘K(맥)/Ctrl+K 또는 '/'(입력 포커스 아닐 때) → 사이드바 검색창 포커스.
+(function () {
+  "use strict";
+  var box = document.querySelector("[data-global-search]");
+  if (!box) return;
+  var mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+  box.setAttribute("placeholder", mac ? "검색  ⌘K" : "검색  Ctrl+K"); // 플랫폼별 힌트(placeholder는 정적이라 여기서 세팅)
+  function editable(el) {
+    if (!el) return false;
+    var t = (el.tagName || "").toLowerCase();
+    return t === "input" || t === "textarea" || t === "select" || el.isContentEditable;
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 무시(#18)
+    var cmdK = (e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey);
+    var slash = e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !editable(e.target); // '/'는 입력 중이 아닐 때만(타이핑 방해 금지)
+    if (!cmdK && !slash) return;
+    e.preventDefault();
+    box.focus();
+    if (box.select) box.select();
   });
 })();
 

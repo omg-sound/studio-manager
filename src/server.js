@@ -18,6 +18,7 @@ const projectRoutes = require("./routes/projects.routes");
 const deliverableRoutes = require("./routes/deliverables.routes");
 const invoiceRoutes = require("./routes/invoices.routes");
 const sessionRoutes = require("./routes/sessions.routes");
+const searchRoutes = require("./routes/search.routes");
 const clientRoutes = require("./routes/clients.routes");
 const contactRoutes = require("./routes/contacts.routes");
 const workerRoutes = require("./routes/workers.routes");
@@ -136,6 +137,7 @@ app.use("/contacts", contactRoutes); // requireEditor (클라이언트 측 담�
 app.use("/workers", workerRoutes); // 열람·정산=requireInvoice(치프·대표), 추가·삭제·수정(마스터)=requireChief
 app.use("/revenue", revenueRoutes); // requireInvoice (담당 엔지니어별 매출, 대표·치프 — 스태프 제외)
 app.use("/settings", settingsRoutes); // requireEditor(환경설정·콘텐츠=치프·스태프), 로그인 계정 관리(/users*)만 requireChief
+app.use("/search", searchRoutes); // 전역 통합 검색 — /search(전체 결과 페이지)·/search/suggest(드롭다운 JSON), requireAuth
 
 // 정적 자산(css/js)만 — 보호 대상 HTML은 여기 없음
 app.use(

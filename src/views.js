@@ -263,7 +263,13 @@ function layout({ title, user, current = "", body, wide = false }) {
       <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     ${WORDMARK}
-    <a href="/logout" class="text-sm text-muted hover:text-fg">로그아웃</a>
+    <div class="flex items-center gap-1">
+      <!-- 모바일 전역 검색: 좁은 상단바엔 typeahead 부적합 → 아이콘으로 /search(자체 검색창 보유) 이동(2026-07-21). -->
+      <a href="/search" class="btn-ghost px-2 py-1.5" aria-label="검색">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </a>
+      <a href="/logout" class="text-sm text-muted hover:text-fg">로그아웃</a>
+    </div>
   </header>
 
   <div class="mx-auto flex w-full max-w-wide gap-8 px-4 py-6 sm:px-6">
@@ -277,6 +283,8 @@ function layout({ title, user, current = "", body, wide = false }) {
         </button>
       </div>
       <div class="mb-7 hidden items-center gap-2 px-2 sm:flex">${WORDMARK}</div>
+      <!-- 전역 통합 검색(2026-07-21): 사이드바 상시. suggestUrl=/search/suggest(드롭다운), action=/search(엔터=전체 결과). data-global-search=단축키(⌘K/'/') 포커스 대상. popWide=좁은 사이드바에서 결과 안 잘리게. -->
+      ${searchBox({ action: "/search", suggestUrl: "/search/suggest", placeholder: "검색", label: "전역 검색", noButton: true, inputAttrs: "data-global-search", popWide: true })}
       <nav class="space-y-6">
         ${sidebarLinks(user, current)}
       </nav>
@@ -507,14 +515,16 @@ function capList(rows, query, moreHrefFn, { def = 100, step = 200 } = {}) {
  * 검색 박스(+ 타이핑 제안 typeahead). suggestUrl 지정 시 app.js가 타이핑하면 매칭 결과를 드롭다운으로 제안(클릭·엔터로 해당 상세로 이동).
  * hidden = 함께 제출할 hidden input HTML(탭·뷰 등 유지). suggestUrl JSON = [{label, sub?, href}].
  */
-function searchBox({ action, q = "", placeholder = "", label = "검색", suggestUrl = "", hidden = "", liveFilter = false, noButton = false, remote = false }) {
+function searchBox({ action, q = "", placeholder = "", label = "검색", suggestUrl = "", hidden = "", liveFilter = false, noButton = false, remote = false, inputAttrs = "", popWide = false }) {
   const wrapAttrs = suggestUrl ? ` data-search-suggest data-suggest-url="${esc(suggestUrl)}"` : "";
   const combo = suggestUrl ? ' role="combobox" aria-expanded="false" aria-autocomplete="list"' : "";
   const live = liveFilter ? " data-live-filter" : ""; // 타이핑 시 [data-filter-list] 행을 실시간 필터(검색 누르기 전, app.js)
   // remote=목록이 상한(capList)으로 잘렸을 때(로드된 행만으로는 부족) 타이핑 시 서버 전체 검색 결과로 [data-filter-list]를 채운다(app.js, 2026-07-17).
   const rmt = remote && liveFilter ? " data-live-remote" : "";
+  // popWide=좁은 컨테이너(사이드바 ~224px)에서 결과가 잘리지 않게 드롭다운을 입력폭보다 넓게(왼쪽 기준·오른쪽으로 확장). 전역 검색용.
+  const popPos = popWide ? "left-0 min-w-[17rem] w-max max-w-sm" : "left-0 right-0";
   const pop = suggestUrl
-    ? `<div class="absolute left-0 right-0 z-30 mt-1 hidden max-h-72 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-suggest-pop role="listbox"></div>`
+    ? `<div class="absolute ${popPos} z-30 mt-1 hidden max-h-80 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-suggest-pop role="listbox"></div>`
     : "";
   // noButton=검색 버튼 숨김(실시간 필터가 주 경험 — 2026-07-16). 폼은 단일 텍스트 입력이라 Enter로 서버 전체 검색(캡 초과분)은 유지.
   const btn = noButton ? "" : `<button class="btn-primary shrink-0" type="submit">검색</button>`;
@@ -522,7 +532,7 @@ function searchBox({ action, q = "", placeholder = "", label = "검색", suggest
     <form method="get" action="${esc(action)}" class="mb-4 flex gap-2">
       ${hidden}
       <div class="relative min-w-0 flex-1"${wrapAttrs}>
-        <input class="input w-full" type="search" name="q" value="${esc(q)}" placeholder="${esc(placeholder)}" aria-label="${esc(label)}" autocomplete="off"${combo}${live}${rmt} />
+        <input class="input w-full" type="search" name="q" value="${esc(q)}" placeholder="${esc(placeholder)}" aria-label="${esc(label)}" autocomplete="off"${combo}${live}${rmt}${inputAttrs ? " " + inputAttrs : ""} />
         ${pop}
       </div>
       ${btn}
