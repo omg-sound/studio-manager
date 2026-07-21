@@ -11,8 +11,12 @@
     }
     if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
     // 기본 팔레트 = Linear(미선택 사용자도 Linear, 2026-07-18). claude(기본 :root)는 속성 없이 사용.
+    // ⚠️ 서버가 `<html data-palette="linear">`를 먼저 렌더한다(FOUC 방지, 2026-07-21) — 그래서 여기서
+    //    claude는 **속성을 지워** :root로 되돌리고, 미선택/기타는 linear로 확정한다(서버값과 동일 = 전환 없음).
+    //    이전엔 서버가 팔레트를 안 보내 매 로드마다 Claude(:root)→Linear 전환이 보였다(사용자 리포트 '이전/다음 누를 때 깜빡').
     var p = localStorage.getItem("palette");
     if (p === "apple" || p === "linear" || p === "spotify" || p === "pinterest") document.documentElement.setAttribute("data-palette", p);
-    else if (p !== "claude") document.documentElement.setAttribute("data-palette", "linear");
+    else if (p === "claude") document.documentElement.removeAttribute("data-palette");
+    else document.documentElement.setAttribute("data-palette", "linear");
   } catch (e) {}
 })();

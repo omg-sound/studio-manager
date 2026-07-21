@@ -235,7 +235,10 @@ function layout({ title, user, current = "", body, wide = false }) {
   const roleLabel = user ? (ROLE_LABELS[user.role] || user.role) : "";
   const who = user ? `${esc(user.name || user.email)} · ${roleLabel}` : "";
   return `<!doctype html>
-<html lang="ko">
+<!-- data-palette="linear" = 앱 기본 팔레트를 서버가 직접 렌더(FOUC 방지, 2026-07-21 사용자 리포트 '이전/다음 누를 때 시각 스타일 깜빡').
+     이전엔 팔레트를 안 보내 CSS :root(=Claude 크림)로 먼저 그린 뒤 theme-init.js가 Linear로 바꿔 매 로드 전환이 보였다.
+     theme-init가 저장값에 따라 apple/spotify 등으로 바꾸거나 claude면 이 속성을 지운다(대부분인 기본·Linear 사용자는 서버값과 같아 전환 0). -->
+<html lang="ko" data-palette="linear">
 <head>
   <meta charset="utf-8" />
   <title>${esc(title)} · OMG Studios</title>
