@@ -11,12 +11,17 @@
     }
     if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
     // 기본 팔레트 = Linear(미선택 사용자도 Linear, 2026-07-18). claude(기본 :root)는 속성 없이 사용.
-    // ⚠️ 서버가 `<html data-palette="linear">`를 먼저 렌더한다(FOUC 방지, 2026-07-21) — 그래서 여기서
-    //    claude는 **속성을 지워** :root로 되돌리고, 미선택/기타는 linear로 확정한다(서버값과 동일 = 전환 없음).
-    //    이전엔 서버가 팔레트를 안 보내 매 로드마다 Claude(:root)→Linear 전환이 보였다(사용자 리포트 '이전/다음 누를 때 깜빡').
+    // ⚠️ 서버가 `<html>`에 data-theme·data-palette를 쿠키 기준으로 먼저 렌더한다(FOUC 방지, 2026-07-21) — 그래서 여기서
+    //    claude는 **속성을 지워** :root로 되돌리고, 미선택/기타는 linear로 확정한다(서버값과 같아 전환 없음).
     var p = localStorage.getItem("palette");
     if (p === "apple" || p === "linear" || p === "spotify" || p === "pinterest") document.documentElement.setAttribute("data-palette", p);
     else if (p === "claude") document.documentElement.removeAttribute("data-palette");
-    else document.documentElement.setAttribute("data-palette", "linear");
+    else { document.documentElement.setAttribute("data-palette", "linear"); p = "linear"; }
+    // 쿠키에 기록 → **다음 페이지부터 서버가 <html>에 첫 페인트로 렌더**(FOUC 방지). 기존 localStorage 사용자도 쿠키 없이 들어와 여기서 맞춰진다.
+    // theme 쿠키는 명시 선택(또는 OS 스냅샷) t가 있을 때만. path=/ · 1년 · lax.
+    try {
+      if (t === "dark" || t === "light") document.cookie = "theme=" + t + "; path=/; max-age=31536000; samesite=lax";
+      document.cookie = "palette=" + p + "; path=/; max-age=31536000; samesite=lax";
+    } catch (e) {}
   } catch (e) {}
 })();

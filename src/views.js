@@ -8,6 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const { PROJECT_SERVICE_LABELS, ROLE_LABELS } = require("./config");
+const { currentThemeAttrs } = require("./lib/request-theme");
 
 /**
  * 캐시 버스팅 버전: 배포 때마다 새로 빌드되는 정적 자산(app.css·app.js)의 mtime+size로 산출.
@@ -234,11 +235,13 @@ const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" /
 function layout({ title, user, current = "", body, wide = false }) {
   const roleLabel = user ? (ROLE_LABELS[user.role] || user.role) : "";
   const who = user ? `${esc(user.name || user.email)} · ${roleLabel}` : "";
+  // <html>에 data-theme·data-palette를 **서버가 첫 페인트에** 렌더(FOUC 방지, 2026-07-21 사용자 리포트 '다크 모드 깜빡').
+  // 값은 쿠키(app.js·theme-init.js가 기록)에서 요청 컨텍스트로 온다. 쿠키 없으면 기본(팔레트 linear·테마 미설정=OS 추종).
+  // theme-init.js는 폴백으로 남아(첫 방문·OS 변경) 쿠키를 다시 맞춘다.
+  const { theme, palette } = currentThemeAttrs();
+  const htmlAttrs = `lang="ko"${palette ? ` data-palette="${palette}"` : ""}${theme ? ` data-theme="${theme}"` : ""}`;
   return `<!doctype html>
-<!-- data-palette="linear" = 앱 기본 팔레트를 서버가 직접 렌더(FOUC 방지, 2026-07-21 사용자 리포트 '이전/다음 누를 때 시각 스타일 깜빡').
-     이전엔 팔레트를 안 보내 CSS :root(=Claude 크림)로 먼저 그린 뒤 theme-init.js가 Linear로 바꿔 매 로드 전환이 보였다.
-     theme-init가 저장값에 따라 apple/spotify 등으로 바꾸거나 claude면 이 속성을 지운다(대부분인 기본·Linear 사용자는 서버값과 같아 전환 0). -->
-<html lang="ko" data-palette="linear">
+<html ${htmlAttrs}>
 <head>
   <meta charset="utf-8" />
   <title>${esc(title)} · OMG Studios</title>

@@ -9,6 +9,7 @@ const cookieParser = require("cookie-parser");
 const { config } = require("./config");
 const { init } = require("./db");
 const { attachUser } = require("./auth");
+const { runWithTheme } = require("./lib/request-theme");
 const { errorPage } = require("./views");
 
 const authRoutes = require("./routes/auth.routes");
@@ -109,6 +110,10 @@ app.use((req, res, next) => {
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true, limit: "1mb" })); // 클래식 폼 POST
 app.use(express.json({ limit: "1mb" }));
+
+// 테마/팔레트 쿠키를 요청 컨텍스트에 담아 layout()이 <html>에 첫 페인트로 렌더(FOUC 방지, 2026-07-21).
+// 나머지 요청 처리를 AsyncLocalStorage 컨텍스트로 감싼다(cookieParser 이후라 req.cookies 사용 가능).
+app.use((req, _res, next) => runWithTheme({ theme: req.cookies.theme, palette: req.cookies.palette }, next));
 
 // 모든 요청에 req.user 부착(라우트 차단은 각 라우트의 미들웨어가 담당)
 app.use(attachUser);

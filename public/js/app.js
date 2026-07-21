@@ -136,9 +136,14 @@
       el.textContent = text;
     });
   }
+  // 쿠키에도 기록 → 서버가 다음 페이지의 <html>에 첫 페인트로 렌더(FOUC 방지, 2026-07-21). 1년·lax.
+  function setPref(k, v) {
+    try { document.cookie = k + "=" + v + "; path=/; max-age=31536000; samesite=lax"; } catch (e) {}
+  }
   function setTheme(mode) {
     document.documentElement.setAttribute("data-theme", mode);
     try { localStorage.setItem("theme", mode); } catch (e) {}
+    setPref("theme", mode);
     syncThemeLabel(mode);
   }
   document.addEventListener("click", function (e) {
@@ -166,6 +171,7 @@
     if (p === "claude") document.documentElement.removeAttribute("data-palette");
     else document.documentElement.setAttribute("data-palette", p);
     try { localStorage.setItem("palette", p); } catch (e) {}
+    setPref("palette", p); // 서버가 다음 페이지 첫 페인트에 렌더(claude면 서버가 속성 없이 렌더)
     syncSwatches();
   });
   syncSwatches(); // 초기 로드 시 저장된 팔레트로 활성 스와치 표시
