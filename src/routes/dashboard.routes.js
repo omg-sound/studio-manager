@@ -2,7 +2,7 @@
 
 const express = require("express");
 const { requireAuth, canBill, canEdit } = require("../auth");
-const { dashboardStats, upcomingSessions, listProjects } = require("../data");
+const { dashboardStats, upcomingSessions, listProjects, myTodo, taskTypeLabel } = require("../data");
 const { layout, pageHeader, esc, formatKRW, emptyState, ddayPill } = require("../views");
 const { todayYmd, formatYmdShort } = require("../lib/date");
 
@@ -107,6 +107,40 @@ router.get("/", requireAuth, (req, res) => {
     }
   }
 
+  // 내 할 일(개인 렌즈) — 담당자 행이 있는 사람만, 담당 세션·미완료 작업이 하나라도 있을 때. '오늘·이번 주 세션'(전체) 위에 둔다.
+  const todo = myTodo(user);
+  let myTodoCard = "";
+  if (todo && (todo.sessions.length || todo.tasks.length)) {
+    const sessRows = todo.sessions
+      .map((ss) => `
+      <a href="/projects/${ss.project_id}?tab=sessions" class="row-link flex items-center justify-between gap-3 border-b border-border py-2 last:border-0">
+        <div class="min-w-0">
+          <div class="truncate text-sm font-medium">${esc(ss.artist || ss.project_title)}</div>
+          <div class="truncate text-xs text-muted">${esc(ss.session_type)} 세션${ss.artist ? " · " + esc(ss.project_title) : ""}</div>
+        </div>
+        ${ddayPill(ss.session_date)}
+      </a>`)
+      .join("");
+    const taskRows = todo.tasks
+      .map((t) => `
+      <a href="/projects/${t.project_id}?tab=tracks" class="row-link flex items-center justify-between gap-3 border-b border-border py-2 last:border-0">
+        <div class="min-w-0">
+          <div class="truncate text-sm font-medium">${esc(taskTypeLabel(t.task_type))}${t.artist ? " · " + esc(t.artist) : ""}</div>
+          <div class="truncate text-xs text-muted">${esc(t.track_title || t.project_title)}</div>
+        </div>
+      </a>`)
+      .join("");
+    myTodoCard = `
+    <div class="card mt-4">
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <h2 class="font-display text-base font-semibold">내 할 일</h2>
+        <span class="text-xs text-muted">${esc(todo.name)}</span>
+      </div>
+      ${todo.sessions.length ? `<div class="mb-1 text-xs font-medium text-muted">담당 세션 ${todo.sessions.length}</div>${sessRows}` : ""}
+      ${todo.tasks.length ? `<div class="mt-3 mb-1 text-xs font-medium text-muted">미완료 작업 ${todo.tasks.length}</div>${taskRows}` : ""}
+    </div>`;
+  }
+
   const body = `
     ${pageHeader({
       title: "대시보드",
@@ -115,6 +149,7 @@ router.get("/", requireAuth, (req, res) => {
     })}
     ${overdueBanner}
     ${cards}
+    ${myTodoCard}
     <div class="card mt-4">
       <div class="mb-2 flex items-center justify-between gap-2">
         <h2 class="font-display text-base font-semibold">오늘 · 이번 주 세션</h2>
