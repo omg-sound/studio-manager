@@ -22,12 +22,17 @@ router.get("/", requireAuth, (req, res) => {
   const todaySessions = allSessions.filter((ss) => ss.session_date === today);
   const weekSessions = allSessions.filter((ss) => ss.session_date >= today && ss.session_date <= weekEnd);
 
-  const statCard = (label, value, sub = "") => `
-    <div class="card border-l-2 [border-left-color:rgb(var(--color-primary))]">
+  // 카드는 전부 드릴다운(href) — 넷이 똑같이 생겼는데 미수금만 클릭되던 어포던스 불일치 해소(2026-07-21 사용자 요청).
+  const statCard = (label, value, sub = "", href = "") => {
+    const tag = href ? "a" : "div";
+    const attrs = href ? ` href="${esc(href)}" class="card row-link block` : ` class="card`;
+    return `
+    <${tag}${attrs} border-l-2 [border-left-color:rgb(var(--color-primary))]">
       <div class="text-sm text-muted">${esc(label)}</div>
       <div class="mt-1 font-display text-lg font-bold tabular">${esc(String(value))}</div>
       ${sub ? `<div class="mt-1 text-xs text-muted">${esc(sub)}</div>` : ""}
-    </div>`;
+    </${tag}>`;
+  };
 
   const moneyCard = (label, amount, danger = false, sub = "", href = "") => {
     const tag = href ? "a" : "div";
@@ -52,10 +57,10 @@ router.get("/", requireAuth, (req, res) => {
   const cardItems = [];
   if (s.canInvoice) {
     cardItems.push(moneyCard("미수금", inv.receivable, true, "발행·미입금 잔금", "/invoices?filter=done"));
-    cardItems.push(moneyCard("이번 달 발행", inv.thisMonthIssued));
+    cardItems.push(moneyCard("이번 달 발행", inv.thisMonthIssued, false, "", "/invoices"));
   }
-  cardItems.push(statCard("프로젝트", s.total));
-  if (s.isChief) cardItems.push(statCard("업체·그룹", s.clients));
+  cardItems.push(statCard("프로젝트", s.total, "", "/projects"));
+  if (s.isChief) cardItems.push(statCard("업체·그룹", s.clients, "", "/clients"));
   // 읽기 폭(768)로 좁힌 뒤(2026-07-16 사용자 '폭 조절') 카드는 2열 고정 — 좁은 폭에 4열이면 금액이 찌부.
   const cards = `<div class="grid grid-cols-2 gap-3">${cardItems.join("")}</div>`;
 

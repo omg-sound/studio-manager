@@ -187,7 +187,7 @@ test("projectMetaCard: 치프만 작성일 편집 필드", () => {
   assert.match(chiefHtml, /data-date-combo/);
   assert.match(chiefHtml, /<input type="hidden" name="created_at" value="2026-07-01" data-date-hidden/);
   assert.doesNotMatch(chiefHtml, /name="created_at"[^>]*data-autosubmit/); // 자동 저장 제거
-  assert.match(chiefHtml, /created-at[\s\S]*?<button type="submit"[^>]*>저장<\/button>/); // 명시적 저장 버튼
+  assert.match(chiefHtml, /created-at[\s\S]*?<button type="submit"[^>]*>작성일 저장<\/button>/); // 명시적 저장 버튼(폼 저장과 구분되는 라벨, 2026-07-21)
   const plainHtml = views.projectMetaCard(p, "", { chief: false });
   assert.doesNotMatch(plainHtml, /\/projects\/7\/created-at/);
 });

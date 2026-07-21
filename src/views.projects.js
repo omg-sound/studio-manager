@@ -314,19 +314,21 @@ function projectMetaReadonly(p) {
 function projectMetaCard(p, err = "", { chief = false } = {}) {
   // 치프 전용 작성일(생성일) 편집 — 완료/청구 필요 탭 정렬(작성일순)에 영향. 목록에서 상세로 이동(2026-07-11).
   const dateStr = esc(kstYmd(p.created_at));
+  // 작성일 = 저빈도 관리 필드 → **폼 맨 아래**에 별도 줄로(2026-07-21 사용자 요청 '작성일이 정보 탭 맨 위·저장 버튼 둘이 헷갈린다').
+  // 버튼 라벨도 '작성일 저장'으로 구분(위 폼의 '저장'과 혼동 방지). border-t로 본 폼과 시각 분리.
   const createdEdit = chief
-    ? `<form method="post" action="/projects/${p.id}/created-at" class="mb-3 flex items-center gap-2 border-b border-border/40 pb-3">
-         <input type="hidden" name="return" value="/projects/${p.id}?tab=project" />
+    ? `<form method="post" action="/projects/${p.id}/created-at" class="mt-4 flex items-center gap-2 border-t border-border/40 pt-3">
          <label class="text-xs text-muted">작성일</label>
+         <input type="hidden" name="return" value="/projects/${p.id}?tab=project" />
          ${dateCombo("created_at", dateStr, { label: "작성일", inputCls: "w-[8.5rem] rounded border border-border/70 bg-surface px-1.5 py-0.5 text-xs text-muted tabular focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30" })}
-         <button type="submit" class="btn-primary btn-xs shrink-0">저장</button>
+         <button type="submit" class="btn-ghost btn-xs shrink-0">작성일 저장</button>
        </form>`
     : "";
   return `
     <div class="card">
       <form id="del-proj-${p.id}" method="post" action="/projects/${p.id}/delete" data-confirm="프로젝트를 삭제하면 세션·곡·콘텐츠·자료가 모두 삭제됩니다. 정말 삭제할까요?" class="hidden"></form>
-      ${createdEdit}
       ${projectEditForm(p, err)}
+      ${createdEdit}
     </div>`;
 }
 
@@ -674,7 +676,7 @@ function engineerSelect(managers, task) {
   const legacyName = !curId && task && task.engineer_name ? String(task.engineer_name) : "";
   const out = [`<option value="">담당자 미지정</option>`];
   if (legacyName) {
-    out.push(`<option value="legacy" selected>${esc(legacyName)} (목록 외)</option>`);
+    out.push(`<option value="legacy" selected>${esc(legacyName)} (목록에 없음)</option>`);
   }
   for (const m of managers) {
     // data-external: 외주 작업자(user_id 없음)=1 → app.js가 외주 지급단가 토글. 하우스 엔지니어는 단가 숨김.

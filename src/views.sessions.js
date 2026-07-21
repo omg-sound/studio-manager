@@ -32,7 +32,7 @@ function managerOptions(managers, current, placeholder = "담당자 미지정", 
   const names = managers.map((m) => m.name);
   const out = allowEmpty ? [`<option value="">${esc(placeholder)}</option>`] : []; // allowEmpty=false면 '미지정' 옵션 없음
   if (current && !names.includes(current)) {
-    out.push(`<option value="${esc(current)}" selected>${esc(current)} (목록 외)</option>`);
+    out.push(`<option value="${esc(current)}" selected>${esc(current)} (목록에 없음)</option>`);
   }
   for (const m of managers) {
     out.push(`<option value="${esc(m.name)}" ${m.name === current ? "selected" : ""}>${esc(m.name)}</option>`);
