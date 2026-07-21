@@ -785,6 +785,14 @@
   transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 .theme-swatch:hover { transform: scale(1.12); }
+/* 활성 스와치 링 = **data-palette 기준 CSS**(theme-init.js가 <head>에서 페인트 전 세팅). aria-pressed는 app.js(defer)가
+   첫 페인트 뒤에 걸어, 매 페이지 이동마다 '링 없이 페인트 → app.js가 링 추가'로 링이 사라졌다 나타났다(2026-07-21 사용자 리포트).
+   data-palette로 그리면 첫 페인트부터 링이 있어 깜빡임이 없다. claude = 속성 없음(:not([data-palette])). aria-pressed는 a11y용으로 유지. */
+html[data-palette="linear"] .theme-swatch-linear,
+html[data-palette="apple"] .theme-swatch-apple,
+html[data-palette="spotify"] .theme-swatch-spotify,
+html[data-palette="pinterest"] .theme-swatch-pinterest,
+html:not([data-palette]) .theme-swatch-claude,
 .theme-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px rgb(var(--color-bg)), 0 0 0 3px rgb(var(--color-fg)); }
 .theme-swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(var(--color-bg)), 0 0 0 3px rgb(var(--color-primary)); }
 .theme-swatch-claude { background: #C8795B; }   /* 클레이(Claude 기본 정체성) */
