@@ -440,7 +440,7 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
 
   const errorModal = req.query.error === "session_invoiced" ? sessionInvoicedModal(p.id) : "";
   const body = [flashBanner(req.query), errorModal, pageHeader({ title: p.title, desc, back: { href: safePath(req.query.return) || "/projects", label: "프로젝트" } }), tabBar, tabContent].join("\n");
-  res.send(layout({ title: p.title, user: req.user, current: "/projects", body }));
+  res.send(layout({ title: p.title, user: req.user, current: "/projects", body, recent: { cat: "프로젝트", label: p.title, href: `/projects/${p.id}` } }));
 }
 
 // ── 예전 수정 URL은 상세 편집 화면으로 정규화 ──

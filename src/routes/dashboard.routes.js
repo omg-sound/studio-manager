@@ -1,7 +1,7 @@
 "use strict";
 
 const express = require("express");
-const { requireAuth, canBill } = require("../auth");
+const { requireAuth, canBill, canEdit } = require("../auth");
 const { dashboardStats, upcomingSessions, listProjects } = require("../data");
 const { layout, pageHeader, esc, formatKRW, emptyState, ddayPill } = require("../views");
 const { todayYmd, formatYmdShort } = require("../lib/date");
@@ -111,6 +111,7 @@ router.get("/", requireAuth, (req, res) => {
     ${pageHeader({
       title: "대시보드",
       desc: s.canInvoice ? "스튜디오 전체 현황" : "스튜디오 현황",
+      action: canEdit(user) ? '<a href="/projects/new" class="btn-primary">+ 새 프로젝트</a>' : "",
     })}
     ${overdueBanner}
     ${cards}

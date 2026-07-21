@@ -361,7 +361,7 @@ function renderContacts(req, sel, rightHtml) {
     ${pageHeader({ title: "연락처", back, action: `<a href="/contacts/new" class="btn-primary">+ 새 연락처</a>` })}
     ${tabs}
     ${contactPanes({ left, right, hasSelection: !!sel, backHref: `/contacts${keep}`, backLabel: "연락처" })}`;
-  return layout({ title: sel ? sel.name : "연락처", user: req.user, current: "/contacts", body, wide: true });
+  return layout({ title: sel ? sel.name : "연락처", user: req.user, current: "/contacts", body, wide: true, recent: sel ? { cat: "연락처", label: sel.name, href: `/contacts/${sel.id}` } : null });
 }
 
 /** 읽기 패널 — 상세 데이터 조회 + 연동 정보(파생·contactExtras 공용) 조립. */

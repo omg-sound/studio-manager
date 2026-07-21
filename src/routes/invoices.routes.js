@@ -230,7 +230,7 @@ router.get("/:id", requireBilling, (req, res) => {
     </div>
     ${inv.memo ? `<div class="card mt-3"><div class="mb-1 text-sm text-muted">메모</div><div class="whitespace-pre-wrap text-sm">${esc(inv.memo)}</div></div>` : ""}
     ${deleteBlock}`;
-  res.send(layout({ title: inv.title, user: req.user, current: "/invoices", body }));
+  res.send(layout({ title: inv.title, user: req.user, current: "/invoices", body, recent: { cat: "청구", label: inv.invoice_number || inv.title, href: `/invoices/${inv.id}` } }));
 });
 
 // ── 거래명세서 PDF (발행/입금완료 또는 견적서 타입은 미발행도 허용. PII → 인증 필수·no-store·즉석 스트리밍) ──

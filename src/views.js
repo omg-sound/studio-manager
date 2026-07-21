@@ -232,7 +232,7 @@ const FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com" /
 // 페이지마다 사이드바 위치가 바뀌던 것(가변 max-w 중앙정렬의 부작용) 해소. main 폭만 페이지별로:
 //   wide=true → 목록·표·캘린더·대시보드: main 전체 폭 사용(적극적). / 기본(wide=false) → 폼·상세: main 안에서
 //   읽기 폭(max-w-content 768) 좌측 정렬(입력칸이 화면 끝까지 늘어나 스캔 힘든 것 방지·시선 분산 최소화, 2026-07-16 1024→768). 사이드바는 어느 쪽이든 고정.
-function layout({ title, user, current = "", body, wide = false }) {
+function layout({ title, user, current = "", body, wide = false, recent = null }) {
   const roleLabel = user ? (ROLE_LABELS[user.role] || user.role) : "";
   const who = user ? `${esc(user.name || user.email)} · ${roleLabel}` : "";
   // <html>에 data-theme·data-palette를 **서버가 첫 페인트에** 렌더(FOUC 방지, 2026-07-21 사용자 리포트 '다크 모드 깜빡').
@@ -327,6 +327,7 @@ function layout({ title, user, current = "", body, wide = false }) {
     <div id="backdrop" class="fixed inset-0 z-30 hidden bg-black/30 sm:hidden"></div>
 
     <main class="min-w-0 flex-1">
+      ${recent ? `<span data-recent-item="${esc(JSON.stringify(recent))}" hidden></span>` : ""}
       ${wide ? body : `<div class="max-w-content">${body}</div>`}
     </main>
   </div>

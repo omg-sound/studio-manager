@@ -2930,7 +2930,15 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     var pop = root.querySelector("[data-suggest-pop]");
     var url = root.getAttribute("data-suggest-url");
     if (!input || !pop || !url) return;
+    var isGlobal = input.hasAttribute("data-global-search"); // 전역 검색만 빈 상태에서 "최근"을 보여준다
     var items = [], hi = -1, timer = null, ctrl = null, lastQ = null;
+    function recentItems() { // localStorage의 최근 방문 → 드롭다운 항목(그룹 헤더 "최근", 부제=분류)
+      var list;
+      try { list = JSON.parse(localStorage.getItem("omg:recent") || "[]"); } catch (_e) { return []; }
+      if (!Array.isArray(list)) return [];
+      return list.filter(function (x) { return x && x.href && x.label; })
+        .map(function (x) { return { cat: "최근", label: x.label, sub: x.cat || "", href: x.href }; });
+    }
     function hide() { pop.classList.add("hidden"); input.setAttribute("aria-expanded", "false"); hi = -1; }
     function show() { pop.classList.remove("hidden"); input.setAttribute("aria-expanded", "true"); }
     // 선택 대상은 <a>만(카테고리 헤더 <div>는 건너뛴다 — 전역 검색 그룹 헤더). cat 없는 기존 suggest는 헤더 없이 그대로.
@@ -2959,7 +2967,7 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     function fetchSuggest() {
       var q = input.value.trim();
       lastQ = q;
-      if (q.length < 1) { items = []; render(); return; }
+      if (q.length < 1) { items = isGlobal ? recentItems() : []; render(); return; } // 전역 검색은 빈 입력=최근 방문
       if (ctrl && ctrl.abort) { try { ctrl.abort(); } catch (_e) {} }
       ctrl = window.AbortController ? new AbortController() : null;
       fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "q=" + encodeURIComponent(q), { headers: { Accept: "application/json" }, credentials: "same-origin", signal: ctrl ? ctrl.signal : undefined })
@@ -2968,7 +2976,10 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
         .catch(function () {});
     }
     input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(fetchSuggest, 200); });
-    input.addEventListener("focus", function () { if (items.length) show(); });
+    input.addEventListener("focus", function () { // ⌘K로 포커스하면(빈 입력) 최근 방문을 바로 띄운다
+      if (isGlobal && input.value.trim().length < 1) { items = recentItems(); render(); return; }
+      if (items.length) show();
+    });
     input.addEventListener("blur", function () { setTimeout(hide, 150); });
     input.addEventListener("keydown", function (e) {
       if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중 키 무시
@@ -3004,6 +3015,24 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     box.focus();
     if (box.select) box.select();
   });
+})();
+
+// 최근 방문 기록(2026-07-22): 상세 페이지가 layout에 렌더한 [data-recent-item]을 localStorage에 쌓는다
+// (같은 항목은 최신으로 승격·최대 8건). 전역 검색(⌘K)이 타이핑 전 빈 상태에서 "최근"으로 보여준다.
+(function () {
+  "use strict";
+  var el = document.querySelector("[data-recent-item]");
+  if (!el) return;
+  var item;
+  try { item = JSON.parse(el.getAttribute("data-recent-item")); } catch (_e) { return; }
+  if (!item || !item.href) return;
+  var list;
+  try { list = JSON.parse(localStorage.getItem("omg:recent") || "[]"); } catch (_e) { list = []; }
+  if (!Array.isArray(list)) list = [];
+  list = list.filter(function (x) { return x && x.href !== item.href; }); // 같은 항목 중복 제거(방금 것을 맨 앞으로)
+  list.unshift(item);
+  if (list.length > 8) list = list.slice(0, 8);
+  try { localStorage.setItem("omg:recent", JSON.stringify(list)); } catch (_e) {}
 })();
 
 // 목록 실시간 필터([data-live-filter] 검색 입력 → [data-filter-list] 직접 자식 행을 textContent로 즉시 필터, 2026-07-15).

@@ -121,7 +121,7 @@ function renderClients(req, sel, rightHtml, backHref) {
     ${pageHeader({ title: "업체·그룹", action })}
     ${tabs}
     ${contactPanes({ left, right, hasSelection: !!sel, backHref: backHref || `/clients${keep}`, backLabel: "업체·그룹" })}`;
-  return layout({ title: sel ? sel.name : "업체·그룹", user: req.user, current: "/clients", body, wide: true });
+  return layout({ title: sel ? sel.name : "업체·그룹", user: req.user, current: "/clients", body, wide: true, recent: sel ? { cat: "업체·그룹", label: sel.name, href: `/clients/${sel.id}` } : null });
 }
 
 // ── 검색 제안(typeahead JSON) — 반드시 /:id 앞에 등록. listClients는 q 미지원이라 이름/활동명 인메모리 필터 ──
