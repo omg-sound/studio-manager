@@ -120,13 +120,25 @@ function renderWorkers(req, sel, rightHtml) {
   const right = rightHtml || `${workerEmptyPane()}${isChief(req.user) ? addForm : ""}`;
   const body = `
     ${flashBanner(req.query)}
-    ${pageHeader({ title: "외주 작업자", desc: "로그인 없이 작업 담당자로 쓰는 외부 인력. 작업 히스토리·정산 관리." })}
+    ${pageHeader({ title: "외주 작업자", desc: "로그인 없이 작업 담당자로 쓰는 외부 인력. 작업 히스토리·정산 관리.", action: `<a href="/workers/export.csv" class="btn-ghost btn-sm">정산 CSV</a>` })}
     ${contactPanes({ left, right, hasSelection: !!sel, backHref: safePath(req.query.return) || "/workers", backLabel: "외주 작업자" })}`;
   return layout({ title: sel ? sel.name : "외주 작업자", user: req.user, current: "/workers", body, wide: true });
 }
 
 router.get("/", requireInvoice, (req, res) => {
   res.send(renderWorkers(req, null));
+});
+
+// 정산 CSV 내보내기(회계 — 외주 원천징수 신고). 지급 완료분 전체(지급일 열로 세무사가 지급월 필터).
+// **`/:id`보다 위에 등록**(문자 라우트가 param 라우트보다 먼저 매칭되도록). requireInvoice(치프·대표).
+router.get("/export.csv", requireInvoice, (req, res) => {
+  const { payoutExportRows, payoutCsv } = require("../data");
+  const csv = payoutCsv(payoutExportRows());
+  const fname = "외주정산_전체.csv";
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`);
+  res.setHeader("Cache-Control", "no-store"); // 정산액·원천세 = 민감
+  res.send(csv);
 });
 
 router.post("/", requireChief, (req, res) => {

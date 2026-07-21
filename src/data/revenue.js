@@ -238,6 +238,31 @@ function revenueByType({ year, month }) {
   return Array.from(byLabel, ([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
 }
 
+// 매출 CSV(회계 내보내기) — 선택 기간의 **발행 청구서**를 한 줄씩. 순수 함수(db 미접근):
+// 라우트가 listInvoices(표시명·아티스트·금액·상태 파생 완료)를 넘기면 여기서 기간·발행 필터 + 컬럼 매핑.
+// 매출 화면 정의와 일치: 공급가 = amount − VAT(발행일 기준·미발행 제외). 세무사 전달·부가세 신고용.
+const REV_CSV_HEADERS = ["발행일", "청구번호", "청구처", "아티스트", "공급가", "VAT", "할인", "합계", "세금상태", "미수금"];
+function revenueCsv(invoices, { year, month } = {}) {
+  const { toCsv } = require("../lib/csv");
+  const inP = (d) => d && d.slice(0, 4) === String(year) && (month === "all" || Number(d.slice(5, 7)) === Number(month));
+  const rows = (invoices || [])
+    .filter((i) => i.status !== "미발행" && i.issued_date && inP(i.issued_date))
+    .sort((a, b) => String(a.issued_date).localeCompare(String(b.issued_date)) || (a.id || 0) - (b.id || 0))
+    .map((i) => [
+      i.issued_date,
+      i.invoice_number || "",
+      i.client_name || "",
+      i.project_artist || "",
+      (i.amount || 0) - (i.tax_amount || 0), // 공급가(VAT 제외) = 매출
+      i.tax_amount || 0,
+      i.discount_amount || 0,
+      i.amount || 0, // 합계(VAT 포함 발행액)
+      i.tax_status || "",
+      Math.max((i.amount || 0) - (i.paid_amount || 0), 0), // 미수금
+    ]);
+  return toCsv(REV_CSV_HEADERS, rows);
+}
+
 module.exports = {
   issuedInPeriodSql,
   revenueYears,
@@ -249,4 +274,6 @@ module.exports = {
   revenueByPayer,
   revenueForPayer,
   revenueByType,
+  revenueCsv,
+  REV_CSV_HEADERS,
 };

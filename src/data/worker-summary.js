@@ -62,4 +62,36 @@ function workerPayoutSummary(worker) {
   };
 }
 
-module.exports = { workerPayoutSummary };
+/**
+ * 정산 CSV(회계 내보내기) — **지급 완료** 외주 지급을 한 줄씩(원천세 3.3% 분해 포함).
+ * 원천징수 신고는 '지급' 기준이라 지급 완료분만 낸다(미지급은 아직 신고 대상 아님). 지급일 열로 세무사가
+ * 지급월별 필터. 작업·세션 통합(정산은 둘을 구분 안 함). db 조회 → 순수 포맷터(payoutCsv)와 분리해 테스트 용이.
+ */
+function payoutExportRows() {
+  const { listProjectManagers, taskTypeLabel } = require("../data");
+  const { withholding33 } = require("../lib/tax");
+  const workers = listProjectManagers({ includeInactive: true, externalOnly: true });
+  const rows = [];
+  for (const w of workers) {
+    const items = [
+      ...listTasksForWorker(w).filter((t) => t.worker_paid).map((t) => ({ paidDate: t.worker_paid_date || "", project: t.project_title || "", label: taskTypeLabel(t.task_type), rate: t.worker_rate || 0 })),
+      ...listSessionPayoutsForWorker(w).filter((s) => s.worker_paid).map((s) => ({ paidDate: s.worker_paid_date || "", project: s.project_title || "", label: `${s.session_type || "녹음"} 세션`, rate: s.worker_rate || 0 })),
+    ];
+    for (const it of items) {
+      const wh = withholding33(it.rate);
+      rows.push({ worker: w.name, paidDate: it.paidDate, project: it.project, label: it.label, gross: it.rate, incomeTax: wh.incomeTax, localTax: wh.localTax, net: wh.net });
+    }
+  }
+  rows.sort((a, b) => String(a.paidDate).localeCompare(String(b.paidDate)) || String(a.worker).localeCompare(String(b.worker)));
+  return rows;
+}
+
+const PAYOUT_CSV_HEADERS = ["지급일", "작업자", "프로젝트", "항목", "지급액", "소득세", "지방소득세", "실지급"];
+/** payoutExportRows 결과 → CSV 문자열(순수). */
+function payoutCsv(rows) {
+  const { toCsv } = require("../lib/csv");
+  const body = (rows || []).map((r) => [r.paidDate || "", r.worker || "", r.project || "", r.label || "", r.gross || 0, r.incomeTax || 0, r.localTax || 0, r.net || 0]);
+  return toCsv(PAYOUT_CSV_HEADERS, body);
+}
+
+module.exports = { workerPayoutSummary, payoutExportRows, payoutCsv, PAYOUT_CSV_HEADERS };

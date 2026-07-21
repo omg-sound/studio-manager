@@ -1,7 +1,7 @@
 "use strict";
 const express = require("express");
 const { requireInvoice } = require("../auth");
-const { revenueSummary, revenueByStaff, revenueForStaff, revenueUnattributed, revenueByPayer, revenueForPayer, revenueYears, revenueByType, revenueTax } = require("../data");
+const { revenueSummary, revenueByStaff, revenueForStaff, revenueUnattributed, revenueByPayer, revenueForPayer, revenueYears, revenueByType, revenueTax, revenueCsv, listInvoices } = require("../data");
 const { revPeriodControl, revTabs, revOverview, revStaffList, revPayerList, revStaffDetail, revPayerDetail } = require("../views.revenue");
 const { contactPanes } = require("../views.contacts");
 const { layout, pageHeader, esc, emptyState } = require("../views");
@@ -79,13 +79,25 @@ router.get("/", requireInvoice, (req, res) => {
     content = revOverview({ summary, topStaff, topPayer, byType: revenueByType(period), tax: revenueTax(period), ...period });
   }
   const body = `
-    ${pageHeader({ title: "매출", desc: "공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급." })}
+    ${pageHeader({ title: "매출", desc: "공급가(VAT 제외)·발행일 기준. 순이익 = 매출 − 외주 지급.", action: tab === "overview" ? `<a href="/revenue/export.csv?${periodQS(period)}" class="btn-ghost btn-sm">매출 CSV</a>` : "" })}
     ${tab === "overview" ? revPeriodControl({ ...period, years, tab }) : ""}
     ${revTabs({ tab, ...period })}
     <div class="mt-4">${content}</div>`;
   // 세 탭 모두 넓게. 스탭별·업체개인별은 마스터-디테일이라 남는 폭을 상세 패널이 쓴다(contactPanes 내부가
   // 오른쪽을 max-w-content로 감싸 읽기 폭은 그대로 보장 — 2026-07-19, 698c596의 읽기 폭 결정을 대체).
   res.send(layout({ title: "매출", user: req.user, current: "/revenue", body, wide: true }));
+});
+
+// 매출 CSV 내보내기(회계 — 세무사 전달·부가세 신고). 선택 기간의 발행 청구서. requireInvoice(치프·대표).
+// 문자 라우트라 /:id 파라미터 라우트와 안 겹친다(그래도 위에 둔다).
+router.get("/export.csv", requireInvoice, (req, res) => {
+  const period = parsePeriod(req);
+  const csv = revenueCsv(listInvoices(req.user, {}), period);
+  const fname = `매출_${period.year}${period.month === "all" ? "_전체" : "-" + String(period.month).padStart(2, "0")}.csv`;
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`);
+  res.setHeader("Cache-Control", "no-store"); // 매출액 = 민감, 캐시 금지
+  res.send(csv);
 });
 
 // 구 드릴다운 경로 → 패널 URL 302(북마크·기존 링크 호환). 상세로 가는 길은 하나로 유지한다.
