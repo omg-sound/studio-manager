@@ -283,11 +283,15 @@ function layout({ title, user, current = "", body, wide = false }) {
         </button>
       </div>
       <div class="mb-7 hidden items-center gap-2 px-2 sm:flex">${WORDMARK}</div>
-      <!-- 전역 통합 검색(2026-07-21): 사이드바 상시. suggestUrl=/search/suggest(드롭다운), action=/search(엔터=전체 결과). data-global-search=단축키(⌘K/'/') 포커스 대상. popWide=좁은 사이드바에서 결과 안 잘리게. -->
-      ${searchBox({ action: "/search", suggestUrl: "/search/suggest", placeholder: "검색", label: "전역 검색", noButton: true, inputAttrs: "data-global-search", popWide: true })}
       <nav class="space-y-6">
         ${sidebarLinks(user, current)}
       </nav>
+      <!-- 전역 통합 검색(2026-07-21): 사이드바 상시, **환경설정 아래**(2026-07-21 사용자 요청). suggestUrl=/search/suggest(드롭다운),
+           action=/search(엔터=전체 결과). data-global-search=단축키(⌘K/'/') 포커스 대상. popWide=좁은 사이드바에서 결과 안 잘리게.
+           popUp=하단 배치라 드롭다운을 **위로** 연다(아래로 열면 사이드바 overflow에 잘림). -->
+      <div class="mt-6">
+        ${searchBox({ action: "/search", suggestUrl: "/search/suggest", placeholder: "검색", label: "전역 검색", noButton: true, inputAttrs: "data-global-search", popWide: true, popUp: true })}
+      </div>
       <div class="mt-8 hidden border-t border-border pt-4 text-xs text-muted sm:block">
         <div class="mb-2 px-2">${who}</div>
         ${user && (user.role === "chief" || user.real_role === "chief")
@@ -515,7 +519,7 @@ function capList(rows, query, moreHrefFn, { def = 100, step = 200 } = {}) {
  * 검색 박스(+ 타이핑 제안 typeahead). suggestUrl 지정 시 app.js가 타이핑하면 매칭 결과를 드롭다운으로 제안(클릭·엔터로 해당 상세로 이동).
  * hidden = 함께 제출할 hidden input HTML(탭·뷰 등 유지). suggestUrl JSON = [{label, sub?, href}].
  */
-function searchBox({ action, q = "", placeholder = "", label = "검색", suggestUrl = "", hidden = "", liveFilter = false, noButton = false, remote = false, inputAttrs = "", popWide = false }) {
+function searchBox({ action, q = "", placeholder = "", label = "검색", suggestUrl = "", hidden = "", liveFilter = false, noButton = false, remote = false, inputAttrs = "", popWide = false, popUp = false }) {
   const wrapAttrs = suggestUrl ? ` data-search-suggest data-suggest-url="${esc(suggestUrl)}"` : "";
   const combo = suggestUrl ? ' role="combobox" aria-expanded="false" aria-autocomplete="list"' : "";
   const live = liveFilter ? " data-live-filter" : ""; // 타이핑 시 [data-filter-list] 행을 실시간 필터(검색 누르기 전, app.js)
@@ -523,8 +527,10 @@ function searchBox({ action, q = "", placeholder = "", label = "검색", suggest
   const rmt = remote && liveFilter ? " data-live-remote" : "";
   // popWide=좁은 컨테이너(사이드바 ~224px)에서 결과가 잘리지 않게 드롭다운을 입력폭보다 넓게(왼쪽 기준·오른쪽으로 확장). 전역 검색용.
   const popPos = popWide ? "left-0 min-w-[17rem] w-max max-w-sm" : "left-0 right-0";
+  // popUp=입력 위로 연다(하단 배치 시 아래로 열면 사이드바 overflow에 잘림). 기본=아래(mt-1).
+  const popDir = popUp ? "bottom-full mb-1" : "top-full mt-1";
   const pop = suggestUrl
-    ? `<div class="absolute ${popPos} z-30 mt-1 hidden max-h-80 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-suggest-pop role="listbox"></div>`
+    ? `<div class="absolute ${popPos} ${popDir} z-30 hidden max-h-80 overflow-auto rounded-lg border border-border bg-surface py-1 shadow-lg" data-suggest-pop role="listbox"></div>`
     : "";
   // noButton=검색 버튼 숨김(실시간 필터가 주 경험 — 2026-07-16). 폼은 단일 텍스트 입력이라 Enter로 서버 전체 검색(캡 초과분)은 유지.
   const btn = noButton ? "" : `<button class="btn-primary shrink-0" type="submit">검색</button>`;
