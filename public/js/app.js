@@ -3035,6 +3035,35 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
   try { localStorage.setItem("omg:recent", JSON.stringify(list)); } catch (_e) {}
 })();
 
+// 네비게이션 단축키(2026-07-22): g 다음에 니모닉 문자 → 그 메뉴로 이동(Linear·GitHub식 순차 단축키).
+//  h 대시보드 · p 프로젝트 · s 일정 · d 자료전달 · i 청구 · c 연락처 · o 업체·그룹 · r 매출 · w 외주 · e 환경설정.
+// ⚠️ 입력 중엔 절대 안 먹는다(사용자 요청): editable 요소 포커스·한글 IME 조합·수식키(⌘/Ctrl/Alt) 조합을 전부 무시.
+// 목적지는 서버가 렌더한 [data-nav-key] 사이드바 링크에서만 찾는다 → 권한 없는 메뉴는 링크 자체가 없어 점프 안 함(403 방지).
+(function () {
+  "use strict";
+  function editable(el) {
+    if (!el) return false;
+    var t = (el.tagName || "").toLowerCase();
+    return t === "input" || t === "textarea" || t === "select" || el.isContentEditable;
+  }
+  var armed = false, timer = null;
+  function disarm() { armed = false; if (timer) { clearTimeout(timer); timer = null; } }
+  document.addEventListener("keydown", function (e) {
+    if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 중(#18)
+    if (e.metaKey || e.ctrlKey || e.altKey) return;  // ⌘/Ctrl/Alt 조합(브라우저·OS 단축키)은 건드리지 않음
+    if (editable(e.target)) { disarm(); return; }     // 입력·선택·contenteditable 포커스면 단축키 없음(핵심)
+    var k = (e.key || "").toLowerCase();
+    if (armed) {
+      disarm();
+      if (!/^[a-z]$/.test(k)) return; // g 다음은 영문 한 글자만(셀렉터 안전)
+      var link = document.querySelector('[data-nav-key="' + k + '"]');
+      if (link && link.getAttribute("href")) { e.preventDefault(); link.click(); } // 실제 사이드바 링크 클릭=이동
+      return;
+    }
+    if (k === "g") { armed = true; timer = setTimeout(disarm, 1500); } // g 후 1.5초 안에 둘째 키
+  });
+})();
+
 // 목록 실시간 필터([data-live-filter] 검색 입력 → [data-filter-list] 직접 자식 행을 textContent로 즉시 필터, 2026-07-15).
 // 검색 버튼(폼 제출=서버 ?q=)을 누르기 전에 이미 로드된 목록에서 검색어에 매칭되는 행만 남긴다(클라이언트 목록).
 // [data-live-remote](2026-07-17): 목록이 상한(capList, 기본 100건)으로 잘린 경우 — 로드된 행만 훑는 실시간 필터가
