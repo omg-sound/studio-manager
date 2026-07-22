@@ -170,7 +170,9 @@ function projectListRow(p, summary, { tab = "active", isAdmin = false, openId = 
   const next = tab === "active" ? nextSessionLine(p) : ""; // 다음 세션·디데이 = 진행 중 탭만(완료·청구필요는 next_session_date 없음)
   const amt = projectAmount(p);
   const amount = amt ? formatKRW(amt) : "";
-  const billingBadge = tab === "billing" && Number(p.unbilled_cnt) > 0
+  // 미청구가 있으면 어느 탭에서든 배지(2026-07-23) — 예전엔 청구 필요 탭에만 띄워서, 다가오는 세션이 하나라도
+  // 있으면(=진행 중 탭) 이미 끝난 세션의 미청구가 어디에도 안 보였다. 장기 앨범일수록 청구가 늦어지던 원인.
+  const billingBadge = Number(p.unbilled_cnt) > 0
     ? ` <span class="badge bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span>` : "";
   const created = p.created_at ? esc(kstYmd(p.created_at)) : ""; // DB는 UTC — KST로 변환해 표시(2026-07-20)
   const isOpen = openId != null && Number(p.id) === Number(openId);
@@ -824,9 +826,21 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   // 녹음 세션 직접 청구 후보(곡·콘텐츠/버튼 없이 자동 노출). 완료 세션은 기본 체크, 예정은 흐리게·체크 시 완료 확인(작업과 동일 규칙).
   const sessionList = sessionRows
     .map((s) => {
-      const label = [formatYmdShort(s.session_date), project.artist, s.billing.item.name].filter(Boolean).join(" · "); // 청구 항목 스냅샷과 동일 형식 "7월 8일 · 아티스트 · 보컬녹음"(2026-07-08 — 접두 제거·· 구분)
+      const label = [formatYmdShort(s.session_date), project.artist, s.billing ? s.billing.item.name : s.session_type].filter(Boolean).join(" · "); // 청구 항목 스냅샷과 동일 형식 "7월 8일 · 아티스트 · 보컬녹음"(2026-07-08 — 접두 제거·· 구분)
       const waiveAction = `/sessions/${s.id}/waive`;
       if (s.waived) return waivedRow(esc(label), waiveAction);
+      // 산정 불가(단가 항목 미선택) — 체크박스·금액칸 없이 사유만 보여주고 '청구 안 함' 탈출구는 남긴다(2026-07-23).
+      // 예전엔 이런 세션이 후보 목록에서 통째로 빠져 매출이 소리 없이 샜다(프로젝트가 조용히 '완료'로 이동).
+      if (!s.billing) {
+        return `
+        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 opacity-60" data-line-row>
+          <span class="min-w-0 flex-1 text-sm">
+            <span class="block font-medium">${esc(label)}</span>
+            <span class="block text-xs text-warning">단가 항목을 선택해야 청구할 수 있습니다 — 세션 일정 탭에서 지정하세요</span>
+          </span>
+          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
+        </div>`;
+      }
       const done = s.status === "완료";
       const mins = s.billing.minutes;
       const dur = `${Math.floor(mins / 60)}시간${mins % 60 ? " " + (mins % 60) + "분" : ""}`;

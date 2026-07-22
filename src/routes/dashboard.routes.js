@@ -82,16 +82,22 @@ router.get("/", requireAuth, (req, res) => {
         .join("")
     : emptyState("이번 주 예정된 세션이 없습니다.", { icon: "sessions" });
 
-  // 청구 필요 = 완료됐는데 미청구 항목이 남은 프로젝트(프로젝트 목록 '청구 필요' 탭 splitProjectTabs.billing과 동일 정의).
-  // 청구 생성 권한자(canBill=치프·대표·스태프) 전원에게 — 스태프가 청구 생성 담당. 상위 5개 + 청구 필요 탭 전체 링크.
+  // 청구 필요 = 미청구 항목이 남은 프로젝트 **전부**(2026-07-23 — 완료 여부 무관).
+  // 예전엔 `is_completed`(=다가오는 세션 0)를 요구해 '청구 필요' 탭 정의와 맞췄는데, 그러면 장기 앨범처럼
+  // 다음 세션이 잡혀 있는 프로젝트는 이미 끝난 세션의 미청구가 어디에도 안 보여 청구가 늦어졌다.
+  // 탭 3분류(상호배타)는 그대로 두고 **대시보드만** 신호를 넓힌다 — 여긴 분류가 아니라 '할 일' 표면이라서.
+  // 끝난 프로젝트가 더 급하므로 완료분을 위로. 청구 생성 권한자(canBill=치프·대표·스태프) 전원에게.
   let unbilledCard = "";
   if (canBill(user)) {
-    const needBilling = listProjects(user, {}).filter((p) => p.is_completed && Number(p.unbilled_cnt) > 0);
+    const needBilling = listProjects(user, {})
+      .filter((p) => Number(p.unbilled_cnt) > 0)
+      .sort((a, b) => (b.is_completed ? 1 : 0) - (a.is_completed ? 1 : 0)); // 안정 정렬(같은 그룹 안은 기존 순서=최신 생성순)
+    const doneCnt = needBilling.filter((p) => p.is_completed).length; // '청구 필요' 탭이 실제로 보여주는 건수
     if (needBilling.length) {
       const rowsHtml = needBilling.slice(0, 5).map((p) => `
       <a href="/projects/${p.id}?tab=invoice" class="row-link flex items-center justify-between gap-3 border-b border-border py-2.5 last:border-0">
         <div class="min-w-0">
-          <div class="truncate text-sm font-medium">${esc(p.title)}</div>
+          <div class="truncate text-sm font-medium">${esc(p.title)}${p.is_completed ? "" : ` <span class="text-xs font-normal text-muted">진행 중</span>`}</div>
           <div class="truncate text-xs text-muted">${esc([p.artist, p.client_name].filter(Boolean).join(" · ") || "정보 미정")}</div>
         </div>
         <span class="badge shrink-0 bg-warning/10 text-warning">청구 필요 ${p.unbilled_cnt}</span>
@@ -99,8 +105,8 @@ router.get("/", requireAuth, (req, res) => {
       unbilledCard = `
     <div class="card mt-4">
       <div class="mb-2 flex items-center justify-between gap-2">
-        <h2 class="font-display text-base font-semibold">청구 필요</h2>
-        <a href="/projects?tab=billing" class="text-xs text-muted hover:text-fg hover:underline">청구 필요 탭에서 전체 보기 ${needBilling.length}건 ↗</a>
+        <h2 class="font-display text-base font-semibold">청구 필요 ${needBilling.length}</h2>
+        ${doneCnt ? `<a href="/projects?tab=billing" class="text-xs text-muted hover:text-fg hover:underline">완료된 프로젝트 ${doneCnt}건 ↗</a>` : ""}
       </div>
       ${rowsHtml}
     </div>`;

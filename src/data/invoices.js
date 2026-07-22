@@ -201,7 +201,16 @@ function listUnbilledTasksForProject(user, projectId) {
   return { project, rows };
 }
 
-/** 청구 가능 녹음 세션(**완료**·녹음+단가+시간) 중 아직 청구/전환 안 된 것 — 세션 직접 청구 후보(완료 처리해야 노출). */
+/**
+ * 대관 세션(녹음·촬영·공연) 중 아직 청구/전환 안 된 것 — 세션 직접 청구 후보.
+ *
+ * ⚠️ **단가 항목이 없어 산정 불가한 세션도 `billing: null`로 함께 반환한다**(2026-07-23 기능성 평가).
+ * 예전엔 `rate_item_id IS NOT NULL`로 걸러냈는데, 그러면 완료된 대관 세션이 **청구 후보와 미청구
+ * 집계 양쪽에서 동시에 사라져** 프로젝트가 조용히 '완료' 탭으로 넘어갔다(매출이 소리 없이 빠짐).
+ * 이제 청구 폼이 흐린 행 + 사유 + '청구 안 함' 탈출구로 렌더하고, 실제 발행은 `computeInvoiceDraft`가
+ * 여전히 단가 항목을 요구해 막는다(체크박스 미렌더 + 서버 재검증).
+ * 미청구 집계(`listProjects.unbilled_cnt`)도 **이 함수와 같은 조건**을 써야 한다.
+ */
 function listBillableSessionsForProject(user, projectId) {
   const { sessionRateAmount } = require("../data"); // sessions와 상호의존 → 지연 require
   const project = getProjectForUser(user, projectId);
@@ -212,15 +221,13 @@ function listBillableSessionsForProject(user, projectId) {
        WHERE s.project_id = ?
          AND s.status <> '취소'
          AND s.session_type IN (${RENTAL_IN})
-         AND s.rate_item_id IS NOT NULL
          AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
          AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
          AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id)
        ORDER BY s.session_date ASC, s.start_time ASC, s.id ASC`
     )
     .all(project.id)
-    .map((row) => ({ ...row, billing: sessionRateAmount(row) }))
-    .filter((row) => row.billing); // 산정액 0(정액 '금액 미정' 항목)도 후보에 노출 — 청구 폼에서 금액 입력(0원은 생성 시 차단)
+    .map((row) => ({ ...row, billing: sessionRateAmount(row) })); // 산정 불가(단가 미선택)=null — 폼이 사유와 함께 흐리게 렌더
   return { project, rows };
 }
 

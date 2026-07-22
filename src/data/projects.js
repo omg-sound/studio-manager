@@ -124,11 +124,14 @@ function listProjects(_user, { q } = {}) {
       -- 미청구 항목 수 = 미청구 작업 + 미청구 청구가능 세션(listBillableSessionsForProject와 동일 조건).
       -- 완료 탭에서 '청구 생성 안 한 프로젝트'를 위로 올리는 정렬·배지용(2026-07-05 사용자 요청).
       -- 청구 안 함(waived) 처리한 항목은 더 이상 '필요'하지 않으므로 제외(2026-07-06 사용자 요청).
+      -- ⚠️ 단가 항목 미선택(rate_item_id NULL)도 **센다**(2026-07-23) — 안 세면 완료된 대관 세션이
+      --    청구 후보·집계 양쪽에서 동시에 사라져 프로젝트가 조용히 '완료'로 넘어간다(매출 누락).
+      --    산정이 안 될 뿐 청구는 여전히 '필요'하다. 진짜로 안 받을 거면 '청구 안 함'(waived)이 탈출구.
       ((SELECT COUNT(*) FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id
          WHERE tr.project_id = p.id AND t.is_invoiced = 0 AND t.waived = 0)
        + (SELECT COUNT(*) FROM sessions s
            WHERE s.project_id = p.id AND s.status <> '취소' AND s.session_type IN (${RENTAL_IN})
-             AND s.rate_item_id IS NOT NULL AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
+             AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
              AND s.waived = 0
              AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
              AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id))) AS unbilled_cnt,
