@@ -341,6 +341,14 @@ function deleteProject(projectId) {
     .prepare("SELECT 1 FROM invoice_items ii JOIN sessions s ON s.id = ii.session_id WHERE s.project_id = ? LIMIT 1")
     .get(pid);
   if (invoicedTask || invoicedSession) throw new Error("PROJECT_HAS_INVOICED");
+  // 프로젝트 삭제는 트랙·작업·세션·배정을 CASCADE로 쓸어간다 — 이미 이체한 지급 기록이 남아 있으면 거부.
+  const paidTask = db()
+    .prepare("SELECT 1 FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id WHERE tr.project_id = ? AND t.worker_paid = 1 LIMIT 1")
+    .get(pid);
+  const paidSession = db()
+    .prepare("SELECT 1 FROM session_engineers se JOIN sessions s ON s.id = se.session_id WHERE s.project_id = ? AND se.worker_paid = 1 LIMIT 1")
+    .get(pid);
+  if (paidTask || paidSession) throw new Error("PAYOUT_LOCKED");
   db().prepare("DELETE FROM projects WHERE id = ?").run(pid);
 }
 

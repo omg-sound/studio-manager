@@ -192,6 +192,10 @@ function setSessionEngineers(sessionId, assignments) {
   const d = db();
   const existing = new Map(d.prepare("SELECT manager_id, worker_paid FROM session_engineers WHERE session_id = ?").all(sessionId).map((r) => [r.manager_id, r]));
   const nextIds = new Set(assignments.map((a) => a.id));
+  // 배정에서 빠진 엔지니어는 행이 통째로 사라진다 — 이미 이체한 지급 기록이면 거부(먼저 전수 확인해 반쪽 상태를 안 만든다).
+  for (const [mid, row] of existing) {
+    if (!nextIds.has(mid) && row.worker_paid) throw new Error("PAYOUT_LOCKED");
+  }
   for (const mid of existing.keys()) {
     if (!nextIds.has(mid)) d.prepare("DELETE FROM session_engineers WHERE session_id = ? AND manager_id = ?").run(sessionId, mid);
   }
@@ -513,11 +517,17 @@ function setSessionWaived(user, sessionId) {
   return { ...db().prepare("SELECT * FROM sessions WHERE id = ?").get(s.id), project_id: s.project_id };
 }
 
+/** 이 세션에 이미 이체한(지급 완료) 외주 배정이 있나 — session_engineers는 세션 CASCADE라 삭제 시 지급 이력이 함께 사라진다. */
+function sessionHasPaidPayout(sessionId) {
+  return Boolean(db().prepare("SELECT 1 FROM session_engineers WHERE session_id = ? AND worker_paid = 1 LIMIT 1").get(Number(sessionId)));
+}
+
 function deleteSession(user, sessionId) {
   const { isSessionInvoiced } = require("../data"); // invoices와 상호의존 → 지연 require
   const s = getSessionForUser(user, sessionId);
   if (!s) return null;
   if (isSessionInvoiced(s.id)) throw new Error("SESSION_INVOICED");
+  if (sessionHasPaidPayout(s.id)) throw new Error("PAYOUT_LOCKED"); // 지급 취소가 유일한 해제 경로
   db().prepare("DELETE FROM sessions WHERE id = ?").run(s.id);
   return { project_id: s.project_id };
 }

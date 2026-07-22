@@ -83,7 +83,7 @@ function updateTrack(user, trackId, input = {}) {
   return db().prepare("SELECT * FROM project_tracks WHERE id = ?").get(track.id);
 }
 
-/** 트랙 삭제. 청구된 작업이 하나라도 있으면 거부(인보이스 스냅샷 정합성). */
+/** 트랙 삭제. 청구된 작업·지급 완료된 작업이 하나라도 있으면 거부(인보이스 스냅샷·지급 이력 보존). */
 function deleteTrack(user, trackId) {
   const track = getTrackForUser(user, trackId);
   if (!track) return null;
@@ -91,6 +91,11 @@ function deleteTrack(user, trackId) {
     .prepare("SELECT COUNT(*) AS n FROM track_tasks WHERE track_id = ? AND is_invoiced = 1")
     .get(track.id).n;
   if (invoiced > 0) throw new Error("TRACK_HAS_INVOICED");
+  // 트랙을 지우면 하위 작업이 CASCADE로 사라진다 — 작업 단 지급 잠금(deleteTask)을 우회하는 경로를 여기서도 막는다.
+  const paid = db()
+    .prepare("SELECT COUNT(*) AS n FROM track_tasks WHERE track_id = ? AND worker_paid = 1")
+    .get(track.id).n;
+  if (paid > 0) throw new Error("PAYOUT_LOCKED");
   db().prepare("DELETE FROM project_tracks WHERE id = ?").run(track.id); // track_tasks는 CASCADE
   return { project_id: track.project_id };
 }
@@ -195,6 +200,7 @@ function deleteTask(user, taskId) {
   const task = getTaskForUser(user, taskId);
   if (!task) return null;
   if (task.is_invoiced) throw new Error("TASK_LOCKED");
+  if (task.worker_paid) throw new Error("PAYOUT_LOCKED"); // 이미 이체한 외주 지급 기록(원천세 신고 근거) — 지급 취소가 유일한 해제 경로
   db().prepare("DELETE FROM track_tasks WHERE id = ?").run(task.id);
   return { project_id: task.project_id };
 }

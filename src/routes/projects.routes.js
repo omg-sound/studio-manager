@@ -84,6 +84,19 @@ function cleanYmd(v) {
   return isValidYmd(s) ? s : null;
 }
 
+/**
+ * 지급 완료(이미 이체)된 외주 정산 기록이 걸린 삭제 시도(PAYOUT_LOCKED).
+ * 정산 CSV·지급월 이력이 라이브 행 파생이라 지우면 원천세 신고 근거가 함께 사라진다 — 지급 취소가 유일한 해제 경로.
+ */
+function payoutLockedPage(user, what) {
+  return errorPage({
+    code: 409,
+    title: "삭제 불가",
+    message: `이미 지급 처리된 외주 정산 기록이 있어 ${what} 삭제할 수 없습니다. 외주 작업자 > 정산에서 해당 지급을 취소한 뒤 다시 시도하세요.`,
+    user,
+  });
+}
+
 // ensureCompanyParty는 parties.js 공용을 사용(로컬 중복 제거 — 2026-07-05 전수점검).
 
 /** 사람 party를 아티스트로 표시(is_artist=1, 활동명 비어 있으면 채움). 그룹은 이미 is_artist라 무해. */
@@ -367,6 +380,7 @@ router.post("/:id/delete", requireEditor, (req, res) => {
     if (e.message === "PROJECT_HAS_INVOICED") {
       return res.status(409).send(errorPage({ code: 409, title: "청구된 프로젝트는 삭제할 수 없습니다", message: "이 프로젝트에 청구된 작업·세션이 있습니다. 먼저 관련 청구서를 삭제한 뒤 다시 시도하세요(매출 추적 보존).", user: req.user }));
     }
+    if (e.message === "PAYOUT_LOCKED") return res.status(409).send(payoutLockedPage(req.user, "이 프로젝트를"));
     throw e;
   }
   logAudit(req.user, "project.delete", `#${req.params.id}`);
@@ -552,6 +566,7 @@ router.post("/tracks/:trackId/delete", requireEditor, (req, res) => {
     if (e.message === "TRACK_HAS_INVOICED") {
       return res.status(400).send(errorPage({ code: 400, title: "삭제 불가", message: "이미 청구된 작업이 있는 곡·콘텐츠는 삭제할 수 없습니다.", user: req.user }));
     }
+    if (e.message === "PAYOUT_LOCKED") return res.status(409).send(payoutLockedPage(req.user, "이 곡·콘텐츠를"));
     throw e;
   }
 });
@@ -630,9 +645,11 @@ router.post("/tasks/:taskId/delete", requireEditor, (req, res) => {
   try {
     const result = deleteTask(req.user, Number(req.params.taskId));
     if (!result) return res.status(404).send(errorPage({ code: 404, title: "작업을 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
+    logAudit(req.user, "task.delete", `#${req.params.taskId} 프로젝트 #${result.project_id}`); // 파괴적 액션인데 유일하게 기록이 없었다(2026-07-23 평가)
     res.redirect(`/projects/${result.project_id}?tab=tracks&flash=deleted`);
   } catch (e) {
     if (e.message === "TASK_LOCKED") return res.status(400).send(errorPage({ code: 400, title: "삭제 불가", message: "이미 청구된 작업은 삭제할 수 없습니다.", user: req.user }));
+    if (e.message === "PAYOUT_LOCKED") return res.status(409).send(payoutLockedPage(req.user, "이 작업을"));
     throw e;
   }
 });

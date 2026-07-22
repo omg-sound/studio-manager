@@ -261,6 +261,9 @@ function sessionInputError(e, res, user) {
   if (e.message === "SESSION_TIME_CONFLICT") return res.status(409).send(sessionConflictMessage(e.conflict, user));
   if (e.message === "SESSION_INVOICED")
     return res.status(400).send(errorPage({ code: 400, title: "이미 청구된 세션", message: "이미 청구된 세션은 수정·삭제할 수 없습니다. 청구서를 삭제한 뒤 시도하세요.", user }));
+  // 이미 이체한 외주 지급 기록(원천세 신고 근거)이 세션 삭제·엔지니어 배정 해제로 사라지는 것을 막는다.
+  if (e.message === "PAYOUT_LOCKED")
+    return res.status(409).send(errorPage({ code: 409, title: "지급 완료된 외주 정산이 있습니다", message: "이 세션에 이미 지급 처리된 외주 정산 기록이 있어 삭제하거나 담당 엔지니어를 뺄 수 없습니다. 외주 작업자 > 정산에서 해당 지급을 취소한 뒤 다시 시도하세요.", user }));
   throw e;
 }
 

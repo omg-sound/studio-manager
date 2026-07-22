@@ -365,10 +365,25 @@ router.post("/bulk-tax-status", requireInvoice, (req, res) => {
 });
 
 // ── 삭제(관리자) ── 연결 작업의 청구 잠금을 먼저 해제(좀비 작업 방지). data.js deleteInvoice 트랜잭션.
+// 계산서가 나갔거나 입금이 있는 건은 치프·대표만(invoiceIsSettled) — payments가 CASCADE로 함께 사라지는 비가역 작업.
 router.post("/:id/delete", requireBilling, (req, res) => {
-  const invDel = db().prepare("SELECT title, invoice_number FROM invoices WHERE id = ?").get(Number(req.params.id));
-  deleteInvoice(req.user, Number(req.params.id));
-  if (invDel) logAudit(req.user, "invoice.delete", `#${req.params.id} ${invDel.invoice_number || ""} ${invDel.title || ""}`.trim());
+  let del;
+  try {
+    del = deleteInvoice(req.user, Number(req.params.id));
+  } catch (e) {
+    if (e.message === "INVOICE_SETTLED_FORBIDDEN")
+      return res.status(403).send(
+        errorPage({
+          code: 403,
+          title: "삭제 권한이 없습니다",
+          message: "계산서가 발행됐거나 입금이 있는 청구서는 치프·대표만 삭제할 수 있습니다. 정정이 필요하면 치프에게 요청하세요.",
+          user: req.user,
+        })
+      );
+    throw e;
+  }
+  // 금액·입금·세금상태까지 남긴다 — 삭제하면 청구서와 입금 이력이 함께 사라져 사후 추적 수단이 이 줄뿐이다.
+  if (del) logAudit(req.user, "invoice.delete", `#${del.id} ${del.invoice_number || ""} ${del.title || ""} ${formatKRW(del.amount)} 입금 ${formatKRW(del.paid_amount)} ${del.tax_status || ""}`.replace(/\s+/g, " ").trim());
   // 삭제 후엔 인보이스가 없으니 청구 탭 복귀 시 open=ID는 무시됨(그 행 미생성). 기본은 청구 목록.
   res.redirect(returnTo(req, "/invoices", "deleted"));
 });

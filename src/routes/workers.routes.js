@@ -154,6 +154,24 @@ router.post("/", requireChief, (req, res) => {
 
 router.post("/:id/delete", requireChief, (req, res) => {
   const wDel = getWorker(Number(req.params.id));
+  // 지급 완료 이력이 있으면 거부 — session_engineers가 작업자 CASCADE라 이미 이체한 기록이 통째로 사라지고,
+  // 정산 CSV(payoutExportRows)가 작업자 행을 순회하는 구조라 작업 지급 이력도 신고 자료에서 함께 빠진다(2026-07-23 평가).
+  if (wDel) {
+    const paidSession = db().prepare("SELECT 1 FROM session_engineers WHERE manager_id = ? AND worker_paid = 1 LIMIT 1").get(wDel.id);
+    const paidTask = db()
+      .prepare("SELECT 1 FROM track_tasks WHERE worker_paid = 1 AND (engineer_id = @id OR (engineer_id IS NULL AND engineer_name = @name)) LIMIT 1")
+      .get({ id: wDel.id, name: wDel.name || "" });
+    if (paidSession || paidTask) {
+      return res.status(409).send(
+        errorPage({
+          code: 409,
+          title: "지급 이력이 있는 작업자는 삭제할 수 없습니다",
+          message: "이미 지급 처리된 정산 기록이 있습니다(원천세 신고 근거). 정산 탭에서 해당 지급을 취소한 뒤 다시 시도하세요.",
+          user: req.user,
+        })
+      );
+    }
+  }
   // 첨부 실파일(주민등록증·통장사본)도 함께 회수 — 행만 CASCADE 삭제하면 Drive/로컬에 PII 스캔본이 고아로 남음(2026-07-09 PII 수명주기 점검).
   // DB 삭제 전에 목록을 확보하고, 실제로 삭제됐을 때만(changes>0 — 하우스는 이 라우트로 안 지워짐) best-effort 제거(비동기 fail-safe·흐름 비차단).
   const orphanFiles = listWorkerFiles(Number(req.params.id));

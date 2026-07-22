@@ -454,20 +454,34 @@ function invoiceDraftForPdf(user, opts = {}) {
 }
 
 /**
+ * '확정 진행'된 청구서인가 — 계산서가 홈택스로 나갔거나 입금이 들어온 건.
+ * 삭제하면 payments가 FK CASCADE로 함께 사라져 매출·미수가 소급 변하고, 이미 신고한
+ * 세금계산서와의 대사가 깨진다. 그래서 이 상태만 삭제 권한을 치프·대표로 올린다.
+ */
+function invoiceIsSettled(inv) {
+  if (!inv) return false;
+  return Number(inv.paid_amount) > 0 || (Boolean(inv.tax_status) && inv.tax_status !== "계산서 미발행");
+}
+
+/**
  * 청구 삭제. 연결된 작업의 잠금(is_invoiced)을 먼저 해제한 뒤 삭제해야 좀비 작업이 안 생긴다.
  * (FK는 invoice_id만 SET NULL로 지울 뿐 is_invoiced=1은 남으므로 명시적 UPDATE 필요.)
+ *
+ * '정정 = 삭제 후 재발행'은 유지하되, **확정 진행된 건은 치프·대표만**(스태프 차단).
+ * @returns 삭제된 청구서 요약(감사 로그에 금액·입금까지 남기려면 삭제 전 값이 필요하다).
  */
 function deleteInvoice(user, id) {
   if (!canBill(user)) return null;
-  const inv = db().prepare("SELECT id FROM invoices WHERE id = ?").get(id);
+  const inv = db().prepare("SELECT id, title, invoice_number, amount, paid_amount, tax_status FROM invoices WHERE id = ?").get(id);
   if (!inv) return null;
+  if (invoiceIsSettled(inv) && !canInvoice(user)) throw new Error("INVOICE_SETTLED_FORBIDDEN");
   const d = db();
   d.exec("BEGIN IMMEDIATE;");
   try {
     d.prepare("UPDATE track_tasks SET is_invoiced = 0, invoice_id = NULL WHERE invoice_id = ?").run(id);
     d.prepare("DELETE FROM invoices WHERE id = ?").run(id); // invoice_items는 FK CASCADE
     d.exec("COMMIT;");
-    return { id };
+    return { ...inv };
   } catch (e) {
     d.exec("ROLLBACK;");
     throw e;
@@ -594,6 +608,7 @@ module.exports = {
   payerDocMeta,
   payerDocMissing,
   invoiceDraftForPdf,
+  invoiceIsSettled,
   deleteInvoice,
   listInvoices,
   getInvoiceForUser,

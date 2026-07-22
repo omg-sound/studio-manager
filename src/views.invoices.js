@@ -4,7 +4,7 @@
 
 const { INVOICE_STATUS_BADGE, DOC_TYPES, docNumberWithType } = require("./config");
 const { esc, formatKRW, emptyState, detailsChevron, copyable, personLabel } = require("./views");
-const { balanceOf, payStatusOf, isOverdue } = require("./data");
+const { balanceOf, payStatusOf, isOverdue, invoiceIsSettled } = require("./data");
 const { formatYmdShort } = require("./lib/date"); // todayYmd·ddayLabel 미사용(입금일·마감일 개념 제거, 2026-07-05)
 
 /**
@@ -176,10 +176,16 @@ function invoiceExpandBody(inv, { items = [], isAdmin = false, returnTo = "", in
 
   // 프로젝트 청구 탭엔 청구 처리 컨트롤을 두지 않는다 — 선택 항목으로 청구 생성이 곧 청구서 발행이라 상태 컨트롤 불필요(사용자 요청).
   // 여기선 보기·삭제만. 청구서 발행·계산서·현금영수증·입금 처리는 전부 청구 메뉴에서.
+  // 확정 진행된 건(계산서 발행·입금 있음)은 무엇이 함께 사라지는지 확인창에 그대로 적는다 — 일반 문구로는
+  // '입금 이력까지 CASCADE로 삭제'라는 비가역 결과가 드러나지 않는다(2026-07-23 평가 지적).
+  const settled = invoiceIsSettled(inv);
+  const delConfirm = settled
+    ? `이 청구를 삭제할까요? 총액 ${formatKRW(inv.amount)}${Number(inv.paid_amount) > 0 ? ` · 입금 ${formatKRW(inv.paid_amount)}` : ""}${inv.tax_status && inv.tax_status !== "계산서 미발행" ? ` · ${inv.tax_status}` : ""} 건입니다. 입금 이력도 함께 삭제되며 되돌릴 수 없습니다.`
+    : "이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다.";
   const adminControls = isAdmin
     ? `<div class="space-y-2 border-t border-border pt-2">
          <div class="flex flex-wrap items-center gap-2">
-           <form method="post" action="/invoices/${inv.id}/delete" data-confirm="이 청구를 삭제할까요? 발행한 청구는 수정 대신 삭제 후 다시 발행합니다.">
+           <form method="post" action="/invoices/${inv.id}/delete" data-confirm="${esc(delConfirm)}">
              <input type="hidden" name="return" value="${ret}" />
              <button class="btn-ghost btn-sm text-danger">삭제</button>
            </form>
