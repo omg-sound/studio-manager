@@ -341,7 +341,9 @@ test("revenueUnattributed: 담당 없는 작업·세션을 모으고, 담당 있
   const sessGhost = db().prepare("INSERT INTO sessions (project_id, session_type, session_date, engineer_name, status) VALUES (?,'녹음','2026-09-04','사라진이름','완료')").run(proj).lastInsertRowid;
   // ⑤ 담당 있는 세션(제외돼야 함)
   const sessYes = db().prepare("INSERT INTO sessions (project_id, session_type, session_date, engineer_name, status) VALUES (?,'녹음','2026-09-05','있는담당','완료')").run(proj).lastInsertRowid;
-  const inv = db().prepare("INSERT INTO invoices (project_id,payer_id,title,amount,tax_amount,status,issued_date) VALUES (?,?,'U',0,0,'발행','2026-09-10')").run(proj, payer).lastInsertRowid;
+  // 무할인 정합 청구서: amount = 라인 합(70000+50000+300000+200000+400000=1,020,000), VAT 0 → 공급가=라인 합.
+  // (배분식이 i.amount를 읽으므로 실제 데이터처럼 amount가 라인 합과 맞아야 한다 — 옛 코드는 ii.amount만 봐 무관했음.)
+  const inv = db().prepare("INSERT INTO invoices (project_id,payer_id,title,amount,tax_amount,status,issued_date) VALUES (?,?,'U',1020000,0,'발행','2026-09-10')").run(proj, payer).lastInsertRowid;
   const line = (col, id, amt) => db().prepare(`INSERT INTO invoice_items (invoice_id, ${col}, description, quantity, unit_price, amount) VALUES (?,?,'x',1,?,?)`).run(inv, id, amt, amt);
   line("task_id", taskNo, 70000);
   line("task_id", taskYes, 50000);
@@ -366,10 +368,67 @@ test("revenueUnattributed: 수동 청구서 라인(작업·세션 없음)은 대
   assert.equal(u.supply, 0, "일 기록이 없는 라인은 사람에 붙을 대상이 아니다(업체·개인별 탭이 제자리)");
 });
 
-test("revenueUnattributed + revenueByStaff 합 = 라인 총합(누락 없음)", () => {
+test("revenueUnattributed + revenueByStaff 합 = 일 라인 귀속 공급가 총합(누락 없음)", () => {
   const per = { year: 2026, month: 9 };
   const staffSum = D.revenueByStaff(per).reduce((a, r) => a + r.supply, 0);
-  const lineSum = db().prepare(`SELECT COALESCE(SUM(ii.amount),0) s FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
+  // 2026-09 픽스처는 무할인이라 귀속 공급가 = 라인 원금(ii.amount)과 같다.
+  // 배분식과 같은 값을 SQL로도 계산해 대조(할인이 들어와도 항등식이 유지되도록 배분 기준으로 잠금).
+  const lineSum = db().prepare(`SELECT COALESCE(SUM(ROUND(ii.amount*1.0*(i.amount-i.tax_amount)/NULLIF(ilt.line_total,0))),0) s
+      FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
+      JOIN (SELECT invoice_id, SUM(amount) AS line_total FROM invoice_items GROUP BY invoice_id) ilt ON ilt.invoice_id=ii.invoice_id
       WHERE i.status<>'미발행' AND substr(i.issued_date,1,7)='2026-09' AND (ii.task_id IS NOT NULL OR ii.session_id IS NOT NULL)`).get().s;
-  assert.equal(staffSum + D.revenueUnattributed(per).supply, lineSum, "스탭 합 + 미귀속 = 일 라인 총합");
+  assert.equal(staffSum + D.revenueUnattributed(per).supply, lineSum, "스탭 합 + 미귀속 = 일 라인 귀속 공급가 총합");
+});
+
+// ── 청구서 할인의 라인 배분(2026-07-23 기능성 평가 — 스탭 축 과대 수정) ──
+// 스탭·종류·미귀속 축이 라인 원금(ii.amount)을 쓰면, 청구서 단위 할인 시 라인 합 > 실매출이라
+// 스탭별 매출이 부풀었다(사례 +33%). → 할인을 금액 비례로 라인에 배분해 청구처 축·개요와 일치시킨다.
+test("revenueByStaff: 다라인 할인 청구서를 금액 비례로 배분 — 스탭 합 = 청구서 공급가", () => {
+  // 엔지니어 2명 + 한 청구서에 각자 라인(원금 30만·10만, 합 40만) + 청구서 할인 8만 → 공급가 32만.
+  const uA = db().prepare("INSERT INTO users (email, role, name) VALUES ('disc-a@test.com','staff','할인A')").run().lastInsertRowid;
+  const uB = db().prepare("INSERT INTO users (email, role, name) VALUES ('disc-b@test.com','staff','할인B')").run().lastInsertRowid;
+  const mA = db().prepare("INSERT INTO project_managers (name, active, user_id) VALUES ('할인A',1,?)").run(uA).lastInsertRowid;
+  const mB = db().prepare("INSERT INTO project_managers (name, active, user_id) VALUES ('할인B',1,?)").run(uB).lastInsertRowid;
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company','할인청구사')").run().lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, rate) VALUES ('DP','task',0)").run().lastInsertRowid;
+  const tr = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡','Music')").run(proj).lastInsertRowid;
+  const tA = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, engineer_id, worker_rate) VALUES (?, 'Mixing','Fixed_Per_Track',1,300000,300000,'Completed',1,?,0)").run(tr, mA).lastInsertRowid;
+  const tB = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, engineer_id, worker_rate) VALUES (?, 'Vocal_Tuning','Fixed_Per_Track',1,100000,100000,'Completed',1,?,0)").run(tr, mB).lastInsertRowid;
+  // 라인 합 40만, 할인 8만 → 과세표준 32만, VAT 3.2만, amount 35.2만. 공급가(amount−tax)=32만.
+  const inv = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, discount_amount, status, issued_date) VALUES (?,?,'DT',352000,32000,80000,'발행','2027-03-10')").run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?,?,'Mixing',1,300000,300000)").run(inv, tA);
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?,?,'Vocal_Tuning',1,100000,100000)").run(inv, tB);
+
+  const rows = D.revenueByStaff({ year: 2027, month: 3 });
+  const a = rows.find((r) => r.id === mA), b = rows.find((r) => r.id === mB);
+  assert.equal(a.supply, 240000, "할인A = 30만 × 32만/40만 = 24만(라인 원금 30만이 아니라)");
+  assert.equal(b.supply, 80000, "할인B = 10만 × 32만/40만 = 8만");
+  assert.equal(a.supply + b.supply, 320000, "스탭 합 = 청구서 공급가(할인 반영) — 개요·청구처 축과 일치");
+
+  // 개요 KPI(청구처 축과 같은 i.amount−i.tax_amount)와도 일치
+  const summary = D.revenueSummary({ year: 2027, month: 3 });
+  assert.equal(summary.periodSupply, 320000, "개요 공급가도 32만");
+});
+
+test("revenueForStaff: 상세 라인 금액도 할인 반영(행 합 = 소계 = 총계)", () => {
+  const u = db().prepare("INSERT INTO users (email, role, name) VALUES ('disc-detail@test.com','staff','할인상세')").run().lastInsertRowid;
+  const m = db().prepare("INSERT INTO project_managers (name, active, user_id) VALUES ('할인상세',1,?)").run(u).lastInsertRowid;
+  const payer = db().prepare("INSERT INTO parties (kind, name) VALUES ('company','할인상세사')").run().lastInsertRowid;
+  const proj = db().prepare("INSERT INTO projects (title, project_type, artist, rate) VALUES ('DDP','task','루나',0)").run().lastInsertRowid;
+  const tr = db().prepare("INSERT INTO project_tracks (project_id, title, content_type) VALUES (?, '곡','Music')").run(proj).lastInsertRowid;
+  // 이 사람 라인 30만 + 다른(담당 없는) 라인 10만, 할인 8만 → 공급가 32만. 이 사람 몫 = 30만×32/40 = 24만.
+  const tMine = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, engineer_id, worker_rate) VALUES (?, 'Mixing','Fixed_Per_Track',1,300000,300000,'Completed',1,?,60000)").run(tr, m).lastInsertRowid;
+  const tOther = db().prepare("INSERT INTO track_tasks (track_id, task_type, billing_type, quantity, unit_price, total_price, status, is_invoiced, engineer_id, worker_rate) VALUES (?, 'Vocal_Tuning','Fixed_Per_Track',1,100000,100000,'Completed',1,NULL,0)").run(tr).lastInsertRowid;
+  const inv = db().prepare("INSERT INTO invoices (project_id, payer_id, title, amount, tax_amount, discount_amount, status, issued_date) VALUES (?,?,'DDT',352000,32000,80000,'발행','2027-04-10')").run(proj, payer).lastInsertRowid;
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?,?,'Mixing',1,300000,300000)").run(inv, tMine);
+  db().prepare("INSERT INTO invoice_items (invoice_id, task_id, description, quantity, unit_price, amount) VALUES (?,?,'Vocal_Tuning',1,100000,100000)").run(inv, tOther);
+
+  const d = D.revenueForStaff(m, { year: 2027, month: 4 });
+  assert.equal(d.tasks.length, 1, "이 사람 라인만");
+  assert.equal(d.tasks[0].amount, 240000, "행 금액도 할인 반영(30만×32/40=24만)");
+  assert.equal(d.supply, 240000, "상세 공급가 = 행 합");
+
+  // 담당 없는 라인은 미귀속으로 — 이것도 할인 반영(10만×32/40=8만)
+  const un = D.revenueUnattributed({ year: 2027, month: 4 });
+  assert.equal(un.tasks.find((t) => t.id === tOther).amount, 80000, "미귀속 라인도 배분");
 });
