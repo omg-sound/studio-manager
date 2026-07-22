@@ -19,6 +19,7 @@ const {
   listProjectsForParty,
   listSessionsForParty,
   listInvoicesForParty,
+  partyHasIssuedInvoice,
   getManagerByPartyId,
   syncPartyToManager,
   listGroupsForPicker,
@@ -161,6 +162,10 @@ router.post("/:id", asyncHandler(async (req, res) => {
 // ── 삭제(하드: affiliations CASCADE, projects.contact_id SET NULL) ──
 router.post("/:id/delete", asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  // 발행·진행된 청구의 청구재(payer)면 삭제 거부 — 개인 청구처(현금영수증 발행 대상)를 여기서 지우면
+  // payer_id NULL화로 그 사람 기준 미수 추적이 끊기고 payer_kind 소실로 현금영수증이 '계산서'로 오표시된다.
+  // /clients와 같은 헬퍼(partyHasIssuedInvoice)로 판정 — 삭제 문이 어디냐에 따라 결과가 갈리지 않게(2026-07-23).
+  if (partyHasIssuedInvoice(id)) return res.status(409).send(errorPage({ code: 409, title: "청구처로 발행된 청구가 있어 삭제할 수 없습니다", message: "발행·입금완료된 청구의 청구처(현금영수증 포함)입니다. 관련 청구를 먼저 정리하세요(매출 추적 보존).", user: req.user }));
   // DB 삭제 전 resourceName 확보 — 삭제 후에는 조회 불가.
   const contact = getParty(id);
   const resourceName = contact && contact.google_resource_name;

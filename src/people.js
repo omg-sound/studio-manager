@@ -23,6 +23,7 @@ const {
   createPerson: createPartyPerson, // 로컬 Google API createPerson과 충돌 방지(별칭)
   updateParty,
   deleteParty,
+  partyHasIssuedInvoice,
   setPartyGoogleRef,
   currentAffiliation,
   syncCompanyAffiliation,
@@ -219,7 +220,7 @@ async function syncFromGoogle() {
 
     const { persons, finalSyncToken } = await fetchAll(syncToken);
 
-    let created = 0, updated = 0, deleted = 0;
+    let created = 0, updated = 0, deleted = 0, keptWithInvoice = 0;
 
     for (const person of persons) {
       const resourceName = person.resourceName;
@@ -229,8 +230,16 @@ async function syncFromGoogle() {
       if (meta.deleted) {
         const existing = getPartyByResourceName(resourceName);
         if (existing) {
-          deleteParty(existing.id);
-          deleted++;
+          // 구글에서 지웠어도 **발행 청구의 청구처면 앱에서는 보존**한다(2026-07-23 기능성 평가).
+          // deleteParty는 invoices.payer_id를 NULL로 만들어 재무 추적을 끊는다 — 구글 주소록 정리가
+          // 우리 매출 기록을 소급 삭제하면 안 된다. 삭제 라우트(clients·contacts)와 같은 헬퍼로 판정.
+          // (지금은 이 pull을 부르는 UI가 없지만, '향후 자동화용 보존'이라 자동화 시점에 이 가드가 방어선이 된다.)
+          if (partyHasIssuedInvoice(existing.id)) {
+            keptWithInvoice++;
+          } else {
+            deleteParty(existing.id);
+            deleted++;
+          }
         }
       } else {
         const fields = personToContactFields(person);
@@ -261,7 +270,7 @@ async function syncFromGoogle() {
 
     if (finalSyncToken) setState("contacts_sync_token", finalSyncToken);
 
-    return { created, updated, deleted };
+    return { created, updated, deleted, keptWithInvoice };
   } catch (e) {
     return { error: e.message || String(e) };
   }

@@ -7,7 +7,7 @@ const { requireEditor } = require("../auth");
 const { COMPANY_ROLES } = require("../config");
 const {
   listClients, getParty, listProjectsForParty,
-  listInvoicesForParty,
+  listInvoicesForParty, partyHasIssuedInvoice,
   listClientFiles, getClientFile, upsertClientFile, deleteClientFile,
   setOrgContacts, setCompanyOwners, listCompanyOwners, listOrgContacts, listContacts, resolvePersonByName,
   listArtistsForAgency, artistPersonOptions,
@@ -322,8 +322,8 @@ router.post("/:id", (req, res) => {
 // 단, 발행/입금완료 인보이스가 있으면 청구처 보존을 위해 삭제 거부
 router.post("/:id/delete", (req, res) => {
   const id = Number(req.params.id);
-  const active = db().prepare("SELECT 1 FROM invoices WHERE payer_id=? AND (status='발행' OR tax_status IN ('계산서 발행','입금완료')) LIMIT 1").get(id); // 청구서 발행 또는 계산서·입금 진행분이면 청구처 보존
-  if (active) return res.status(409).send(errorPage({ code: 409, title: "청구처로 발행된 청구가 있어 삭제할 수 없습니다", message: "발행·입금완료된 청구의 청구처입니다. 관련 청구를 먼저 정리하세요(매출 추적 보존).", user: req.user }));
+  // 발행·진행된 청구의 청구처면 삭제 거부(청구처 보존) — 판정은 세 삭제 경로(clients·contacts·구글 pull) 공용 헬퍼.
+  if (partyHasIssuedInvoice(id)) return res.status(409).send(errorPage({ code: 409, title: "청구처로 발행된 청구가 있어 삭제할 수 없습니다", message: "발행·입금완료된 청구의 청구처입니다. 관련 청구를 먼저 정리하세요(매출 추적 보존).", user: req.user }));
   logAudit(req.user, "party.delete", `#${id} ${(getParty(id) || {}).name || ""}`.trim());
   deleteParty(id); // 하드 삭제(파티) — 역할 참조 정리·첨부 CASCADE
   res.redirect("/clients?flash=deleted");

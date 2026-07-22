@@ -353,6 +353,23 @@ function listProjectsForParty(partyId) {
   ).all({ id });
 }
 
+/**
+ * 이 당사자가 **발행/진행된 청구의 청구처**인가 — 삭제하면 재무 추적이 끊기므로 삭제를 거부할 판정.
+ *
+ * `deleteParty`는 `invoices.payer_id`를 NULL로 만든다(역할 참조 정리). 그러면 그 사람 기준 미수
+ * 추적(`listInvoicesForParty`)이 0건이 되고, `payer_kind` 소실로 현금영수증 건이 '계산서'로 오표시된다.
+ * 그래서 발행됐거나(status) 계산서·입금이 진행된(tax_status) 청구가 있으면 청구처를 보존한다.
+ *
+ * ⚠️ **삭제 경로 세 곳이 이 하나를 공유해야 한다** — `/clients` 삭제(원래 여기에만 인라인 가드가 있었다),
+ * `/contacts` 삭제, 구글→앱 pull(`people.js` meta.deleted). 판정이 갈리면 어느 문으로 들어오느냐에 따라
+ * 같은 사람이 지워지거나 보존되는 비대칭이 생긴다(2026-07-23 기능성 평가). 회귀 `test/party-delete-guard.test.js`.
+ */
+function partyHasIssuedInvoice(partyId) {
+  return !!db()
+    .prepare("SELECT 1 FROM invoices WHERE payer_id = ? AND (status = '발행' OR tax_status IN ('계산서 발행', '입금완료')) LIMIT 1")
+    .get(Number(partyId));
+}
+
 /** 당사자가 청구처(payer)인 인보이스 전체. */
 function listInvoicesForParty(partyId) {
   // payer_kind 조인(2026-07-09 감사): 미제공 시 taxDocOf가 항상 '계산서'로 판정해 개인(아티스트) 청구처
@@ -1031,6 +1048,7 @@ module.exports = {
   listPersonsForOrg,
   orgsWithOwnerParty,
   listProjectsForParty,
+  partyHasIssuedInvoice,
   listInvoicesForParty,
   listSessionsForParty,
   partyOptions,
