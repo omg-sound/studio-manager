@@ -72,38 +72,6 @@ function rfc3339Kst(date, time, addDay = 0) {
   return `${d}T${time}:00+09:00`;
 }
 
-/**
- * 해당 날짜에 스튜디오 캘린더에서 바쁜 30분 시작 슬롯 목록(가용성 표시용). 미연동/오류는 [](fail-open).
- * slots = 후보 'HH:MM' 배열. 각 슬롯 [t, t+30)가 캘린더 busy 구간과 겹치면 포함.
- */
-async function busySlotsForDate(date, slots) {
-  const cal = calendarClient();
-  const calId = getStudioCalendarId();
-  if (!cal || !calId || !RE_DATE.test(date) || !Array.isArray(slots) || !slots.length) return [];
-  try {
-    const { data } = await cal.freebusy.query({
-      requestBody: {
-        timeMin: rfc3339Kst(date, "00:00"),
-        timeMax: rfc3339Kst(date, "00:00", 1), // 그날 하루 전체(익일 00:00까지)
-        timeZone: "Asia/Seoul",
-        items: [{ id: calId }],
-      },
-    });
-    const busy = (data.calendars && data.calendars[calId] && data.calendars[calId].busy) || [];
-    const ranges = busy
-      .map((b) => [Date.parse(b.start), Date.parse(b.end)])
-      .filter(([s, e]) => Number.isFinite(s) && Number.isFinite(e));
-    if (!ranges.length) return [];
-    return slots.filter((slot) => {
-      if (!RE_TIME.test(slot)) return false;
-      const ss = Date.parse(rfc3339Kst(date, slot));
-      const se = ss + 30 * 60000;
-      return ranges.some(([bs, be]) => ss < be && bs < se); // 반열린 겹침
-    });
-  } catch (_e) {
-    return [];
-  }
-}
 
 /** 일정 시간 본문: 시작·종료 있으면 시간 일정(KST·야간 익일), 없으면 종일(다일이면 endDate까지). */
 function eventTimes(date, start, end, endDate) {
@@ -208,7 +176,6 @@ module.exports = {
   listCalendars,
   rfc3339Kst,
   eventTimes, // 종일/다일/야간 시간 조립(순수) — 테스트 노출(KST +1일 산술 회귀 잠금)
-  busySlotsForDate,
   eventBody,
   createEvent,
   updateEvent,

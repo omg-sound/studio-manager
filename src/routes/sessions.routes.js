@@ -20,14 +20,14 @@ const {
   setSessionAmount,
   setSessionEventId,
   deleteSession,
-  busySessionSlots,
+  busySessionRanges,
   sessionAttendeeEmails,
   listSessionDirectors,
   listSessionEngineers,
   contactOptions,
   partyOptions,
 } = require("../data");
-const { config, SESSION_TIME_SLOTS, RENTAL_SESSION_TYPES } = require("../config");
+const { config, RENTAL_SESSION_TYPES } = require("../config");
 const { layout, pageHeader, esc, flashBanner, errorPage, emptyState, tabBar, searchBox, personLabel, personComboOptionsScript, personComboCompanyScript } = require("../views");
 const { sessionProjectCard, monthCalendar, sessionCardModal } = require("../views.sessions");
 const { safePath } = require("../lib/nav");
@@ -109,7 +109,7 @@ function sessionConflictMessage(c, user) {
   return errorPage({
     code: 409,
     title: "세션 시간이 겹칩니다",
-    message: `같은 룸(${room})에 이미 같은 시간대 ${c.session_type} 세션이 있습니다 — ${c.project_title} (${when}). 다른 시간이나 다른 룸으로 예약하세요.`,
+    message: `같은 룸(${room})에 이미 같은 시간대 ${c.session_type} 세션이 있습니다 — ${c.project_title} (${when}). 다른 시간이나 다른 룸을 고르세요. 겹치는 줄 알면서 등록하려면 폼으로 돌아가 그대로 저장하면 확인창이 뜹니다.`,
     user,
   });
 }
@@ -243,17 +243,25 @@ router.get("/sessions/place-suggest", requireEditor, asyncHandler(async (req, re
   }
 }));
 
-// ── 시간 슬롯 가용성(JSON) — 시작 버튼 그리드 비활성 표시용 ──
-// 그 날짜에 이미 예약된(앱 DB 세션 + 구글 캘린더) 30분 슬롯을 반환. 외부 캘린더 오류는 fail-open([]).
-router.get("/sessions/availability", requireEditor, asyncHandler(async (req, res) => {
+// ── 겹침 경고용 점유 구간(JSON) ──
+// 그 날짜·**그 룸**의 점유 구간을 기준일 자정 절대 분축으로 반환(전날 야간분은 start 음수).
+// 서버의 겹침 차단(findSessionConflict)과 **같은 함수**(busySessionRanges)를 쓰므로 경고 ≡ 차단.
+//
+// ⚠️ 구글 캘린더 FreeBusy 합산은 2026-07-23에 제거했다 — 단일 캘린더라 룸을 구분 못 하고 이벤트 id가 없어
+// 자기 일정도 못 빼서, 동기화된 세션을 편집할 때마다 거짓 경고가 떴다. 그 경고를 승인하면
+// override_conflict=1이 서버의 진짜 검사를 통째로 꺼서 실제 이중 예약이 통과하던 경로였다.
+// (앱→구글 단방향이라 캘린더 내용은 사실상 DB 복제 — 룸 점유의 진실원천은 앱 DB다.)
+router.get("/sessions/availability", requireEditor, (req, res) => {
   const date = String(req.query.date || "");
   const excludeId = Number(req.query.exclude) || null;
-  const room = req.query.room !== undefined && req.query.room !== "" ? Number(req.query.room) : undefined;
-  const dbBusy = busySessionSlots(date, SESSION_TIME_SLOTS, { excludeId, room });
-  const calBusy = await calendar.busySlotsForDate(date, SESSION_TIME_SLOTS);
-  const busy = Array.from(new Set([...dbBusy, ...calBusy])).sort();
-  res.json({ date, slots: SESSION_TIME_SLOTS, busy });
-}));
+  const room = Number(req.query.room) || 0; // 빈 값 = '룸 미지정'(room_id NULL) → IFNULL 0, 서버 판정과 동일
+  const busy = busySessionRanges(date, { excludeId, room }).map((r) => ({
+    start: r.start,
+    end: r.end,
+    label: `${r.room_name || "룸 미지정"} ${r.start_time}–${r.end_time} · ${r.project_title || ""}`.trim(),
+  }));
+  res.json({ date, busy });
+});
 
 function sessionInputError(e, res, user) {
   if (e.message === "SESSION_DATE_REQUIRED")

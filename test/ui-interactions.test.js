@@ -1686,3 +1686,89 @@ test("프로젝트 목록 정렬: 키보드(Enter)로도 정렬, IME 조합 중 
   assert.equal(th.getAttribute("aria-sort"), "ascending");
   assert.deepEqual(sortVals(doc, "company"), ["가", "나"]);
 });
+
+// ── 겹침 경고(2026-07-23 평가 수정) — 경고가 뜨는 조건 = 서버가 막는 조건 ──
+// 옛 구조는 30분 슬롯 + 구글 FreeBusy 합산이라 거짓 경고가 상시로 떴고, 그걸 승인하면
+// override_conflict=1이 서버의 같은 룸 검사를 통째로 꺼서 실제 이중 예약이 통과했다.
+// 이제 서버가 busySessionRanges 구간을 그대로 주고 app.js가 같은 반열린 비교를 한다.
+
+/** 세션 폼 마운트 + /sessions/availability 응답 스텁. */
+function mountSessionForm(busy, { sessionId = "" } = {}) {
+  const rooms = [{ id: 1, name: "A룸", is_external: 0 }];
+  const idAttr = sessionId ? ` data-session-id="${sessionId}"` : "";
+  const html = `<form data-session-form${idAttr}>${sessionBookingFields({ session_date: "2026-03-05" }, [], [], rooms, "")}<input type="hidden" data-override-conflict name="override_conflict" /></form>`;
+  return mountDom(html, {
+    fetchImpl: (url) =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(String(url).indexOf("/sessions/availability") >= 0 ? { date: "2026-03-05", busy } : {}) }),
+  });
+}
+
+/** 시작 시각 타이핑(시간 콤보는 input을 듣는다 — hidden 동기·경고 갱신은 app.js가 처리). */
+function setStart(win, doc, hhmm) {
+  const start = doc.querySelector("[data-start-input]");
+  start.value = hhmm;
+  fire(win, start, "input");
+}
+
+test("세션 폼 겹침 경고: 점유 구간과 겹치면 경고 + 어느 세션인지 표시", async () => {
+  const { win, doc } = mountSessionForm([{ start: 840, end: 1080, label: "A룸 14:00–18:00 · 루나 1집" }]);
+  await tick();
+  const warn = doc.querySelector("[data-conflict-warn]");
+  setStart(win, doc, "15:00");
+  assert.equal(warn.hidden, false, "15:00은 14:00–18:00과 겹친다");
+  assert.match(warn.textContent, /루나 1집/, "어느 세션인지 알려준다(옛 '이미 예약된 일정이 있습니다'는 무엇인지 불명)");
+});
+
+test("세션 폼 겹침 경고: 경계가 맞닿기만 하면 경고 없음(반열린 — 서버 판정과 동일)", async () => {
+  const { win, doc } = mountSessionForm([{ start: 840, end: 1080, label: "A룸 14:00–18:00 · 루나 1집" }]);
+  await tick();
+  const warn = doc.querySelector("[data-conflict-warn]");
+  setStart(win, doc, "18:00");
+  assert.equal(warn.hidden, true, "18:00 시작은 18:00 종료와 안 겹친다");
+});
+
+test("세션 폼 겹침 경고: 오전 세션도 잡힌다(옛 슬롯 창 12:00~ 사각지대)", async () => {
+  const { win, doc } = mountSessionForm([{ start: 540, end: 660, label: "A룸 09:00–11:00 · 아침 녹음" }]);
+  await tick();
+  const warn = doc.querySelector("[data-conflict-warn]");
+  setStart(win, doc, "10:00");
+  assert.equal(warn.hidden, false, "오전 예약이 경고에서 빠지면 안 된다");
+});
+
+test("세션 폼 겹침 경고: 전날 야간분(음수 구간)도 새벽 예약에 잡힌다", async () => {
+  const { win, doc } = mountSessionForm([{ start: -120, end: 120, label: "A룸 22:00–02:00 · 야간" }]);
+  await tick();
+  const warn = doc.querySelector("[data-conflict-warn]");
+  setStart(win, doc, "01:00");
+  assert.equal(warn.hidden, false, "전날 22시 세션이 새벽 1시를 점유한다");
+});
+
+test("세션 폼 겹침 경고: 점유가 없으면 경고도 override도 없다", async () => {
+  const { win, doc } = mountSessionForm([]);
+  await tick();
+  setStart(win, doc, "15:00");
+  assert.equal(doc.querySelector("[data-conflict-warn]").hidden, true);
+  fire(win, doc.querySelector("form"), "submit");
+  assert.equal(doc.querySelector("[data-override-conflict]").value, "", "겹치지 않으면 서버 검사를 끄지 않는다");
+});
+
+test("세션 폼 겹침 경고: 겹칠 때 확인 승인 시에만 override_conflict=1", async () => {
+  const { win, doc } = mountSessionForm([{ start: 840, end: 1080, label: "A룸 14:00–18:00 · 루나 1집" }]);
+  await tick();
+  setStart(win, doc, "15:00");
+  win.confirm = () => false; // 사용자가 취소
+  fire(win, doc.querySelector("form"), "submit");
+  assert.equal(doc.querySelector("[data-override-conflict]").value, "", "취소하면 override 안 붙는다");
+  win.confirm = () => true; // 사용자가 승인
+  fire(win, doc.querySelector("form"), "submit");
+  assert.equal(doc.querySelector("[data-override-conflict]").value, "1");
+});
+
+test("세션 폼 겹침 경고: 가용성 조회에 룸을 항상 실어 보낸다(룸별 판정)", async () => {
+  const { doc, fetchCalls } = mountSessionForm([]);
+  await tick();
+  const call = fetchCalls.filter((c) => c.url.indexOf("/sessions/availability") >= 0).pop();
+  assert.ok(call, "가용성 조회가 일어난다");
+  assert.match(call.url, /[?&]room=/, "룸 파라미터 필수 — 없으면 다른 룸 일정까지 경고로 뜬다");
+  assert.equal(doc.querySelector("[data-conflict-warn]").hidden, true);
+});

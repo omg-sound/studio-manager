@@ -297,37 +297,6 @@ function listSessionDirectors(sessionId) {
  * slots = 후보 'HH:MM' 배열. excludeId로 수정 중 세션 제외.
  * room 미지정(undefined)이면 전 룸 합산(기존 동작), 지정 시 같은 룸만(IFNULL=0=레거시/미지정 가상룸).
  */
-function busySessionSlots(date, slots, { excludeId = null, room } = {}) {
-  if (!isValidYmd(date) || !Array.isArray(slots) || !slots.length) return [];
-  const params = { date, excludeId: excludeId == null ? -1 : excludeId };
-  let roomClause = "";
-  if (room !== undefined) {
-    roomClause = "AND IFNULL(room_id, 0) = @room";
-    params.room = Number(room) || 0;
-  }
-  const rows = db()
-    .prepare(
-      `SELECT session_date, start_time, end_time FROM sessions
-       WHERE session_date IN (date(@date, '-1 day'), @date, date(@date, '+1 day')) AND status <> '취소'
-         AND start_time IS NOT NULL AND end_time IS NOT NULL AND id <> @excludeId ${roomClause}`
-    )
-    .all(params);
-  const ranges = rows
-    .map((r) => {
-      const off = dayOffsetMin(r.session_date, date); // 야간 세션이 인접일로 넘어가므로 절대 분축으로 정규화
-      const s = timeToMin(r.start_time);
-      let e = timeToMin(r.end_time);
-      if (s == null || e == null) return null;
-      if (e <= s) e += 1440;
-      return [s + off, e + off];
-    })
-    .filter(Boolean);
-  if (!ranges.length) return [];
-  return slots.filter((slot) => {
-    const m = timeToMin(slot);
-    return m != null && ranges.some(([s, e]) => m < e && s < m + 30);
-  });
-}
 
 /** 녹음 세션의 진행시간 → 단가표 자동 산정. 시간제 대상(녹음+단가+시간)이 아니면 null. */
 function sessionRateAmount(session, itemOverride) {
@@ -375,13 +344,21 @@ function dayOffsetMin(rowDate, baseDate) {
   return Math.round((a - b) / 86400000) * 1440;
 }
 
-function findSessionConflict({ date, start, end, excludeId = null, room = null }) {
-  const s = timeToMin(start);
-  let e = timeToMin(end);
-  if (!isValidYmd(date) || s == null || e == null) return null;
-  if (e <= s) e += 1440; // end<=start면 야간(자정 넘김) — 최대 12시간이라 다음날 아침까지만 넘어감
+/**
+ * 기준일(date) 자정을 0으로 둔 **절대 분축**으로 정규화한 **같은 룸** 점유 구간 목록.
+ * 각 원소 = 세션 행 + `{start, end}`(분). 전날 야간분은 start가 음수가 될 수 있다.
+ *
+ * ⚠️ 겹침 **차단**(findSessionConflict)과 겹침 **경고**(`GET /sessions/availability`)가 이 함수 하나를 공유한다.
+ * 2026-07-23 평가에서 확인된 결함이 정확히 '두 판정이 갈린 것'이었다 — 경고는 30분 슬롯 근사 + 구글
+ * FreeBusy 합산(룸 구분·자기 일정 제외 불가)이라 거짓 경고가 상시로 떴고, 그걸 승인하면
+ * `override_conflict=1`이 서버의 진짜 검사를 통째로 꺼서 **실제 이중 예약이 통과**했다.
+ * 판정을 한 구현으로 합쳐 그 계열의 재발을 구조적으로 막는다(회귀 `test/session-conflict-warn.test.js`).
+ *
+ * 야간 세션이 인접일로 넘어가므로 D-1·D·D+1을 함께 조회해 오프셋을 더한다.
+ */
+function busySessionRanges(date, { excludeId = null, room = null } = {}) {
+  if (!isValidYmd(date)) return [];
   const roomKey = Number(room) || 0;
-  // 전날 야간분이 오늘 아침으로, 오늘 야간분이 다음날 아침으로 넘어갈 수 있으므로 D-1·D·D+1을 함께 조회해 절대 분축으로 비교.
   const rows = db()
     .prepare(
       `SELECT s.*, p.title AS project_title, rm.name AS room_name FROM sessions s
@@ -394,14 +371,29 @@ function findSessionConflict({ date, start, end, excludeId = null, room = null }
        ORDER BY s.session_date, s.start_time`
     )
     .all(date, date, date, roomKey, excludeId == null ? -1 : excludeId);
+  const out = [];
   for (const r of rows) {
     const off = dayOffsetMin(r.session_date, date); // 그 세션이 속한 날의 기준일 대비 오프셋(-1440|0|+1440)
-    let bs = timeToMin(r.start_time);
+    const bs = timeToMin(r.start_time);
     let be = timeToMin(r.end_time);
     if (bs == null || be == null) continue;
     if (be <= bs) be += 1440;
-    bs += off; be += off; // 기준일 자정 절대축으로 이동
-    if (s < be && bs < e) return r; // 겹침
+    const start = bs + off, end = be + off; // 기준일 자정 절대축
+    // 기준일 자정 이전에 끝난 구간은 이 날짜의 어떤 선택과도 겹칠 수 없다(선택 시작은 항상 0분 이상).
+    // 전날을 함께 조회하는 건 **자정을 넘긴** 야간분(end>0) 때문이지 전날 주간분 때문이 아니다.
+    if (end <= 0) continue;
+    out.push({ ...r, start, end });
+  }
+  return out;
+}
+
+function findSessionConflict({ date, start, end, excludeId = null, room = null }) {
+  const s = timeToMin(start);
+  let e = timeToMin(end);
+  if (!isValidYmd(date) || s == null || e == null) return null;
+  if (e <= s) e += 1440; // end<=start면 야간(자정 넘김) — 최대 12시간이라 다음날 아침까지만 넘어감
+  for (const r of busySessionRanges(date, { excludeId, room })) {
+    if (s < r.end && r.start < e) return r; // 겹침(반열린 구간)
   }
   return null;
 }
@@ -628,7 +620,7 @@ module.exports = {
   listSessionEngineers,
   listSessionPayoutsForWorker,
   setSessionEngineerPayout,
-  busySessionSlots,
+  busySessionRanges,
   sessionRateAmount,
   createSession,
   updateSession,

@@ -613,7 +613,7 @@ function sortCellValue(cell) {
   var conflictWarn = form.querySelector("[data-conflict-warn]");
   var overrideField = form.querySelector("[data-override-conflict]");
   var SLIDER_MAX = slider ? parseInt(slider.max, 10) || 960 : 960;
-  var busy = {};
+  var busy = []; // 그 날짜·그 룸의 점유 구간 [{start,end,label}] — /sessions/availability
 
   var durGroup = form.querySelector("[data-duration-group]");
   function pad(n) { return (n < 10 ? "0" : "") + n; }
@@ -680,7 +680,6 @@ function sortCellValue(cell) {
     if (durLabel) durLabel.textContent = allDay && allDay.checked ? "종일" : fmtDuration(curDur);
     updatePreview();
   }
-  // (그리드 폐지 — busy 슬롯은 겹침 경고(overlapDetected) 계산에만 쓴다)
   // 시작(HH:MM) → 자정 기준 분. 무효면 null.
   function toMin(hhmm) {
     var p = String(hhmm || "").split(":");
@@ -688,23 +687,24 @@ function sortCellValue(cell) {
     var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
     return isNaN(h) || isNaN(m) ? null : h * 60 + m;
   }
-  // 선택한 시작+소요 구간이 예약된 30분 슬롯(busy) 중 하나와 겹치는가(클라이언트 근사 — 서버가 최종 판정).
+  // 선택한 시작+소요가 그 룸의 점유 구간과 겹치면 그 구간을 반환(없으면 null).
+  // busy = 서버 busySessionRanges 결과([{start,end,label}] — 기준일 자정 절대 분축, 전날 야간분은 start 음수).
+  // 서버의 겹침 차단과 같은 데이터·같은 반열린 비교라 경고와 차단이 어긋나지 않는다(2026-07-23).
   function overlapDetected() {
-    var start = currentStart();
-    var sMin = toMin(start);
-    if (sMin == null) return false;
+    var sMin = toMin(currentStart());
+    if (sMin == null) return null;
     var dur = durationMinutes();
     var eMin = sMin + (dur > 0 ? dur : 30); // 소요 미설정이면 30분 블록으로 간주
-    for (var slot in busy) {
-      if (!busy[slot]) continue;
-      var m = toMin(slot);
-      if (m == null) continue;
-      if (sMin < m + 30 && m < eMin) return true; // busy 슬롯 [m,m+30)과 겹침
+    for (var i = 0; i < busy.length; i++) {
+      if (sMin < busy[i].end && busy[i].start < eMin) return busy[i];
     }
-    return false;
+    return null;
   }
   function updateConflictWarn() {
-    if (conflictWarn) conflictWarn.hidden = (allDay && allDay.checked) || !overlapDetected(); // 종일은 시간 점유 없음 → 경고 없음
+    if (!conflictWarn) return;
+    var hit = (allDay && allDay.checked) ? null : overlapDetected(); // 종일은 시간 점유 없음 → 경고 없음
+    conflictWarn.hidden = !hit;
+    if (hit && hit.label) conflictWarn.textContent = "⚠ 같은 룸에 예약이 있습니다 — " + hit.label; // 어느 세션인지 명시
   }
   // 세션 종류 kind(녹음→recording·촬영→filming) — 세션 종류 select data-rate-kinds="녹음:recording,촬영:filming"
   function rateKindOf(type) {
@@ -780,13 +780,13 @@ function sortCellValue(cell) {
     var url = "/sessions/availability?date=" + encodeURIComponent(dateInput.value);
     var sid = form.getAttribute("data-session-id");
     if (sid) url += "&exclude=" + encodeURIComponent(sid);
-    if (roomSel && roomSel.value) url += "&room=" + encodeURIComponent(roomSel.value);
+    // 룸은 항상 보낸다 — 빈 값('룸 미지정')도 room_id NULL(=IFNULL 0)이라는 실제 선택이고, 서버 판정도 그 축을 쓴다.
+    url += "&room=" + encodeURIComponent(roomSel ? roomSel.value : "");
     fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data || !data.busy) return;
-        busy = {};
-        data.busy.forEach(function (s) { busy[s] = true; });
+        busy = data.busy;
         updatePreview();
       })
       .catch(function () {});
@@ -912,10 +912,13 @@ function sortCellValue(cell) {
   // 편집 진입 시 서버가 체크(all_day 세션)해 뒀으면 UI 반영.
   if (allDay && allDay.checked) applyAllDay(true);
   // 겹침이 감지되면 제출 직전 확인 → 승인 시 override_conflict=1로 그대로 등록(서버가 겹침 허용). 취소면 제출 중단.
+  // ⚠️ override는 서버의 같은 룸 검사를 통째로 끄므로, 이 확인창이 뜨는 조건은 서버가 실제로 막는 조건과
+  //    정확히 같아야 한다(거짓 경고에 길들여지면 진짜 이중 예약을 눌러서 통과시킨다 — 2026-07-23 평가).
   form.addEventListener("submit", function (e) {
     if (!overrideField) return;
-    if (overlapDetected()) {
-      if (!window.confirm("이미 예약된 일정이 있습니다. 그래도 등록할까요?")) {
+    var hit = (allDay && allDay.checked) ? null : overlapDetected();
+    if (hit) {
+      if (!window.confirm("이미 예약이 있습니다 — " + (hit.label || "같은 룸 일정") + "\n\n그래도 등록할까요?")) {
         e.preventDefault();
         return;
       }

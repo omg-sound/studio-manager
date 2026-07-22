@@ -230,7 +230,7 @@ function sessionBookingFields(s, managers, rateItems = [], rooms, defaultBooker 
           <input type="checkbox" name="all_day" value="1" class="h-4 w-4 rounded border-border text-primary" data-all-day ${s.all_day ? "checked" : ""} /> 종일
         </label>
       </div>
-      <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 이 시간대에 같은 장소 예약이 이미 있습니다.</p>
+      <p class="text-xs text-warning" data-conflict-warn hidden>⚠ 같은 룸에 이 시간대 예약이 이미 있습니다.</p>
       <input type="hidden" name="override_conflict" value="" data-override-conflict />
       <div data-duration-wrap>
         <label class="label-sm">소요 시간 <span class="ml-1 font-medium text-primary" data-duration-label>${fmtDurationKo(initMins)}</span></label>

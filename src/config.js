@@ -185,8 +185,8 @@ function timeSlots(startMin, endMin, step = 30) {
   }
   return out;
 }
-// 전체 운영시간(12:00~23:30) — 편집 폼 드롭다운·가용성 검사용.
-const SESSION_TIME_SLOTS = timeSlots(12 * 60, 23 * 60 + 30);
+// (SESSION_TIME_SLOTS 제거 2026-07-23 — 겹침 경고가 슬롯 근사에서 구간 비교(busySessionRanges)로 바뀌며 소비처 소멸.
+//  12:00~23:30 창이 오전 세션을 경고 사각지대로 만들던 원인이라, 시간대 창 자체를 없앤 것이 수정의 일부다.)
 // 예약 그리드 기본 노출(14:00~18:30) — 그 외 시간은 '직접입력' 버튼으로.
 const SESSION_START_SLOTS = timeSlots(14 * 60, 18 * 60 + 30);
 const SESSION_STATUS_BADGE = {
@@ -275,7 +275,6 @@ module.exports = {
   RENTAL_SESSION_TYPES,
   SESSION_STATUSES,
   SESSION_STATUS_BADGE,
-  SESSION_TIME_SLOTS,
   SESSION_START_SLOTS,
   timeSlots,
   RECORDING_CATEGORIES,
