@@ -782,6 +782,19 @@ function payerSuggestChips(project) {
     </div>`;
 }
 
+/**
+ * 청구 항목 행 레이아웃 — 모바일 2단 스택(2026-07-23 사용자 리포트).
+ *
+ * ⚠️ 한 줄 flex에 [체크박스 · 라벨 · '청구 안 함' · 금액칸 112px]를 다 넣으면, 390px 화면에서 고정 폭들이
+ * 자리를 다 먹고 **라벨에 42px만 남는다**(실측). 한글은 기본(`word-break: normal`)이 **음절 단위 줄바꿈**이라
+ * 그 폭에서 글자별로 쪼개져 행 높이가 221px로 부푼다("7월/20일/·/프로미/스나인…").
+ * → 컨트롤을 한 덩어리로 묶어 모바일에선 **둘째 줄 전폭**(w-full)으로 내리고, sm+에선 종전처럼 인라인.
+ * 라벨엔 `break-keep`(word-break:keep-all) — 공백에서만 줄바꿈해 단어가 안 쪼개진다.
+ */
+const LINE_ROW = "flex flex-wrap items-start gap-x-2 gap-y-1.5 border-b border-border py-2 last:border-0";
+const LINE_LABEL = "min-w-0 flex-1 break-keep text-sm";
+const LINE_CTRL = "flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end";
+
 function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   const tasks = taskRows || [];
   if (!tasks.length && !sessionRows.length) {
@@ -799,9 +812,9 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
   const tax = Math.round(subtotal * 0.1);
   // 무료 처리된 행 — 체크박스·금액칸 없이 배지 + 되돌리기 버튼만(2026-07-06). formaction으로 같은 폼에서 다른 라우트 제출(중첩 폼 회피).
   const waivedRow = (label, waiveAction) => `
-    <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 opacity-60" data-line-row>
-      <span class="min-w-0 flex-1 text-sm">${label} <span class="badge bg-bg text-muted">무료 처리됨</span></span>
-      <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0">되돌리기</button>
+    <div class="${LINE_ROW} opacity-60" data-line-row>
+      <span class="${LINE_LABEL}">${label} <span class="badge bg-bg text-muted">무료 처리됨</span></span>
+      <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 whitespace-nowrap">되돌리기</button>
     </div>`;
   const taskList = tasks
     .map((task) => {
@@ -812,13 +825,15 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const amt = taskAmt(task);
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(TASK_STATUS_LABELS[task.status] || task.status)}</span>`;
       return `
-        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
-          <input class="shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${amt}" ${done ? "checked" : "data-confirm-pending"} id="task-cb-${task.id}" />
-          <label for="task-cb-${task.id}" class="min-w-0 flex-1 cursor-pointer text-sm font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</label>
-          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
-          <div class="relative w-28 shrink-0">
-            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${amt || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
-            <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+        <div class="${LINE_ROW} ${done ? "" : "opacity-60"}" data-line-row>
+          <input class="mt-0.5 shrink-0" type="checkbox" name="task_id" value="${task.id}" data-line-amount="${amt}" ${done ? "checked" : "data-confirm-pending"} id="task-cb-${task.id}" />
+          <label for="task-cb-${task.id}" class="${LINE_LABEL} cursor-pointer font-medium">${esc(task.track_title)} · ${esc(label)}${statusTag}</label>
+          <div class="${LINE_CTRL}">
+            <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 whitespace-nowrap text-muted">청구 안 함</button>
+            <div class="relative w-28 shrink-0">
+              <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="task_amount_${task.id}" value="${amt || ""}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
+              <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+            </div>
           </div>
         </div>`;
     })
@@ -833,12 +848,12 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       // 예전엔 이런 세션이 후보 목록에서 통째로 빠져 매출이 소리 없이 샜다(프로젝트가 조용히 '완료'로 이동).
       if (!s.billing) {
         return `
-        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 opacity-60" data-line-row>
-          <span class="min-w-0 flex-1 text-sm">
+        <div class="${LINE_ROW} opacity-60" data-line-row>
+          <span class="${LINE_LABEL}">
             <span class="block font-medium">${esc(label)}</span>
             <span class="block text-xs text-warning">단가 항목을 선택해야 청구할 수 있습니다 — 세션 일정 탭에서 지정하세요</span>
           </span>
-          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
+          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 whitespace-nowrap text-muted">청구 안 함</button>
         </div>`;
       }
       const done = s.status === "완료";
@@ -847,16 +862,18 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
       const time = [s.start_time, s.end_time].filter(Boolean).join("–");
       const statusTag = done ? "" : ` <span class="text-xs font-normal text-warning">${esc(s.status)}</span>`;
       return `
-        <div class="flex items-center gap-2 border-b border-border py-2 last:border-0 ${done ? "" : "opacity-60"}" data-line-row>
-          <input class="shrink-0" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" ${done ? "checked" : "data-confirm-pending"} id="session-cb-${s.id}" />
-          <label for="session-cb-${s.id}" class="min-w-0 flex-1 cursor-pointer">
-            <span class="block text-sm font-medium">${esc(label)}${statusTag}</span>
+        <div class="${LINE_ROW} ${done ? "" : "opacity-60"}" data-line-row>
+          <input class="mt-0.5 shrink-0" type="checkbox" name="session_id" value="${s.id}" data-line-amount="${s.billing.amount}" ${done ? "checked" : "data-confirm-pending"} id="session-cb-${s.id}" />
+          <label for="session-cb-${s.id}" class="${LINE_LABEL} cursor-pointer">
+            <span class="block font-medium">${esc(label)}${statusTag}</span>
             <span class="block text-xs text-muted">${esc(dur)}${time ? " · " + esc(time) : ""}${s.billing.fixed ? ` · <span class="text-success">확정 금액</span>` : ""}</span>
           </label>
-          <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 text-muted">청구 안 함</button>
-          <div class="relative w-28 shrink-0">
-            <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="session_amount_${s.id}" value="${s.billing.amount == null ? "" : s.billing.amount}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
-            <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+          <div class="${LINE_CTRL}">
+            <button type="submit" formaction="${waiveAction}" formmethod="post" data-waive-btn class="btn-ghost btn-xs shrink-0 whitespace-nowrap text-muted">청구 안 함</button>
+            <div class="relative w-28 shrink-0">
+              <input class="input py-1 pr-7 text-right text-sm tabular" type="text" inputmode="numeric" name="session_amount_${s.id}" value="${s.billing.amount == null ? "" : s.billing.amount}" data-line-input placeholder="0" aria-label="${esc(label)} 금액" />
+              <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted">원</span>
+            </div>
           </div>
         </div>`;
     })
@@ -926,7 +943,7 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
             // 유형·번호는 경로(:type/:name)에 — GET은 formaction의 쿼리를 폼 데이터로 대체하므로 유형을 경로에 둔다.
             const base = peekInvoiceNumber(todayYmd());
             const act = (t) => `/projects/${project.id}/invoices/preview/${encodeURIComponent(t)}/${encodeURIComponent(docNumberWithType(base, t))}.pdf`;
-            return `<div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            return `<div class="grid grid-cols-3 gap-2">
             <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("견적서")}" formtarget="_blank">견적서</button>
             <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("내역서")}" formtarget="_blank">내역서</button>
             <button class="btn-ghost btn-sm" type="submit" formmethod="get" formaction="${act("거래명세서")}" formtarget="_blank">거래명세서</button>
@@ -934,9 +951,9 @@ function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
           })()}
         </div>
         ${explain(`<span class="font-medium text-fg">계산서 발행</span>이 필요할 때 아래 '청구 생성'을 누르면 청구서가 만들어지고 바로 발행됩니다(발행 후 청구처 변경 불가).`, { cls: "mb-2" })}
-        <div class="flex items-center justify-end gap-2">
-          <button class="btn-ghost btn-sm" type="button" data-invoice-draft-save>임시저장</button>
-          <button class="btn-primary btn-sm" type="submit" data-invoice-submit>선택 항목으로 청구 생성 <span data-inv-doc>(계산서 발행)</span></button>
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <button class="btn-ghost btn-sm whitespace-nowrap" type="button" data-invoice-draft-save>임시저장</button>
+          <button class="btn-primary btn-sm whitespace-nowrap" type="submit" data-invoice-submit>청구 생성 <span data-inv-doc>(계산서 발행)</span></button>
         </div>
       </div>
     </form>`;
