@@ -10,7 +10,7 @@
 
 | 단계 | 상태 |
 |---|---|
-| 1. Git 저장소 + 푸시 | ✅ 완료 — `github.com/omg-sound/studio-manager` (main) |
+| 1. Git 저장소 + 푸시 | ✅ 완료 — `github.com/omg-sound/omg-studios-erp` (main) |
 | 2. Render Blueprint 연결 | ✅ 완료 — web + cron 두 서비스 배포 중 |
 | 3. 시크릿 입력 | ✅ 완료 — 전체 env 입력 완료 |
 | 4. Apply → 빌드·배포 | ✅ 완료 — `https://omg-studios-manager.onrender.com` live |
@@ -29,7 +29,7 @@
 
 ## 0. 사전 준비물
 
-- **GitHub 저장소** — ✅ `github.com/omg-sound/studio-manager` (Render Blueprint는 Git 저장소에서 배포).
+- **GitHub 저장소** — ✅ `github.com/omg-sound/omg-studios-erp` (Render Blueprint는 Git 저장소에서 배포).
 - **Render 계정** — https://render.com (Blueprint는 유료 Starter 플랜 기준: web + cron).
 - **Google Cloud 프로젝트** — OAuth 클라이언트(웹) + Drive API. (로그인·자료 스토리지에 필요)
 
@@ -37,7 +37,7 @@
 
 ## 1. Git 저장소 (✅ 완료)
 
-이미 초기화·푸시 완료: `github.com/omg-sound/studio-manager` (`main`). 이후 변경은 평소대로:
+이미 초기화·푸시 완료: `github.com/omg-sound/omg-studios-erp` (`main`). 이후 변경은 평소대로:
 
 ```bash
 git add -A && git commit -m "..." && git push   # autoDeploy=commit → web/cron 자동 재배포
