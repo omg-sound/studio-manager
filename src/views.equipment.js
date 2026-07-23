@@ -23,6 +23,7 @@ function equipmentRow(e) {
   const bought = e.purchased_on ? esc(formatYmdShort(e.purchased_on)) : "";
   const meta = [bought].filter(Boolean).join("");
   return `<a href="/equipment/${e.id}/edit" class="block px-4 py-3 transition-colors hover:bg-surface active:bg-elevated">
+      <span class="sr-only">${esc(e.category || "미분류")}</span>
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(e.name)}</div>

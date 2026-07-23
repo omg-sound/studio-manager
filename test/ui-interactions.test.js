@@ -1467,6 +1467,23 @@ test("searchBox remote 계약: liveFilter 있을 때만 data-live-remote 활성"
   assert.match(searchBox({ action: "/x", liveFilter: true, remote: true }), /data-live-remote/, "liveFilter+remote면 활성");
 });
 
+// ── 장비 목록 실시간 필터: 종류(category)는 그룹 헤더에만 있어 행 textContent에 안 잡히던 것 → 행에 sr-only로 숨겨 포함 ──
+test("장비 목록 실시간 필터: 종류로 검색해도 해당 행이 남는다(헤더만 매칭되고 행이 사라지던 버그)", () => {
+  const { equipmentList } = require("../src/views.equipment");
+  const rows = [
+    { id: 1, name: "SM7B", category: "마이크", location: "A룸" },
+    { id: 2, name: "1176", category: "아웃보드", location: "랙실" },
+  ];
+  const html = equipmentList(rows, { q: "" });
+  const { win, doc } = mountDom(html);
+  const input = doc.querySelector("[data-live-filter]");
+  const micRow = doc.querySelector('a[href="/equipment/1/edit"]');
+  const outRow = doc.querySelector('a[href="/equipment/2/edit"]');
+  input.value = "마이크"; fire(win, input, "input");
+  assert.strictEqual(micRow.style.display, "", "종류 '마이크' 검색 → SM7B 행이 계속 보임");
+  assert.strictEqual(outRow.style.display, "none", "매칭 안 되는 1176 행은 숨김");
+});
+
 // ── 청구 할인 정액칸: 미리 채운 '0' 없이 placeholder만(빈칸=0, 타이핑 시 바로 입력) ──
 test("청구 할인 정액칸: value='0' 없이 placeholder만", () => {
   const html = unbilledInvoiceForm({ id: 7, title: "테스트" }, [{ id: 1, task_type: "vocal_tune", track_title: "곡A", status: "Completed", total_price: 100000, waived: 0 }], []);
