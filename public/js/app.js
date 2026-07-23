@@ -3393,3 +3393,15 @@ function announceParty(detail) { if (detail && detail.id && detail.name) documen
     if (form) form.submit();
   });
 })();
+
+// 제안 칩([data-fill-value][data-fill-target]) 클릭 → 대상 입력칸 채움 + dirty 통지(장비 종류·장소).
+document.addEventListener("click", function (e) {
+  var chip = e.target.closest ? e.target.closest("[data-fill-value][data-fill-target]") : null;
+  if (!chip) return;
+  var form = chip.form || (chip.closest ? chip.closest("form") : null);
+  var input = form ? form.querySelector(chip.getAttribute("data-fill-target")) : document.querySelector(chip.getAttribute("data-fill-target"));
+  if (!input) return;
+  input.value = chip.getAttribute("data-fill-value");
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true })); // dirty 감시 통지(함정 #23)
+});

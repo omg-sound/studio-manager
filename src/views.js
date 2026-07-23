@@ -136,6 +136,7 @@ const ICONS = {
   workers: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   settings: '<path d="M12 20h9"/><path d="M3 20h3"/><path d="M18 4h3"/><path d="M3 4h9"/><path d="M15 7a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M9 23a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>',
   revenue: '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  equipment: '<path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/><circle cx="8" cy="5" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="19" r="2"/>',
 };
 
 /** 인라인 SVG 아이콘. size=tailwind w/h 클래스(기본 20px). */
@@ -158,6 +159,7 @@ const NAV = [
   { href: "/invoices", label: "청구", key: "invoices", navKey: "i", access: "billing", group: "billing" },
   { href: "/contacts", label: "연락처", key: "contacts", navKey: "c", access: "editor", group: "manage" },
   { href: "/clients", label: "업체·그룹", key: "clients", navKey: "o", access: "editor", group: "manage" },
+  { href: "/equipment", label: "장비", key: "equipment", navKey: "q", access: "editor", group: "manage" },
   // 청구 그룹 순서 = **돈의 흐름**(청구 → 매출 → 정산): 외주 작업자는 '정산'이라 매출 뒤에 온다(2026-07-20 사용자 요청).
   { href: "/revenue", label: "매출", key: "revenue", navKey: "r", access: "invoice", group: "billing" },
   { href: "/workers", label: "외주 작업자", key: "workers", navKey: "w", access: "invoice", group: "billing" },
