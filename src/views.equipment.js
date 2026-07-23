@@ -22,7 +22,7 @@ function equipmentRow(e) {
   const price = e.purchase_price != null ? formatKRW(e.purchase_price) : "";
   const bought = e.purchased_on ? esc(formatYmdShort(e.purchased_on)) : "";
   const meta = [bought].filter(Boolean).join("");
-  return `<a href="/equipment/${e.id}/edit" class="block px-4 py-3 transition-colors hover:bg-surface active:bg-elevated" data-filter-row>
+  return `<a href="/equipment/${e.id}/edit" class="block px-4 py-3 transition-colors hover:bg-surface active:bg-elevated">
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0">
           <div class="truncate font-medium">${esc(e.name)}</div>
@@ -41,21 +41,26 @@ function equipmentList(rows, { q = "" } = {}) {
   if (!rows.length) {
     return `${search}${emptyState("등록된 장비가 없습니다. '+ 새 장비'로 추가하세요.", { card: true })}`;
   }
-  // 종류별 그룹(listEquipment가 이미 종류 순 정렬 — 연속 그룹핑). 빈 종류 = '미분류'.
-  const groups = [];
-  let cur = null;
+  // 종류별 그룹 — **단일 [data-filter-list] 컨테이너** 안에 헤더 + 행을 형제로(연락처 contactNameList 패턴).
+  // app.js 실시간 필터는 첫 [data-filter-list]의 직접 자식만 훑으므로, 그룹마다 컨테이너를 나누면 첫 그룹만 필터된다.
+  // 하나로 합치면 전 행이 필터되고, 검색 중엔 헤더도 텍스트 불일치로 함께 숨어 평면 결과가 된다(iCloud식·연락처와 동일).
+  // listEquipment가 이미 종류 순 정렬 — 연속 그룹핑. 빈 종류 = '미분류'.
+  const counts = new Map();
   for (const e of rows) {
     const key = e.category && e.category.trim() ? e.category : "미분류";
-    if (!cur || cur.key !== key) { cur = { key, items: [] }; groups.push(cur); }
-    cur.items.push(e);
+    counts.set(key, (counts.get(key) || 0) + 1);
   }
-  const body = groups.map((g) =>
-    `<div class="mb-4" data-filter-group>
-        <h3 class="mb-1 px-1 text-xs font-semibold text-muted">${esc(g.key)} <span class="font-normal">${g.items.length}</span></h3>
-        ${listGroup({ rows: g.items.map(equipmentRow), filterList: true })}
-      </div>`
-  ).join("");
-  return `${search}${body}`;
+  const items = [];
+  let curKey = null;
+  for (const e of rows) {
+    const key = e.category && e.category.trim() ? e.category : "미분류";
+    if (key !== curKey) {
+      curKey = key;
+      items.push(`<div class="bg-surface/50 px-4 pb-1 pt-2 text-xs font-semibold text-muted" data-equip-group-head>${esc(key)} <span class="font-normal">${counts.get(key)}</span></div>`);
+    }
+    items.push(equipmentRow(e));
+  }
+  return `${search}${listGroup({ rows: items, filterList: true })}`;
 }
 
 function equipmentForm(item, { rooms = [], categories = [], locations = [] } = {}) {

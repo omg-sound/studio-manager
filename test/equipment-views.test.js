@@ -16,6 +16,8 @@ test("equipmentList: 종류별 그룹 + 미분류, 검색박스", () => {
   assert.match(html, /data-live-filter/, "실시간 검색 입력");
   assert.match(html, /data-filter-list/, "필터 대상 목록");
   assert.match(html, /장소 미지정/, "장소 빈 행 표기");
+  assert.strictEqual((html.match(/data-filter-list/g) || []).length, 1, "필터 컨테이너는 하나(그룹마다 나누면 첫 그룹만 필터됨)");
+  assert.match(html, /data-equip-group-head/, "종류 헤더 마커");
 });
 
 test("equipmentList: 빈 목록이면 emptyState", () => {
