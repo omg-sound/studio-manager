@@ -40,10 +40,17 @@ test("equipmentForm: 신규 폼 필드 존재(equipment_name·purchase_price 등
   assert.match(html, /action="\/equipment"/, "신규 = POST /equipment");
 });
 
-test("equipmentForm: 편집 폼은 값 프리필 + 삭제 폼 + POST /equipment/:id", () => {
+test("equipmentForm: 편집 폼은 값 프리필 + 삭제 폼(형제, 중첩 아님) + POST /equipment/:id", () => {
   const item = { id: 7, name: "1176", category: "아웃보드", serial_no: "S1", purchase_price: 2000000, purchased_on: "2023-03-03", location: "랙실", memo: "" };
   const html = equipmentForm(item, { rooms: [], categories: ["아웃보드"], locations: ["랙실"] });
   assert.match(html, /value="1176"/);
   assert.match(html, /action="\/equipment\/7"/, "편집 = POST /equipment/:id");
-  assert.match(html, /\/equipment\/7\/delete/, "삭제 폼");
+  // 삭제 폼은 수정 폼과 형제(HTML은 <form> 중첩 금지 — 중첩하면 브라우저가 안쪽 폼을 버려
+  // 삭제 클릭이 바깥 수정 폼으로 샌다). 편집 폼의 </form> 뒤에 별도 <form id=equip-del-7>이 온다.
+  const editFormEnd = html.indexOf("</form>");
+  const delFormStart = html.indexOf('<form id="equip-del-7"');
+  assert.ok(editFormEnd >= 0 && delFormStart > editFormEnd, "삭제 폼은 편집 폼의 </form> 뒤에(형제)");
+  assert.match(html, /<form id="equip-del-7" method="post" action="\/equipment\/7\/delete"/, "삭제 폼 action");
+  assert.match(html, /data-confirm="[^"]*삭제[^"]*"/, "삭제 확인 다이얼로그");
+  assert.match(html, /form="equip-del-7"/, "삭제 버튼이 form= 속성으로 삭제 폼을 가리킴");
 });

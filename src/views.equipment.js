@@ -5,7 +5,7 @@
  * 마스터데이터 CRUD(연락처·단가표) 결. 장소·종류는 제안 칩(클릭 시 입력칸에 채움, app.js).
  */
 
-const { esc, formatKRW, searchBox, listGroup, emptyState, dateCombo } = require("./views");
+const { esc, formatKRW, searchBox, listGroup, emptyState, dateCombo, dirtyActionRow } = require("./views");
 const { formatYmdShort } = require("./lib/date");
 
 /** 제안 칩 묶음 — 클릭하면 대상 입력칸(sel)에 값을 채운다(app.js [data-fill-target]). */
@@ -72,9 +72,9 @@ function equipmentForm(item, { rooms = [], categories = [], locations = [] } = {
   const roomNames = rooms.map((r) => r.name);
   const locSeen = new Set();
   const locSuggest = [...roomNames, ...locations].filter((v) => v && !locSeen.has(v) && locSeen.add(v));
-  const del = isEdit
-    ? `<form method="post" action="/equipment/${e.id}/delete" data-confirm="이 장비를 대장에서 삭제할까요?"><button class="btn-ghost btn-sm text-danger">삭제</button></form>`
-    : "";
+  // 삭제 폼은 편집 폼과 형제(sibling) — HTML은 <form> 중첩을 허용하지 않아 안에 넣으면
+  // 브라우저가 내부 폼을 버리고 삭제 버튼 클릭이 바깥 수정 폼(POST /equipment/:id)으로 새어나간다.
+  // dirtyActionRow(공용, contacts.routes.js와 동일 패턴)로 버튼만 폼 안에 두고 form=ID로 연결.
   return `<form method="post" action="${action}" class="space-y-3" data-dirty-form>
       <div>
         <label class="label mb-1 text-xs">장비명 <span class="text-danger">*</span></label>
@@ -113,14 +113,11 @@ function equipmentForm(item, { rooms = [], categories = [], locations = [] } = {
         <label class="label mb-1 text-xs">메모</label>
         <textarea class="input" name="memo" rows="2">${val(e.memo)}</textarea>
       </div>
-      <div class="flex items-center justify-between gap-2 pt-1">
-        ${del}
-        <div class="ml-auto flex gap-2">
-          <a href="/equipment" class="btn-ghost btn-sm" data-no-guard>취소</a>
-          <button class="btn-primary btn-sm" type="submit">${isEdit ? "저장" : "추가"}</button>
-        </div>
-      </div>
-    </form>`;
+      ${isEdit
+        ? dirtyActionRow({ deleteFormId: `equip-del-${e.id}`, deleteLabel: "삭제", saveLabel: "저장" })
+        : dirtyActionRow({ cancelHref: "/equipment", saveLabel: "추가", dirty: false })}
+    </form>
+    ${isEdit ? `<form id="equip-del-${e.id}" method="post" action="/equipment/${e.id}/delete" data-confirm="이 장비를 대장에서 삭제할까요?" class="hidden"></form>` : ""}`;
 }
 
 module.exports = { equipmentList, equipmentForm };

@@ -23,13 +23,13 @@ router.get("/", (req, res) => {
   const rows = listEquipment({ q });
   const body = `${pageHeader({ title: "장비", desc: "스튜디오 보유 장비 대장", action: `<a href="/equipment/new" class="btn-primary btn-sm">+ 새 장비</a>` })}
     ${equipmentList(rows, { q })}`;
-  res.send(layout({ title: "장비", user: req.user, current: "equipment", body, wide: true }));
+  res.send(layout({ title: "장비", user: req.user, current: "/equipment", body, wide: true }));
 });
 
 // 추가 폼
 router.get("/new", (req, res) => {
-  const body = `${pageHeader({ title: "새 장비", back: "/equipment" })}<div class="card">${equipmentForm(null, formOpts())}</div>`;
-  res.send(layout({ title: "새 장비", user: req.user, current: "equipment", body }));
+  const body = `${pageHeader({ title: "새 장비", back: { href: "/equipment", label: "장비" } })}<div class="card">${equipmentForm(null, formOpts())}</div>`;
+  res.send(layout({ title: "새 장비", user: req.user, current: "/equipment", body }));
 });
 
 // 생성
@@ -47,8 +47,8 @@ router.post("/", (req, res) => {
 router.get("/:id/edit", (req, res) => {
   const item = getEquipment(Number(req.params.id));
   if (!item) return res.status(404).send(errorPage({ code: 404, title: "장비를 찾을 수 없습니다", message: "삭제되었거나 주소가 잘못되었습니다.", user: req.user }));
-  const body = `${pageHeader({ title: item.name, back: "/equipment" })}<div class="card">${equipmentForm(item, formOpts())}</div>`;
-  res.send(layout({ title: item.name, user: req.user, current: "equipment", body }));
+  const body = `${pageHeader({ title: item.name, back: { href: "/equipment", label: "장비" } })}<div class="card">${equipmentForm(item, formOpts())}</div>`;
+  res.send(layout({ title: item.name, user: req.user, current: "/equipment", body }));
 });
 
 // 수정
