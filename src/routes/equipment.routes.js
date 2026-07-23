@@ -23,7 +23,9 @@ router.get("/", (req, res) => {
   const rows = listEquipment({ q });
   const body = `${pageHeader({ title: "장비", desc: "스튜디오 보유 장비 대장", action: `<a href="/equipment/new" class="btn-primary btn-sm">+ 새 장비</a>` })}
     ${equipmentList(rows, { q })}`;
-  res.send(layout({ title: "장비", user: req.user, current: "/equipment", body, wide: true }));
+  // 읽기 폭(wide 아님): 장비 목록은 이름+장소 / 매입가+구매일 2열뿐이라 wide(1760)에선 중앙이 크게 비어 희소하다.
+  // 프로젝트·청구 목록은 여러 열로 폭을 채우지만 여기는 아니다(2026-07-23 최종 리뷰 지적 → 브라우저 실측으로 확정).
+  res.send(layout({ title: "장비", user: req.user, current: "/equipment", body }));
 });
 
 // 추가 폼
