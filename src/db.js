@@ -171,6 +171,18 @@ function init() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS equipment (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      name           TEXT NOT NULL,
+      category       TEXT,
+      serial_no      TEXT,
+      purchase_price INTEGER,
+      purchased_on   TEXT,
+      location       TEXT,
+      memo           TEXT,
+      created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- 스튜디오 세션(일정). 프로젝트 하위 녹음/믹싱/마스터링 예약. 청구 시간 산정의 기반.
     CREATE TABLE IF NOT EXISTS sessions (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
