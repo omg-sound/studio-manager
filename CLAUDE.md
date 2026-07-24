@@ -188,7 +188,7 @@
 
 | 영역 | 선택 |
 |---|---|
-| 런타임 | Node ≥20, Express 4 (CommonJS) |
+| 런타임 | Node ≥20(`engines`), **표준 버전=22 고정**(`.nvmrc` — Render 프로덕션·nvm 로컬이 읽음, CI는 20+22 매트릭스 유지), Express 4 (CommonJS) |
 | DB | SQLite — `better-sqlite3`(운영, prebuild) / `node:sqlite`(폴백) 어댑터(`src/sqlite.js`) |
 | 인증 | 전원 Google OAuth + 화이트리스트(`users` 행) → httpOnly 서명 JWT 쿠키(30일). 비밀번호 로그인 폐기 |
 | 저장소 | Google Drive(**고정 스튜디오 계정** `STUDIO_DRIVE_EMAIL`=studio@omgworks.kr의 토큰만 저장, `drive.file`) — 첨부·자료 전달용. 그 계정 로그인 시에만 토큰 갱신(치프 무관·고정). 미연동/Drive 업로드 실패 시 로컬 디스크 폴백(단 Drive 연결 상태에서 실패는 예외로 알림) |
