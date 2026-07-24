@@ -12,8 +12,9 @@
 const { db } = require("../db");
 const { minutesBetween, todayYmd } = require("../lib/date");
 const { computeRatePrice } = require("./rate-items"); // 무순환(rate-items는 projects를 호출하지 않음)
-const { RENTAL_SESSION_TYPES } = require("../config");
+const { RENTAL_SESSION_TYPES, POSTPROD_SESSION_TYPES } = require("../config");
 const RENTAL_IN = RENTAL_SESSION_TYPES.map((t) => `'${t}'`).join(", "); // SQL IN절(정적 config 값 — 인젝션 무관)
+const POSTPROD_IN = POSTPROD_SESSION_TYPES.map((t) => `'${t}'`).join(", "); // 후반작업(믹싱·마스터링) 세션 IN절
 
 /** 프로젝트 폼 자동완성용 — 기존 프로젝트의 아티스트·소속사/레이블·제작사 중복 제거 목록. */
 function distinctProjectFields() {
@@ -134,7 +135,21 @@ function listProjects(_user, { q } = {}) {
              AND (s.all_day = 1 OR (s.start_time IS NOT NULL AND s.end_time IS NOT NULL))
              AND s.waived = 0
              AND NOT EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.session_id = s.id)
-             AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id))) AS unbilled_cnt,
+             AND NOT EXISTS (SELECT 1 FROM track_tasks tt WHERE tt.session_id = s.id))
+       -- 후반작업(믹싱·마스터링)은 곡·콘텐츠 작업으로 청구하는데, 세션만 마치고 작업을 아직 안 만든
+       -- 프로젝트는 청구할 게 없어 보여 조용히 '완료'로 넘어간다(2026-07-24). 청구 준비(작업·청구서)가
+       -- 하나도 없을 때만 '청구 미착수' 플래그(+1)로 세어 '청구 필요'에 잡는다. 작업/청구서가 생기면
+       -- 그쪽 로직이 이어받으므로 자동으로 꺼진다. 예정(미래) 세션은 조기 신호 방지로 제외.
+       + (CASE WHEN EXISTS (
+           SELECT 1 FROM sessions s2
+            WHERE s2.project_id = p.id
+              AND s2.session_type IN (${POSTPROD_IN})
+              AND s2.status <> '취소' AND s2.waived = 0
+              AND (s2.status = '완료' OR s2.session_date < @today)
+              AND NOT EXISTS (SELECT 1 FROM track_tasks t3 JOIN project_tracks tr3 ON tr3.id = t3.track_id
+                               WHERE tr3.project_id = p.id)
+              AND NOT EXISTS (SELECT 1 FROM invoices i3 WHERE i3.project_id = p.id)
+         ) THEN 1 ELSE 0 END)) AS unbilled_cnt,
       -- 청구서 단위 할인 합계 — 작업·세션이 연결된(from-tasks) 청구서만. 수동 청구서 라인은 프로젝트 버짓에
       -- 안 잡히므로 그 할인을 빼면 이중 차감이 된다. 목록·상세 금액 표시에서 확정 라인 합계에서 차감(2026-07-05).
       (SELECT COALESCE(SUM(i.discount_amount), 0) FROM invoices i

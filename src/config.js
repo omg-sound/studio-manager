@@ -176,6 +176,9 @@ const SESSION_TYPES = ["녹음", "촬영", "공연", "믹싱", "마스터링", "
 // 대관 매출 세션 — 세션 자체가 단가표(시간제) 청구 대상. 완료 시 청구로 넘어간다. 녹음·촬영.
 // (믹싱·마스터링 등은 세션이 청구 단위가 아님 — 곡·콘텐츠 후반작업으로 청구.) 녹음·촬영·공연.
 const RENTAL_SESSION_TYPES = ["녹음", "촬영", "공연"];
+// 후반작업 세션 — 세션 자체는 청구 단위가 아니고 곡·콘텐츠 '작업'으로 청구한다.
+// 세션만 마치고 작업을 안 만들면 청구할 게 없어 보여 완료로 샜다(2026-07-24) → unbilled_cnt에서 '청구 미착수' 신호로 쓴다.
+const POSTPROD_SESSION_TYPES = ["믹싱", "마스터링"];
 const SESSION_STATUSES = ["예정", "완료", "취소"];
 // 세션 시간 슬롯(30분 단위). 범위별 생성기.
 function timeSlots(startMin, endMin, step = 30) {
@@ -273,6 +276,7 @@ module.exports = {
   ARTIST_ACTIVITY_FORM_LABELS,
   SESSION_TYPES,
   RENTAL_SESSION_TYPES,
+  POSTPROD_SESSION_TYPES,
   SESSION_STATUSES,
   SESSION_STATUS_BADGE,
   SESSION_START_SLOTS,
