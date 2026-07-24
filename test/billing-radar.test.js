@@ -274,10 +274,13 @@ test("hasPostprodSessionNeedingBilling: unbilled_cnt 후반작업 항과 정합"
   assert.equal(hasPostprodSessionNeedingBilling(pid), false, "작업 생기면 false(청구 준비 시작)");
 });
 
-test("hasPostprodSessionNeedingBilling: 미래 예정 세션만이면 false(날짜 게이트)", () => {
-  const pid = seedProject("헬퍼예정");
-  seedMixSession(pid, { date: "2998-01-01", done: false });
-  assert.equal(hasPostprodSessionNeedingBilling(pid), false, "미래 예정 세션은 게이트로 제외");
+test("hasPostprodSessionNeedingBilling: 완료 아닌 세션(미래·지난 예정)은 false", () => {
+  const future = seedProject("헬퍼예정미래");
+  seedMixSession(future, { date: "2998-01-01", done: false });
+  assert.equal(hasPostprodSessionNeedingBilling(future), false, "미래 예정 세션은 완료 아니라 제외");
+  const past = seedProject("헬퍼예정지난");
+  seedMixSession(past, { date: "2020-06-01", done: false });
+  assert.equal(hasPostprodSessionNeedingBilling(past), false, "지난 예정 세션도 완료 아니라 제외(날짜 게이트 제거 후)");
 });
 
 test("unbilledInvoiceForm: 후보 0 + 후반작업 플래그 → 안내 문구 렌더", () => {
