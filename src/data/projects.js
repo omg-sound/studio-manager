@@ -370,6 +370,27 @@ function deleteProject(projectId) {
   db().prepare("DELETE FROM projects WHERE id = ?").run(pid);
 }
 
+/**
+ * 후반작업(믹싱/마스터링) 세션은 마쳤지만 청구 준비(곡·콘텐츠 작업·청구서)가 하나도 없는 상태인가?
+ * = listProjects unbilled_cnt의 '청구 미착수' 항과 동일 조건. 청구 탭 안내 문구 노출 판정용.
+ */
+function hasPostprodSessionNeedingBilling(projectId) {
+  const row = db()
+    .prepare(
+      `SELECT 1 FROM sessions s
+        WHERE s.project_id = @pid
+          AND s.session_type IN (${POSTPROD_IN})
+          AND s.status <> '취소' AND s.waived = 0
+          AND (s.status = '완료' OR s.session_date < @today)
+          AND NOT EXISTS (SELECT 1 FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id
+                           WHERE tr.project_id = @pid)
+          AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.project_id = @pid)
+        LIMIT 1`
+    )
+    .get({ pid: projectId, today: todayYmd() });
+  return !!row;
+}
+
 module.exports = {
   distinctProjectFields,
   listProjects,
@@ -382,4 +403,5 @@ module.exports = {
   splitProjectTabs,
   listProjectIdsForManager,
   deleteProject,
+  hasPostprodSessionNeedingBilling,
 };

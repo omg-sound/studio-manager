@@ -795,9 +795,12 @@ const LINE_ROW = "flex flex-wrap items-start gap-x-2 gap-y-1.5 border-b border-b
 const LINE_LABEL = "min-w-0 flex-1 break-keep text-sm";
 const LINE_CTRL = "flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end";
 
-function unbilledInvoiceForm(project, taskRows, sessionRows = []) {
+function unbilledInvoiceForm(project, taskRows, sessionRows = [], opts = {}) {
   const tasks = taskRows || [];
   if (!tasks.length && !sessionRows.length) {
+    if (opts.hasPostprodSession) {
+      return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-sm text-muted">믹싱/마스터링 세션이 있습니다. <span class="font-medium text-fg">곡·콘텐츠 탭에서 작업을 만들어</span> 청구하세요.<span class="mt-1 block text-xs">무료로 처리할 거면 작업을 만든 뒤 '청구 안 함'을 누르세요.</span></div>`;
+    }
     return `<div class="rounded-lg border border-border bg-bg px-3 py-4 text-center text-sm text-muted">청구할 작업·세션이 없습니다.</div>`;
   }
   // 세션 '완료 강제'와 규칙 통일: 완료 상태 작업만 기본 체크. 미완료(대기)는 체크 해제·흐리게(선택은 가능).

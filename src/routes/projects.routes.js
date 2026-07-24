@@ -57,6 +57,7 @@ const {
   currentAffiliation,
   setProjectArtists,
   setProjectContacts,
+  hasPostprodSessionNeedingBilling,
 } = require("../data");
 const { layout, pageHeader, esc, formatKRW, flashBanner, errorPage, emptyState, capList, tabBar: renderTabs, searchBox } = require("../views");
 const { deliverablesSection } = require("../views.deliverables");
@@ -444,8 +445,11 @@ function renderProjectDetail(req, res, p, formState = null, err = "") {
     const unbilledRows = unbilled ? unbilled.rows : [];
     const billable = listBillableSessionsForProject(req.user, p.id);
     const sessionRows = billable ? billable.rows : [];
-    const unbilledForm = (unbilledRows.length || sessionRows.length) ? unbilledInvoiceForm(p, unbilledRows, sessionRows) : "";
-    tabContent = invoicesSection({ project: p, rows: invoiceRows, isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length + sessionRows.length, openId: Number(req.query.open) || null });
+    const needsPostprodBilling = hasPostprodSessionNeedingBilling(p.id);
+    const unbilledForm = (unbilledRows.length || sessionRows.length || needsPostprodBilling)
+      ? unbilledInvoiceForm(p, unbilledRows, sessionRows, { hasPostprodSession: needsPostprodBilling })
+      : "";
+    tabContent = invoicesSection({ project: p, rows: invoiceRows, isAdmin: showInvoice, collapsed: false, unbilledForm, unbilledCount: unbilledRows.length + sessionRows.length + (needsPostprodBilling ? 1 : 0), openId: Number(req.query.open) || null });
   } else {
     const rateItems = editable ? listRateItems() : [];
     const sessionBundle2 = listSessionsForProject(req.user, p.id);
