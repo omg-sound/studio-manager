@@ -139,13 +139,13 @@ function listProjects(_user, { q } = {}) {
        -- 후반작업(믹싱·마스터링)은 곡·콘텐츠 작업으로 청구하는데, 세션만 마치고 작업을 아직 안 만든
        -- 프로젝트는 청구할 게 없어 보여 조용히 '완료'로 넘어간다(2026-07-24). 청구 준비(작업·청구서)가
        -- 하나도 없을 때만 '청구 미착수' 플래그(+1)로 세어 '청구 필요'에 잡는다. 작업/청구서가 생기면
-       -- 그쪽 로직이 이어받으므로 자동으로 꺼진다. 예정(미래) 세션은 조기 신호 방지로 제외.
+       -- 그쪽 로직이 이어받으므로 자동으로 꺼진다. 명시적 완료 세션만 — 예정 세션은 진행 중에 머묾(2026-07-25).
        + (CASE WHEN EXISTS (
            SELECT 1 FROM sessions s2
             WHERE s2.project_id = p.id
               AND s2.session_type IN (${POSTPROD_IN})
               AND s2.status <> '취소' AND s2.waived = 0
-              AND (s2.status = '완료' OR s2.session_date < @today)
+              AND s2.status = '완료'
               AND NOT EXISTS (SELECT 1 FROM track_tasks t3 JOIN project_tracks tr3 ON tr3.id = t3.track_id
                                WHERE tr3.project_id = p.id)
               AND NOT EXISTS (SELECT 1 FROM invoices i3 WHERE i3.project_id = p.id)
@@ -169,8 +169,10 @@ function listProjects(_user, { q } = {}) {
   return rows.map((r) => ({
     ...r,
     session_amount_total: sessionAmounts[r.id] || 0,
-    // 완료 = 실제 활동이 있었고(content_cnt>0) 다가오는 세션 없음 + 미완료 작업 없음.
-    is_completed: r.content_cnt > 0 && r.upcoming_cnt === 0 && r.open_tasks === 0,
+    // 완료 = 실제 활동이 있었고(content_cnt>0) 예정 세션 없음(전부 완료/취소) + 미완료 작업 없음.
+    // ⚠️ 세션도 작업(open_tasks)과 대칭 — 완료 안 누른 예정 세션이 있으면(미래든 지난이든) 진행 중(2026-07-25).
+    //    이전엔 upcoming_cnt(미래 예정만)라 지난 예정 세션이 날짜만 지나면 완료/청구필요로 샜다.
+    is_completed: r.content_cnt > 0 && r.sess_scheduled === 0 && r.open_tasks === 0,
   }));
 }
 
@@ -381,7 +383,7 @@ function hasPostprodSessionNeedingBilling(projectId) {
         WHERE s.project_id = @pid
           AND s.session_type IN (${POSTPROD_IN})
           AND s.status <> '취소' AND s.waived = 0
-          AND (s.status = '완료' OR s.session_date < @today)
+          AND s.status = '완료'
           AND NOT EXISTS (SELECT 1 FROM track_tasks t JOIN project_tracks tr ON tr.id = t.track_id
                            WHERE tr.project_id = @pid)
           AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.project_id = @pid)
