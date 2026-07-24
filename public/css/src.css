@@ -74,12 +74,15 @@
   color-scheme: light;
 }
 
-/* iOS 입력 자동확대 방지: 모바일에서 폼 컨트롤 16px(플레이북2 §5-1). */
+/* iOS 입력 자동확대 방지: 모바일에서 폼 컨트롤 16px(플레이북2 §5-1).
+   !important 필수 — 요소 셀렉터(0,0,1)는 text-xs/text-sm 같은 Tailwind 유틸리티(0,1,0)에 특정도로 져서,
+   text-xs가 붙은 폼 컨트롤(예: 사이드바 '보기 모드' 셀렉트)이 12px로 남아 iOS가 탭 시 확대됐다(2026-07-24 실기기 감사 발견).
+   16px는 플랫폼 하드 요구라 유틸리티보다 우선해야 한다. 데스크톱(≥640px)은 미적용이라 원래 크기 유지. */
 @media (max-width: 639.98px) {
   input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 
